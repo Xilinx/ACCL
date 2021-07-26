@@ -1,5 +1,7 @@
 # ACCL: Accelerated Collective Communication Library
 
+### * Note: This project is under active development. We will tag a stable release in the coming weeks.*
+
 ACCL is a Vitis kernel and associated Pynq and XRT drivers which together provide MPI-like collectives for Xilinx FPGAs. ACCL is designed to enable compute kernels resident in FPGA fabric to communicate directly under host supervision but without requiring data movement between the FPGA and host. Instead, ACCL uses Vitis-compatible TCP and UDP stacks to connect FPGAs directly over Ethernet at up to 100 Gbps on Alveo cards. 
 
 ACCL currently supports Send/Recv and the following collectives:
