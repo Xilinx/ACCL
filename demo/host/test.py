@@ -35,7 +35,8 @@ def configure_accl(xclbin, board_idx, nbufs=16, bufsize=16*1024):
     if local_alveo.name == 'xilinx_u250_xdma_201830_2':
         devicemem = [ol.__getattr__(f"bank{i}") for i in range(args.naccel)]
     elif local_alveo.name == 'xilinx_u280_xdma_201920_3':
-        devicemem = [ol.HBM0                    for _ in range(args.naccel)]
+        devicemem = [[ol.__getattr__(f"HBM{j}") for j in range(i*6, i*6+6) ] for i in range(args.naccel)]
+        #devicemem = [[ol.__getattr__(f"HBM0") ] for i in range(args.naccel)] #tcp_cmac v
 
     cclo = [ol.__getattr__(f"ccl_offload_{i}")   for i in range(args.naccel)]
     ext_arithm = [ol.__getattr__(f"external_reduce_arith_{i}")   for i in range(args.naccel)]
