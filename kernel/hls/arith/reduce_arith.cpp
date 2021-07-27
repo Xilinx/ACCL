@@ -35,6 +35,7 @@ void elementwise_sum(	stream<ap_axiu<data_width,0,0,0> > & in1,
 	
 	for (unsigned int i = 0; i < count; i++) {
 #pragma HLS PIPELINE II=1
+		
 		ap_axiu<data_width,0,0,0> op1_word = in1.read();
 		ap_axiu<data_width,0,0,0> op2_word = in2.read();
 		ap_uint<data_width> op1 = op1_word.data;
@@ -42,21 +43,20 @@ void elementwise_sum(	stream<ap_axiu<data_width,0,0,0> > & in1,
 		ap_uint<data_width> res;
 		for (unsigned int j = 0; j < simd; j++) {
 #pragma HLS UNROLL
-			ap_uint<dwb> op1_word = op1((j+1)*dwb-1,j*dwb);
-			ap_uint<dwb> op2_word = op2((j+1)*dwb-1,j*dwb);
-			T op1_word_t = *reinterpret_cast<T*>(&op1_word);
-			T op2_word_t = *reinterpret_cast<T*>(&op2_word);
+			ap_uint<dwb> op1_simd = op1((j+1)*dwb-1,j*dwb);
+			ap_uint<dwb> op2_simd = op2((j+1)*dwb-1,j*dwb);
+			T op1_word_t = *reinterpret_cast<T*>(&op1_simd);
+			T op2_word_t = *reinterpret_cast<T*>(&op2_simd);
 			T sum = op1_word_t + op2_word_t;
 			ap_uint<dwb> res_word = *reinterpret_cast<ap_uint<dwb>*>(&sum);
 			res((j+1)*dwb-1,j*dwb) = res_word;
 		}
 		ap_axiu<data_width,0,0,0> wword;
 		wword.data = res;
-		wword.last = (i == (count-1));
+		wword.last = op1_word.last & op2_word.last;
 		wword.keep = op1_word.keep & op2_word.keep;
 		out.write(wword);
 	}
-//TODO: copy control signals (last/keep) from inputs to output
 }
 
 void reduce_arith(	stream<ap_axiu<DATA_WIDTH,0,0,0> > & in1,
