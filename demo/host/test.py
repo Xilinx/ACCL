@@ -16,6 +16,7 @@
 # *******************************************************************************/
 
 import sys
+import warnings
 import numpy as np
 sys.path.append('../../driver/pynq/')
 from cclo import *
@@ -26,7 +27,7 @@ from queue import Queue
 import threading
 import time
 
-def configure_accl(xclbin, board_idx, nbufs=16, bufsize=16*1024):
+def configure_xccl(xclbin, board_idx, nbufs=16, bufsize=1024):
     global ext_arithm  
     local_alveo = pynq.Device.devices[board_idx]
     ol=pynq.Overlay(xclbin, device=local_alveo)
@@ -37,6 +38,7 @@ def configure_accl(xclbin, board_idx, nbufs=16, bufsize=16*1024):
     elif local_alveo.name == 'xilinx_u280_xdma_201920_3':
         devicemem = [[ol.__getattr__(f"HBM{j}") for j in range(i*6, i*6+6) ] for i in range(args.naccel)]
         #devicemem = [[ol.__getattr__(f"HBM0") ] for i in range(args.naccel)] #tcp_cmac v
+        
 
     cclo = [ol.__getattr__(f"ccl_offload_{i}")   for i in range(args.naccel)]
     ext_arithm = [ol.__getattr__(f"external_reduce_arith_{i}")   for i in range(args.naccel)]
@@ -44,9 +46,14 @@ def configure_accl(xclbin, board_idx, nbufs=16, bufsize=16*1024):
         print("CCLO {} HWID: {} at {}".format(i, hex(cclo[i].get_hwid()), hex(cclo[i].mmio.base_addr)))
 
     ranks = [{"ip": "127.0.0.1", "port": i} for i in range(args.naccel)]
-
+    print(devicemem)
+    
     for i in range(args.naccel):
+        #cclo[i].dump_host_control_memory()
+        #cclo[i].dump_exchange_memory()
+        
         print("CCLO ",i)
+        cclo[i].use_udp()
         print("Configuring RX Buffers")
         cclo[i].setup_rx_buffers(nbufs, bufsize, devicemem[i])
         print("Configuring a communicator")
@@ -61,15 +68,15 @@ def test_self_sendrecv():
     print("Self Send/Recv ")
     print("========================================")
     for j in range(args.naccel):
+        
         src_rank = j
         dst_rank = j
         tag      = 5+10*j
         senddata = np.random.randint(100, size=tx_buf[src_rank].shape)
         tx_buf[src_rank][:]=senddata
-        cclo_inst[src_rank].send(0, tx_buf[src_rank], dst_rank, tag)
-
+        cclo_inst[src_rank].send(0, tx_buf[src_rank], dst_rank, tag, run_async=True) #run_async to ensure that even if we have less spares than the number that will be needed for the entire collective we will not block sending and the other endpoint can start receiving
         cclo_inst[dst_rank].recv(0, rx_buf[dst_rank], src_rank, tag)
-
+        
         recvdata = rx_buf[dst_rank]
         if (recvdata == senddata).all():
             print("Send/Recv {} -> {} succeeded".format(src_rank, dst_rank))
@@ -86,6 +93,10 @@ def test_self_sendrecv():
 
 
 def test_sendrecv():
+    #scenario 0. Send and recv from 0 to 1
+    print("========================================")
+    print("Send/Recv Scenario 0")
+    print("========================================")
     # test sending from each cclo_inst to each other cclo_inst
     queues = [[Queue() for i in range(args.naccel)] for j in range(args.naccel)]
     src_rank = 0
@@ -94,8 +105,10 @@ def test_sendrecv():
     senddata = np.random.randint(100, size=tx_buf[src_rank].shape)
     queues[src_rank][dst_rank].put(senddata)
     tx_buf[src_rank][:]=senddata
-    cclo_inst[src_rank].send(0, tx_buf[src_rank], dst_rank)
+
+    cclo_inst[src_rank].send(0, tx_buf[src_rank], dst_rank, run_async=True)  #run_async to ensure that even if we have less spares than the number that will be needed for the entire collective we will not block sending and the other endpoint can start receiving
     cclo_inst[dst_rank].recv(0, rx_buf[dst_rank], src_rank)
+
     exp_recvdata = queues[src_rank][dst_rank].get()
     recvdata = rx_buf[dst_rank]
     if (recvdata == exp_recvdata).all():
@@ -110,13 +123,13 @@ def test_sendrecv():
         cclo_inst[src_rank].dump_communicator()
         cclo_inst[dst_rank].dump_rx_buffers_spares()
         import pdb; pdb.set_trace()
-    # scenario 2: send to everyone and recv 
+    # scenario 1: send to everyone and recv 
     print("========================================")
     print("Send/Recv Scenario 1")
     print("========================================")
-    from time import sleep
     for i in range(args.naccel):
         for j in range(args.naccel):
+
             src_rank = i
             dst_rank = (i+j+1)%args.naccel
             tag = i+5+10*j
@@ -124,8 +137,9 @@ def test_sendrecv():
             senddata = np.random.randint(100, size=tx_buf[src_rank].shape)
             queues[i][j].put(senddata)
             tx_buf[src_rank][:]=senddata
-            cclo_inst[src_rank].send(0, tx_buf[src_rank], dst_rank, tag)
+            cclo_inst[src_rank].send(0, tx_buf[src_rank], dst_rank, tag, run_async=True)  #run_async to ensure that even if we have less spares than the number that will be needed for the entire collective we will not block sending and the other endpoint can start receiving
             cclo_inst[dst_rank].recv(0, rx_buf[dst_rank], src_rank, tag)
+
             exp_recvdata = queues[i][j].get()
             recvdata = rx_buf[dst_rank]
             if (recvdata == exp_recvdata).all():
@@ -140,7 +154,8 @@ def test_sendrecv():
                 cclo_inst[src_rank].dump_communicator()
                 cclo_inst[dst_rank].dump_rx_buffers_spares()
                 import pdb; pdb.set_trace()
-    # scenario 1: for each instance, send multiple, then recv multiple at the other instances
+
+    # scenario 2: for each instance, send multiple, then recv multiple at the other instances
     print("========================================")
     print("Send/Recv Scenario 2")
     print("========================================")
@@ -149,16 +164,22 @@ def test_sendrecv():
             src_rank = i
             dst_rank = (i+j+1)%args.naccel
             tag = i+5+10*j
+            nbufs_in_dst = sum(map(lambda q: q.qsize(),queues[dst_rank])) + 1
+            if (nbufs_in_dst + args.segment_size - 1 )//args.segment_size > args.nbufs:
+                continue  #to ensure that we have enough spares for the entire collective. we can't run async since we will need to use different source buffers
             senddata = np.random.randint(100, size=tx_buf[src_rank].shape)
             tx_buf[src_rank][:]=senddata
             cclo_inst[src_rank].send(0, tx_buf[src_rank], dst_rank, tag)
-            queues[i][j].put(senddata)
+            queues[dst_rank][src_rank].put(senddata)
             
         for j in range(args.naccel):
             src_rank = i
             dst_rank = (i+j+1)%args.naccel
             tag = i+5+10*j
-            exp_recvdata = queues[i][j].get()
+            if queues[dst_rank][src_rank].empty():
+                continue
+            exp_recvdata = queues[dst_rank][src_rank].get()
+
 
             cclo_inst[dst_rank].recv(0, rx_buf[dst_rank], src_rank, tag)
         
@@ -176,17 +197,22 @@ def test_sendrecv():
                 cclo_inst[dst_rank].dump_rx_buffers_spares()
 
                 import pdb; pdb.set_trace()
+    if args.bsize > 10_000_000:
+        return
     # scenario 3: send everything, recv everything
     print("========================================")
-    print("Send/Recv Scenario 2")
+    print("Send/Recv Scenario 3")
     print("========================================")
     for i in range(args.naccel):
         for j in range(args.naccel):
             src_rank = i
             dst_rank = (i+j+1)%args.naccel
             tag = i+5+10*j
+            nbufs_in_dst = sum(map(lambda q: q.qsize(),queues[dst_rank])) + 1
+            if (nbufs_in_dst + args.segment_size - 1 )//args.segment_size > args.nbufs:
+                continue  #to ensure that we have enough spares for the entire collective. we can't run async since we will need to use different source buffers
             senddata = np.random.randint(100, size=tx_buf[src_rank].shape)
-            queues[i][j].put(senddata)
+            queues[dst_rank][src_rank].put(senddata)
             tx_buf[src_rank][:]=senddata
             cclo_inst[src_rank].send(0, tx_buf[src_rank], dst_rank, tag)
             #print(f"sent {src_rank}")
@@ -198,7 +224,9 @@ def test_sendrecv():
             src_rank = i
             dst_rank = (i+j+1)%args.naccel
             tag = i+5+10*j
-            exp_recvdata = queues[i][j].get()
+            if queues[dst_rank][src_rank].empty():
+                continue
+            exp_recvdata = queues[dst_rank][src_rank].get()
 
             #print(f"before recv {dst_rank}")
             #cclo_inst[src_rank].dump_communicator()
@@ -237,10 +265,9 @@ def test_sendrecv_unaligned():
                 tag +=1
                 tx_buf[src_rank][:]= np.random.randint(100, size=tx_buf[src_rank].shape)
                 
-                cclo_inst[src_rank].send(0, tx_buf[src_rank][offset:], dst_rank, tag=tag)
-
+                cclo_inst[src_rank].send(0, tx_buf[src_rank][offset:], dst_rank, tag=tag, run_async=True)
                 cclo_inst[dst_rank].recv(0, rx_buf[dst_rank][offset:], src_rank, tag=tag)
-
+                
                 if ( rx_buf[dst_rank][offset:] == tx_buf[src_rank][offset:]).all():
                     print("Send/Recv {} -> {} succeeded".format(src_rank, dst_rank))
                 else:
@@ -280,7 +307,16 @@ def test_bcast(sw=True):
                 err_count += 1
                 print(f"Bcast {src_rank} -> {j} failed")
                 print(f", expected {tx_buf[src_rank]}\n  got: {buf}")
-
+                if args.debug:
+                    print(f"Bcast {src_rank} -> {j} failed")
+                    print(f", expected {tx_buf[src_rank]}\n  got: {buf}")
+                    print(f"{src_rank} buffer: {rx_buf[src_rank].view(np.uint8)}")
+                    cclo_inst[src_rank].dump_communicator()
+                    cclo_inst[src_rank].dump_rx_buffers_spares()
+                    print(f"{j} buffer: {tx_buf[j].view(np.uint8)}")
+                    cclo_inst[j].dump_communicator()
+                    cclo_inst[j].dump_rx_buffers_spares()
+                    import pdb; pdb.set_trace()
         if err_count == 0:
             print(f"Bcast {src_rank} -> all succeeded")
 
@@ -318,6 +354,16 @@ def test_bcast_rnd(sw=True, repetitions=1):
                 err_count += 1
                 print(f"Bcast {src_rank} -> {j} failed")
                 print(f", expected {tx_buf[src_rank]}\n  got: {buf}")
+                if args.debug:
+                    print(f"Bcast {src_rank} -> {j} failed")
+                    print(f", expected {tx_buf[src_rank]}\n  got: {buf}")
+                    print(f"{src_rank} buffer: {tx_buf[src_rank].view(np.uint8)}")
+                    cclo_inst[src_rank].dump_communicator()
+                    cclo_inst[src_rank].dump_rx_buffers_spares()
+                    print(f"{j} buffer: {tx_buf[j].view(np.uint8)}")
+                    cclo_inst[j].dump_communicator()
+                    cclo_inst[j].dump_rx_buffers_spares()
+                    import pdb; pdb.set_trace()
 
         if err_count == 0:
             print(f"Bcast {src_rank} -> all succeeded")
@@ -345,8 +391,16 @@ def test_bcast_async(sw=True):
 
             if not (buf == tx_buf[src_rank]).all():
                 err_count += 1
-                print(f"Bcast {src_rank} -> {j} failed")
-                print(f", expected {tx_buf[src_rank]}\n  got: {buf}")
+                if args.debug:
+                    print(f"Bcast {src_rank} -> {j} failed")
+                    print(f", expected {tx_buf[src_rank]}\n  got: {buf}")
+                    print(f"{src_rank} buffer: {tx_buf[src_rank].view(np.uint8)}")
+                    cclo_inst[src_rank].dump_communicator()
+                    cclo_inst[src_rank].dump_rx_buffers_spares()
+                    print(f"{j} buffer: {tx_buf[j].view(np.uint8)}")
+                    cclo_inst[j].dump_communicator()
+                    cclo_inst[j].dump_rx_buffers_spares()
+                    import pdb; pdb.set_trace()
         if err_count == 0:
             print(f"Bcast {src_rank} -> all succeeded")
 
@@ -373,6 +427,14 @@ def test_scatter(sw=True):
             if not (rx_buf[j][0:count]==tx_buf[i][count*j:count*(j+1)]).all():
                 err_count += 1
                 print(f"Scatter {i} -> {j} failed")
+                if args.debug:                
+                    print(f"{j} buffer: {tx_buf[j].view(np.uint8)}")
+                    cclo_inst[j].dump_communicator()
+                    cclo_inst[j].dump_rx_buffers_spares()
+                    print(f"{i} buffer: {tx_buf[i].view(np.uint8)}")
+                    cclo_inst[i].dump_communicator()
+                    cclo_inst[i].dump_rx_buffers_spares()
+                    import pdb; pdb.set_trace()
         if err_count == 0:
             print(f"Scatter {i} -> all succeeded".format(i))
 
@@ -556,6 +618,7 @@ def test_reduce(sw=True, shift=False):
                     for jj in range(args.naccel):
                         print(f"{jj} buffer: {tx_buf_fp[jj].view(np.uint8)}")
                         print(f"{jj} buffer: {tx_buf_fp[jj].view(np_type)}")
+                        cclo_inst[jj].dump_communicator()
                         cclo_inst[jj].dump_rx_buffers_spares()
                     import pdb; pdb.set_trace()
             else:
@@ -604,6 +667,7 @@ def test_reduce_async(sw=True, shift=False):
                     for jj in range(args.naccel):
                         print(f"{jj} buffer: {tx_buf_fp[jj].view(np.uint8)}")
                         print(f"{jj} buffer: {tx_buf_fp[jj].view(np_type)}")
+                        cclo_inst[jj].dump_communicator()
                         cclo_inst[jj].dump_rx_buffers_spares()
                     import pdb; pdb.set_trace()
             else:
@@ -790,41 +854,42 @@ def test_external_reduce():
 
 def test_acc():
     for i in range(args.naccel):
-        tx_buf[i][:] = np.random.randint(128, size=tx_buf[i].size, dtype=np.int8)
-        rx_buf[i][:] = np.random.randint(128, size=rx_buf[i].size, dtype=np.int8)
+        for nptype in [np.int32, np.int64, np.float32, np.float64]:
+            ##simple test
+            tx_buf[i][:] = np.ones(tx_buf[i].view(nptype).size, dtype=nptype).view(np.uint8)
+            rx_buf[i][:] = np.ones(rx_buf[i].view(nptype).size, dtype=nptype).view(np.uint8)
 
-        buf0_fp = tx_buf[i].view(np.float32)
-        buf1_fp = rx_buf[i].view(np.float32)
-        sum_fp = buf0_fp + buf1_fp
+            buf0 = tx_buf[i]
+            buf1 = rx_buf[i]
+            sum_fp = buf0.view(nptype) + buf1.view(nptype)
+            if args.debug:    
+                print("buf0:", buf0.view(nptype),"\nbuf1:", buf1.view(nptype))
+                print("(np.uint8) buf0:", buf0.view(np.uint8),"\n(np.uint8) buf1:", buf1.view(np.uint8))
+            cclo_inst[i].accumulate(np_type_2_cclo_type(nptype), buf0, buf1)
+            if args.debug: 
+                print("obtained:", buf1.view(nptype),"\nexpected:", sum_fp)
+                print("(np.uint8) obtained:", buf1.view(np.uint8),"\n(np.uint8) expected:", sum_fp.view(np.uint8))
+            assert np.allclose(buf1.view(nptype), sum_fp) , f"{nptype} Simple Sum for CCLO {i} not succeeded"
+            print(f"{nptype} Simple Sum for CCLO {i} succeeded")
 
-        cclo_inst[i].accumulate(CCLOReduceFunc.fp, buf0_fp, buf1_fp)
-        assert np.allclose(buf1_fp, sum_fp)
-        print("FP Sum for CCLO {} succeeded".format(i))
+            tx_buf[i][:] = np.random.randint(128, size=tx_buf[i].nbytes, dtype=np.int8)
+            rx_buf[i][:] = np.random.randint(128, size=rx_buf[i].nbytes, dtype=np.int8)
 
-        buf0_dp = tx_buf[i].view(np.float64)
-        buf1_dp = rx_buf[i].view(np.float64)
-        sum_dp = buf0_dp + buf1_dp
+            buf0 = tx_buf[i]
+            buf1 = rx_buf[i]
+            sum_fp = buf0.view(nptype) + buf1.view(nptype)
 
-        cclo_inst[i].accumulate(CCLOReduceFunc.dp, buf0_dp, buf1_dp)
-        assert np.allclose(buf1_dp, sum_dp)
-        print("DP Sum for CCLO {} succeeded".format(i))
+            cclo_inst[i].accumulate(np_type_2_cclo_type(nptype), buf0, buf1)
+            if args.debug: 
+                print("obtained:", buf1.view(nptype),"\nexpected:", sum_fp)
+                print("(np.uint8) obtained:", buf1.view(np.uint8),"\n(np.uint8) expected:", sum_fp.view(np.uint8))
+            assert np.allclose(buf1.view(nptype), sum_fp)
+            print(f"{nptype}  Sum for CCLO {i} succeeded"), f"{nptype} Simple Sum for CCLO {i} not succeeded"
 
-        buf0_i32 = tx_buf[i].view(np.int32)
-        buf1_i32 = rx_buf[i].view(np.int32)
-        sum_i32 = buf0_i32 + buf1_i32
 
-        cclo_inst[i].accumulate(CCLOReduceFunc.i32, buf0_i32, buf1_i32)
-        assert np.array_equal(buf1_i32, sum_i32)
-        print("INT32 Sum for CCLO {} succeeded".format(i))
-
-        buf0_i64 = tx_buf[i].view(np.int64)
-        buf1_i64 = rx_buf[i].view(np.int64)
-        sum_i64 = buf0_i64 + buf1_i64
-
-        cclo_inst[i].accumulate(CCLOReduceFunc.i64, buf0_i64, buf1_i64)
-        assert np.array_equal(buf1_i64, sum_i64)
-        print("INT64 Sum for CCLO {} succeeded".format(i))
-
+        
+            
+        
 def test_timeout():
     global cclo_inst
     for i in range(args.naccel):
@@ -845,7 +910,7 @@ def test_timeout():
     for i in range(args.naccel):
         cclo_inst[i].deinit()
 
-    ol, cclo_inst, devicemem = configure_accl(args.xclbin, args.device_index, nbufs=args.nbufs, bufsize=max(16*1024, args.bsize))
+    ol, cclo_inst, devicemem = configure_xccl(args.xclbin, args.device_index, nbufs=args.nbufs, bufsize=args.segment_size)
 
 def print_timing_us(label,duration_us):
     print(f"execution time {label:.<44} us :{duration_us:>6.2f} ")
@@ -918,10 +983,8 @@ def benchmark(niter):
             prevcall = [cclo_inst[0].copy(tx_buf[0], rx_buf[0], from_fpga=True, to_fpga=True, run_async=True, waitfor=prevcall)]
         prevcall[0].wait()
         end = time.perf_counter()
-        for j in range(args.naccel):
-            cclo_inst[j].check_return_value()
-        for c in cclo_inst:
-            c.end_profiling()
+        cclo_inst[0].check_return_value()
+        cclo_inst[0].end_profiling()
         duration_us = ((end - start)/niter) * seconds_to_us
         print_timing_us('Copy',duration_us)
 
@@ -1114,14 +1177,14 @@ def reinit():
     global cclo_inst
     for j in range(args.naccel):
         cclo_inst[j].deinit()
-    ol, cclo_inst, devicemem = configure_accl(args.xclbin, args.device_index, nbufs=args.nbufs, bufsize=max(16*1024, args.bsize))
+    ol, cclo_inst, devicemem = configure_xccl(args.xclbin, args.device_index, nbufs=args.nbufs, bufsize=args.segment_size)
 
 def allocate_buffers(n, bsize, devicemem):
     tx_buf = []
     rx_buf = []
     for i in range(n):
-        tx_buf.append(pynq.allocate((bsize,), dtype=np.int8, target=devicemem[i]))
-        rx_buf.append(pynq.allocate((bsize,), dtype=np.int8, target=devicemem[i]))
+        tx_buf.append(pynq.allocate((bsize,), dtype=np.int8, target=devicemem[i][0]))
+        rx_buf.append(pynq.allocate((bsize,), dtype=np.int8, target=(devicemem[i][0] if len(devicemem[i]) < 2 else devicemem[i][1])))
 
     for i, buf in enumerate(rx_buf):
         print(f'rx_buf {i}',hex(buf.device_address))
@@ -1131,8 +1194,8 @@ def allocate_buffers(n, bsize, devicemem):
     tx_buf_fp = []
     rx_buf_fp = []
     for i in range(n):
-        tx_buf_fp.append(pynq.allocate((bsize,), dtype=np.int8, target=devicemem[i]))
-        rx_buf_fp.append(pynq.allocate((bsize,), dtype=np.int8, target=devicemem[i]))
+        tx_buf_fp.append(pynq.allocate((bsize,), dtype=np.int8, target=devicemem[i][0]))
+        rx_buf_fp.append(pynq.allocate((bsize,), dtype=np.int8, target=(devicemem[i][0] if len(devicemem[i]) < 2 else devicemem[i][1])))
 
     return tx_buf, rx_buf, tx_buf_fp, rx_buf_fp
 
@@ -1143,7 +1206,8 @@ if __name__ == "__main__":
     parser.add_argument('--nruns',          type=int, default=1,                help='How many times to run each test')
     parser.add_argument('--nbufs',          type=int, default=16,               help='number of spare buffers to configure each ccl_offload')
     parser.add_argument('--naccel',         type=int, default=4,                help='number of ccl_offload to test ')
-    parser.add_argument('--bsize',          type=int, default=1024,             help='How many KB per buffer')
+    parser.add_argument('--bsize',          type=int, default=1024,             help='How many KB per user buffer')
+    parser.add_argument('--segment_size',   type=int, default=1024,             help='How many KB per buffer')
     parser.add_argument('--dump_rx_regs',   type=int, default=-1,               help='Print RX regs of specified ')
     parser.add_argument('--debug',          action='store_true', default=False, help='enable debug mode')
     parser.add_argument('--all',            action='store_true', default=False, help='Select all collectives')
@@ -1177,12 +1241,12 @@ if __name__ == "__main__":
         args.allreduce  = True
         args.accumulate = True
         args.copy       = True
-        args.external_stream = True
-        args.external_reduce = True
+        #args.external_stream = True
+        #args.external_reduce = True
         
     #configure FPGA and CCLO cores with the default 16 RX buffers of bsize KB each
-    ol, cclo_inst, devicemem = configure_accl(args.xclbin, args.device_index, nbufs=args.nbufs, bufsize=max(16*1024, args.bsize))
-
+    ol, cclo_inst, devicemem = configure_xccl(args.xclbin, args.device_index, nbufs=args.nbufs, bufsize=args.segment_size)
+   
     tx_buf, rx_buf, tx_buf_fp, rx_buf_fp = allocate_buffers(args.naccel, args.bsize, devicemem)
 
     if args.dump_rx_regs >= 0 :
@@ -1194,7 +1258,7 @@ if __name__ == "__main__":
         #set a random seed to make it reproducible
         np.random.seed(2021)
         for i in range(args.naccel):
-            cclo_inst[i].set_timeout(1_000_00)
+            cclo_inst[i].set_timeout(1_000_000)
         
         if not args.benchmark and args.spare:
             for i in range(args.nruns):
@@ -1202,80 +1266,104 @@ if __name__ == "__main__":
 
         if not args.benchmark and args.sendrecv:
             for i in range(args.nruns):
-                test_sendrecv()
                 test_self_sendrecv()
+                test_sendrecv()
                 test_sendrecv_unaligned()
 
         if not args.benchmark and args.bcast:
             for i in range(args.nruns):
-                test_bcast(         sw=True)
-                test_bcast_async(   sw=True)
-                test_bcast(         sw=False)
-                test_bcast_async(   sw=False)
-            test_bcast_rnd(     sw=True , repetitions=5)
-            test_bcast_rnd(     sw=False, repetitions=5)
+                if args.sw:
+                    test_bcast(         sw=True)
+                    test_bcast_async(   sw=True)
+                else:
+                    test_bcast(         sw=False)
+                    test_bcast_async(   sw=False)
+            if args.sw:
+                test_bcast_rnd(     sw=True , repetitions=5)
+            else:
+                test_bcast_rnd(     sw=False, repetitions=5)
 
         if not args.benchmark and args.scatter:
             for i in range(args.nruns):
-                test_scatter(    sw=True)
-                test_scatter(    sw=False)
-                test_scatter_async(sw=True)
-                test_scatter_async(sw=False)
+                if args.sw:
+                    test_scatter(    sw=True)
+                    test_scatter_async(sw=True)
+                else:
+                    test_scatter(    sw=False)
+                    test_scatter_async(sw=False)
                 
 
         if not args.benchmark and args.gather:
             for i in range(args.nruns):
-                ##test_gather(       sw=True , ring=False) non-shift sw gather not implemented
-                test_gather(        sw=True , ring=True )
-                #test_gather(        sw=False, ring=False) not safe now
-                test_gather(        sw=False, ring=True )
-                ##test_gather_async( sw=True , ring=False) non-shift sw gather not implemented
-                test_gather_async(  sw=True , ring=True )
-                #test_gather_async(  sw=False, ring=False) not safe now
-                test_gather_async(  sw=False, ring=True ) 
+                if args.sw:
+                    ##test_gather(       sw=True , ring=False) non-shift sw gather not implemented
+                    test_gather(        sw=True , ring=True )
+                    ##test_gather_async( sw=True , ring=False) non-shift sw gather not implemented
+                    test_gather_async(  sw=True , ring=True )
+                else:
+                    #test_gather(        sw=False, ring=False) not safe now
+                    test_gather(        sw=False, ring=True )
+                    #test_gather_async(  sw=False, ring=False) not safe now
+                    test_gather_async(  sw=False, ring=True ) 
                 
 
         if not args.benchmark and args.allgather:
             for i in range(args.nruns):
-                test_allgather(         sw=True , ring=True , fused=True  )
-                test_allgather(         sw=True , ring=True , fused=False )
-                #test_allgather(         sw=True , ring=False, fused=False ) not safe now
-                #test_allgather(         sw=True , ring=False, fused=True  ) not implemented
-                test_allgather(         sw=False , ring=True , fused=True  )
-                #test_allgather(         sw=False , ring=True , fused=False ) not implemented
-                #test_allgather(         sw=False , ring=False, fused=False ) not safe now
-                #test_allgather(         sw=False , ring=False, fused=True  ) not implemented
-                test_allgather_async(   sw=True , ring=True , fused=True  )
-                test_allgather_async(   sw=True , ring=True , fused=False )
-                #test_allgather_async(   sw=True , ring=False, fused=False ) not safe now
-                #test_allgather_async(   sw=True , ring=False, fused=True  ) not implemented
-                test_allgather_async(   sw=False , ring=True , fused=True  )
-                #test_allgather_async(   sw=False , ring=True , fused=False ) not implemented
-                #test_allgather_async(   sw=False , ring=False, fused=False ) not safe now
-                #test_allgather_async(   sw=False , ring=False, fused=True  ) not implemented
+                if args.sw:
+                    test_allgather(         sw=True , ring=True , fused=True  )
+                    test_allgather(         sw=True , ring=True , fused=False )
+                    #test_allgather(         sw=True , ring=False, fused=False ) not safe now
+                    #test_allgather(         sw=True , ring=False, fused=True  ) not implemented
+                    test_allgather_async(   sw=True , ring=True , fused=True  )
+                    test_allgather_async(   sw=True , ring=True , fused=False )
+                    #test_allgather_async(   sw=True , ring=False, fused=False ) not safe now
+                    #test_allgather_async(   sw=True , ring=False, fused=True  ) not implemented
+                else:
+                    test_allgather(         sw=False , ring=True , fused=True  )
+                    #test_allgather(         sw=False , ring=True , fused=False ) not implemented
+                    #test_allgather(         sw=False , ring=False, fused=False ) not safe now
+                    #test_allgather(         sw=False , ring=False, fused=True  ) not implemented
+                    test_allgather_async(   sw=False , ring=True , fused=True  )
+                    #test_allgather_async(   sw=False , ring=True , fused=False ) not implemented
+                    #test_allgather_async(   sw=False , ring=False, fused=False ) not safe now
+                    #test_allgather_async(   sw=False , ring=False, fused=True  ) not implemented
 
 
         if not args.benchmark and args.reduce:
             for i in range(args.nruns):
-                #test_reduce(sw=True , shift=False) no-shift not implemented
-                test_reduce(sw=True , shift=True)
-                #test_reduce(sw=False, shift=False) not safe now
-                test_reduce(sw=False, shift=True)
-                #test_reduce_async(sw=True , shift=False) no-shift not implemented
-                test_reduce_async(sw=True , shift=True)
-                #test_reduce_async(sw=False, shift=False) not safe now
-                test_reduce_async(sw=False, shift=True)
+                
+                if args.sw :
+                    if (args.naccel*(args.bsize + args.segment_size -1)//args.segment_size < args.nbufs):
+                        #test_reduce(sw=True , shift=False) no-shift not implemented
+                        test_reduce(sw=True , shift=True)
+                        #test_reduce_async(sw=True , shift=False) no-shift not implemented
+                        test_reduce_async(sw=True , shift=True)
+                    else:
+                        import warnings
+                        warnings.warn("not safe to run sw reduce! it may run out of buffers") 
+                else:
+                    #test_reduce(sw=False, shift=False) not safe now
+                    test_reduce(sw=False, shift=True)
+                    #test_reduce_async(sw=False, shift=False) not safe now
+                    test_reduce_async(sw=False, shift=True)
+               
 
         if not args.benchmark and args.allreduce:
             for i in range(args.nruns):
-                test_allreduce(fused=False  , sw=True )
-                test_allreduce(fused=True   , sw=True )             
-                test_allreduce(fused=False  , sw=False)
-                test_allreduce(fused=True   , sw=False)
-                test_allreduce_async(fused=False  , sw=True )
-                test_allreduce_async(fused=True   , sw=True )
-                test_allreduce_async(fused=False  , sw=False)
-                test_allreduce_async(fused=True   , sw=False)
+                if args.sw :
+                    if (args.naccel*(args.bsize + args.segment_size -1)//args.segment_size < args.nbufs):
+                        test_allreduce(fused=False  , sw=True )
+                        test_allreduce(fused=True   , sw=True )       
+                        test_allreduce_async(fused=False  , sw=True )
+                        test_allreduce_async(fused=True   , sw=True )
+                    else:
+                        import warnings
+                        warnings.warn("not safe to run sw allreduce! it may run out of buffers") 
+                else:    
+                    test_allreduce(fused=False  , sw=False)
+                    test_allreduce(fused=True   , sw=False)
+                    test_allreduce_async(fused=False  , sw=False) 
+                    test_allreduce_async(fused=True   , sw=False)
 
 
         if not args.benchmark and args.accumulate:
@@ -1302,14 +1390,15 @@ if __name__ == "__main__":
             benchmark(args.nruns)
 
         if args.regression:
-            for size in [1, 8, 16, 50, 128, 200, 256, 2_500, 25_000, 1_000_000, 7_000_000]:
+            for size in [1, 8, 16, 50, 128, 200, 256, 2_500, 25_000, 1_000_000, 7_000_000, 10_000_000, args.segment_size-8, args.segment_size, args.segment_size+8, args.segment_size*2, args.segment_size*2+8, args.segment_size*3]:
                 if size > args.bsize:
-                    continue #this ensures that spare buffer are large enough to store the intermediate results
+                    continue #this ensures that spare buffer are large enough to store the intermediate results //TODO: not needed?
                 #but since most of the test rely on buffer size we have to reallocate the buffers
                 for buf in [*tx_buf, *rx_buf, *tx_buf_fp, *rx_buf_fp]:
                     buf.freebuffer()
                 del tx_buf, rx_buf, tx_buf_fp, rx_buf_fp
-                tx_buf, rx_buf, tx_buf_fp, rx_buf_fp = allocate_buffers(args.naccel, args.bsize, devicemem)
+                tx_buf, rx_buf, tx_buf_fp, rx_buf_fp = allocate_buffers(args.naccel, size, devicemem)
+
                 print(f"Regression for bsize {size}")
                 for i in range(args.nruns):
 
@@ -1355,28 +1444,42 @@ if __name__ == "__main__":
                     # if sizes aren't divisible by sizeof(fp32) or sizeof(fp64)
                     if size % 8 == 0:
                         test_acc()
-                        #test_reduce(sw=True , shift=False) no-shift not implemented
-                        test_reduce(sw=True , shift=True)
+                        
                         #test_reduce(sw=False, shift=False) not safe now
                         test_reduce(sw=False, shift=True)
-                        #test_reduce_async(sw=True , shift=False) no-shift not implemented
-                        test_reduce_async(sw=True , shift=True)
                         #test_reduce_async(sw=False, shift=False) not safe now
                         test_reduce_async(sw=False, shift=True)
-                        test_allreduce( sw=True , fused=False   )
-                        test_allreduce( sw=True , fused=True    )
+
                         test_allreduce( sw=False, fused=False   )
                         test_allreduce( sw=False, fused=True    )
-                        test_allreduce_async(fused=False  , sw=True )
-                        test_allreduce_async(fused=True   , sw=True )
+
                         test_allreduce_async(fused=False  , sw=False)
                         test_allreduce_async(fused=True   , sw=False)
-
+                        if (args.naccel*(args.bsize + args.segment_size -1)//args.segment_size < args.nbufs):
+                            test_allreduce( sw=True , fused=True    )
+                            #test_reduce(sw=True , shift=False) no-shift not implemented
+                            test_reduce(sw=True , shift=True)
+                            #test_reduce_async(sw=True , shift=False) no-shift not implemented
+                            test_reduce_async(sw=True , shift=True)
+                            test_allreduce( sw=True , fused=False   )
+                            test_allreduce_async(fused=False  , sw=True )
+                            test_allreduce_async(fused=True   , sw=True )
+                            pass   
+                        else:
+                            import warnings
+                            warnings.warn("not safe to run sw reduce/allreduce non fused version! it may run out of buffers") 
+                            
+                            
     except KeyboardInterrupt:
         print("CTR^C")
     except Exception as e:
         print(e)
         import traceback
         traceback.print_tb(e.__traceback__)
+        for jj in range(args.naccel):
+            print(f"{jj}tx buffer {np.uint8}: {tx_buf_fp[jj].view(np.uint8)}")
+            print(f"{jj}rx buffer {np.uint8}: {rx_buf_fp[jj].view(np.uint8)}")
+            cclo_inst[jj].dump_communicator()
+            cclo_inst[jj].dump_rx_buffers_spares()
 
     deinit_system()

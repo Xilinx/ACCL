@@ -40,6 +40,7 @@ int main(){
 	stream<ap_axiu<DATA_WIDTH,0,0,16> > out;
 	stream<ap_axiu<DATA_WIDTH,0,0,0> > golden;
 	stream<ap_uint<32> > cmd;
+	stream<ap_uint<32> > sts;
 	
 	ap_axiu<DATA_WIDTH,0,0,0> inword;
 	ap_axiu<DATA_WIDTH,0,0,16> outword;
@@ -65,7 +66,7 @@ int main(){
 		golden.write(inword);
 	}
 	
-	vnx_packetizer(in, out, cmd, 1536/64);
+	vnx_packetizer(in, out, cmd, sts, 1536/64);
 	
 	//parse header
 	outword = out.read();
@@ -82,7 +83,7 @@ int main(){
 		if(outword.data != goldenword.data) return 1;
 		if(outword.last != goldenword.last) return 1;
 	}
-	
+	if(sts.data(31,90) != message_seq)	return 1;
 	
 	//1536B transfer
 	seq++;
@@ -117,6 +118,7 @@ int main(){
 		if(outword.data != goldenword.data) return 1;
 		if(outword.last != goldenword.last) return 1;
 	}
+	if(sts.data(31,90) != message_seq)	return 1;
 	
 	//10KB transfer	
 	seq++;
@@ -157,6 +159,7 @@ int main(){
 			if(outword.last != goldenword.last) return 1;
 		}
 	}
+	if(sts.data(31,90) != message_seq)	return 1;
 
 	return 0;
 }
