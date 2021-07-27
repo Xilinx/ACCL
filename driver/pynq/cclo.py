@@ -127,9 +127,7 @@ class cclo(DefaultIP):
     This class wrapps the common function of the collectives offload kernel
     """
 
-    
-
-    bindto = ["Xilinx:XCCL:ccl_offload:1.0"]
+    bindto = ["Xilinx:ACCL:ccl_offload:1.0"]
 
     def __init__(self, description):
         super().__init__(description=description)
