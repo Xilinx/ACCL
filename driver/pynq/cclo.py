@@ -1,4 +1,3 @@
-
 # /*******************************************************************************
 #  Copyright (C) 2021 Xilinx, Inc
 #
@@ -17,7 +16,7 @@
 # *******************************************************************************/
 
 import pynq
-from pynq import DefaultIP
+from pynq import DefaultIP, MMIO
 import os
 import sys
 import numpy as np
@@ -25,7 +24,7 @@ import struct
 import warnings
 import numpy as np
 import ipaddress
-from enum import IntEnum
+from enum import IntEnum, unique
 
 class CCLOp(IntEnum):
     config      = 0
@@ -54,13 +53,13 @@ class CCLOCfgFunc(IntEnum):
     enable_pkt  = 3
     set_timeout = 4
     init_connection = 5
-    open_port   = 6
-    open_con    = 7
-    use_tcp_stack = 8
-    use_udp_stack = 9
-    start_profiling= 10
-    end_profiling= 11
-
+    open_port       = 6
+    open_con        = 7
+    use_tcp_stack   = 8
+    use_udp_stack   = 9
+    start_profiling = 10
+    end_profiling   = 11
+    
 class CCLOReduceFunc(IntEnum):
     fp          = 0
     dp          = 1
@@ -76,7 +75,7 @@ def np_type_2_cclo_type(np_type):
         return CCLOReduceFunc.i32
     elif (np_type == np.int64   ):
         return CCLOReduceFunc.i64
-
+@unique
 class ErrorCode(IntEnum):
     COLLECTIVE_OP_SUCCESS             = 0  
     DMA_MISMATCH_ERROR                = 1     
@@ -97,6 +96,8 @@ class ErrorCode(IntEnum):
     RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID = 16
     OPEN_PORT_NOT_SUCCEEDED           = 17
     OPEN_COM_NOT_SUCCEEDED            = 18
+    def __contains__(cls, item): 
+        return item in [v.value for v in cls.__members__.values()] 
 
 class dummy_address_class:
     def __init__(self):
@@ -104,6 +105,9 @@ class dummy_address_class:
 dummy_address = dummy_address_class()
 
 TAG_ANY = 0xFFFF_FFFF
+EXCHANGE_MEM_OFFSET_ADDRESS= 0x1000
+EXCHANGE_MEM_ADDRESS_RANGE = 0x1000
+HOST_CTRL_ADDRESS_RANGE    = 0x800
 
 def compatible_size(nbytes,type):
         if   (type == CCLOReduceFunc.fp or type == CCLOReduceFunc.i32 ):
@@ -111,27 +115,11 @@ def compatible_size(nbytes,type):
         elif   (type == CCLOReduceFunc.dp or type == CCLOReduceFunc.i64 ):
             return True if (nbytes % 8) == 0 else False
 
-def repeat(objects, times=None):
-    
-    if times is None:
-        while True:
-            for object in objects:
-                yield object
-    else:
-        i=0
-        while(i < times):
-            for object in objects:
-                yield object
-                i+=1
-                if(i >= times):
-                    break
-
-        
 
 class cclo(DefaultIP):
     """
     This class wrapps the common function of the collectives offload kernel
-    """
+    """  
 
     bindto = ["Xilinx:ACCL:ccl_offload:1.0"]
 
@@ -141,14 +129,35 @@ class cclo(DefaultIP):
         #define an empty list of RX spare buffers
         self.rx_buffer_spares = []
         self.rx_buffer_size = 0
-        self.rx_buffers_adr = 0x800
+        self.rx_buffers_adr = 0 
         #define another spare for general use (e.g. as accumulator for reduce/allreduce)
         self.utility_spare = None
         #define an empty list of communicators, to which users will add
         self.communicators = []
         self.communicators_addr = self.rx_buffers_adr
         self.check_return_value_flag = True
-        
+        #TODO: use description to gather info about where to allocate spare buffers
+        self.exchange_mem = MMIO(self.mmio.base_addr + EXCHANGE_MEM_OFFSET_ADDRESS, EXCHANGE_MEM_ADDRESS_RANGE)
+
+
+    def dump_exchange_memory(self):
+        print("exchange mem:")
+        num_word_per_line=4
+        for i in range(0,EXCHANGE_MEM_ADDRESS_RANGE, 4*num_word_per_line):
+            memory = []
+            for j in range(num_word_per_line):
+                memory.append(hex(self.exchange_mem.read(i+(j*4))))
+            print(hex(self.exchange_mem.base_addr + i), memory)
+    
+    def dump_host_control_memory(self):
+        print("host control:")
+        num_word_per_line=4
+        for i in range(0,HOST_CTRL_ADDRESS_RANGE, 4*num_word_per_line):
+            memory = []
+            for j in range(num_word_per_line):
+                memory.append(hex(self.mmio.read(i+(j*4))))
+            print(hex(self.mmio.base_addr + i), memory)
+
     def deinit(self):
         print("Removing CCLO object at ",hex(self.mmio.base_addr))
         self.call(scenario=CCLOp.config, function=CCLOCfgFunc.reset_periph)
@@ -166,26 +175,29 @@ class cclo(DefaultIP):
     def setup_rx_buffers(self, nbufs, bufsize, devicemem):
         addr = self.rx_buffers_adr
         self.rx_buffer_size = bufsize
-        self.write(addr,nbufs)
+        self.exchange_mem.write(addr,nbufs)
         if not isinstance(devicemem, list):
             devicemem = [devicemem]
-        for i, devicemem_i in enumerate(repeat(devicemem, nbufs)):
-
+        for i in range(nbufs):
+            #try to take a different bank where to put rank 
+            devicemem_i = devicemem[ i % len(devicemem)]
+           
             self.rx_buffer_spares.append(pynq.allocate((bufsize,), dtype=np.int8, target=devicemem_i))
             #program this buffer into the accelerator
             addr += 4
-            self.write(addr, self.rx_buffer_spares[-1].physical_address & 0xffffffff)
+            self.exchange_mem.write(addr, self.rx_buffer_spares[-1].physical_address & 0xffffffff)
             addr += 4
-            self.write(addr, (self.rx_buffer_spares[-1].physical_address>>32) & 0xffffffff)
+            self.exchange_mem.write(addr, (self.rx_buffer_spares[-1].physical_address>>32) & 0xffffffff)
             addr += 4
-            self.write(addr, bufsize)
+            self.exchange_mem.write(addr, bufsize)
             # clear remaining fields
-            for i in range(3,9):
+            for _ in range(3,9):
                 addr += 4
-                self.write(addr, 0)
+                self.exchange_mem.write(addr, 0)
 
         self.communicators_addr = addr+4
-        self.utility_spare = pynq.allocate((bufsize,), dtype=np.int8, target=devicemem[0])
+        max_higher = 5
+        self.utility_spare = pynq.allocate((bufsize*max_higher,), dtype=np.int8, target=devicemem[0])
 
         #Start irq-driven RX buffer scheduler and (de)packetizer
         #self.call(scenario=CCLOp.config, function=CCLOCfgFunc.reset_periph)
@@ -195,30 +207,30 @@ class cclo(DefaultIP):
     def dump_rx_buffers_spares(self, nbufs=None):
         addr = self.rx_buffers_adr
         if nbufs is None:
-            assert self.read(addr) == len(self.rx_buffer_spares)
+            assert self.exchange_mem.read(addr) == len(self.rx_buffer_spares)
             nbufs = len(self.rx_buffer_spares)
         print(f"CCLO address:{hex(self.mmio.base_addr)}")
         nbufs = min(len(self.rx_buffer_spares), nbufs)
         for i in range(nbufs):
             addr   += 4
-            addrl   =self.read(addr)
+            addrl   =self.exchange_mem.read(addr)
             addr   += 4
-            addrh   = self.read(addr)
+            addrh   = self.exchange_mem.read(addr)
             addr   += 4
-            maxsize = self.read(addr)
+            maxsize = self.exchange_mem.read(addr)
             #assert self.read(addr) == self.rx_buffer_size
             addr   += 4
-            dmatag  = self.read(addr)
+            dmatag  = self.exchange_mem.read(addr)
             addr   += 4
-            rstatus  = self.read(addr)
+            rstatus  = self.exchange_mem.read(addr)
             addr   += 4
-            rxtag   = self.read(addr)
+            rxtag   = self.exchange_mem.read(addr)
             addr   += 4
-            rxlen   = self.read(addr)
+            rxlen   = self.exchange_mem.read(addr)
             addr   += 4
-            rxsrc   = self.read(addr)
+            rxsrc   = self.exchange_mem.read(addr)
             addr   += 4
-            seq     = self.read(addr)
+            seq     = self.exchange_mem.read(addr)
             
             if rstatus == 0 :
                 status =  "NOT USED"
@@ -231,7 +243,7 @@ class cclo(DefaultIP):
 
             try:
                 self.rx_buffer_spares[i].sync_from_device()
-                content = str(self.rx_buffer_spares[i])
+                content = str(self.rx_buffer_spares[i].view(np.uint8))
             except Exception :
                 content= "xxread failedxx"
             print(f"SPARE RX BUFFER{i}:\t ADDR: {hex(int(str(addrh)+str(addrl)))} \t STATUS: {status} \t OCCUPACY: {rxlen}/{maxsize} \t DMA TAG: {hex(dmatag)} \t  MPI TAG:{hex(rxtag)} \t SEQ: {seq} \t SRC:{rxsrc} \t content {content}")
@@ -255,44 +267,46 @@ class cclo(DefaultIP):
         return DefaultIP.call(self, scenario, len, comm, root_src_dst, function, tag, buf_0_type, buf_1_type, buf_2_type, addr_0, addr_1, addr_2)        
 
     def get_retcode(self):
-        return self.read(0xFFC)
+        return self.exchange_mem.read(0xFFC) 
 
     def self_check_return_value(call):
         def wrapper(self, *args, **kwargs):
             handle = call(self, *args, **kwargs)
             if self.check_return_value_flag and handle is None: # if handle is none it means that the execution was synchronous
-                self.check_return_value()
+                self.check_return_value(call.__name__)
             else: #not possible to check return code if invoked async
                 pass
             return handle
         return wrapper
     
-    def check_return_value(self):
+    def check_return_value(self, label=""):
         retcode = self.get_retcode()
         if retcode != 0:
-            raise Exception(f"CCLO @{hex(self.mmio.base_addr)}: {ErrorCode(retcode).name} you should consider resetting mpi_offload")
+            error_msg = ErrorCode(retcode).name if retcode not in ErrorCode else f"UNKNOWN ERROR ({retcode})"
+            raise Exception(f"CCLO @{hex(self.mmio.base_addr)}: during {label} {error_msg} you should consider resetting mpi_offload")
+                
 
     def get_hwid(self):
         #TODO: add check
-        return self.read(0xFF8)
+        return self.exchange_mem.read(0xFF8) 
 
-    def set_timeout(self, value, run_asynch=False, waitfor=[]):
+    def set_timeout(self, value, run_async=False, waitfor=[]):
         handle = self.start(scenario=CCLOp.config, len=value, function=CCLOCfgFunc.set_timeout, waitfor=waitfor)
-        if run_asynch:
+        if run_async:
             return handle
         else:
             handle.wait()
 
-    def start_profiling(self, run_asynch=False, waitfor=[]):
-        handle = self.start(scenario=CCLOp.config, waitfor=waitfor)
-        if run_asynch:
+    def start_profiling(self, run_async=False, waitfor=[]):
+        handle = self.start(scenario=CCLOp.config, function=CCLOCfgFunc.start_profiling, waitfor=waitfor)
+        if run_async:
             return handle
         else:
             handle.wait()
 
-    def end_profiling(self, run_asynch=False, waitfor=[]):
-        handle = self.start(scenario=CCLOp.config, waitfor=waitfor)
-        if run_asynch:
+    def end_profiling(self, run_async=False, waitfor=[]):
+        handle = self.start(scenario=CCLOp.config, function=CCLOCfgFunc.end_profiling, waitfor=waitfor)
+        if run_async:
             return handle
         else:
             handle.wait()     
@@ -322,33 +336,34 @@ class cclo(DefaultIP):
             addr = self.communicators_addr
         else:
             addr = self.communicators[-1]["addr"]
-        communicator = {"local_rank": local_rank, "addr": addr, "ranks": ranks, "inbound_seq_number_addr":[0 for _ in ranks], "outbound_seq_number_addr":[0 for _ in ranks], "session_addr":[0 for _ in ranks]}
-        self.write(addr,len(ranks))
+        comm_address = EXCHANGE_MEM_OFFSET_ADDRESS + addr
+        communicator = {"local_rank": local_rank, "addr": comm_address, "ranks": ranks, "inbound_seq_number_addr":[0 for _ in ranks], "outbound_seq_number_addr":[0 for _ in ranks], "session_addr":[0 for _ in ranks]}
+        self.exchange_mem.write(addr,len(ranks))
         addr += 4
-        self.write(addr,local_rank)
+        self.exchange_mem.write(addr,local_rank)
         for i in range(len(ranks)):
             addr += 4
             #ip string to int conversion from here:
             #https://stackoverflow.com/questions/5619685/conversion-from-ip-string-to-integer-and-backward-in-python
-            self.write(addr, int(ipaddress.IPv4Address(ranks[i]["ip"])))
+            self.exchange_mem.write(addr, int(ipaddress.IPv4Address(ranks[i]["ip"])))
             addr += 4
             #when using the UDP stack, write the rank number into the port register
             #the actual port is programmed into the stack itself
             if vnx:
-                self.write(addr,i)
+                self.exchange_mem.write(addr,i)
             else:
-                self.write(addr,ranks[i]["port"])
+                self.exchange_mem.write(addr,ranks[i]["port"])
             #leave 2 32 bit space for inbound/outbound_seq_number
             addr += 4
-            self.write(addr,0)
+            self.exchange_mem.write(addr,0)
             communicator["inbound_seq_number_addr"][i]  = addr
             addr +=4
-            self.write(addr,0)
+            self.exchange_mem.write(addr,0)
             communicator["outbound_seq_number_addr"][i] = addr
             #a 32 bit number is reserved for session id
             # sessions are initialized to 0xFFFFFFFF
             addr += 4
-            self.write(addr, 0xFFFFFFFF)
+            self.exchange_mem.write(addr, 0xFFFFFFFF)
             communicator["session_addr"][i] = addr
         self.communicators.append(communicator)
         
@@ -356,28 +371,28 @@ class cclo(DefaultIP):
         if len(self.communicators) == 0:
             addr    = self.communicators_addr
         else:
-            addr    = self.communicators[-1]["addr"]
-        nr_ranks    = self.read(addr)
+            addr    = self.communicators[-1]["addr"] - EXCHANGE_MEM_OFFSET_ADDRESS
+        nr_ranks    = self.exchange_mem.read(addr)
         addr +=4
-        local_rank  = self.read(addr)
+        local_rank  = self.exchange_mem.read(addr)
         print(f"Communicator. local_rank: {local_rank} \t number of ranks: {nr_ranks}.")
         for i in range(nr_ranks):
             addr +=4
             #ip string to int conversion from here:
             #https://stackoverflow.com/questions/5619685/conversion-from-ip-string-to-integer-and-backward-in-python
-            ip_addr_rank = str(ipaddress.IPv4Address(self.read(addr)))
+            ip_addr_rank = str(ipaddress.IPv4Address(self.exchange_mem.read(addr)))
             addr += 4
             #when using the UDP stack, write the rank number into the port register
             #the actual port is programmed into the stack itself
-            port                = self.read(addr)
+            port                = self.exchange_mem.read(addr)
             #leave 2 32 bit space for inbound/outbound_seq_number
             addr += 4
-            inbound_seq_number  = self.read(addr)
+            inbound_seq_number  = self.exchange_mem.read(addr)
             addr +=4
-            outbound_seq_number = self.read(addr)
+            outbound_seq_number = self.exchange_mem.read(addr)
             #a 32 bit integer is dedicated to session id 
             addr += 4
-            session = self.read(addr)
+            session = self.exchange_mem.read(addr)
             print(f"> rank {i} (ip {ip_addr_rank}:{port} ; session {session}) : <- inbound_seq_number {inbound_seq_number}, -> outbound_seq_number {outbound_seq_number}")
    
 
@@ -405,7 +420,7 @@ class cclo(DefaultIP):
     @self_check_return_value
     def recv(self, comm_id, dstbuf, src, tag=TAG_ANY, to_fpga=False, run_async=False, waitfor=[]):
         if not to_fpga and run_async:
-            warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
+            warnings.warn("XCCL: async run returns data on FPGA, user must sync_from_device() after waiting")
         if dstbuf.nbytes == 0:
             return
         handle = self.start(scenario=CCLOp.recv, len=dstbuf.nbytes, comm=self.communicators[comm_id]["addr"], root_src_dst=src, tag=tag, addr_0=dstbuf, waitfor=waitfor)
@@ -419,7 +434,7 @@ class cclo(DefaultIP):
     @self_check_return_value
     def copy(self, srcbuf, dstbuf,  from_fpga=False,  to_fpga=False, run_async=False, waitfor=[]):
         if not to_fpga and run_async:
-            warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
+            warnings.warn("XCCL: async run returns data on FPGA, user must sync_from_device() after waiting")
         if srcbuf.nbytes == 0:
             return
         # performs dstbuf = srcbuf
@@ -436,7 +451,7 @@ class cclo(DefaultIP):
     @self_check_return_value
     def accumulate(self, func, val, acc, val_from_fpga=False, acc_from_fpga=False, to_fpga=False, run_async=False, waitfor=[]):
         if not to_fpga and run_async:
-            warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
+            warnings.warn("XCCL: async run returns data on FPGA, user must sync_from_device() after waiting")
         if val.nbytes == 0:
             return
         if not compatible_size(val.nbytes,func):
@@ -457,7 +472,7 @@ class cclo(DefaultIP):
     @self_check_return_value
     def external_reduce(self, op1, op2, res, op1_from_fpga=False, op2_from_fpga=False, to_fpga=False, run_async=False, waitfor=[]):
         if not to_fpga and run_async:
-            warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
+            warnings.warn("XCCL: async run returns data on FPGA, user must sync_from_device() after waiting")
         if op1.nbytes == 0 or op2.nbytes == 0:
             return
 
@@ -480,7 +495,7 @@ class cclo(DefaultIP):
     @self_check_return_value
     def external_stream_kernel(self, src_buf, dst_buf, from_fpga=False, to_fpga=False, run_async=False, waitfor=[]):
         if not to_fpga and run_async:
-            warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
+            warnings.warn("XCCL: async run returns data on FPGA, user must sync_from_device() after waiting")
         if src_buf.nbytes <= 4:
             return
 
@@ -500,7 +515,7 @@ class cclo(DefaultIP):
         comm = self.communicators[comm_id]
         is_root = comm["local_rank"] == root
         if not to_fpga and not(is_root) and run_async:
-            warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
+            warnings.warn("XCCL: async run returns data on FPGA, user must sync_from_device() after waiting")
         if buf.nbytes == 0:
             return
         # sync the transmit source in one go
@@ -529,7 +544,7 @@ class cclo(DefaultIP):
     @self_check_return_value
     def scatter(self, comm_id, sbuf, rbuf, count, root, sw=True, from_fpga=False, to_fpga=False, run_async=False, waitfor=[]):
         if not to_fpga and run_async:
-            warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
+            warnings.warn("XCCL: async run returns data on FPGA, user must sync_from_device() after waiting")
         if count == 0:
             return
         comm        = self.communicators[comm_id]
@@ -565,12 +580,13 @@ class cclo(DefaultIP):
     def gather(self, comm_id, sbuf, rbuf, count, root, sw=True, shift=True, from_fpga=False, to_fpga=False, run_async=False, waitfor=[]):
         #print(hex(self.mmio.base_addr), count, root, sw, shift)
         if not to_fpga and run_async:
-            warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
+            warnings.warn("XCCL: async run returns data on FPGA, user must sync_from_device() after waiting")
         if count == 0:
             return
         comm        = self.communicators[comm_id]
         local_rank  = comm["local_rank"]
         p           = len(comm["ranks"])
+
         
         if not from_fpga:
             sbuf[0:count].sync_to_device()
@@ -580,6 +596,7 @@ class cclo(DefaultIP):
             #use rbuf[0:count] as intermediate storage
             #root will assemble its rbuf from receives (does not send)
             if shift:
+               
                 next_in_ring =  (local_rank+1)%p
                 prev_in_ring =  (local_rank+p-1)%p
                 if local_rank != root:
@@ -620,7 +637,7 @@ class cclo(DefaultIP):
     @self_check_return_value
     def allgather(self, comm_id, sbuf, rbuf, count, fused=False, sw=True, ring=True, from_fpga=False, to_fpga=False, run_async=False, waitfor=[]):
         if not to_fpga and run_async:
-            warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
+            warnings.warn("XCCL: async run returns data on FPGA, user must sync_from_device() after waiting")
         if count == 0:
             return
         comm    = self.communicators[comm_id]
@@ -685,7 +702,7 @@ class cclo(DefaultIP):
     @self_check_return_value
     def reduce(self, comm_id, sbuf, rbuf, count, root, func, sw=False, shift=True, from_fpga=False, to_fpga=False, run_async=False, waitfor=[]):
         if not to_fpga and run_async:
-            warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
+            warnings.warn("XCCL: async run returns data on FPGA, user must sync_from_device() after waiting")
         if count == 0:
             return
         if not compatible_size(count,func):
@@ -707,12 +724,16 @@ class cclo(DefaultIP):
             #use self.utility_spare as intermediate storage when needed
             #root will receive and accumulate in its rbuf from receives (does not send)
             if shift:
+                if(self.utility_spare.size < sbuf.size):
+                    warnings.warn("utility buffer can't accommodate intermediate data")
+                    return
                 prev_in_ring = (local_rank+p-1)%p
                 next_in_ring = (local_rank+1)%p
                 if local_rank != root:
                     nshifts = (p+local_rank-root)%p-1
                     #send our own data
                     prevcall     = [self.send(comm_id, sbuf[0:count], dst=next_in_ring , from_fpga=from_fpga            , run_async=True, waitfor=waitfor)]
+                    #then relay data coming from prev element in the ring
                     for i in range(nshifts):
                         prevcall = [self.recv(comm_id, rbuf[0:count], src=prev_in_ring                 , to_fpga=True   , run_async=True, waitfor=prevcall)]
                         prevcall = [self.send(comm_id, rbuf[0:count], dst=next_in_ring , from_fpga=True                 , run_async=True, waitfor=prevcall)]
@@ -720,7 +741,7 @@ class cclo(DefaultIP):
                 else:#in case of the root
                     
                     spare_buf= self.utility_spare
-                    accum_buf= rbuf[0:count]
+                    accum_buf= rbuf[0:count] 
 
                     prevcall = [self.copy(sbuf[0:count], accum_buf[0:count], from_fpga=from_fpga,  to_fpga=True, run_async=True, waitfor=waitfor)]
                     for i in range(p-1):
@@ -753,7 +774,7 @@ class cclo(DefaultIP):
     @self_check_return_value
     def allreduce(self, comm_id, sbuf, rbuf, count, func, fused=False, sw=True, ring=True, from_fpga=False, to_fpga=False, run_async=False, waitfor=[]):
         if not to_fpga and run_async:
-            warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
+            warnings.warn("XCCL: async run returns data on FPGA, user must sync_from_device() after waiting")
         if count == 0:
             return
         if not compatible_size(count,func):
@@ -767,6 +788,9 @@ class cclo(DefaultIP):
         if sw: #sw collectives implement all reduce on top of send/recv functionality exposed by mpi_offload
                     
             if       fused and ring:
+                if(self.utility_spare.size < count):
+                    warnings.warn("utility buffer can't accommodate intermediate data")
+                    return
                 comm        = self.communicators[comm_id]
                 p           = len(comm["ranks"])
                 local_rank  = comm["local_rank"]
@@ -776,7 +800,7 @@ class cclo(DefaultIP):
                 
                 buf         = sbuf[0:count]
                 accum_buf   = rbuf[0:count]
-                spare_buf   = self.utility_spare[0:count]
+                spare_buf   = self.utility_spare[0:count] #TODO: this may be a limitation when you don't know how many segments the buffer will be made out of
                 #initalize dest_buff with your data
                 prevcall    = [self.copy(sbuf, accum_buf, from_fpga=True,  to_fpga=True, run_async=True, waitfor=waitfor)]
                 #send your data to the next in the queue
@@ -811,8 +835,8 @@ class cclo(DefaultIP):
                 warnings.warn("sw non ring based fused allreduce not implemented")
                 return
             else:
-                ccl_op = CCLOp.allreduce
-            
+                cclop = CCLOp.allreduce
+                
             prevcall = [self.start(scenario=cclop, len=count, comm=self.communicators[comm_id]["addr"], function=func, addr_0=sbuf, addr_1=rbuf, waitfor=waitfor)]
 
         if run_async:
@@ -821,5 +845,4 @@ class cclo(DefaultIP):
         prevcall[0].wait()
         if not to_fpga:
             rbuf[0:count].sync_from_device()
-            
 
