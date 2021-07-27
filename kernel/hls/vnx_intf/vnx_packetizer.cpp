@@ -35,10 +35,12 @@ using namespace std;
 void vnx_packetizer(	stream<ap_axiu<DATA_WIDTH,0,0,0> > & in,
 			stream<ap_axiu<DATA_WIDTH,0,0,16> > & out,
 			stream<ap_uint<32> > & cmd,
+			stream<ap_uint<32> > & sts,
 			unsigned int max_pktsize) {
 #pragma HLS INTERFACE axis register both port=in
 #pragma HLS INTERFACE axis register both port=out
 #pragma HLS INTERFACE axis register both port=cmd
+#pragma HLS INTERFACE axis register both port=sts
 #pragma HLS INTERFACE s_axilite port=max_pktsize
 #pragma HLS INTERFACE s_axilite port=return
 
@@ -91,5 +93,7 @@ while(bytes_processed < bytes_to_process){
 	//write output stream
 	out.write(outword);
 }
-
+//acknowledge that message_seq has been sent successfully
+ap_uint<32> outsts;
+sts.write(message_seq)
 }

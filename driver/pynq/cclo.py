@@ -16,7 +16,7 @@
 # *******************************************************************************/
 
 import pynq
-from pynq import DefaultIP, MMIO
+from pynq import DefaultIP
 import os
 import sys
 import numpy as np
@@ -59,6 +59,7 @@ class CCLOCfgFunc(IntEnum):
     use_udp_stack   = 9
     start_profiling = 10
     end_profiling   = 11
+    set_dma_transaction_size = 12
     
 class CCLOReduceFunc(IntEnum):
     fp          = 0
@@ -96,6 +97,10 @@ class ErrorCode(IntEnum):
     RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID = 16
     OPEN_PORT_NOT_SUCCEEDED           = 17
     OPEN_COM_NOT_SUCCEEDED            = 18
+    DMA_SIZE_ERROR                    = 19
+    ARITH_ERROR                       = 20
+    PACK_TIMEOUT_STS_ERROR            = 21
+    PACK_SEQ_NUMBER_ERROR             = 22
     def __contains__(cls, item): 
         return item in [v.value for v in cls.__members__.values()] 
 
@@ -116,12 +121,15 @@ def compatible_size(nbytes,type):
             return True if (nbytes % 8) == 0 else False
 
 
+
 class cclo(DefaultIP):
     """
     This class wrapps the common function of the collectives offload kernel
-    """  
+    """
 
-    bindto = ["Xilinx:ACCL:ccl_offload:1.0"]
+    
+
+    bindto = ["Xilinx:XCCL:ccl_offload:1.0"]
 
     def __init__(self, description):
         super().__init__(description=description)
@@ -137,6 +145,8 @@ class cclo(DefaultIP):
         self.communicators_addr = self.rx_buffers_adr
         self.check_return_value_flag = True
         #TODO: use description to gather info about where to allocate spare buffers
+        self.segment_size = None
+        from pynq import MMIO
         self.exchange_mem = MMIO(self.mmio.base_addr + EXCHANGE_MEM_OFFSET_ADDRESS, EXCHANGE_MEM_ADDRESS_RANGE)
 
 
@@ -203,6 +213,9 @@ class cclo(DefaultIP):
         #self.call(scenario=CCLOp.config, function=CCLOCfgFunc.reset_periph)
         self.call(scenario=CCLOp.config, function=CCLOCfgFunc.enable_irq)
         self.call(scenario=CCLOp.config, function=CCLOCfgFunc.enable_pkt)
+        print("time taken to enqueue buffers", self.exchange_mem.read(0x0FF4))
+        #set segmentation size equal to buffer size
+        self.set_dma_transaction_size(bufsize)
     
     def dump_rx_buffers_spares(self, nbufs=None):
         addr = self.rx_buffers_adr
@@ -329,6 +342,17 @@ class cclo(DefaultIP):
     @self_check_return_value
     def use_tcp(self, comm_id=0):
         self.call(scenario=CCLOp.config, function=CCLOCfgFunc.use_tcp_stack)   
+    
+    @self_check_return_value
+    def set_dma_transaction_size(self, value=0):
+        if value % 8 != 0:
+            warnings.warn("XCCL: dma transaction must be divisible by 8 to use reduce collectives")
+        elif value > self.rx_buffer_size:
+            warnings.warn("XCCL: transaction size should be less or equal to configured buffer size!")
+            return
+        self.call(scenario=CCLOp.config, function=CCLOCfgFunc.set_dma_transaction_size, len=value)   
+        self.segment_size = value
+        print("time taken to start and stop timer", self.exchange_mem.read(0x0FF4))
 
     def configure_communicator(self, ranks, local_rank, vnx=False):
         assert len(self.rx_buffer_spares) > 0, "RX buffers unconfigured, please call setup_rx_buffers() first"
@@ -587,6 +611,9 @@ class cclo(DefaultIP):
         local_rank  = comm["local_rank"]
         p           = len(comm["ranks"])
 
+        if (count + self.segment_size-1)//self.segment_size * p > len(self.rx_buffer_spares):
+                warnings.warn("gather can't be executed safely with this number of spare buffers")
+                return
         
         if not from_fpga:
             sbuf[0:count].sync_to_device()
@@ -642,6 +669,10 @@ class cclo(DefaultIP):
             return
         comm    = self.communicators[comm_id]
         p       = len(comm["ranks"])
+
+        if (count + self.segment_size-1)//self.segment_size * p > len(self.rx_buffer_spares):
+            warnings.warn("All gather can't be executed safely with this number of spare buffers")
+            return
         
         if not from_fpga:
             sbuf[0:count].sync_to_device()
@@ -724,6 +755,9 @@ class cclo(DefaultIP):
             #use self.utility_spare as intermediate storage when needed
             #root will receive and accumulate in its rbuf from receives (does not send)
             if shift:
+                if (count + self.segment_size-1)//self.segment_size * p > len(self.rx_buffer_spares):
+                    warnings.warn("ring reduce can't be executed safely with this number of spare buffers")
+                    return
                 if(self.utility_spare.size < sbuf.size):
                     warnings.warn("utility buffer can't accommodate intermediate data")
                     return
@@ -788,12 +822,16 @@ class cclo(DefaultIP):
         if sw: #sw collectives implement all reduce on top of send/recv functionality exposed by mpi_offload
                     
             if       fused and ring:
-                if(self.utility_spare.size < count):
-                    warnings.warn("utility buffer can't accommodate intermediate data")
-                    return
                 comm        = self.communicators[comm_id]
                 p           = len(comm["ranks"])
                 local_rank  = comm["local_rank"]
+                
+                if p*(count + self.segment_size-1)//self.segment_size > len(self.rx_buffer_spares):
+                    warnings.warn("ring reduce can't be executed safely with this number of spare buffers")
+                    return
+                if(self.utility_spare.size < count):
+                    warnings.warn("utility buffer can't accommodate intermediate data")
+                    return
 
                 next_in_ring = (local_rank + 1     )%p
                 prev_in_ring = (local_rank - 1 + p )%p

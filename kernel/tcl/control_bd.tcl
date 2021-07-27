@@ -328,10 +328,12 @@ proc create_hier_cell_control { parentCell nameHier } {
 
   create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 udp_packetizer_cmd
   create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 udp_depacketizer_sts
+  create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 udp_packetizer_sts
 
   create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 tcp_packetizer_cmd
   create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 tcp_depacketizer_sts
-
+  create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 tcp_packetizer_sts
+  
   create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 tcp_opencon_cmd
   create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 tcp_opencon_sts
 
@@ -406,6 +408,20 @@ proc create_hier_cell_control { parentCell nameHier } {
    CONFIG.TDATA_NUM_BYTES {4} \
  ] $fifo_tcp_depacketizer_sts
 
+   # Create instance: fifo_udp_packetizer_sts, and set properties
+  set fifo_udp_packetizer_sts [ create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 fifo_udp_packetizer_sts ]
+  set_property -dict [ list \
+   CONFIG.HAS_TLAST {1} \
+   CONFIG.TDATA_NUM_BYTES {4} \
+ ] $fifo_udp_packetizer_sts
+
+   # Create instance: fifo_tcp_packetizer_sts, and set properties
+  set fifo_tcp_packetizer_sts [ create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 fifo_tcp_packetizer_sts ]
+  set_property -dict [ list \
+   CONFIG.HAS_TLAST {1} \
+   CONFIG.TDATA_NUM_BYTES {4} \
+ ] $fifo_tcp_packetizer_sts
+
   # Create instance: fifo_openCon_cmd, and set properties
   set fifo_openCon_cmd [ create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 fifo_openCon_cmd ]
   set_property -dict [ list \
@@ -452,7 +468,7 @@ proc create_hier_cell_control { parentCell nameHier } {
    CONFIG.C_BASE_VECTORS {0x0000000000010000} \
    CONFIG.C_D_AXI {1} \
    CONFIG.C_D_LMB {1} \
-   CONFIG.C_FSL_LINKS {11} \
+   CONFIG.C_FSL_LINKS {13} \
    CONFIG.C_I_LMB {1} \
    CONFIG.C_TRACE {1} \
    CONFIG.C_USE_EXTENDED_FSL_INSTR {1} \
@@ -515,6 +531,7 @@ proc create_hier_cell_control { parentCell nameHier } {
 
   connect_bd_intf_net -intf_net udp_depacketizer_sts [get_bd_intf_pins udp_depacketizer_sts] [get_bd_intf_pins fifo_depacketizer_sts/S_AXIS]  
   connect_bd_intf_net -intf_net udp_packetizer_cmd [get_bd_intf_pins udp_packetizer_cmd] [get_bd_intf_pins fifo_packetizer_cmd/M_AXIS]
+  connect_bd_intf_net -intf_net udp_packetizer_sts [get_bd_intf_pins fifo_udp_packetizer_sts/S_AXIS] [get_bd_intf_pins udp_packetizer_sts]
 
   connect_bd_intf_net -intf_net tcp_openport_cmd [get_bd_intf_pins fifo_openPort_cmd/M_AXIS] [get_bd_intf_pins tcp_openport_cmd]
   connect_bd_intf_net -intf_net tcp_opencon_cmd [get_bd_intf_pins fifo_openCon_cmd/M_AXIS] [get_bd_intf_pins tcp_opencon_cmd]
@@ -522,11 +539,13 @@ proc create_hier_cell_control { parentCell nameHier } {
   connect_bd_intf_net -intf_net tcp_openport_sts [get_bd_intf_pins fifo_openPort_sts/S_AXIS] [get_bd_intf_pins tcp_openport_sts]
   connect_bd_intf_net -intf_net tcp_opencon_sts [get_bd_intf_pins fifo_openCon_sts/S_AXIS] [get_bd_intf_pins tcp_opencon_sts]
   connect_bd_intf_net -intf_net tcp_depacketizer_sts [get_bd_intf_pins fifo_tcp_depacketizer_sts/S_AXIS] [get_bd_intf_pins tcp_depacketizer_sts]
-
+  connect_bd_intf_net -intf_net tcp_packetizer_sts [get_bd_intf_pins fifo_tcp_packetizer_sts/S_AXIS] [get_bd_intf_pins tcp_packetizer_sts]
+   
   connect_bd_intf_net -intf_net microblaze_0_M_AXI_DP [get_bd_intf_pins microblaze_0/M_AXI_DP] [get_bd_intf_pins microblaze_0_axi_periph/S00_AXI]
 
   connect_bd_intf_net [get_bd_intf_pins fifo_depacketizer_sts/M_AXIS] [get_bd_intf_pins microblaze_0/S6_AXIS]
   connect_bd_intf_net [get_bd_intf_pins fifo_packetizer_cmd/S_AXIS] [get_bd_intf_pins microblaze_0/M6_AXIS]
+  connect_bd_intf_net [get_bd_intf_pins fifo_udp_packetizer_sts/M_AXIS] [get_bd_intf_pins microblaze_0/S12_AXIS]
 
   connect_bd_intf_net [get_bd_intf_pins fifo_openPort_cmd/S_AXIS] [get_bd_intf_pins microblaze_0/M7_AXIS]
   connect_bd_intf_net [get_bd_intf_pins fifo_openCon_cmd/S_AXIS] [get_bd_intf_pins microblaze_0/M8_AXIS]
@@ -534,6 +553,7 @@ proc create_hier_cell_control { parentCell nameHier } {
   connect_bd_intf_net [get_bd_intf_pins fifo_openCon_sts/M_AXIS] [get_bd_intf_pins microblaze_0/S8_AXIS]
   connect_bd_intf_net [get_bd_intf_pins fifo_tcp_packetizer_cmd/S_AXIS] [get_bd_intf_pins microblaze_0/M9_AXIS]
   connect_bd_intf_net [get_bd_intf_pins fifo_tcp_depacketizer_sts/M_AXIS] [get_bd_intf_pins microblaze_0/S9_AXIS]
+  connect_bd_intf_net [get_bd_intf_pins fifo_tcp_packetizer_sts/M_AXIS] [get_bd_intf_pins microblaze_0/S11_AXIS]
 
   connect_bd_intf_net [get_bd_intf_pins microblaze_0/S10_AXIS] [get_bd_intf_pins microblaze_0_exchange_memory/host_cmd]
   connect_bd_intf_net [get_bd_intf_pins microblaze_0/M10_AXIS] [get_bd_intf_pins microblaze_0_exchange_memory/host_sts]
@@ -543,6 +563,7 @@ proc create_hier_cell_control { parentCell nameHier } {
   # Clocks and resets
   connect_bd_net -net SYS_Rst_1 [get_bd_pins microblaze_0_local_memory/SYS_Rst] [get_bd_pins proc_sys_reset_0/peripheral_reset]
   connect_bd_net [get_bd_pins ap_clk] [get_bd_pins fifo_depacketizer_sts/s_axis_aclk] \
+                                      [get_bd_pins fifo_udp_packetizer_sts/s_axis_aclk] \
                                       [get_bd_pins fifo_packetizer_cmd/s_axis_aclk] \
                                       [get_bd_pins fifo_openCon_cmd/s_axis_aclk] \
                                       [get_bd_pins fifo_openCon_sts/s_axis_aclk] \
@@ -550,6 +571,7 @@ proc create_hier_cell_control { parentCell nameHier } {
                                       [get_bd_pins fifo_openPort_sts/s_axis_aclk] \
                                       [get_bd_pins fifo_tcp_depacketizer_sts/s_axis_aclk] \
                                       [get_bd_pins fifo_tcp_packetizer_cmd/s_axis_aclk] \
+                                      [get_bd_pins fifo_tcp_packetizer_sts/s_axis_aclk] \
                                       [get_bd_pins microblaze_0/Clk] \
                                       [get_bd_pins microblaze_0_axi_periph/ACLK] \
                                       [get_bd_pins microblaze_0_axi_periph/M00_ACLK] \
@@ -580,8 +602,10 @@ proc create_hier_cell_control { parentCell nameHier } {
                                                                    [get_bd_pins microblaze_0_axi_periph/M01_ARESETN] \
                                                                    [get_bd_pins fifo_depacketizer_sts/s_axis_aresetn] \
                                                                    [get_bd_pins fifo_packetizer_cmd/s_axis_aresetn] \
+                                                                   [get_bd_pins fifo_udp_packetizer_sts/s_axis_aresetn] \
                                                                    [get_bd_pins fifo_tcp_depacketizer_sts/s_axis_aresetn] \
                                                                    [get_bd_pins fifo_tcp_packetizer_cmd/s_axis_aresetn] \
+                                                                   [get_bd_pins fifo_tcp_packetizer_sts/s_axis_aresetn] \
                                                                    [get_bd_pins fifo_openCon_cmd/s_axis_aresetn] \
                                                                    [get_bd_pins fifo_openCon_sts/s_axis_aresetn] \
                                                                    [get_bd_pins fifo_openPort_cmd/s_axis_aresetn] \

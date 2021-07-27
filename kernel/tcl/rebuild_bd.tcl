@@ -609,9 +609,11 @@ set s_axis_tcp_notification [ create_bd_intf_port -mode Slave -vlnv xilinx.com:i
   connect_bd_intf_net -intf_net vnx_packetizer_cmd [get_bd_intf_pins control/udp_packetizer_cmd] [get_bd_intf_pins udp_tx_subsystem/s_axis_command]
   connect_bd_intf_net -intf_net vnx_packetizer_in [get_bd_intf_pins axis_switch_0/M00_AXIS] [get_bd_intf_pins udp_tx_subsystem/s_axis_data]
   connect_bd_intf_net -intf_net vnx_packetizer_out [get_bd_intf_ports m_axis_udp_tx_data] [get_bd_intf_pins udp_tx_subsystem/m_axis_data]
+  connect_bd_intf_net -intf_net vnx_packetizer_sts [get_bd_intf_pins control/udp_packetizer_sts] [get_bd_intf_pins udp_tx_subsystem/m_axis_sts]
 
   connect_bd_intf_net [get_bd_intf_pins tcp_rx_subsystem/m_axis_pktsts] [get_bd_intf_pins control/tcp_depacketizer_sts]
   connect_bd_intf_net [get_bd_intf_pins tcp_tx_subsystem/s_axis_pktcmd] [get_bd_intf_pins control/tcp_packetizer_cmd]
+  connect_bd_intf_net [get_bd_intf_pins tcp_tx_subsystem/m_axis_tcp_packetizer_sts] [get_bd_intf_pins control/tcp_packetizer_sts]
 
   connect_bd_intf_net [get_bd_intf_pins tcp_rx_subsystem/m_axis_openport_sts] [get_bd_intf_pins control/tcp_openport_sts]
   connect_bd_intf_net [get_bd_intf_pins tcp_rx_subsystem/s_axis_openport_cmd] [get_bd_intf_pins control/tcp_openport_cmd]

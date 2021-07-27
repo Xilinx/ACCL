@@ -53,7 +53,7 @@ proc create_hier_cell_udp_tx_subsystem { parentCell nameHier } {
   create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 s_axis_data
   create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_data
   create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:aximm_rtl:1.0 s_axi_control
-
+  create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_sts
   # Create pins
   create_bd_pin -dir I -type clk ap_clk
   create_bd_pin -dir I -type rst ap_rst_n
@@ -72,6 +72,7 @@ proc create_hier_cell_udp_tx_subsystem { parentCell nameHier } {
   set vnx_packetizer_0 [ create_bd_cell -type ip -vlnv xilinx.com:hls:vnx_packetizer:1.0 vnx_packetizer_0 ]
 
   # Create interface connections
+  connect_bd_intf_net -intf_net status [get_bd_intf_pins m_axis_sts] [get_bd_intf_pins vnx_packetizer_0/sts_V]
   connect_bd_intf_net -intf_net control [get_bd_intf_pins s_axi_control] [get_bd_intf_pins vnx_packetizer_0/s_axi_control]
   connect_bd_intf_net -intf_net command [get_bd_intf_pins s_axis_command] [get_bd_intf_pins vnx_packetizer_0/cmd_V]
   connect_bd_intf_net -intf_net pkt2fifo [get_bd_intf_pins m_axis_data] [get_bd_intf_pins tx_fifo/M_AXIS]
@@ -132,6 +133,7 @@ proc create_hier_cell_tcp_tx_subsystem { parentCell nameHier } {
   create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_tcp_tx_meta
   create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 s_axis_opencon_cmd
   create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_opencon_sts
+  create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_tcp_packetizer_sts
 
   # Create pins
   create_bd_pin -dir I -type clk ap_clk
@@ -161,6 +163,7 @@ proc create_hier_cell_tcp_tx_subsystem { parentCell nameHier } {
   connect_bd_intf_net -intf_net cmd_V1_1 [get_bd_intf_pins s_axis_opencon_cmd] [get_bd_intf_pins tcp_openConReq_0/cmd_V]
   connect_bd_intf_net -intf_net cmd_V_1 [get_bd_intf_pins s_axis_pktcmd] [get_bd_intf_pins tcp_packetizer_0/cmd_V]
   connect_bd_intf_net -intf_net in_r_1 [get_bd_intf_pins s_axis_tcp_tx_data] [get_bd_intf_pins tcp_packetizer_0/in_r]
+  connect_bd_intf_net -intf_net status [get_bd_intf_pins m_axis_tcp_packetizer_sts] [get_bd_intf_pins tcp_packetizer_0/sts_V]
   connect_bd_intf_net -intf_net s_axis_tcp_tx_status_1 [get_bd_intf_pins s_axis_tcp_tx_status] [get_bd_intf_pins tcp_txHandler_0/s_axis_tcp_tx_status]
   connect_bd_intf_net -intf_net tcp_openConResp_0_sts_V [get_bd_intf_pins m_axis_opencon_sts] [get_bd_intf_pins tcp_openConResp_0/sts_V]
   connect_bd_intf_net -intf_net tcp_packetizer_0_cmd_txHandler_V [get_bd_intf_pins tcp_packetizer_0/cmd_txHandler_V] [get_bd_intf_pins tcp_txHandler_0/cmd_txHandler_V]
@@ -195,4 +198,3 @@ proc create_hier_cell_tcp_tx_subsystem { parentCell nameHier } {
 # Create instance: tx_subsystem
 create_hier_cell_udp_tx_subsystem [current_bd_instance .] udp_tx_subsystem
 create_hier_cell_tcp_tx_subsystem [current_bd_instance .] tcp_tx_subsystem
-
