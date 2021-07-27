@@ -140,13 +140,13 @@ extern "C" {
 
 //AXI MMAP address
 #define CONTROL_OFFSET    0x0000
-#define HWID_OFFSET       0x0FF8
-#define RETVAL_OFFSET     0x0FFC
 #define ARG00_OFFSET      0x0010
 #define AXI00_PTR0_OFFSET 0x0018
 #define AXI01_PTR0_OFFSET 0x0024
 #define END_OF_REG_OFFSET 0x0030
-#define END_OF_EXCHMEM    0x1000
+#define HWID_OFFSET       0x1FF8	
+#define RETVAL_OFFSET     0x1FFC
+#define END_OF_EXCHMEM    0x2000
 
 #define HOSTCTRL_BASEADDR     0x0        
 #define EXCHMEM_BASEADDR      0x0800
