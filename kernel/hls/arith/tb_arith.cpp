@@ -47,7 +47,7 @@ int main(){
 
 	for(int i=0; i<(len/64); i++){
 		inword.data = i;
-		inword.last = (i == len/64-1);
+		inword.last = (i % 4 == 0);
 		if(inword.last == 1) inword.keep = 0xf;
 		in1.write(inword);
 		inword.data = 2*i;
@@ -71,8 +71,9 @@ int main(){
 		if(outword.last != goldenword.last) return 1;
 		if(outword.keep != goldenword.keep) return 1;
 		int last = outword.last;
-		if(last == 0 && i==(len/64-1)) return 1;
+		if(last != (i % 4 == 0))) return 1;
 	}
 	
+
 	return 0;
 }
