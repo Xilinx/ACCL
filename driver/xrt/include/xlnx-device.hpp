@@ -33,25 +33,43 @@
 // XXX Implement all supported ops
 
 enum fgFunc {
-  enable_irq = 0,
-  disable_irq = 1,
-  reset_periph = 2,
-  enable_pkt = 3
+	enable_irq  = 0,
+    disable_irq = 1,
+    reset_periph= 2,
+    enable_pkt  = 3,
+    set_timeout = 4,
+    init_connection = 5,
+    open_port       = 6,
+    open_con        = 7,
+    use_tcp_stack   = 8,
+    use_udp_stack   = 9,
+    start_profiling = 10,
+    end_profiling   = 11,
+    set_dma_transaction_size = 12
 };
 
 enum operation_t {
-  config = 0,
-  sending = 1,
-  receiving = 2,
-  bcast = 3,
-  scatter = 4,
-  gather = 5,
-  reduce = 6,
-  allgather = 7,
-  allreduce = 8,
-  accumulate = 9,
-  copy = 10,
-  nop = 11
+	config                  = 0,
+    sendop                  = 1,
+    recvop                  = 2,
+    bcast                   = 3,
+    scatter                 = 4,
+    gather                  = 5,
+    reduce                  = 6,
+    allgather               = 7,
+    allreduce               = 8,
+    accumulate              = 9,
+    copy                    = 10,
+    reduce_ring             = 11,
+    allreduce_fused_ring    = 12,
+    gather_ring             = 13,
+    allgather_ring          = 14,
+    ext_stream_krnl         = 15,
+    ext_reduce              = 16,
+    bcast_rr                = 17,
+    scatter_rr              = 18,
+    allreduce_share_ring    = 19,
+    nop                     = 255
 };
 
 enum network_protocol_t { TCP, UDP, ROCE };
