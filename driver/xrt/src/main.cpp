@@ -58,7 +58,7 @@ int main(int argc, char *argv[]) {
   constexpr int buffer_size = 16 * 1024;
 
   t_construct.start();
-  FPGA f(nbuf, buffer_size, device_idx, DUAL);
+  ACCL f(nbuf, buffer_size, device_idx, DUAL);
   t_construct.end();
 
   t_bitstream.start();
@@ -66,7 +66,7 @@ int main(int argc, char *argv[]) {
   t_bitstream.end();
 
   t_config_comm.start();
-  f.config_comm(nbuf);
+  //f.config_comm(nbuf);
   t_config_comm.end();
 
   t_preprxbuffers.start();
