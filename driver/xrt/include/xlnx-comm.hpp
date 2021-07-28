@@ -13,20 +13,19 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 #
-# *******************************************************************************/
+#
+*******************************************************************************/
 
 #pragma once
 
 #include <iostream>
 #include <map>
 
-
 #include "experimental/xrt_aie.h"
 #include "experimental/xrt_device.h"
 #include "experimental/xrt_kernel.h"
-#include <mpi.h>
 #include <arpa/inet.h>
-
+#include <mpi.h>
 
 using namespace std;
 
@@ -47,6 +46,7 @@ public:
   communicator(int world_size, uint64_t comm_addr, xrt::kernel krnl,
                bool vnx = false)
       : _world_size(world_size), _comm_addr(comm_addr), _vnx(vnx) {
+
     MPI_Comm_rank(MPI_COMM_WORLD, &_rank);
     char *local_rank_string = getenv("OMPI_COMM_WORLD_LOCAL_RANK");
     _local_rank = atoi(local_rank_string);
@@ -70,7 +70,11 @@ public:
     }
     //  self.communicators.append(communicator)
   }
-  int port_from_rank(int rank) { throw  std::logic_error("Function not yet implemented"); return 0; }
+
+  int port_from_rank(int rank) {
+    throw std::logic_error("Function not yet implemented");
+    return 0;
+  }
 
   uint32_t ip_encode(string ip) { return inet_addr(ip.c_str()); }
 
