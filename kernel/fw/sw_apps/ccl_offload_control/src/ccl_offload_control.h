@@ -24,7 +24,7 @@ extern "C" {
 
 #define KERNEL_NAME    "ccl_offload"
 #define KERNEL_VENDOR  "Xilinx"
-#define KERNEL_LIBRARY "XCCL"
+#define KERNEL_LIBRARY "ACCL"
 
 // #define NUM_M_AXI      3
 // #define NUM_CLOCKS     1
@@ -129,6 +129,9 @@ extern "C" {
 #define XCCL_ALLGATHER_RING 14
 #define XCCL_EXT_STREAM_KRNL 15
 #define XCCL_EXT_REDUCE     16
+#define XCCL_BCAST_RR       17
+#define XCCL_SCATTER_RR     18
+#define XCCL_ALLREDUCE_SHARE_RING 19
 
 //XCCL_CONFIG SUBFUNCTIONS
 #define HOUSEKEEP_IRQEN   0
