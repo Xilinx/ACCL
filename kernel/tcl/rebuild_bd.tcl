@@ -366,7 +366,7 @@ proc create_root_design { parentCell } {
 
   set s_axi_control [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:aximm_rtl:1.0 s_axi_control ]
   set_property -dict [ list \
-   CONFIG.ADDR_WIDTH {12} \
+   CONFIG.ADDR_WIDTH {13} \
    CONFIG.ARUSER_WIDTH {0} \
    CONFIG.AWUSER_WIDTH {0} \
    CONFIG.BUSER_WIDTH {0} \
@@ -609,9 +609,11 @@ set s_axis_tcp_notification [ create_bd_intf_port -mode Slave -vlnv xilinx.com:i
   connect_bd_intf_net -intf_net vnx_packetizer_cmd [get_bd_intf_pins control/udp_packetizer_cmd] [get_bd_intf_pins udp_tx_subsystem/s_axis_command]
   connect_bd_intf_net -intf_net vnx_packetizer_in [get_bd_intf_pins axis_switch_0/M00_AXIS] [get_bd_intf_pins udp_tx_subsystem/s_axis_data]
   connect_bd_intf_net -intf_net vnx_packetizer_out [get_bd_intf_ports m_axis_udp_tx_data] [get_bd_intf_pins udp_tx_subsystem/m_axis_data]
+  connect_bd_intf_net -intf_net vnx_packetizer_sts [get_bd_intf_pins control/udp_packetizer_sts] [get_bd_intf_pins udp_tx_subsystem/m_axis_sts]
 
   connect_bd_intf_net [get_bd_intf_pins tcp_rx_subsystem/m_axis_pktsts] [get_bd_intf_pins control/tcp_depacketizer_sts]
   connect_bd_intf_net [get_bd_intf_pins tcp_tx_subsystem/s_axis_pktcmd] [get_bd_intf_pins control/tcp_packetizer_cmd]
+  connect_bd_intf_net [get_bd_intf_pins tcp_tx_subsystem/m_axis_tcp_packetizer_sts] [get_bd_intf_pins control/tcp_packetizer_sts]
 
   connect_bd_intf_net [get_bd_intf_pins tcp_rx_subsystem/m_axis_openport_sts] [get_bd_intf_pins control/tcp_openport_sts]
   connect_bd_intf_net [get_bd_intf_pins tcp_rx_subsystem/s_axis_openport_cmd] [get_bd_intf_pins control/tcp_openport_cmd]
@@ -680,13 +682,14 @@ set s_axis_tcp_notification [ create_bd_intf_port -mode Slave -vlnv xilinx.com:i
 
   # Create address segments
   #1. exchange memory module
-  #1.1. register in which user writes
+  #1.1. register in which user writes, to communicate with host control and exchange mem. !!It has to span accross host_ctrl AND exchange mem regions!!
   assign_bd_address -offset 0x00000000 -range 0x00000800 -target_address_space [get_bd_addr_spaces s_axi_control] [get_bd_addr_segs control/microblaze_0_exchange_memory/hostctrl/s_axi_control/Reg] -force 
-  #1.2  hostctrl to pass arguments to MB
+  #1.2  make hostctrl region accessible to MB
   assign_bd_address -offset 0x00000000 -range 0x00000800 -target_address_space [get_bd_addr_spaces control/microblaze_0/Data] [get_bd_addr_segs control/microblaze_0_exchange_memory/hostctrl/s_axi_control/Reg] -force
   #1.2  actual exchange memory 
-  assign_bd_address -offset 0x00000800 -range 0x00000800 -target_address_space [get_bd_addr_spaces s_axi_control] [get_bd_addr_segs control/microblaze_0_exchange_memory/axi_bram_ctrl_0/S_AXI/Mem0] -force
-  assign_bd_address -offset 0x00000800 -range 0x00000800 -target_address_space [get_bd_addr_spaces control/microblaze_0/Data] [get_bd_addr_segs control/microblaze_0_exchange_memory/axi_bram_ctrl_0/S_AXI/Mem0] -force
+  assign_bd_address -offset 0x00001000 -range 0x00001000 -target_address_space [get_bd_addr_spaces s_axi_control] [get_bd_addr_segs control/microblaze_0_exchange_memory/axi_bram_ctrl_0/S_AXI/Mem0] -force
+  #1.2  make exchange mem region accessible to MB
+  assign_bd_address -offset 0x00001000 -range 0x00001000 -target_address_space [get_bd_addr_spaces control/microblaze_0/Data] [get_bd_addr_segs control/microblaze_0_exchange_memory/axi_bram_ctrl_0/S_AXI/Mem0] -force
   #MB RAM for memory and instructions
   assign_bd_address -offset 0x00010000 -range 0x00008000 -target_address_space [get_bd_addr_spaces control/microblaze_0/Data] [get_bd_addr_segs control/microblaze_0_local_memory/dlmb_bram_if_cntlr/SLMB/Mem] -force
   assign_bd_address -offset 0x00010000 -range 0x00008000 -target_address_space [get_bd_addr_spaces control/microblaze_0/Instruction] [get_bd_addr_segs control/microblaze_0_local_memory/ilmb_bram_if_cntlr/SLMB/Mem] -force
@@ -728,5 +731,4 @@ set s_axis_tcp_notification [ create_bd_intf_port -mode Slave -vlnv xilinx.com:i
 ##################################################################
 
 create_root_design ""
-
 
