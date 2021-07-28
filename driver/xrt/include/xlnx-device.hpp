@@ -13,11 +13,13 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 #
-# *******************************************************************************/
+#
+*******************************************************************************/
 
 #pragma once
 
 #include "xlnx-comm.hpp"
+#include "xlnx-consts.hpp"
 
 #include "experimental/xrt_aie.h"
 #include "experimental/xrt_device.h"
@@ -30,47 +32,13 @@
 #include <uuid/uuid.h>
 #include <vector>
 
-// XXX Implement all supported ops
-
-enum fgFunc {
-	enable_irq  = 0,
-    disable_irq = 1,
-    reset_periph= 2,
-    enable_pkt  = 3,
-    set_timeout = 4,
-    init_connection = 5,
-    open_port       = 6,
-    open_con        = 7,
-    use_tcp_stack   = 8,
-    use_udp_stack   = 9,
-    start_profiling = 10,
-    end_profiling   = 11,
-    set_dma_transaction_size = 12
-};
-
-enum operation_t {
-	config                  = 0,
-    sendop                  = 1,
-    recvop                  = 2,
-    bcast                   = 3,
-    scatter                 = 4,
-    gather                  = 5,
-    reduce                  = 6,
-    allgather               = 7,
-    allreduce               = 8,
-    accumulate              = 9,
-    copy                    = 10,
-    reduce_ring             = 11,
-    allreduce_fused_ring    = 12,
-    gather_ring             = 13,
-    allgather_ring          = 14,
-    ext_stream_krnl         = 15,
-    ext_reduce              = 16,
-    bcast_rr                = 17,
-    scatter_rr              = 18,
-    allreduce_share_ring    = 19,
-    nop                     = 255
-};
+bool compatible_size(size_t nbytes, accl_reduce_func type) {
+  if (type == fp || type == i32) {
+    return (nbytes % 4) == 0 ? true : false;
+  } else if (type == dp || type == i64) {
+    return (nbytes % 8) == 0 ? true : false;
+  }
+}
 
 enum network_protocol_t { TCP, UDP, ROCE };
 
@@ -101,8 +69,10 @@ public:
   }
 
   ~FPGA() {
-	std::cout << "Removing CCLO object at " << std::hex <<  get_mmio_addr() << std::endl;
-    execute_kernel(true, config, 0, 0, 0, reset_periph, 0, 0, 0, _rx_buffers[0], _rx_buffers[0]);
+    std::cout << "Removing CCLO object at " << std::hex << get_mmio_addr()
+              << std::endl;
+    execute_kernel(true, config, 0, 0, 0, reset_periph, 0, 0, 0, _rx_buffers[0],
+                   _rx_buffers[0]);
   }
 
   /*
@@ -119,7 +89,7 @@ public:
   }
 
   uint64_t get_mmio_addr() {
-	return 0; //XXX Implement this
+    return 0; // XXX Implement this
   }
 
   void config_comm(int ranks) { _comm = {ranks, _comm_addr, _krnl}; }
@@ -146,7 +116,7 @@ public:
 
   template <typename... Args> void execute_kernel(bool wait, Args... args) {
     auto run = _krnl(args...);
-   	run.start(); 
+    run.start();
     if (wait) {
       run.wait();
     }
@@ -237,11 +207,11 @@ public:
 
   uint64_t get_hwid() { return read_reg(0xFF8); }
 
-//XXX Continue here
-  void nop_op(bool run_async=false) {//, waitfor=[]) {
-        auto handle = _krnl(nop, 0, 0, 0, 0, 0, 0, 0, _rx_buffers[0], _rx_buffers[0]);//, waitfor=waitfor);
-        handle.start();
-            handle.wait();
+  // XXX Continue here
+  void nop_op(bool run_async = false) { //, waitfor=[]) {
+    auto handle = _krnl(nop, 0, 0, 0, 0, 0, 0, 0, _rx_buffers[0],
+                        _rx_buffers[0]); //, waitfor=waitfor);
+    handle.start();
+    handle.wait();
   }
-
 };
