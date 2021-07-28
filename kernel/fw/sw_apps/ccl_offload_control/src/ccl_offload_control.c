@@ -1766,8 +1766,7 @@ int allreduce_fused_ring(
 				curr_len = tmp_len;
 			//2. receive part of data from previous rank and retrieve spare buffer index
 			buf_idx = wait_receive_world_i(&world, prev_in_ring, curr_len, TAG_ANY);
-			if  (buf_idx < 0 )
-				return RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID;
+			if  (buf_idx < 0 ) return RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID;
 			buf_addr = ((long long) rx_buf_list[buf_idx].addrh << 32) | rx_buf_list[buf_idx].addrl; 
 			//3. relay others data only if it's not the last iteration.  
 			if ( i+1<world.size-1){
@@ -1786,6 +1785,21 @@ int allreduce_fused_ring(
 	return ret;
 }
 
+static inline int arith_number_of_bytes_per(unsigned int function){
+	switch (function)
+	{
+		case ARITH_fp:
+			return 4;
+		case ARITH_dp:
+			return 8;
+		case ARITH_i32:
+			return 4;
+		case ARITH_i64:
+			return 8;
+	}
+	return -1;
+}
+
 //2 stage allreduce: distribute sums across the ranks. smaller bandwidth between ranks and use multiple arith at the same time.
 int all_reduce_share(
 				unsigned int comm,
@@ -1793,57 +1807,58 @@ int all_reduce_share(
 				unsigned int function,
 				unsigned long long src_addr,
 				unsigned long long dst_addr){
-	unsigned int ret;
-	uint64_t curr_src_addr, curr_accu_addr, curr_dst_addr;
+	unsigned int ret,i;
+	uint64_t curr_recv_addr, curr_send_addr;
 	//find communicator
 	communicator world 		  	 = find_comm(comm);
 	unsigned int next_in_ring 	 = (world.local_rank+1			  )%world.size	;
 	unsigned int prev_in_ring 	 = (world.local_rank+world.size-1 )%world.size	;
+	//divide into chunks a
+	unsigned int len_div_size 	 = len/world.size; 
+	unsigned int tail 		     = len_div_size % min_operand_width;
+	unsigned int min_operand_width = arith_number_of_bytes_per(function);
+	len_div_size += - tail + (tail == 0 ? 0 : min_operand_width); //TODO: move
 
-	unsigned int len_div_size 	 = len/world.size; //TODO: ensure is compatible with operation we are performing
 	unsigned int curr_send_chunk = world.local_rank;
 	unsigned int curr_recv_chunk = (curr_send_chunk + world.size - 1) % world.size;
 
 	//A) Share reduce stage
-	for (int i = 0; i < world.size -1; ++i)
+	//1. each rank send its own chunk to the next rank in the ring
+	curr_send_addr = src_addr + len_div_size * curr_send_chunk;
+	ret = transmit_offchip_world(&world, next_in_ring,	len_div_size, curr_send_addr, TAG_ANY);
+	if(ret != COLLECTIVE_OP_SUCCESS) return ret;
+	//2. for n-1 times sum the chunk that is coming from previous rank with your chunk at the same location. then forward the result to
+	// the next rank in the ring
+	for (i = 0; i < world.size -2; ++i, curr_recv_chunk=(curr_recv_chunk + world.size - 1) % world.size)
 	{
-		curr_src_addr  = src_addr + len_div_size * curr_send_chunk;
-		curr_accu_addr = src_addr + len_div_size * curr_recv_chunk;
-
-		// TODO: 1 and 2 can actually overlapped
-		// 1.send our data from src buffer
-		ret = transmit_offchip_world(&world, next_in_ring,	len_div_size, curr_src_addr, TAG_ANY);
+		curr_recv_addr = src_addr + len_div_size * curr_recv_chunk;
+		//2. receive part of data from previous in rank and accumulate to the part you have at the same address
+		//ad forwar dto the next rank in the ring
+		ret = receive_and_reduce_offchip(&world, prev_in_ring, next_in_ring, len_div_size, function, curr_recv_addr, TAG_ANY); 
 		if(ret != COLLECTIVE_OP_SUCCESS) return ret;
-		//2. receive part of data from previous in rank and accumulate in src buffer: src_buffer = src_buffer + spare_buffer 
-		ret = receive_and_accumulate(&world, prev_in_ring, len_div_size, function, curr_accu_addr, curr_accu_addr, TAG_ANY); 
-		if(ret != COLLECTIVE_OP_SUCCESS) return ret;
-		//3. if last iteration, copy the reduced result from src buffer to corresponding position of the dst buffer
-		if (i == world.size - 2)
-		{
-			curr_dst_addr = dst_addr + len_div_size * curr_recv_chunk;
-
-			ret = copy(len_div_size, curr_accu_addr, curr_dst_addr);
-			if(ret != COLLECTIVE_OP_SUCCESS) return ret;
-		}
-
-		curr_send_chunk = curr_recv_chunk;
-		curr_recv_chunk = (curr_recv_chunk + world.size - 1) % world.size;
+	}
+	//at last iteration (n-1) you can sum and save the result at the same location (which is the right place to be)
+	if (i > 0 ){
+		curr_recv_addr  = src_addr + len_div_size * curr_recv_chunk; 
+		curr_send_addr  = dst_addr + len_div_size * curr_recv_chunk;
+		ret = receive_and_accumulate(&world, prev_in_ring, len_div_size, function, curr_recv_addr, curr_send_addr, TAG_ANY); 
 	}
 
-	//B) Share result stage
-	for (int i = 0; i < world.size -1; ++i)
+	//B) Share result stage at this point each of the ranks has at curr_recv_chunk the final result.
+	//they have to share it with the others so that all have the entire buffer
+	for (i = 0; i < world.size -1; ++i)
 	{
+		curr_send_chunk =  curr_recv_chunk;
+		curr_recv_chunk = (curr_recv_chunk + world.size - 1) % world.size;
+		curr_send_addr  = dst_addr + len_div_size * curr_send_chunk;
+		curr_recv_addr  = dst_addr + len_div_size * curr_recv_chunk;
+		//TODO: 5.6. can be done together since we have 3 dmas (1rx read from spare, 1tx write in the final dest, 2rx can read and transmit to next in the ring)
 		//5. send the local reduced results to next rank
-		curr_dst_addr = dst_addr + len_div_size * curr_send_chunk;
-		ret = transmit_offchip_world(&world, next_in_ring,	len_div_size, curr_dst_addr, TAG_ANY);
+		ret = transmit_offchip_world(&world, next_in_ring,	len_div_size, curr_send_addr, TAG_ANY);
 		if(ret != COLLECTIVE_OP_SUCCESS) return ret;
 		//6. receive the reduced results from previous rank and put into correct dst buffer position
-		curr_dst_addr = dst_addr + len_div_size * curr_recv_chunk;
-
-		ret = receive_offchip_world(&world, prev_in_ring,	len_div_size, curr_dst_addr, TAG_ANY);
+		ret = receive_offchip_world(&world, prev_in_ring,	len_div_size, curr_recv_addr, TAG_ANY);
 		if(ret != COLLECTIVE_OP_SUCCESS) return ret;
-		curr_send_chunk = curr_recv_chunk;
-		curr_recv_chunk = (curr_recv_chunk + world.size - 1) % world.size;
 	}
 
 	return COLLECTIVE_OP_SUCCESS;

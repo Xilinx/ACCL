@@ -24,7 +24,7 @@ extern "C" {
 
 #define KERNEL_NAME    "ccl_offload"
 #define KERNEL_VENDOR  "Xilinx"
-#define KERNEL_LIBRARY "ACCL"
+#define KERNEL_LIBRARY "XCCL"
 
 // #define NUM_M_AXI      3
 // #define NUM_CLOCKS     1
@@ -272,6 +272,11 @@ extern "C" {
 #define PACK_TIMEOUT_STS_ERROR     21
 #define PACK_SEQ_NUMBER_ERROR      22
 
+//ARITH functions
+#define ARITH_fp    0
+#define ARITH_dp    1
+#define ARITH_i32   2
+#define ARITH_i64   3
 
 //USE DMAS
 #define USE_DMA0_RX 1

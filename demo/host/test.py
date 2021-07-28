@@ -36,7 +36,10 @@ def configure_xccl(xclbin, board_idx, nbufs=16, bufsize=1024):
     if local_alveo.name == 'xilinx_u250_xdma_201830_2':
         devicemem = [ol.__getattr__(f"bank{i}") for i in range(args.naccel)]
     elif local_alveo.name == 'xilinx_u280_xdma_201920_3':
-        devicemem = [[ol.__getattr__(f"HBM{j}") for j in range(i*6, i*6+6) ] for i in range(args.naccel)]
+        if args.single_bank:
+            devicemem = [[ol.__getattr__(f"HBM{j}") for j in range(i*6, i*6+1) ] for i in range(args.naccel)]
+        else:
+            devicemem = [[ol.__getattr__(f"HBM{j}") for j in range(i*6, i*6+6) ] for i in range(args.naccel)]
         #devicemem = [[ol.__getattr__(f"HBM0") ] for i in range(args.naccel)] #tcp_cmac v
         
 
@@ -680,7 +683,7 @@ def test_allreduce(fused=False, sw=False):
     print("AllReduce ","Fused" if fused else "Non-Fused","sw" if sw else "hw")
     print("========================================")
     #for each type
-    for np_type in [np.float32, np.float64, np.int32, np.int64]:
+    for np_type in  [np.float32, np.float64, np.int32, np.int64]:
 
         #initialize buffers with random data. 
         for j in range(args.naccel):
@@ -748,7 +751,6 @@ def test_allreduce_async(fused=False, sw=False):
         handles = []
         for j in range(args.naccel):
             handles += [cclo_inst[j].allreduce(0, tx_buf_fp[j], rx_buf_fp[j], count,  np_type_2_cclo_type(np_type), fused, sw, run_async=True, to_fpga=True)]
-        
         #wait for completion
         for a_handle in handles:
             a_handle.wait()
@@ -926,7 +928,7 @@ def benchmark(niter):
     csv_writer.writerow(["", f"bsize{args.bsize} sw{args.sw}"])
     csv_writer.writerow(["collective","execution time [us]"])
     print(f"{'':=>50}")
-    print(f"Benchmarks ({niter} iterations, bsize {args.bsize}, naccel {args.naccel})" )
+    print(f"Benchmarks ({niter} iterations, bsize {args.bsize}, naccel {args.naccel}, segment_size {args.segment_size})" )
     print(f"{'':=>50}")
     #nop warmup
     for j in range(args.naccel):
@@ -1206,9 +1208,10 @@ if __name__ == "__main__":
     parser.add_argument('--nruns',          type=int, default=1,                help='How many times to run each test')
     parser.add_argument('--nbufs',          type=int, default=16,               help='number of spare buffers to configure each ccl_offload')
     parser.add_argument('--naccel',         type=int, default=4,                help='number of ccl_offload to test ')
-    parser.add_argument('--bsize',          type=int, default=1024,             help='How many KB per user buffer')
-    parser.add_argument('--segment_size',   type=int, default=1024,             help='How many KB per buffer')
+    parser.add_argument('--bsize',          type=int, default=1024,             help='How many B per user buffer')
+    parser.add_argument('--segment_size',   type=int, default=1024,             help='How many B per spare buffer')
     parser.add_argument('--dump_rx_regs',   type=int, default=-1,               help='Print RX regs of specified ')
+    parser.add_argument('--single_bank',    action='store_true', default=False, help='use a single memory bank per CCL_Offload instance')
     parser.add_argument('--debug',          action='store_true', default=False, help='enable debug mode')
     parser.add_argument('--all',            action='store_true', default=False, help='Select all collectives')
     parser.add_argument('--nop',            action='store_true', default=False, help='Run nop test')
@@ -1390,7 +1393,7 @@ if __name__ == "__main__":
             benchmark(args.nruns)
 
         if args.regression:
-            for size in [1, 8, 16, 50, 128, 200, 256, 2_500, 25_000, 1_000_000, 7_000_000, 10_000_000, args.segment_size-8, args.segment_size, args.segment_size+8, args.segment_size*2, args.segment_size*2+8, args.segment_size*3]:
+            for size in [1, 8, 16, 50, 128, 200, 256, 2_500, 25_000, 1_000_000, 7_000_000, 10_000_000, 32_000_000, args.segment_size-8, args.segment_size, args.segment_size+8, args.segment_size*2, args.segment_size*2+8, args.segment_size*3]:
                 if size > args.bsize:
                     continue #this ensures that spare buffer are large enough to store the intermediate results //TODO: not needed?
                 #but since most of the test rely on buffer size we have to reallocate the buffers
