@@ -57,6 +57,8 @@ extern "C" {
 #define STS_TCP_CON  8
 #define STS_TCP_RX   9
 #define STS_HOST     10 
+#define STS_TCP_PKT  11 
+#define STS_UDP_PKT  12
 
 //MAIN SWITCH
 
@@ -86,6 +88,7 @@ extern "C" {
 //ARITH SWITCH
 #define ARITH_INTERNAL 0
 #define ARITH_EXTERNAL 1
+#define ARITH_NONE     2
 
 #define ARITH_SWITCH_M_INT_OP0 0
 #define ARITH_SWITCH_M_INT_OP1 1
@@ -99,32 +102,38 @@ extern "C" {
 #define ARITH_SWITCH_S_EXT_RES 3
 
 //PACKT CONST
-#define MAX_PACKETSIZE 2048
+#define MAX_PACKETSIZE 1536
+#define MAX_SEG_SIZE 1048576
 //DMA CONST 
-#define MAX_BTT        0x7FFFFF
+#define DMA_MAX_BTT              0x7FFFFF
+#define DMA_MAX_TRANSACTIONS     2
+#define DMA_TRANSACTION_SIZE     4194304 //info: can correspond to MAX_BTT
 
 //******************************
-//**  ACCL Primitives         **
+//**  XCC COLLECTIVE          **
 //******************************
-#define ACCL_CONFIG         0
-#define ACCL_SEND           1 
-#define ACCL_RECV           2
-#define ACCL_BCAST          3
-#define ACCL_SCATTER        4
-#define ACCL_GATHER         5
-#define ACCL_REDUCE         6
-#define ACCL_ALLGATHER      7
-#define ACCL_ALLREDUCE      8
-#define ACCL_ACC            9
-#define ACCL_COPY           10
-#define ACCL_REDUCE_RING    11
-#define ACCL_ALLREDUCE_FUSED_RING 12
-#define ACCL_GATHER_RING    13
-#define ACCL_ALLGATHER_RING 14
-#define ACCL_EXT_STREAM_KRNL 15
-#define ACCL_EXT_REDUCE     16
+#define XCCL_CONFIG         0
+#define XCCL_SEND           1 
+#define XCCL_RECV           2
+#define XCCL_BCAST          3
+#define XCCL_SCATTER        4
+#define XCCL_GATHER         5
+#define XCCL_REDUCE         6
+#define XCCL_ALLGATHER      7
+#define XCCL_ALLREDUCE      8
+#define XCCL_ACC            9
+#define XCCL_COPY           10
+#define XCCL_REDUCE_RING    11
+#define XCCL_ALLREDUCE_FUSED_RING 12
+#define XCCL_GATHER_RING    13
+#define XCCL_ALLGATHER_RING 14
+#define XCCL_EXT_STREAM_KRNL 15
+#define XCCL_EXT_REDUCE     16
+#define XCCL_BCAST_RR       17
+#define XCCL_SCATTER_RR     18
+#define XCCL_ALLREDUCE_SHARE_RING 19
 
-//ACCL_CONFIG SUBFUNCTIONS
+//XCCL_CONFIG SUBFUNCTIONS
 #define HOUSEKEEP_IRQEN   0
 #define HOUSEKEEP_IRQDIS  1
 #define HOUSEKEEP_SWRST   2
@@ -137,19 +146,21 @@ extern "C" {
 #define USE_UDP_STACK     9
 #define START_PROFILING   10
 #define END_PROFILING     11
+#define SET_DMA_TRANSACTION_SIZE 12
 
 //AXI MMAP address
 #define CONTROL_OFFSET    0x0000
-#define HWID_OFFSET       0x0FF8
-#define RETVAL_OFFSET     0x0FFC
 #define ARG00_OFFSET      0x0010
 #define AXI00_PTR0_OFFSET 0x0018
 #define AXI01_PTR0_OFFSET 0x0024
 #define END_OF_REG_OFFSET 0x0030
-#define END_OF_EXCHMEM    0x1000
+#define TIME_TO_ACCESS_EXCH_MEM 0x1FF4
+#define HWID_OFFSET       0x1FF8
+#define RETVAL_OFFSET     0x1FFC
+#define END_OF_EXCHMEM    0x2000
 
 #define HOSTCTRL_BASEADDR     0x0        
-#define EXCHMEM_BASEADDR      0x0800
+#define EXCHMEM_BASEADDR      0x1000
 #define ARITH_BASEADDR        0x20000
 #define UDP_RXPKT_BASEADDR    0x30000
 #define UDP_TXPKT_BASEADDR    0x40000
@@ -160,11 +171,12 @@ extern "C" {
 #define IRQCTRL_BASEADDR      0x44A10000
 #define TIMER_BASEADDR        0x44A20000
 #define ARITH_SWITCH_BASEADDR 0x44B00000
-
+//https://www.xilinx.com/html_docs/xilinx2020_2/vitis_doc/managing_interface_synthesis.html#tzw1539734223235
 #define CONTROL_START_MASK  0x00000001
-#define CONTROL_DONE_MASK   0x00000002
-#define CONTROL_IDLE_MASK   0x00000004
-#define CONTROL_REPEAT_MASK 0x00000080
+#define CONTROL_DONE_MASK   0x00000001 << 1
+#define CONTROL_IDLE_MASK   0x00000001 << 2 
+#define CONTROL_READY_MASK  0x00000001 << 3
+#define CONTROL_REPEAT_MASK 0x00000001 << 7
 
 #define GPIO_DATA_REG      XPAR_GPIO_0_BASEADDR + 0x0000
 #define GPIO_READY_MASK    0x00000001
@@ -255,6 +267,18 @@ extern "C" {
 #define RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID 16
 #define OPEN_PORT_NOT_SUCCEEDED    17
 #define OPEN_COM_NOT_SUCCEEDED     18
+#define DMA_SIZE_ERROR             19
+#define ARITH_ERROR                20 
+#define PACK_TIMEOUT_STS_ERROR     21
+#define PACK_SEQ_NUMBER_ERROR      22
+
+
+//USE DMAS
+#define USE_DMA0_RX 1
+#define USE_DMA1_RX 2
+#define USE_DMA1_TX 4
+#define USE_DMA2_RX 8
+#define USE_DMA1_TX_WITHOUT_TLAST 16
 
 #define S_AXI_CONTROL -1
 
@@ -331,7 +355,7 @@ typedef struct {
 #define STATUS_ENQUEUED 0x01
 #define STATUS_RESERVED 0x02
 
-#define RX_BUFFER_COUNT_OFFSET 0x800
+#define RX_BUFFER_COUNT_OFFSET 0x1000
 
 #define COMM_OFFSET (RX_BUFFER_COUNT_OFFSET+4*(1 + Xil_In32(RX_BUFFER_COUNT_OFFSET)*9))
 
@@ -351,6 +375,10 @@ typedef struct {
 
 #define TAG_ANY 0xFFFFFFFF
 
+typedef struct list_node {
+    int val;
+    struct list_node * next;
+} list;
 
 #ifdef __cplusplus
 }
