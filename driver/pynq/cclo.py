@@ -27,24 +27,27 @@ import ipaddress
 from enum import IntEnum, unique
 
 class CCLOp(IntEnum):
-    config      = 0
-    send        = 1
-    recv        = 2
-    bcast       = 3
-    scatter     = 4
-    gather      = 5
-    reduce      = 6
-    allgather   = 7
-    allreduce   = 8
-    accumulate  = 9
-    copy        = 10
-    reduce_ring = 11
-    allreduce_fused_ring = 12
-    gather_ring = 13
-    allgather_ring = 14
-    ext_stream_krnl = 15
-    ext_reduce  = 16
-    nop         = 255
+    config                  = 0
+    send                    = 1
+    recv                    = 2
+    bcast                   = 3
+    scatter                 = 4
+    gather                  = 5
+    reduce                  = 6
+    allgather               = 7
+    allreduce               = 8
+    accumulate              = 9
+    copy                    = 10
+    reduce_ring             = 11
+    allreduce_fused_ring    = 12
+    gather_ring             = 13
+    allgather_ring          = 14
+    ext_stream_krnl         = 15
+    ext_reduce              = 16
+    bcast_rr                = 17
+    scatter_rr              = 18
+    allreduce_share_ring    = 19
+    nop                     = 255
 
 class CCLOCfgFunc(IntEnum):
     enable_irq  = 0
@@ -124,7 +127,7 @@ def compatible_size(nbytes,type):
 
 class cclo(DefaultIP):
     """
-    This class wrapps the common function of the collectives offload kernel
+    This class wraps the common function of the collectives offload kernel
     """
 
     bindto = ["Xilinx:ACCL:ccl_offload:1.0"]
@@ -533,7 +536,7 @@ class cclo(DefaultIP):
             dst_buf.sync_from_device()
 
     @self_check_return_value
-    def bcast(self, comm_id, buf, root, sw=False, from_fpga=False, to_fpga=False, run_async=False, waitfor=[]):
+    def bcast(self, comm_id, buf, root, sw=False, from_fpga=False, to_fpga=False, run_async=False, waitfor=[], rr=True):
         comm = self.communicators[comm_id]
         is_root = comm["local_rank"] == root
         if not to_fpga and not(is_root) and run_async:
@@ -554,7 +557,8 @@ class cclo(DefaultIP):
                 #receive once if we're a destination
                 prevcall = [    self.recv(comm_id, buf, root    , to_fpga=True, run_async=True, waitfor=waitfor)]
         else:#hw implementation
-            prevcall = [self.start(scenario=CCLOp.bcast, len=buf.nbytes, comm=self.communicators[comm_id]["addr"], root_src_dst=root, addr_0=buf, waitfor=waitfor)]
+            cclop = CCLOp.bcast_rr if rr else CCLOp.bcast
+            prevcall = [self.start(scenario=cclop, len=buf.nbytes, comm=self.communicators[comm_id]["addr"], root_src_dst=root, addr_0=buf, waitfor=waitfor)]
         
         if run_async:
             return prevcall[0]
@@ -564,7 +568,7 @@ class cclo(DefaultIP):
             buf.sync_from_device()
 
     @self_check_return_value
-    def scatter(self, comm_id, sbuf, rbuf, count, root, sw=True, from_fpga=False, to_fpga=False, run_async=False, waitfor=[]):
+    def scatter(self, comm_id, sbuf, rbuf, count, root, sw=True, from_fpga=False, to_fpga=False, run_async=False, waitfor=[], rr=True):
         if not to_fpga and run_async:
             warnings.warn("XCCL: async run returns data on FPGA, user must sync_from_device() after waiting")
         if count == 0:
@@ -590,7 +594,8 @@ class cclo(DefaultIP):
                 prevcall = [self.recv(          comm_id, rbuf[0:count]              , src=root  , to_fpga=True, run_async=True, waitfor=waitfor)]
             
         else:
-            prevcall = [self.start(scenario=CCLOp.scatter, len=rbuf[0:count].nbytes, comm=comm["addr"], root_src_dst=root, addr_0=sbuf, addr_1=rbuf[0:count], waitfor=waitfor)]
+            cclop = CCLOp.scatter_rr if rr else CCLOp.scatter
+            prevcall = [self.start(scenario=cclop, len=rbuf[0:count].nbytes, comm=comm["addr"], root_src_dst=root, addr_0=sbuf, addr_1=rbuf[0:count], waitfor=waitfor)]
 
         if run_async:
             return prevcall[0]
@@ -804,7 +809,7 @@ class cclo(DefaultIP):
             rbuf[0:count].sync_from_device()
 
     @self_check_return_value
-    def allreduce(self, comm_id, sbuf, rbuf, count, func, fused=False, sw=True, ring=True, from_fpga=False, to_fpga=False, run_async=False, waitfor=[]):
+    def allreduce(self, comm_id, sbuf, rbuf, count, func, fused=False, sw=True, ring=True, from_fpga=False, to_fpga=False, run_async=False, waitfor=[], share=True):
         if not to_fpga and run_async:
             warnings.warn("XCCL: async run returns data on FPGA, user must sync_from_device() after waiting")
         if count == 0:
@@ -864,8 +869,10 @@ class cclo(DefaultIP):
             # performs acc = val + acc on each cclo
 
             cclop = None
-            if   fused and ring:
+            if   fused and ring and not share:
                 cclop = CCLOp.allreduce_fused_ring
+            elif fused and ring and share :
+                cclop = CCLOp.allreduce_share_ring
             elif fused and not ring:
                 warnings.warn("Non-ring collectives are not handled at packetizer level at the moment.")
                 warnings.warn("sw non ring based fused allreduce not implemented")
@@ -881,4 +888,5 @@ class cclo(DefaultIP):
         prevcall[0].wait()
         if not to_fpga:
             rbuf[0:count].sync_from_device()
+
 
