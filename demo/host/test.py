@@ -585,42 +585,42 @@ def test_reduce(sw=True, shift=False):
     for np_type in [np.float32, np.float64, np.int32, np.int64]:
         for root in np.random.default_rng().permutation(range(args.naccel)):
             err_count = 0
-            count     = tx_buf_fp[root].nbytes
-            rx_buf_fp[root][:]=np.zeros(rx_buf_fp[root].shape, dtype=np.int8)# clear rx buffer
-            rx_buf_fp[root].sync_to_device()
+            count     = tx_buf[root].nbytes
+            rx_buf[root][:]=np.zeros(rx_buf[root].shape, dtype=np.int8)# clear rx buffer
+            rx_buf[root].sync_to_device()
             threads = []
             #fill vector
             for j in range(args.naccel):
-                #tx_buf_fp[j][:]=np.random.random_sample(size=tx_buf_fp[j].shape)#init tx buffers
-                tx_buf_fp[j][:]=np.random.randint(127, size=tx_buf_fp[j].size, dtype=np.int8)#init tx buffers
-                #tx_buf_fp[j][:]=np.ones(                   rx_buf_fp[j].shape, dtype=np_type)# init tx buffer
+                #tx_buf[j][:]=np.random.random_sample(size=tx_buf[j].shape)#init tx buffers
+                tx_buf[j][:]=np.random.randint(127, size=tx_buf[j].size, dtype=np.int8)#init tx buffers
+                #tx_buf[j][:]=np.ones(                   rx_buf[j].shape, dtype=np_type)# init tx buffer
                 
             #compute expected
-            expected=np.zeros(rx_buf_fp[root].shape, dtype=np.int8).view(np_type)
+            expected=np.zeros(rx_buf[root].shape, dtype=np.int8).view(np_type)
             for j in range(args.naccel):
-                expected += tx_buf_fp[j].view(np_type)
+                expected += tx_buf[j].view(np_type)
             #create run
             for j in range(args.naccel):
-                threads.append(threading.Thread(target=cclo_inst[j].reduce, args=(0, tx_buf_fp[j], rx_buf_fp[j], count, root, np_type_2_cclo_type(np_type), sw, shift)))
+                threads.append(threading.Thread(target=cclo_inst[j].reduce, args=(0, tx_buf[j], rx_buf[j], count, root, np_type_2_cclo_type(np_type), sw, shift)))
                 threads[-1].start()
             #wait for others to finish
             for j in range(args.naccel):
                 threads[j].join()
                 
             
-            if not np.allclose(                   rx_buf_fp[root].view(np_type),  expected):
+            if not np.allclose(                   rx_buf[root].view(np_type),  expected):
                 print(f"Reduce {np_type}: {root} <- all failed")
                 if args.debug:
 
-                    print(f"result {                  rx_buf_fp[root].view(np_type)}")
-                    print(f"distance: {np.linalg.norm(rx_buf_fp[root].view(np_type) - expected)} ({np.absolute(rx_buf_fp[root].view(np_type) - expected)})")
-                    diff        = np.where(rx_buf_fp[root].view(np_type)!= expected)
+                    print(f"result {                  rx_buf[root].view(np_type)}")
+                    print(f"distance: {np.linalg.norm(rx_buf[root].view(np_type) - expected)} ({np.absolute(rx_buf[root].view(np_type) - expected)})")
+                    diff        = np.where(rx_buf[root].view(np_type)!= expected)
                     firstdiff   = np.min(diff)
                     ndiffs      = diff[0].size 
                     print(f"Reduce failed, {ndiffs} results different starting at {firstdiff} {diff}")
                     for jj in range(args.naccel):
-                        print(f"{jj} buffer: {tx_buf_fp[jj].view(np.uint8)}")
-                        print(f"{jj} buffer: {tx_buf_fp[jj].view(np_type)}")
+                        print(f"{jj} buffer: {tx_buf[jj].view(np.uint8)}")
+                        print(f"{jj} buffer: {tx_buf[jj].view(np_type)}")
                         cclo_inst[jj].dump_communicator()
                         cclo_inst[jj].dump_rx_buffers_spares()
                     import pdb; pdb.set_trace()
@@ -635,41 +635,41 @@ def test_reduce_async(sw=True, shift=False):
     for np_type in [np.float32, np.float64, np.int32, np.int64]:
         for root in np.random.default_rng().permutation(range(args.naccel)):
             err_count = 0
-            count = tx_buf_fp[root].nbytes
-            rx_buf_fp[root][:]=np.zeros(rx_buf_fp[root].shape, dtype=np.int8)# clear rx buffer
-            rx_buf_fp[root].sync_to_device()
+            count = tx_buf[root].nbytes
+            rx_buf[root][:]=np.zeros(rx_buf[root].shape, dtype=np.int8)# clear rx buffer
+            rx_buf[root].sync_to_device()
             threads = []
             #fill vector
             for j in range(args.naccel):
-                #tx_buf_fp[j][:]=np.random.random_sample(size=tx_buf_fp[j].shape)#init tx buffers
-                tx_buf_fp[j][:]=np.random.randint(127, size=tx_buf_fp[j].size, dtype=np.int8)#init tx buffers
-                #tx_buf_fp[j][:]=np.ones(                   rx_buf_fp[j].shape, dtype=np_type)# init tx buffer
+                #tx_buf[j][:]=np.random.random_sample(size=tx_buf[j].shape)#init tx buffers
+                tx_buf[j][:]=np.random.randint(127, size=tx_buf[j].size, dtype=np.int8)#init tx buffers
+                #tx_buf[j][:]=np.ones(                   rx_buf[j].shape, dtype=np_type)# init tx buffer
             #compute expected
-            expected=np.zeros(rx_buf_fp[root].shape, dtype=np.int8).view(np_type)
+            expected=np.zeros(rx_buf[root].shape, dtype=np.int8).view(np_type)
             for j in range(args.naccel):
-                expected += tx_buf_fp[j].view(np_type)
+                expected += tx_buf[j].view(np_type)
             #create run
             handles = []
             for j in range(args.naccel):
-                handles += [cclo_inst[j].reduce(0, tx_buf_fp[j], rx_buf_fp[j], count, root, np_type_2_cclo_type(np_type), sw=sw, shift=shift, run_async=True, to_fpga=True)]
+                handles += [cclo_inst[j].reduce(0, tx_buf[j], rx_buf[j], count, root, np_type_2_cclo_type(np_type), sw=sw, shift=shift, run_async=True, to_fpga=True)]
             #wait for others to finish
             for a_handle in handles:
                 a_handle.wait()
-            rx_buf_fp[root].sync_from_device()
+            rx_buf[root].sync_from_device()
                 
-            if not np.allclose(                   rx_buf_fp[root].view(np_type),  expected):
+            if not np.allclose(                   rx_buf[root].view(np_type),  expected):
                 print(f"Reduce {np_type}: {root} <- all failed")
                 if args.debug:
 
-                    print(f"result {                  rx_buf_fp[root].view(np_type)}")
-                    print(f"distance: {np.linalg.norm(rx_buf_fp[root].view(np_type) - expected)} ({np.absolute(rx_buf_fp[root].view(np_type) - expected)})")
-                    diff        = np.where(rx_buf_fp[root].view(np_type)!= expected)
+                    print(f"result {                  rx_buf[root].view(np_type)}")
+                    print(f"distance: {np.linalg.norm(rx_buf[root].view(np_type) - expected)} ({np.absolute(rx_buf[root].view(np_type) - expected)})")
+                    diff        = np.where(rx_buf[root].view(np_type)!= expected)
                     firstdiff   = np.min(diff)
                     ndiffs      = diff[0].size 
                     print(f"Reduce failed, {ndiffs} results different starting at {firstdiff} {diff}")
                     for jj in range(args.naccel):
-                        print(f"{jj} buffer: {tx_buf_fp[jj].view(np.uint8)}")
-                        print(f"{jj} buffer: {tx_buf_fp[jj].view(np_type)}")
+                        print(f"{jj} buffer: {tx_buf[jj].view(np.uint8)}")
+                        print(f"{jj} buffer: {tx_buf[jj].view(np_type)}")
                         cclo_inst[jj].dump_communicator()
                         cclo_inst[jj].dump_rx_buffers_spares()
                     import pdb; pdb.set_trace()
@@ -689,42 +689,42 @@ def test_allreduce(fused=False, sw=False):
         for j in range(args.naccel):
             # fill buffers with random bytes that will be interpreted differently depending on the type
             err_count = 0
-            count = tx_buf_fp[j].nbytes
-            rx_buf_fp[j][:]=np.zeros(                  rx_buf_fp[j].shape, dtype=np.int8)# clear rx buffer
-            tx_buf_fp[j][:]=np.random.randint(127, size=tx_buf_fp[j].shape, dtype=np.int8)#init tx buffers
-            #tx_buf_fp[j][:]=np.ones(                   rx_buf_fp[j].shape, dtype=np_type)# init tx buffer
+            count = tx_buf[j].nbytes
+            rx_buf[j][:]=np.zeros(                  rx_buf[j].shape, dtype=np.int8)# clear rx buffer
+            tx_buf[j][:]=np.random.randint(127, size=tx_buf[j].shape, dtype=np.int8)#init tx buffers
+            #tx_buf[j][:]=np.ones(                   rx_buf[j].shape, dtype=np_type)# init tx buffer
         
         threads = []
         for j in range(args.naccel):
-            threads.append(threading.Thread(target=cclo_inst[j].allreduce, args=(0, tx_buf_fp[j], rx_buf_fp[j], count,  np_type_2_cclo_type(np_type), fused, sw)))
+            threads.append(threading.Thread(target=cclo_inst[j].allreduce, args=(0, tx_buf[j], rx_buf[j], count,  np_type_2_cclo_type(np_type), fused, sw)))
         for j in range(args.naccel):
             threads[j].start()
         #wait for completion
         for j in range(args.naccel):
             threads[j].join()
         #compute expected
-        expected=np.zeros(rx_buf_fp[0].shape, dtype=np.int8).view(np_type)
+        expected=np.zeros(rx_buf[0].shape, dtype=np.int8).view(np_type)
         for j in range(args.naccel):
-            expected += tx_buf_fp[j].view(np_type)
+            expected += tx_buf[j].view(np_type)
         #check results
         for j in range(args.naccel):
-            if not np.allclose(rx_buf_fp[j].view(np_type), expected):
+            if not np.allclose(rx_buf[j].view(np_type), expected):
                 print(f"AllReduce {np_type}: {j} <- all failed")
                
                 if args.debug:
                     print(f"expected result {np_type}: {                  expected.view(np_type)}")
                     print(f"expected result {np.uint8}: {                  expected.view(np.uint8)}")
-                    print(f"obtained result {np_type}: {                  rx_buf_fp[j].view(np_type)}")
-                    print(f"obtained result {np.uint8}: {                  rx_buf_fp[j].view(np.uint8)}")
-                    print(f"distance: {np.linalg.norm(rx_buf_fp[j].view(np_type) - expected)} ({np.absolute(rx_buf_fp[j].view(np_type) - expected)})")
-                    diff        = np.where(rx_buf_fp[j].view(np_type)!= expected)
+                    print(f"obtained result {np_type}: {                  rx_buf[j].view(np_type)}")
+                    print(f"obtained result {np.uint8}: {                  rx_buf[j].view(np.uint8)}")
+                    print(f"distance: {np.linalg.norm(rx_buf[j].view(np_type) - expected)} ({np.absolute(rx_buf[j].view(np_type) - expected)})")
+                    diff        = np.where(rx_buf[j].view(np_type)!= expected)
                     firstdiff   = np.min(diff)
                     ndiffs      = diff[0].size 
                     for jj in range(args.naccel):
-                        print(f"{jj}tx buffer {np.uint8}: {tx_buf_fp[jj].view(np.uint8)}")
-                        print(f"{jj}tx buffer {np_type}:  {tx_buf_fp[jj].view(np_type)}")
-                        print(f"{jj}rx buffer {np.uint8}: {rx_buf_fp[jj].view(np.uint8)}")
-                        print(f"{jj}rx buffer {np_type}:  {rx_buf_fp[jj].view(np_type)}")
+                        print(f"{jj}tx buffer {np.uint8}: {tx_buf[jj].view(np.uint8)}")
+                        print(f"{jj}tx buffer {np_type}:  {tx_buf[jj].view(np_type)}")
+                        print(f"{jj}rx buffer {np.uint8}: {rx_buf[jj].view(np.uint8)}")
+                        print(f"{jj}rx buffer {np_type}:  {rx_buf[jj].view(np_type)}")
                         cclo_inst[jj].dump_communicator()
                         cclo_inst[jj].dump_rx_buffers_spares()
                     print(f"Reduce failed, {ndiffs} results different starting at {firstdiff} {diff}")
@@ -744,40 +744,40 @@ def test_allreduce_async(fused=False, sw=False):
         for j in range(args.naccel):
             # fill buffers with random bytes that will be interpreted differently depending on the type
             err_count = 0
-            count = tx_buf_fp[j].nbytes
-            rx_buf_fp[j][:]=np.zeros(                   rx_buf_fp[j].shape, dtype=np.int8)# clear rx buffer
-            tx_buf_fp[j][:]=np.random.randint(127, size=tx_buf_fp[j].shape, dtype=np.int8)#init tx buffers
-            #tx_buf_fp[j][:]=np.ones(                   rx_buf_fp[j].shape, dtype=np_type)# init tx buffer
+            count = tx_buf[j].nbytes
+            rx_buf[j][:]=np.zeros(                   rx_buf[j].shape, dtype=np.int8)# clear rx buffer
+            tx_buf[j][:]=np.random.randint(127, size=tx_buf[j].shape, dtype=np.int8)#init tx buffers
+            #tx_buf[j][:]=np.ones(                   rx_buf[j].shape, dtype=np_type)# init tx buffer
         handles = []
         for j in range(args.naccel):
-            handles += [cclo_inst[j].allreduce(0, tx_buf_fp[j], rx_buf_fp[j], count,  np_type_2_cclo_type(np_type), fused, sw, run_async=True, to_fpga=True)]
+            handles += [cclo_inst[j].allreduce(0, tx_buf[j], rx_buf[j], count,  np_type_2_cclo_type(np_type), fused, sw, run_async=True, to_fpga=True)]
         #wait for completion
         for a_handle in handles:
             a_handle.wait()
         #compute expected
-        expected=np.zeros(rx_buf_fp[0].shape, dtype=np.int8).view(np_type)
+        expected=np.zeros(rx_buf[0].shape, dtype=np.int8).view(np_type)
         for j in range(args.naccel):
-            expected += tx_buf_fp[j].view(np_type)
+            expected += tx_buf[j].view(np_type)
         #check results
         for j in range(args.naccel):
-            rx_buf_fp[j].sync_from_device()
-            if not np.allclose(rx_buf_fp[j].view(np_type), expected):
+            rx_buf[j].sync_from_device()
+            if not np.allclose(rx_buf[j].view(np_type), expected):
                 print(f"AllReduce {np_type}: {j} <- all failed")
                
                 if args.debug:
                     print(f"expected result {np_type}: {                  expected.view(np_type)}")
                     print(f"expected result {np.uint8}: {                  expected.view(np.uint8)}")
-                    print(f"obtained result {np_type}: {                  rx_buf_fp[j].view(np_type)}")
-                    print(f"obtained result {np.uint8}: {                  rx_buf_fp[j].view(np.uint8)}")
-                    print(f"distance: {np.linalg.norm(rx_buf_fp[j].view(np_type) - expected)} ({np.absolute(rx_buf_fp[j].view(np_type) - expected)})")
-                    diff        = np.where(rx_buf_fp[j].view(np_type)!= expected)
+                    print(f"obtained result {np_type}: {                  rx_buf[j].view(np_type)}")
+                    print(f"obtained result {np.uint8}: {                  rx_buf[j].view(np.uint8)}")
+                    print(f"distance: {np.linalg.norm(rx_buf[j].view(np_type) - expected)} ({np.absolute(rx_buf[j].view(np_type) - expected)})")
+                    diff        = np.where(rx_buf[j].view(np_type)!= expected)
                     firstdiff   = np.min(diff)
                     ndiffs      = diff[0].size 
                     for jj in range(args.naccel):
-                        print(f"{jj}tx buffer {np.uint8}: {tx_buf_fp[jj].view(np.uint8)}")
-                        print(f"{jj}tx buffer {np_type}:  {tx_buf_fp[jj].view(np_type)}")
-                        print(f"{jj}rx buffer {np.uint8}: {rx_buf_fp[jj].view(np.uint8)}")
-                        print(f"{jj}rx buffer {np_type}:  {rx_buf_fp[jj].view(np_type)}")
+                        print(f"{jj}tx buffer {np.uint8}: {tx_buf[jj].view(np.uint8)}")
+                        print(f"{jj}tx buffer {np_type}:  {tx_buf[jj].view(np_type)}")
+                        print(f"{jj}rx buffer {np.uint8}: {rx_buf[jj].view(np.uint8)}")
+                        print(f"{jj}rx buffer {np_type}:  {rx_buf[jj].view(np_type)}")
                         cclo_inst[jj].dump_communicator()
                         cclo_inst[jj].dump_rx_buffers_spares()
                     print(f"Reduce failed, {ndiffs} results different starting at {firstdiff} {diff}")
@@ -1009,7 +1009,7 @@ def benchmark(niter):
         print_timing_us('Accumulate',duration_us)
 
     def bench_base(call):
-        global args, cclo_inst, tx_buf, rx_buf, tx_buf_fp, rx_buf_fp
+        global args, cclo_inst, tx_buf, rx_buf, tx_buf, rx_buf
         prevcall = []
         prevcall_next = []
         for c in cclo_inst:
@@ -1108,12 +1108,12 @@ def benchmark(niter):
     threads = []
     #fill vector
     for j in range(args.naccel):
-        tx_buf_fp[j][:]=np.ones( tx_buf_fp[j].shape, dtype=np.float32)# init tx buffer
-        rx_buf_fp[j][:]=np.zeros(rx_buf_fp[j].shape, dtype=np.float32)# clear rx buffer
-        tx_buf_fp[j].sync_to_device()
-        rx_buf_fp[j].sync_to_device()
-        #tx_buf_fp[j][:]=np.random.random_sample(size=tx_buf_fp[j].shape)#init tx buffers
-        #tx_buf_fp[j][:]=np.random.randint(127, size=tx_buf_fp[j].size, dtype=np.int8)#init tx buffers
+        tx_buf[j][:]=np.ones( tx_buf[j].shape, dtype=np.float32)# init tx buffer
+        rx_buf[j][:]=np.zeros(rx_buf[j].shape, dtype=np.float32)# clear rx buffer
+        tx_buf[j].sync_to_device()
+        rx_buf[j].sync_to_device()
+        #tx_buf[j][:]=np.random.random_sample(size=tx_buf[j].shape)#init tx buffers
+        #tx_buf[j][:]=np.random.randint(127, size=tx_buf[j].size, dtype=np.int8)#init tx buffers
     if args.reduce:
         if args.sw:
             def f(cclo_inst,j , prevcall):
@@ -1193,13 +1193,7 @@ def allocate_buffers(n, bsize, devicemem):
     for i, buf in enumerate(tx_buf):
         print(f'tx_buf {i}',hex(buf.device_address))
 
-    tx_buf_fp = []
-    rx_buf_fp = []
-    for i in range(n):
-        tx_buf_fp.append(pynq.allocate((bsize,), dtype=np.int8, target=devicemem[i][0]))
-        rx_buf_fp.append(pynq.allocate((bsize,), dtype=np.int8, target=(devicemem[i][0] if len(devicemem[i]) < 2 else devicemem[i][1])))
-
-    return tx_buf, rx_buf, tx_buf_fp, rx_buf_fp
+    return tx_buf, rx_buf
 
 if __name__ == "__main__":    
     parser = argparse.ArgumentParser(description='Tests for MPI collectives offload with UDP (VNx) backend')
@@ -1250,7 +1244,7 @@ if __name__ == "__main__":
     #configure FPGA and CCLO cores with the default 16 RX buffers of bsize KB each
     ol, cclo_inst, devicemem = configure_xccl(args.xclbin, args.device_index, nbufs=args.nbufs, bufsize=args.segment_size)
    
-    tx_buf, rx_buf, tx_buf_fp, rx_buf_fp = allocate_buffers(args.naccel, args.bsize, devicemem)
+    tx_buf, rx_buf = allocate_buffers(args.naccel, args.bsize, devicemem)
 
     if args.dump_rx_regs >= 0 :
         for cclo_i in cclo_inst:
@@ -1336,7 +1330,7 @@ if __name__ == "__main__":
             for i in range(args.nruns):
                 
                 if args.sw :
-                    if (args.naccel*(args.bsize + args.segment_size -1)//args.segment_size < args.nbufs):
+                    if (args.segment_size >= args.bsize and args.naccel*(args.bsize + args.segment_size -1)//args.segment_size < args.nbufs):
                         #test_reduce(sw=True , shift=False) no-shift not implemented
                         test_reduce(sw=True , shift=True)
                         #test_reduce_async(sw=True , shift=False) no-shift not implemented
@@ -1354,7 +1348,7 @@ if __name__ == "__main__":
         if not args.benchmark and args.allreduce:
             for i in range(args.nruns):
                 if args.sw :
-                    if (args.naccel*(args.bsize + args.segment_size -1)//args.segment_size < args.nbufs):
+                    if (args.segment_size >= args.bsize and args.naccel*(args.bsize + args.segment_size -1)//args.segment_size < args.nbufs):
                         test_allreduce(fused=False  , sw=True )
                         test_allreduce(fused=True   , sw=True )       
                         test_allreduce_async(fused=False  , sw=True )
@@ -1397,10 +1391,10 @@ if __name__ == "__main__":
                 if size > args.bsize:
                     continue #this ensures that spare buffer are large enough to store the intermediate results //TODO: not needed?
                 #but since most of the test rely on buffer size we have to reallocate the buffers
-                for buf in [*tx_buf, *rx_buf, *tx_buf_fp, *rx_buf_fp]:
+                for buf in [*tx_buf, *rx_buf]:
                     buf.freebuffer()
-                del tx_buf, rx_buf, tx_buf_fp, rx_buf_fp
-                tx_buf, rx_buf, tx_buf_fp, rx_buf_fp = allocate_buffers(args.naccel, size, devicemem)
+                del tx_buf, rx_buf
+                tx_buf, rx_buf = allocate_buffers(args.naccel, size, devicemem)
 
                 print(f"Regression for bsize {size}")
                 for i in range(args.nruns):
@@ -1452,13 +1446,11 @@ if __name__ == "__main__":
                         test_reduce(sw=False, shift=True)
                         #test_reduce_async(sw=False, shift=False) not safe now
                         test_reduce_async(sw=False, shift=True)
-
                         test_allreduce( sw=False, fused=False   )
                         test_allreduce( sw=False, fused=True    )
-
                         test_allreduce_async(fused=False  , sw=False)
                         test_allreduce_async(fused=True   , sw=False)
-                        if (args.naccel*(args.bsize + args.segment_size -1)//args.segment_size < args.nbufs):
+                        if  (args.segment_size >= size and args.naccel*(args.bsize + args.segment_size -1)//args.segment_size <= args.nbufs):
                             test_allreduce( sw=True , fused=True    )
                             #test_reduce(sw=True , shift=False) no-shift not implemented
                             test_reduce(sw=True , shift=True)
@@ -1470,8 +1462,7 @@ if __name__ == "__main__":
                             pass   
                         else:
                             import warnings
-                            warnings.warn("not safe to run sw reduce/allreduce non fused version! it may run out of buffers") 
-                            
+                            warnings.warn("not safe to run sw allreduce non fused version! it may run out of buffers") 
                             
     except KeyboardInterrupt:
         print("CTR^C")
@@ -1480,8 +1471,8 @@ if __name__ == "__main__":
         import traceback
         traceback.print_tb(e.__traceback__)
         for jj in range(args.naccel):
-            print(f"{jj}tx buffer {np.uint8}: {tx_buf_fp[jj].view(np.uint8)}")
-            print(f"{jj}rx buffer {np.uint8}: {rx_buf_fp[jj].view(np.uint8)}")
+            print(f"{jj}tx buffer {np.uint8}: {tx_buf[jj].view(np.uint8)}")
+            print(f"{jj}rx buffer {np.uint8}: {rx_buf[jj].view(np.uint8)}")
             cclo_inst[jj].dump_communicator()
             cclo_inst[jj].dump_rx_buffers_spares()
 
