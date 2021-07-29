@@ -52,13 +52,13 @@ int main(int argc, char *argv[]) {
   // Setup
   Timer t_construct, t_bitstream, t_read_reg, t_write_reg, t_execute_kernel,
       t_preprxbuffers, t_dump_rx_buffers, t_config_comm;
-  operation_t op = nop;
+  accl_operation_t op = nop;
 
   const int nbuf = size;
   constexpr int buffer_size = 16 * 1024;
 
   t_construct.start();
-  FPGA f(nbuf, buffer_size, device_idx, DUAL);
+  ACCL f(nbuf, buffer_size, device_idx, DUAL);
   t_construct.end();
 
   t_bitstream.start();
@@ -66,7 +66,7 @@ int main(int argc, char *argv[]) {
   t_bitstream.end();
 
   t_config_comm.start();
-  f.config_comm(nbuf);
+  //f.config_comm(nbuf);
   t_config_comm.end();
 
   t_preprxbuffers.start();

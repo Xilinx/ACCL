@@ -13,11 +13,13 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 #
-# *******************************************************************************/
+#
+*******************************************************************************/
 
 #pragma once
 
 #include "xlnx-comm.hpp"
+#include "xlnx-consts.hpp"
 
 #include "experimental/xrt_aie.h"
 #include "experimental/xrt_device.h"
@@ -29,62 +31,53 @@
 #include <string>
 #include <uuid/uuid.h>
 #include <vector>
+#include <sstream>      // std::stringstream
 
-// XXX Implement all supported ops
-
-enum fgFunc {
-  enable_irq = 0,
-  disable_irq = 1,
-  reset_periph = 2,
-  enable_pkt = 3
-};
-
-enum operation_t {
-  config = 0,
-  sending = 1,
-  receiving = 2,
-  bcast = 3,
-  scatter = 4,
-  gather = 5,
-  reduce = 6,
-  allgather = 7,
-  allreduce = 8,
-  accumulate = 9,
-  copy = 10,
-  nop = 11
-};
+bool compatible_size(size_t nbytes, accl_reduce_func type) {
+  if (type == fp || type == i32) {
+    return (nbytes % 4) == 0 ? true : false;
+  } else if (type == dp || type == i64) {
+    return (nbytes % 8) == 0 ? true : false;
+  }
+}
 
 enum network_protocol_t { TCP, UDP, ROCE };
 
 enum mode { DUAL = 2, QUAD = 4 };
 
-class FPGA {
+class ACCL {
 
 private:
-  std::vector<std::vector<int8_t>> _host_bufs;
+  std::vector<std::vector<int8_t>> _rx_host_bufs;
   int _nbufs;
-  int _buffer_size;
-  std::vector<xrt::bo> _rx_buffers;
+  int _rx_buffers_adr;
+  int _rx_buffer_size;
+  std::vector<xrt::bo> _rx_buffer_spares;
+  xrt::bo _utility_spare; 
   xrt::device _device;
   xrt::kernel _krnl;
-  communicator _comm;
+ // std::vector<communicator> _comm;
   const uint64_t _base_addr = 0x800;
+  uint64_t _exchange_mem = _base_addr;
   uint64_t _comm_addr = 0;
   enum mode _mode;
   int _rank;
 
 public:
-  FPGA(unsigned int idx = 1) { get_xilinx_device(idx); }
+  ACCL(unsigned int idx = 1) { get_xilinx_device(idx); }
 
-  FPGA(int nbufs, int buffersize, unsigned int idx, enum mode m)
-      : _nbufs(nbufs), _host_bufs(nbufs), _rx_buffers(nbufs),
-        _buffer_size(buffersize), _mode(m) {
+  ACCL(int nbufs, int buffersize, unsigned int idx, enum mode m)
+      : _nbufs(nbufs), _rx_host_bufs(nbufs), _rx_buffer_spares(nbufs),
+        _rx_buffer_size(buffersize), _mode(m) {
     get_xilinx_device(idx);
+	_exchange_mem = read_reg(_base_addr + EXCHANGE_MEM_OFFSET_ADDRESS);
   }
 
-  ~FPGA() {
-	std::cout << "Removing CCLO object at " << std::hex <<  get_mmio_addr() << std::endl;
-    execute_kernel(true, config, 0, 0, 0, reset_periph, 0, 0, 0, _rx_buffers[0], _rx_buffers[0]);
+  ~ACCL() {
+    std::cout << "Removing CCLO object at " << std::hex << get_mmio_addr()
+              << std::endl;
+    execute_kernel(true, config, 0, 0, 0, reset_periph, 0, 0, 0, _rx_buffer_spares[0],
+                   _rx_buffer_spares[0]);
   }
 
   /*
@@ -101,10 +94,10 @@ public:
   }
 
   uint64_t get_mmio_addr() {
-	return 0; //XXX Implement this
+    return 0; // XXX Implement this
   }
 
-  void config_comm(int ranks) { _comm = {ranks, _comm_addr, _krnl}; }
+  //void config_comm(int ranks) { _comm = {ranks, _comm_addr, _krnl}; }
 
   void load_bitstream(const std::string xclbin) {
     char *local_rank_string = getenv("OMPI_COMM_WORLD_LOCAL_RANK");
@@ -116,7 +109,7 @@ public:
     cout << local_rank_string << endl;
     _krnl = xrt::kernel(
         _device, uuid,
-        "ccl_offload:ccl_offload_inst", //+string{local_rank_string},
+        "ACCL:ccl_offload:1.0", //+string{local_rank_string},
         xrt::kernel::cu_access_mode::exclusive);
   }
 
@@ -128,11 +121,24 @@ public:
 
   template <typename... Args> void execute_kernel(bool wait, Args... args) {
     auto run = _krnl(args...);
-   	run.start(); 
+    run.start();
     if (wait) {
       run.wait();
     }
   }
+
+	void dump_exchange_memory() {
+        std::cout << "exchange mem: "<< std::endl;
+        const int num_word_per_line=4;
+        for(int i =0; i< EXCHANGE_MEM_ADDRESS_RANGE; i+=4*num_word_per_line){
+            std::stringstream ss;
+			for(int j=0; j<num_word_per_line; j++) {
+             //   ss << read_register(_exchange_mem.base_addr(i+(j*4)));
+			}
+    //        std::cout << std::hex << _exchange_mem.base_addr + i <<  ss << endl;
+		}
+	}
+
 
   void dump_rx_buffers() {
     int64_t addr = _base_addr;
@@ -181,17 +187,17 @@ public:
   }
 
   void prep_rx_buffers(int bank_id = 1) {
-    const auto SIZE = _buffer_size / sizeof(int8_t);
+    const auto SIZE = _rx_buffer_size / sizeof(int8_t);
     int64_t addr = _base_addr;
     write_reg(addr, _nbufs);
     for (int i = 0; i < _nbufs; i++) {
       // Alloc and fill buffer
       const xrtMemoryGroup bank_grp_idx = bank_id;
-      auto bo = xrt::bo(_device, _buffer_size, bank_grp_idx);
+      auto bo = xrt::bo(_device, _rx_buffer_size, bank_grp_idx);
       auto hostmap = bo.map<int8_t *>();
-      std::fill(hostmap, hostmap + (_buffer_size), static_cast<int8_t>(0));
+      std::fill(hostmap, hostmap + (_rx_buffer_size), static_cast<int8_t>(0));
       bo.sync(XCL_BO_SYNC_BO_TO_DEVICE, SIZE, 0);
-      _rx_buffers.insert(_rx_buffers.cbegin() + i, bo);
+      _rx_buffer_spares.insert(_rx_buffer_spares.cbegin() + i, bo);
 
       // Write meta data
       addr += 4;
@@ -201,7 +207,7 @@ public:
       write_reg(addr, (bo.address() >> 32) & 0xffffffff);
 
       addr += 4;
-      write_reg(addr, _buffer_size);
+      write_reg(addr, _rx_buffer_size);
 
       for (int i = 3; i < 9; i++) {
         addr += 4;
@@ -209,21 +215,21 @@ public:
       }
       _comm_addr = addr + 4;
       // Start irq-driven RX buffer scheduler and (de)packetizer
-      execute_kernel(true, config, 0, 0, 0, enable_irq, 0, 0, 0, _rx_buffers[0],
-                     _rx_buffers[0]);
-      execute_kernel(true, config, 0, 0, 0, enable_pkt, 0, 0, 0, _rx_buffers[0],
-                     _rx_buffers[0]);
+      execute_kernel(true, config, 0, 0, 0, enable_irq, 0, 0, 0, _rx_buffer_spares[0],
+                     _rx_buffer_spares[0]);
+      execute_kernel(true, config, 0, 0, 0, enable_pkt, 0, 0, 0, _rx_buffer_spares[0],
+                     _rx_buffer_spares[0]);
     }
   }
   uint64_t get_retcode() { return read_reg(0xFFC); }
 
   uint64_t get_hwid() { return read_reg(0xFF8); }
 
-//XXX Continue here
-  void nop_op(bool run_async=false) {//, waitfor=[]) {
-        auto handle = _krnl(nop, 0, 0, 0, 0, 0, 0, 0, _rx_buffers[0], _rx_buffers[0]);//, waitfor=waitfor);
-        handle.start();
-            handle.wait();
+  // XXX Continue here
+  void nop_op(bool run_async = false) { //, waitfor=[]) {
+    auto handle = _krnl(nop, 0, 0, 0, 0, 0, 0, 0, _rx_buffer_spares[0],
+                        _rx_buffer_spares[0]); //, waitfor=waitfor);
+    handle.start();
+    handle.wait();
   }
-
 };
