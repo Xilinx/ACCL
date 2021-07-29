@@ -50,19 +50,20 @@ class CCLOp(IntEnum):
     nop                     = 255
 
 class CCLOCfgFunc(IntEnum):
-    enable_irq  = 0
-    disable_irq = 1
-    reset_periph= 2
-    enable_pkt  = 3
-    set_timeout = 4
-    init_connection = 5
-    open_port       = 6
-    open_con        = 7
-    use_tcp_stack   = 8
-    use_udp_stack   = 9
-    start_profiling = 10
-    end_profiling   = 11
+    enable_irq               = 0
+    disable_irq              = 1
+    reset_periph             = 2
+    enable_pkt               = 3
+    set_timeout              = 4
+    init_connection          = 5
+    open_port                = 6
+    open_con                 = 7
+    use_tcp_stack            = 8
+    use_udp_stack            = 9
+    start_profiling          = 10
+    end_profiling            = 11
     set_dma_transaction_size = 12
+    set_max_dma_transactions = 13
     
 class CCLOReduceFunc(IntEnum):
     fp          = 0
@@ -130,7 +131,7 @@ class cclo(DefaultIP):
     This class wrapps the common function of the collectives offload kernel
     """
 
-    bindto = ["Xilinx:XCCL:ccl_offload:1.0"]
+    bindto = ["Xilinx:ACCL:ccl_offload:1.0"]
 
     def __init__(self, description):
         super().__init__(description=description)
@@ -549,6 +550,7 @@ class cclo(DefaultIP):
         if not to_fpga and not(is_root) and run_async:
             warnings.warn("XCCL: async run returns data on FPGA, user must sync_from_device() after waiting")
         if buf.nbytes == 0:
+            warnings.warn("zero size buffer")
             return
         # sync the transmit source in one go
         if not from_fpga and is_root:
@@ -769,11 +771,11 @@ class cclo(DefaultIP):
             #use self.utility_spare as intermediate storage when needed
             #root will receive and accumulate in its rbuf from receives (does not send)
             if shift:
-                if (count + self.segment_size-1)//self.segment_size * p > len(self.rx_buffer_spares):
-                    warnings.warn("ring reduce can't be executed safely with this number of spare buffers")
-                    return
                 if(self.utility_spare.size < sbuf.size):
                     warnings.warn("utility buffer can't accommodate intermediate data")
+                    return
+                if (count + self.segment_size-1)//self.segment_size * p > len(self.rx_buffer_spares):
+                    warnings.warn("ring reduce can't be executed safely with this number of spare buffers")
                     return
                 prev_in_ring = (local_rank+p-1)%p
                 next_in_ring = (local_rank+1)%p

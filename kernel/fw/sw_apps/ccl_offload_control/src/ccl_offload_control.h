@@ -62,15 +62,15 @@ extern "C" {
 
 //MAIN SWITCH
 
-#define DATAPATH_DMA_LOOPBACK      1
-#define DATAPATH_DMA_REDUCTION     2
-#define DATAPATH_OFFCHIP_TX_UDP    3
-#define DATAPATH_OFFCHIP_TX_TCP    4
+#define DATAPATH_DMA_LOOPBACK          1
+#define DATAPATH_DMA_REDUCTION         2
+#define DATAPATH_OFFCHIP_TX_UDP        3
+#define DATAPATH_OFFCHIP_TX_TCP        4
 #define DATAPATH_OFFCHIP_UDP_REDUCTION 5
 #define DATAPATH_OFFCHIP_TCP_REDUCTION 6
-#define DATAPATH_DMA_EXT_LOOPBACK  7
-//#define DATAPATH_OFFCHIP_RX_UDP    8 not used up to now since DMA are physically linked to depacketizer
-//#define DATAPATH_OFFCHIP_RX_TCP    9 not used up to now since DMA are physically linked to depacketizer
+#define DATAPATH_DMA_EXT_LOOPBACK      7
+//#define DATAPATH_OFFCHIP_RX_UDP      8 not used up to now since DMA are physically linked to depacketizer
+//#define DATAPATH_OFFCHIP_RX_TCP      9 not used up to now since DMA are physically linked to depacketizer
 
 #define MAIN_SWITCH_M_UDP_TX    0
 #define MAIN_SWITCH_M_TCP_TX    1
@@ -86,9 +86,9 @@ extern "C" {
 #define MAIN_SWITCH_S_EXT_KRNL  4
 
 //ARITH SWITCH
-#define ARITH_INTERNAL 0
-#define ARITH_EXTERNAL 1
-#define ARITH_NONE     2
+#define ARITH_INTERNAL         0
+#define ARITH_EXTERNAL         1
+#define ARITH_NONE             2
 
 #define ARITH_SWITCH_M_INT_OP0 0
 #define ARITH_SWITCH_M_INT_OP1 1
@@ -106,98 +106,99 @@ extern "C" {
 #define MAX_SEG_SIZE 1048576
 //DMA CONST 
 #define DMA_MAX_BTT              0x7FFFFF
-#define DMA_MAX_TRANSACTIONS     2
+#define DMA_MAX_TRANSACTIONS     20
 #define DMA_TRANSACTION_SIZE     4194304 //info: can correspond to MAX_BTT
 
 //******************************
 //**  XCC COLLECTIVE          **
 //******************************
-#define XCCL_CONFIG         0
-#define XCCL_SEND           1 
-#define XCCL_RECV           2
-#define XCCL_BCAST          3
-#define XCCL_SCATTER        4
-#define XCCL_GATHER         5
-#define XCCL_REDUCE         6
-#define XCCL_ALLGATHER      7
-#define XCCL_ALLREDUCE      8
-#define XCCL_ACC            9
-#define XCCL_COPY           10
-#define XCCL_REDUCE_RING    11
+#define XCCL_CONFIG               0
+#define XCCL_SEND                 1 
+#define XCCL_RECV                 2
+#define XCCL_BCAST                3
+#define XCCL_SCATTER              4
+#define XCCL_GATHER               5
+#define XCCL_REDUCE               6
+#define XCCL_ALLGATHER            7
+#define XCCL_ALLREDUCE            8
+#define XCCL_ACC                  9
+#define XCCL_COPY                 10
+#define XCCL_REDUCE_RING          11
 #define XCCL_ALLREDUCE_FUSED_RING 12
-#define XCCL_GATHER_RING    13
-#define XCCL_ALLGATHER_RING 14
-#define XCCL_EXT_STREAM_KRNL 15
-#define XCCL_EXT_REDUCE     16
-#define XCCL_BCAST_RR       17
-#define XCCL_SCATTER_RR     18
+#define XCCL_GATHER_RING          13
+#define XCCL_ALLGATHER_RING       14
+#define XCCL_EXT_STREAM_KRNL      15
+#define XCCL_EXT_REDUCE           16
+#define XCCL_BCAST_RR             17
+#define XCCL_SCATTER_RR           18
 #define XCCL_ALLREDUCE_SHARE_RING 19
 
 //XCCL_CONFIG SUBFUNCTIONS
-#define HOUSEKEEP_IRQEN   0
-#define HOUSEKEEP_IRQDIS  1
-#define HOUSEKEEP_SWRST   2
-#define HOUSEKEEP_PKTEN   3
-#define HOUSEKEEP_TIMEOUT 4
-#define INIT_CONNECTION   5 
-#define OPEN_PORT         6
-#define OPEN_CON          7
-#define USE_TCP_STACK     8
-#define USE_UDP_STACK     9
-#define START_PROFILING   10
-#define END_PROFILING     11
-#define SET_DMA_TRANSACTION_SIZE 12
+#define HOUSEKEEP_IRQEN           0
+#define HOUSEKEEP_IRQDIS          1
+#define HOUSEKEEP_SWRST           2
+#define HOUSEKEEP_PKTEN           3
+#define HOUSEKEEP_TIMEOUT         4
+#define INIT_CONNECTION           5 
+#define OPEN_PORT                 6
+#define OPEN_CON                  7
+#define USE_TCP_STACK             8
+#define USE_UDP_STACK             9
+#define START_PROFILING           10
+#define END_PROFILING             11
+#define SET_DMA_TRANSACTION_SIZE  12
+#define SET_MAX_DMA_TRANSACTIONS  13
 
 //AXI MMAP address
-#define CONTROL_OFFSET    0x0000
-#define ARG00_OFFSET      0x0010
-#define AXI00_PTR0_OFFSET 0x0018
-#define AXI01_PTR0_OFFSET 0x0024
-#define END_OF_REG_OFFSET 0x0030
+#define CONTROL_OFFSET          0x0000
+#define ARG00_OFFSET            0x0010
+#define AXI00_PTR0_OFFSET       0x0018
+#define AXI01_PTR0_OFFSET       0x0024
+#define END_OF_REG_OFFSET       0x0030
 #define TIME_TO_ACCESS_EXCH_MEM 0x1FF4
-#define HWID_OFFSET       0x1FF8
-#define RETVAL_OFFSET     0x1FFC
-#define END_OF_EXCHMEM    0x2000
+#define HWID_OFFSET             0x1FF8
+#define RETVAL_OFFSET           0x1FFC
+#define END_OF_EXCHMEM          0x2000
 
-#define HOSTCTRL_BASEADDR     0x0        
-#define EXCHMEM_BASEADDR      0x1000
-#define ARITH_BASEADDR        0x20000
-#define UDP_RXPKT_BASEADDR    0x30000
-#define UDP_TXPKT_BASEADDR    0x40000
-#define TCP_RXPKT_BASEADDR    0x50000
-#define TCP_TXPKT_BASEADDR    0x60000
-#define GPIO_BASEADDR         0x40000000
-#define MAIN_SWITCH_BASEADDR  0x44A00000
-#define IRQCTRL_BASEADDR      0x44A10000
-#define TIMER_BASEADDR        0x44A20000
-#define ARITH_SWITCH_BASEADDR 0x44B00000
+#define HOSTCTRL_BASEADDR       0x0        
+#define EXCHMEM_BASEADDR        0x1000
+#define ARITH_BASEADDR          0x20000
+#define UDP_RXPKT_BASEADDR      0x30000
+#define UDP_TXPKT_BASEADDR      0x40000
+#define TCP_RXPKT_BASEADDR      0x50000
+#define TCP_TXPKT_BASEADDR      0x60000
+#define GPIO_BASEADDR           0x40000000
+#define MAIN_SWITCH_BASEADDR    0x44A00000
+#define IRQCTRL_BASEADDR        0x44A10000
+#define TIMER_BASEADDR          0x44A20000
+#define ARITH_SWITCH_BASEADDR   0x44B00000
 //https://www.xilinx.com/html_docs/xilinx2020_2/vitis_doc/managing_interface_synthesis.html#tzw1539734223235
-#define CONTROL_START_MASK  0x00000001
-#define CONTROL_DONE_MASK   0x00000001 << 1
-#define CONTROL_IDLE_MASK   0x00000001 << 2 
-#define CONTROL_READY_MASK  0x00000001 << 3
-#define CONTROL_REPEAT_MASK 0x00000001 << 7
+#define CONTROL_START_MASK      0x00000001
+#define CONTROL_DONE_MASK       0x00000001 << 1
+#define CONTROL_IDLE_MASK       0x00000001 << 2 
+#define CONTROL_READY_MASK      0x00000001 << 3
+#define CONTROL_REPEAT_MASK     0x00000001 << 7
 
 #define GPIO_DATA_REG      XPAR_GPIO_0_BASEADDR + 0x0000
-#define GPIO_READY_MASK    0x00000001
-#define GPIO_SWRST_MASK    0x00000002
+#define GPIO_READY_MASK       0x00000001
+#define GPIO_SWRST_MASK       0x00000002
 
 #define GPIO_TRI_REG       XPAR_GPIO_0_BASEADDR + 0x0004
 
 #define GPIO2_DATA_REG     XPAR_GPIO_0_BASEADDR + 0x0008
-#define STREAM_INTR_MASK   0x00000001
+#define STREAM_INTR_MASK      0x00000001
 
 #define GPIO2_TRI_REG      XPAR_GPIO_0_BASEADDR + 0x000C
 
 #define GPIO_GIER_REG      XPAR_GPIO_0_BASEADDR + 0x011C
-#define GIE_MASK           0x80000000
+#define GIE_MASK              0x80000000
 
 #define GPIO_IPISR_REG     XPAR_GPIO_0_BASEADDR + 0x0120
-#define C1IS_MASK          0x00000001
-#define C2IS_MASK          0x00000002
+#define C1IS_MASK             0x00000001
+#define C2IS_MASK             0x00000002
 #define GPIO_IPIER_REG     XPAR_GPIO_0_BASEADDR + 0x0128
-#define C1IE_MASK          0x00000001
-#define C2IE_MASK          0x00000002
+#define C1IE_MASK             0x00000001
+#define C2IE_MASK             0x00000002
 
 //from AXI interrupt controller v4.1 LogiCORE IP product guide
 //https://www.xilinx.com/support/documentation/ip_documentation/axi_intc/v4_1/pg099-axi-intc.pdf
@@ -213,7 +214,7 @@ extern "C" {
 #define IRQCTRL_INTERRUPT_LEVEL_REGISTER_OFFSET                   0x24
 #define IRQCTRL_INTERRUPT_VECTOR_ADDRESS_REGISTER_OFFSET          0x100
 #define IRQCTRL_INTERRUPT_VECTOR_EXTENDED_ADDRESS_REGISTER_OFFSET 0x200
-#define IRQCTRL_SIZE 0x300
+#define IRQCTRL_SIZE                                              0x300
 
 #define IRQCTRL_TIMER_ENABLE                   0x0001
 #define IRQCTRL_DMA0_CMD_QUEUE_EMPTY           0x0002
@@ -222,7 +223,7 @@ extern "C" {
 #define IRQCTRL_DMA2_STS_QUEUE_NON_EMPTY       0x0010
 
 #define IRQCTRL_MASTER_ENABLE_REGISTER_HARDWARE_INTERRUPT_ENABLE 0x0002
-#define IRQCTRL_MASTER_ENABLE_REGISTER_MASTER_ENABLE 0x0001
+#define IRQCTRL_MASTER_ENABLE_REGISTER_MASTER_ENABLE             0x0001
 
 //from AXI Timer v2.0 LogiCORE IP Product Guide
 //https://www.xilinx.com/support/documentation/ip_documentation/axi_timer/v2_0/pg079-axi-timer.pdf
@@ -248,29 +249,29 @@ extern "C" {
 #define CONTROL_AND_STATUS_REGISTER_MODE_TIMER_MASK               0x0001 << 0
 
 //EXCEPTIONS
-#define COLLECTIVE_OP_SUCCESS       0    
-#define DMA_MISMATCH_ERROR          1     
-#define DMA_INTERNAL_ERROR          2     
-#define DMA_DECODE_ERROR            3  
-#define DMA_SLAVE_ERROR             4 
-#define DMA_NOT_OKAY_ERROR          5     
-#define DMA_NOT_END_OF_PACKET_ERROR 6             
-#define DMA_NOT_EXPECTED_BTT_ERROR  7
-#define DMA_TIMEOUT_ERROR           8             
-#define CONFIG_SWITCH_ERROR         9
-#define DEQUEUE_BUFFER_TIMEOUT_ERROR 10
-#define DEQUEUE_BUFFER_SPARE_BUFFER_STATUS_ERROR 11
-#define RECEIVE_TIMEOUT_ERROR       12
-#define DEQUEUE_BUFFER_SPARE_BUFFER_DMATAG_MISMATCH             13
-#define DEQUEUE_BUFFER_SPARE_BUFFER_INDEX_ERROR 14
-#define COLLECTIVE_NOT_IMPLEMENTED 15
-#define RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID 16
-#define OPEN_PORT_NOT_SUCCEEDED    17
-#define OPEN_COM_NOT_SUCCEEDED     18
-#define DMA_SIZE_ERROR             19
-#define ARITH_ERROR                20 
-#define PACK_TIMEOUT_STS_ERROR     21
-#define PACK_SEQ_NUMBER_ERROR      22
+#define COLLECTIVE_OP_SUCCESS                         0    
+#define DMA_MISMATCH_ERROR                            1     
+#define DMA_INTERNAL_ERROR                            2     
+#define DMA_DECODE_ERROR                              3  
+#define DMA_SLAVE_ERROR                               4 
+#define DMA_NOT_OKAY_ERROR                            5     
+#define DMA_NOT_END_OF_PACKET_ERROR                   6             
+#define DMA_NOT_EXPECTED_BTT_ERROR                    7
+#define DMA_TIMEOUT_ERROR                             8             
+#define CONFIG_SWITCH_ERROR                           9
+#define DEQUEUE_BUFFER_TIMEOUT_ERROR                  10
+#define DEQUEUE_BUFFER_SPARE_BUFFER_STATUS_ERROR      11
+#define RECEIVE_TIMEOUT_ERROR                         12
+#define DEQUEUE_BUFFER_SPARE_BUFFER_DMATAG_MISMATCH   13
+#define DEQUEUE_BUFFER_SPARE_BUFFER_INDEX_ERROR       14
+#define COLLECTIVE_NOT_IMPLEMENTED                    15
+#define RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID       16
+#define OPEN_PORT_NOT_SUCCEEDED                       17
+#define OPEN_COM_NOT_SUCCEEDED                        18
+#define DMA_SIZE_ERROR                                19
+#define ARITH_ERROR                                   20 
+#define PACK_TIMEOUT_STS_ERROR                        21
+#define PACK_SEQ_NUMBER_ERROR                         22
 
 //ARITH functions
 #define ARITH_fp    0
@@ -278,7 +279,7 @@ extern "C" {
 #define ARITH_i32   2
 #define ARITH_i64   3
 
-//USE DMAS
+//USE DMAS for DMA movement
 #define USE_DMA0_RX 1
 #define USE_DMA1_RX 2
 #define USE_DMA1_TX 4
@@ -287,8 +288,8 @@ extern "C" {
 
 #define S_AXI_CONTROL -1
 
-#define Xil_Out32(offset, value) *(volatile unsigned int *)(offset) = (value)
-#define Xil_In32(offset) ({unsigned int value = *(volatile unsigned int *)(offset); value; })
+#define Xil_Out32(offset, value) (*((volatile unsigned int *)(offset))) = (value)
+#define Xil_In32(offset) ({unsigned int value = *((volatile unsigned int *)(offset)); value; })
 #define SET(offset, mask) Xil_Out32(offset, Xil_In32(offset) | (mask))
 #define CLR(offset, mask) Xil_Out32(offset, Xil_In32(offset) & ~(mask))
 
@@ -379,11 +380,6 @@ typedef struct {
 } communicator;
 
 #define TAG_ANY 0xFFFFFFFF
-
-typedef struct list_node {
-    int val;
-    struct list_node * next;
-} list;
 
 #ifdef __cplusplus
 }
