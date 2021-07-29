@@ -41,7 +41,7 @@ rename_ref -prefix_all ccl_offload_
 write_checkpoint ./ccl_offload_ex/ccl_offload_ex.runs/synth_1/packaged.dcp
 write_xdc ./ccl_offload_ex/ccl_offload_ex.runs/synth_1/packaged.xdc
 close_design
-package_project_dcp_and_xdc ./ccl_offload_ex/ccl_offload_ex.runs/synth_1/packaged.dcp ./ccl_offload_ex/ccl_offload_ex.runs/synth_1/packaged.xdc ./ccl_offload_ex/ccl_offload Xilinx XCCL ccl_offload
+package_project_dcp_and_xdc ./ccl_offload_ex/ccl_offload_ex.runs/synth_1/packaged.dcp ./ccl_offload_ex/ccl_offload_ex.runs/synth_1/packaged.xdc ./ccl_offload_ex/ccl_offload Xilinx ACCL ccl_offload
 package_xo  -xo_path ./ccl_offload_ex/exports/ccl_offload.xo -kernel_name ccl_offload -ip_directory ./ccl_offload_ex/ccl_offload -kernel_xml ./ccl_offload_ex/imports/kernel.xml
 
 # close and exit
