@@ -17,10 +17,10 @@
 
 TARGET=ip
 DEVICE=xcu250-figd2104-2L-e
-REDUCE_IP=build_arith/sol1/impl/export.xo
+REDUCE_IP=build_fp_hp_stream_conv/sol1/impl/export.xo
 
 all: $(REDUCE_IP)
 
-$(REDUCE_IP): build_arith.tcl reduce_arith.cpp 
+$(REDUCE_IP): build.tcl fp_hp_stream_conv.cpp 
 	vitis_hls $< -tclargs $(TARGET) $(DEVICE)
 

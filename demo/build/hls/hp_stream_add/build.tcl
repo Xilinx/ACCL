@@ -51,12 +51,12 @@ switch $command {
 }
 
 
-open_project build_arith
+open_project build_hp_stream_add
 
-add_files reduce_arith.cpp -cflags "-std=c++14"
-add_files -tb tb_arith.cpp -cflags "-std=c++14"
+add_files hp_stream_add.cpp -cflags "-std=c++14"
+add_files -tb tb.cpp -cflags "-std=c++14"
 
-set_top reduce_arith
+set_top hp_stream_add
 
 open_solution sol1
 config_export -format xo
