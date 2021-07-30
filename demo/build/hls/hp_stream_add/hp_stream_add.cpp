@@ -30,7 +30,7 @@ void hp_stream_add(	stream<ap_axiu<DATA_WIDTH,0,0,0> > & in1,
 #pragma HLS INTERFACE axis register both port=in1
 #pragma HLS INTERFACE axis register both port=in2
 #pragma HLS INTERFACE axis register both port=out
-#pragma HLS INTERFACE s_axilite port=return
+#pragma HLS INTERFACE ap_ctrl_none port=return
 
 	unsigned const dwb = 16;
 	unsigned const simd = DATA_WIDTH / dwb;

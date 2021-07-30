@@ -28,7 +28,7 @@ void fp_hp_stream_conv(	stream<ap_axiu<DATA_WIDTH,0,0,0> > & in,
                     stream<ap_axiu<DATA_WIDTH,0,0,0> > & out) {
 #pragma HLS INTERFACE axis register both port=in
 #pragma HLS INTERFACE axis register both port=out
-#pragma HLS INTERFACE s_axilite port=return
+#pragma HLS INTERFACE ap_ctrl_none port=return
 
     unsigned const simd_in = DATA_WIDTH / 32;
     unsigned const simd_out = DATA_WIDTH / 16;
