@@ -317,7 +317,7 @@ proc create_root_design { parentCell } {
    CONFIG.HAS_TSTRB {0} \
    CONFIG.LAYERED_METADATA {undef} \
    CONFIG.TDATA_NUM_BYTES {64} \
-   CONFIG.TDEST_WIDTH {0} \
+   CONFIG.TDEST_WIDTH {4} \
    CONFIG.TID_WIDTH {0} \
    CONFIG.TUSER_WIDTH {0} \
    ] $m_axis_krnl
@@ -331,7 +331,7 @@ proc create_root_design { parentCell } {
    CONFIG.HAS_TSTRB {0} \
    CONFIG.LAYERED_METADATA {undef} \
    CONFIG.TDATA_NUM_BYTES {64} \
-   CONFIG.TDEST_WIDTH {0} \
+   CONFIG.TDEST_WIDTH {4} \
    CONFIG.TID_WIDTH {0} \
    CONFIG.TUSER_WIDTH {0} \
    ] $m_axis_arith_op0
@@ -345,7 +345,7 @@ proc create_root_design { parentCell } {
    CONFIG.HAS_TSTRB {0} \
    CONFIG.LAYERED_METADATA {undef} \
    CONFIG.TDATA_NUM_BYTES {64} \
-   CONFIG.TDEST_WIDTH {0} \
+   CONFIG.TDEST_WIDTH {4} \
    CONFIG.TID_WIDTH {0} \
    CONFIG.TUSER_WIDTH {0} \
    ] $m_axis_arith_op1
@@ -539,7 +539,7 @@ set s_axis_tcp_notification [ create_bd_intf_port -mode Slave -vlnv xilinx.com:i
 
   set control_xbar [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_interconnect:2.1 control_xbar ]
   set_property -dict [ list \
-   CONFIG.NUM_MI {7} \
+   CONFIG.NUM_MI {9} \
  ] $control_xbar
 
   source ./tcl/control_bd.tcl
@@ -549,6 +549,30 @@ set s_axis_tcp_notification [ create_bd_intf_port -mode Slave -vlnv xilinx.com:i
 
   # Create instance: reduce_arith_0, and set properties
   set reduce_arith_0 [ create_bd_cell -type ip -vlnv xilinx.com:hls:reduce_arith:1.0 reduce_arith_0 ]
+
+  # Create subset converters and GPIOs for TDEST generation on outgoing streams
+  create_bd_cell -type ip -vlnv xilinx.com:ip:axis_subset_converter:1.1 ext_arith_ssc_op0
+  create_bd_cell -type ip -vlnv xilinx.com:ip:axis_subset_converter:1.1 ext_arith_ssc_op1
+  create_bd_cell -type ip -vlnv xilinx.com:ip:axis_subset_converter:1.1 ext_krnl_ssc
+  set_property -dict [list CONFIG.S_HAS_TLAST.VALUE_SRC USER CONFIG.S_HAS_TKEEP.VALUE_SRC USER CONFIG.M_TDEST_WIDTH.VALUE_SRC USER CONFIG.S_TDEST_WIDTH.VALUE_SRC USER CONFIG.M_TDATA_NUM_BYTES.VALUE_SRC USER CONFIG.S_TDATA_NUM_BYTES.VALUE_SRC USER CONFIG.M_HAS_TKEEP.VALUE_SRC USER CONFIG.M_HAS_TLAST.VALUE_SRC USER] [get_bd_cells ext_arith_ssc_op0]
+  set_property -dict [list CONFIG.S_HAS_TLAST.VALUE_SRC USER CONFIG.S_HAS_TKEEP.VALUE_SRC USER CONFIG.M_TDEST_WIDTH.VALUE_SRC USER CONFIG.S_TDEST_WIDTH.VALUE_SRC USER CONFIG.M_TDATA_NUM_BYTES.VALUE_SRC USER CONFIG.S_TDATA_NUM_BYTES.VALUE_SRC USER CONFIG.M_HAS_TKEEP.VALUE_SRC USER CONFIG.M_HAS_TLAST.VALUE_SRC USER] [get_bd_cells ext_arith_ssc_op1]
+  set_property -dict [list CONFIG.S_HAS_TLAST.VALUE_SRC USER CONFIG.S_HAS_TKEEP.VALUE_SRC USER CONFIG.M_TDEST_WIDTH.VALUE_SRC USER CONFIG.S_TDEST_WIDTH.VALUE_SRC USER CONFIG.M_TDATA_NUM_BYTES.VALUE_SRC USER CONFIG.S_TDATA_NUM_BYTES.VALUE_SRC USER CONFIG.M_HAS_TKEEP.VALUE_SRC USER CONFIG.M_HAS_TLAST.VALUE_SRC USER] [get_bd_cells ext_krnl_ssc]
+  set_property -dict [list CONFIG.S_TDATA_NUM_BYTES {64} CONFIG.M_TDATA_NUM_BYTES {64} CONFIG.S_TDEST_WIDTH {4} CONFIG.M_TDEST_WIDTH {4} CONFIG.S_HAS_TKEEP {1} CONFIG.S_HAS_TLAST {1} CONFIG.M_HAS_TKEEP {1} CONFIG.M_HAS_TLAST {1} CONFIG.TDATA_REMAP {tdata[511:0]} CONFIG.TDEST_REMAP {tdest[3:0]} CONFIG.TKEEP_REMAP {tkeep[63:0]} CONFIG.TLAST_REMAP {tlast[0]}] [get_bd_cells ext_arith_ssc_op0]
+  set_property -dict [list CONFIG.S_TDATA_NUM_BYTES {64} CONFIG.M_TDATA_NUM_BYTES {64} CONFIG.S_TDEST_WIDTH {4} CONFIG.M_TDEST_WIDTH {4} CONFIG.S_HAS_TKEEP {1} CONFIG.S_HAS_TLAST {1} CONFIG.M_HAS_TKEEP {1} CONFIG.M_HAS_TLAST {1} CONFIG.TDATA_REMAP {tdata[511:0]} CONFIG.TDEST_REMAP {tdest[3:0]} CONFIG.TKEEP_REMAP {tkeep[63:0]} CONFIG.TLAST_REMAP {tlast[0]}] [get_bd_cells ext_arith_ssc_op1]
+  set_property -dict [list CONFIG.S_TDATA_NUM_BYTES {64} CONFIG.M_TDATA_NUM_BYTES {64} CONFIG.S_TDEST_WIDTH {4} CONFIG.M_TDEST_WIDTH {4} CONFIG.S_HAS_TKEEP {1} CONFIG.S_HAS_TLAST {1} CONFIG.M_HAS_TKEEP {1} CONFIG.M_HAS_TLAST {1} CONFIG.TDATA_REMAP {tdata[511:0]} CONFIG.TDEST_REMAP {tdest[3:0]} CONFIG.TKEEP_REMAP {tkeep[63:0]} CONFIG.TLAST_REMAP {tlast[0]}] [get_bd_cells ext_krnl_ssc]
+  
+  connect_bd_intf_net [get_bd_intf_ports m_axis_krnl] [get_bd_intf_pins ext_krnl_ssc/M_AXIS]
+  connect_bd_intf_net [get_bd_intf_ports m_axis_arith_op0] [get_bd_intf_pins ext_arith_ssc_op0/M_AXIS]
+  connect_bd_intf_net [get_bd_intf_ports m_axis_arith_op1] [get_bd_intf_pins ext_arith_ssc_op1/M_AXIS]
+  
+  create_bd_cell -type ip -vlnv xilinx.com:ip:axi_gpio:2.0 axi_gpio_arith_tdest
+  set_property -dict [list CONFIG.C_GPIO_WIDTH {4} CONFIG.C_ALL_OUTPUTS {1}] [get_bd_cells axi_gpio_arith_tdest]
+  connect_bd_net [get_bd_pins axi_gpio_arith_tdest/gpio_io_o] [get_bd_pins ext_krnl_ssc/s_axis_tdest]
+  
+  create_bd_cell -type ip -vlnv xilinx.com:ip:axi_gpio:2.0 axi_gpio_krnl_tdest
+  set_property -dict [list CONFIG.C_GPIO_WIDTH {4} CONFIG.C_GPIO2_WIDTH {4} CONFIG.C_IS_DUAL {1} CONFIG.C_ALL_OUTPUTS {1} CONFIG.C_ALL_OUTPUTS_2 {1}] [get_bd_cells axi_gpio_krnl_tdest]
+  connect_bd_net [get_bd_pins axi_gpio_krnl_tdest/gpio_io_o] [get_bd_pins ext_arith_ssc_op0/s_axis_tdest]
+  connect_bd_net [get_bd_pins axi_gpio_krnl_tdest/gpio2_io_o] [get_bd_pins ext_arith_ssc_op1/s_axis_tdest]
 
   save_bd_design
 
@@ -563,6 +587,8 @@ set s_axis_tcp_notification [ create_bd_intf_port -mode Slave -vlnv xilinx.com:i
   connect_bd_intf_net -intf_net udp_depacketizer_control [get_bd_intf_pins control_xbar/M04_AXI] [get_bd_intf_pins udp_rx_subsystem/s_axi_control]
   connect_bd_intf_net -intf_net tcp_packetizer_control [get_bd_intf_pins control_xbar/M05_AXI] [get_bd_intf_pins tcp_tx_subsystem/s_axi_control]
   connect_bd_intf_net -intf_net tcp_depacketizer_control [get_bd_intf_pins control_xbar/M06_AXI] [get_bd_intf_pins tcp_rx_subsystem/s_axi_control]
+  connect_bd_intf_net -intf_net ext_arith_tdest_control [get_bd_intf_pins control_xbar/M07_AXI] [get_bd_intf_pins axi_gpio_arith_tdest/S_AXI]
+  connect_bd_intf_net -intf_net ext_krnl_tdest_control [get_bd_intf_pins control_xbar/M08_AXI] [get_bd_intf_pins axi_gpio_krnl_tdest/S_AXI]
 
   connect_bd_intf_net -intf_net bscan_0 [get_bd_intf_ports bscan_0] [get_bd_intf_pins control/bscan_0]
 
@@ -574,12 +600,13 @@ set s_axis_tcp_notification [ create_bd_intf_port -mode Slave -vlnv xilinx.com:i
   connect_bd_intf_net [get_bd_intf_pins arith_switch_0/M01_AXIS] [get_bd_intf_pins reduce_arith_0/in2]
   connect_bd_intf_net [get_bd_intf_pins arith_switch_0/S02_AXIS] [get_bd_intf_pins reduce_arith_0/out_r]
   connect_bd_intf_net [get_bd_intf_pins arith_switch_0/S03_AXIS] [get_bd_intf_pins s_axis_arith_res]
-  connect_bd_intf_net [get_bd_intf_pins arith_switch_0/M02_AXIS] [get_bd_intf_pins m_axis_arith_op0]
-  connect_bd_intf_net [get_bd_intf_pins arith_switch_0/M03_AXIS] [get_bd_intf_pins m_axis_arith_op1]
+  connect_bd_intf_net [get_bd_intf_pins arith_switch_0/M02_AXIS] [get_bd_intf_pins ext_arith_ssc_op0/S_AXIS]
+  connect_bd_intf_net [get_bd_intf_pins arith_switch_0/M03_AXIS] [get_bd_intf_pins ext_arith_ssc_op1/S_AXIS]
 
   # Streaming kernel interface connections
   connect_bd_intf_net [get_bd_intf_ports s_axis_krnl] [get_bd_intf_pins axis_switch_0/S04_AXIS]
-  connect_bd_intf_net [get_bd_intf_ports m_axis_krnl] [get_bd_intf_pins axis_switch_0/M05_AXIS]
+  connect_bd_intf_net [get_bd_intf_pins axis_switch_0/M05_AXIS] [get_bd_intf_pins ext_krnl_ssc/S_AXIS]
+
 
   connect_bd_intf_net [get_bd_intf_pins axis_switch_0/M01_AXIS] -boundary_type upper [get_bd_intf_pins tcp_tx_subsystem/s_axis_tcp_tx_data]
 
@@ -643,6 +670,11 @@ set s_axis_tcp_notification [ create_bd_intf_port -mode Slave -vlnv xilinx.com:i
                                                    [get_bd_pins dma_0/ap_clk] \
                                                    [get_bd_pins dma_1/ap_clk] \
                                                    [get_bd_pins dma_2/ap_clk] \
+                                                   [get_bd_pins axi_gpio_krnl_tdest/s_axi_aclk] \
+                                                   [get_bd_pins axi_gpio_arith_tdest/s_axi_aclk] \
+                                                   [get_bd_pins ext_arith_ssc_op1/aclk] \
+                                                   [get_bd_pins ext_arith_ssc_op0/aclk] \
+                                                   [get_bd_pins ext_krnl_ssc/aclk] \
                                                    [get_bd_pins reduce_arith_0/ap_clk] \
                                                    [get_bd_pins udp_rx_subsystem/ap_clk] \
                                                    [get_bd_pins udp_tx_subsystem/ap_clk] \
@@ -656,7 +688,9 @@ set s_axis_tcp_notification [ create_bd_intf_port -mode Slave -vlnv xilinx.com:i
                                                    [get_bd_pins control_xbar/M03_ACLK] \
                                                    [get_bd_pins control_xbar/M04_ACLK] \
                                                    [get_bd_pins control_xbar/M05_ACLK] \
-                                                   [get_bd_pins control_xbar/M06_ACLK]
+                                                   [get_bd_pins control_xbar/M06_ACLK] \
+                                                   [get_bd_pins control_xbar/M07_ACLK] \
+                                                   [get_bd_pins control_xbar/M08_ACLK]
   connect_bd_net -net ap_rst_n [get_bd_ports ap_rst_n] [get_bd_pins control/ap_rst_n]
   connect_bd_net -net ap_rst_n_1 [get_bd_pins control/encore_aresetn] [get_bd_pins axis_switch_0/aresetn] \
                                                                       [get_bd_pins axis_switch_0/s_axi_ctrl_aresetn] \
@@ -665,6 +699,11 @@ set s_axis_tcp_notification [ create_bd_intf_port -mode Slave -vlnv xilinx.com:i
                                                                       [get_bd_pins dma_0/ap_rst_n] \
                                                                       [get_bd_pins dma_1/ap_rst_n] \
                                                                       [get_bd_pins dma_2/ap_rst_n] \
+                                                                      [get_bd_pins axi_gpio_krnl_tdest/s_axi_aresetn] \
+                                                                      [get_bd_pins axi_gpio_arith_tdest/s_axi_aresetn] \
+                                                                      [get_bd_pins ext_arith_ssc_op1/aresetn] \
+                                                                      [get_bd_pins ext_arith_ssc_op0/aresetn] \
+                                                                      [get_bd_pins ext_krnl_ssc/aresetn] \
                                                                       [get_bd_pins reduce_arith_0/ap_rst_n] \
                                                                       [get_bd_pins udp_rx_subsystem/ap_rst_n] \
                                                                       [get_bd_pins udp_tx_subsystem/ap_rst_n] \
@@ -678,7 +717,9 @@ set s_axis_tcp_notification [ create_bd_intf_port -mode Slave -vlnv xilinx.com:i
                                                                       [get_bd_pins control_xbar/M03_ARESETN] \
                                                                       [get_bd_pins control_xbar/M04_ARESETN] \
                                                                       [get_bd_pins control_xbar/M05_ARESETN] \
-                                                                      [get_bd_pins control_xbar/M06_ARESETN]
+                                                                      [get_bd_pins control_xbar/M06_ARESETN] \
+                                                                      [get_bd_pins control_xbar/M07_ARESETN] \
+                                                                      [get_bd_pins control_xbar/M08_ARESETN]
 
   # Create address segments
   #1. exchange memory module
@@ -705,6 +746,10 @@ set s_axis_tcp_notification [ create_bd_intf_port -mode Slave -vlnv xilinx.com:i
   assign_bd_address -offset 0x00060000 -range 0x00010000 -target_address_space [get_bd_addr_spaces control/microblaze_0/Data] [get_bd_addr_segs tcp_tx_subsystem/tcp_packetizer_0/s_axi_control/Reg] -force
   # exchange memory hw versioning register+reset
   assign_bd_address -offset 0x40000000 -range 0x00001000 -target_address_space [get_bd_addr_spaces control/microblaze_0/Data] [get_bd_addr_segs control/microblaze_0_exchange_memory/axi_gpio_0/S_AXI/Reg] -force
+  # GPIOs for TDEST generation
+  assign_bd_address -offset 0x40010000 -range 0x00001000 -target_address_space [get_bd_addr_spaces control/microblaze_0/Data] [get_bd_addr_segs axi_gpio_arith_tdest/S_AXI/Reg] -force
+  assign_bd_address -offset 0x40020000 -range 0x00001000 -target_address_space [get_bd_addr_spaces control/microblaze_0/Data] [get_bd_addr_segs axi_gpio_krnl_tdest/S_AXI/Reg] -force
+
   # axis_switch in mpi_offload top view
   assign_bd_address -offset 0x44A00000 -range 0x00010000 -target_address_space [get_bd_addr_spaces control/microblaze_0/Data] [get_bd_addr_segs axis_switch_0/S_AXI_CTRL/Reg] -force
   # irq controller
