@@ -1448,7 +1448,6 @@ int receive_and_reduce_offchip(
 }
 
 //receives from a rank and forwards to another rank 
-//TODO: overlap multiple wait_start_dma_movement
 int relay_to_other_rank(
 		communicator *world,
 		unsigned int src_rank,
