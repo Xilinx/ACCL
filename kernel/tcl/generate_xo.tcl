@@ -17,6 +17,24 @@
 
 set elf [lindex $::argv 0]
 
+proc package_project_dcp_and_xdc {path_to_dcp path_to_xdc path_to_packaged kernel_vendor kernel_library kernel_name} {
+    set core [::ipx::package_checkpoint -dcp_file $path_to_dcp -root_dir $path_to_packaged -vendor $kernel_vendor -library $kernel_library -name $kernel_name -taxonomy "/KernelIP" -force]
+    edit_core $core
+    set rel_path_to_xdc [file join "impl" [file tail $path_to_xdc]]
+    set abs_path_to_xdc [file join $path_to_packaged $rel_path_to_xdc]
+    file mkdir [file dirname $abs_path_to_xdc]
+    file copy $path_to_xdc $abs_path_to_xdc
+    set xdcfile [::ipx::add_file $rel_path_to_xdc [::ipx::add_file_group "xilinx_implementation" $core]]
+    set_property type "xdc" $xdcfile
+    set_property used_in [list "implementation"] $xdcfile
+    ::ipx::update_checksums $core
+    ::ipx::check_integrity -kernel $core
+    ::ipx::check_integrity -xrt $core
+    ::ipx::save_core $core
+    ::ipx::unload_core $core
+    unset core
+}
+
 # open project
 open_project ./ccl_offload_ex/ccl_offload_ex.xpr
 
@@ -26,13 +44,12 @@ add_files -norecurse ./hdl/ccl_offload.v
 update_compile_order -fileset sources_1
 
 # add elf file and associate it
-remove_files  ./ccl_offload_ex/ccl_offload_ex.sdk/ccl_offload_control/Debug/ccl_offload_control.elf
 add_files -norecurse $elf
+update_compile_order -fileset sources_1
 set_property SCOPED_TO_REF ccl_offload_bd [get_files -all -of_objects [get_fileset sources_1] $elf]
 set_property SCOPED_TO_CELLS { control/microblaze_0 } [get_files -all -of_objects [get_fileset sources_1] $elf]
 
 #run kernel packaging
-source -notrace ./ccl_offload_ex/imports/package_kernel.tcl
 reset_run synth_1
 launch_runs synth_1 -jobs 12
 wait_on_run [get_runs synth_1]
