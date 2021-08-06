@@ -72,7 +72,7 @@ def configure_xccl(xclbin, board_idx, nbufs=16, bufsize=1024*1024):
 
         arp_addr.append(ip_network[i])
         
-
+    cclo.use_tcp()
     print(f"CCLO {rank_id}: Configuring RX Buffers")
     cclo.setup_rx_buffers(nbufs, bufsize, rxbufmem)
     print(f"CCLO {rank_id}: Configuring a communicator")
@@ -80,8 +80,8 @@ def configure_xccl(xclbin, board_idx, nbufs=16, bufsize=1024*1024):
     print(f"CCLO {rank_id}: Configuring network stack")
 
     #assign 64 MB network tx and rx buffer
-    tx_buf_network = pynq.allocate((64*1024*1024,), dtype=np.int8, target=networkmem)
-    rx_buf_network = pynq.allocate((64*1024*1024,), dtype=np.int8, target=networkmem)
+    tx_buf_network = pynq.allocate((128*1024*1024,), dtype=np.int8, target=networkmem)
+    rx_buf_network = pynq.allocate((128*1024*1024,), dtype=np.int8, target=networkmem)
     
     tx_buf_network.sync_to_device()
     rx_buf_network.sync_to_device()
@@ -169,11 +169,11 @@ def test_bcast(bsize, naccel, to_from_fpga=True):
     for j in range (niter):
         if rank == 0:
             for i in range(num_message):
-                cclo.bcast(0, tx_buf, root=0, sw=False, rr=False, from_fpga=to_from_fpga, to_fpga=to_from_fpga, run_async=False)
+                cclo.bcast(0, tx_buf, root=0, sw=False, rr=True, from_fpga=to_from_fpga, to_fpga=to_from_fpga, run_async=False)
                 # print("rank 0 finishes")
         else :
             for i in range(num_message):
-                cclo.bcast(0, rx_buf, root=0, sw=False, rr=False, from_fpga=to_from_fpga, to_fpga=to_from_fpga, run_async=False)
+                cclo.bcast(0, rx_buf, root=0, sw=False, rr=True, from_fpga=to_from_fpga, to_fpga=to_from_fpga, run_async=False)
                 if args.debug and to_from_fpga:
                     cclo.dump_rx_buffers_spares()
                     print(f"rank {rank} finishes")
@@ -304,12 +304,12 @@ def test_scatter(bsize, naccel, to_from_fpga=True):
     for j in range (niter):
         if rank == 0:
             for i in range(num_message):
-                cclo.scatter(0, tx_buf, rx_buf, count, root=0,  sw=False, from_fpga=to_from_fpga, to_fpga=to_from_fpga, run_async=False)
+                cclo.scatter(0, tx_buf, rx_buf, count, root=0,  sw=False, rr=True, from_fpga=to_from_fpga, to_fpga=to_from_fpga, run_async=False)
                 if args.debug and to_from_fpga:
                     print("rank 0 finishes")
         else :
             for i in range(num_message):
-                cclo.scatter(0, tx_buf, rx_buf, count, root=0,  sw=False, from_fpga=to_from_fpga, to_fpga=to_from_fpga, run_async=False)
+                cclo.scatter(0, tx_buf, rx_buf, count, root=0,  sw=False, rr=True, from_fpga=to_from_fpga, to_fpga=to_from_fpga, run_async=False)
                 if args.debug and to_from_fpga:
                     cclo.dump_rx_buffers_spares()
                     print(f"rank {rank} finishes")
