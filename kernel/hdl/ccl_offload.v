@@ -377,6 +377,7 @@ module ccl_offload
         .m_axis_arith_op1_tvalid(m_axis_arith_op1_tvalid),
         .m_axis_krnl_tdata(m_axis_krnl_tdata),
         .m_axis_krnl_tkeep(m_axis_krnl_tkeep),
+        .m_axis_krnl_dest(m_axis_krnl_tdest),
         .m_axis_krnl_tlast(m_axis_krnl_tlast),
         .m_axis_krnl_tready(m_axis_krnl_tready),
         .m_axis_krnl_tstrb(m_axis_krnl_tstrb),

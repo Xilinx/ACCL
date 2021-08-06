@@ -523,6 +523,8 @@ set s_axis_tcp_notification [ create_bd_intf_port -mode Slave -vlnv xilinx.com:i
    CONFIG.NUM_SI {5} \
    CONFIG.ROUTING_MODE {1} \
    CONFIG.TDATA_NUM_BYTES {64} \
+   CONFIG.TDEST_WIDTH.VALUE_SRC USER \
+   CONFIG.TDEST_WIDTH {0} \
  ] $axis_switch_0
 
    # Create instance: arith_switch_0, and set properties
@@ -535,6 +537,8 @@ set s_axis_tcp_notification [ create_bd_intf_port -mode Slave -vlnv xilinx.com:i
    CONFIG.NUM_SI {4} \
    CONFIG.ROUTING_MODE {1} \
    CONFIG.TDATA_NUM_BYTES {64} \
+   CONFIG.TDEST_WIDTH.VALUE_SRC USER \
+   CONFIG.TDEST_WIDTH {0} \
  ] $arith_switch_0
 
   set control_xbar [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_interconnect:2.1 control_xbar ]
@@ -565,14 +569,14 @@ set s_axis_tcp_notification [ create_bd_intf_port -mode Slave -vlnv xilinx.com:i
   connect_bd_intf_net [get_bd_intf_ports m_axis_arith_op0] [get_bd_intf_pins ext_arith_ssc_op0/M_AXIS]
   connect_bd_intf_net [get_bd_intf_ports m_axis_arith_op1] [get_bd_intf_pins ext_arith_ssc_op1/M_AXIS]
   
-  create_bd_cell -type ip -vlnv xilinx.com:ip:axi_gpio:2.0 axi_gpio_arith_tdest
-  set_property -dict [list CONFIG.C_GPIO_WIDTH {4} CONFIG.C_ALL_OUTPUTS {1}] [get_bd_cells axi_gpio_arith_tdest]
-  connect_bd_net [get_bd_pins axi_gpio_arith_tdest/gpio_io_o] [get_bd_pins ext_krnl_ssc/s_axis_tdest]
-  
   create_bd_cell -type ip -vlnv xilinx.com:ip:axi_gpio:2.0 axi_gpio_krnl_tdest
-  set_property -dict [list CONFIG.C_GPIO_WIDTH {4} CONFIG.C_GPIO2_WIDTH {4} CONFIG.C_IS_DUAL {1} CONFIG.C_ALL_OUTPUTS {1} CONFIG.C_ALL_OUTPUTS_2 {1}] [get_bd_cells axi_gpio_krnl_tdest]
-  connect_bd_net [get_bd_pins axi_gpio_krnl_tdest/gpio_io_o] [get_bd_pins ext_arith_ssc_op0/s_axis_tdest]
-  connect_bd_net [get_bd_pins axi_gpio_krnl_tdest/gpio2_io_o] [get_bd_pins ext_arith_ssc_op1/s_axis_tdest]
+  set_property -dict [list CONFIG.C_GPIO_WIDTH {4} CONFIG.C_ALL_OUTPUTS {1}] [get_bd_cells axi_gpio_krnl_tdest]
+  connect_bd_net [get_bd_pins axi_gpio_krnl_tdest/gpio_io_o] [get_bd_pins ext_krnl_ssc/s_axis_tdest]
+  
+  create_bd_cell -type ip -vlnv xilinx.com:ip:axi_gpio:2.0 axi_gpio_arith_tdest
+  set_property -dict [list CONFIG.C_GPIO_WIDTH {4} CONFIG.C_GPIO2_WIDTH {4} CONFIG.C_IS_DUAL {1} CONFIG.C_ALL_OUTPUTS {1} CONFIG.C_ALL_OUTPUTS_2 {1}] [get_bd_cells axi_gpio_arith_tdest]
+  connect_bd_net [get_bd_pins axi_gpio_arith_tdest/gpio_io_o] [get_bd_pins ext_arith_ssc_op0/s_axis_tdest]
+  connect_bd_net [get_bd_pins axi_gpio_arith_tdest/gpio2_io_o] [get_bd_pins ext_arith_ssc_op1/s_axis_tdest]
 
   save_bd_design
 
