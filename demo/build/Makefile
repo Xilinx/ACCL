@@ -91,9 +91,9 @@ ifeq (vnx,$(MODE))
 	CONFIG += --user_ip_repo_paths $(HLS_IP_FOLDER)
 else ifeq (tri,$(MODE))
 	ETH_IF := none
-	OTHER_XO = $(TCP_DUMMY_XO) $(LOOPBACK_XO) $(COMPRESSION_XO)
+	OTHER_XO = $(TCP_DUMMY_XO) $(COMPRESSION_XO)
 	ifeq (u250,$(findstring u250, $(PLATFORM)))
-		CONFIGFILE = config/link_config_u280_tri.ini
+		CONFIGFILE = config/link_config_u250_tri.ini
 	endif
 	ifeq (u280,$(findstring u280, $(PLATFORM)))
 		CONFIGFILE = config/link_config_u280_tri.ini
@@ -119,34 +119,34 @@ vnx: $(CMAC_UDP_XO) $(UDP_XO)
 
 $(CMAC_UDP_XO) &:	
 	git submodule update --init --recursive xup_vitis_network_example	
-	make -C xup_vitis_network_example/Ethernet DEVICE=$(PLATFORM) INTERFACE=$(ETH_IF) all
+	$(MAKE) -C xup_vitis_network_example/Ethernet DEVICE=$(PLATFORM) INTERFACE=$(ETH_IF) all
 
 $(UDP_XO):
 	git submodule update --init --recursive xup_vitis_network_example
-	make -C xup_vitis_network_example/NetLayers DEVICE=$(PLATFORM) all
+	$(MAKE) -C xup_vitis_network_example/NetLayers DEVICE=$(PLATFORM) all
 
 $(CMAC_TCP_XO):
 	git submodule update --init --recursive Vitis_with_100Gbps_TCP-IP
-	make -C Vitis_with_100Gbps_TCP-IP/ cmac_krnl DEVICE=$(PLATFORM) TEMP_DIR=_x.hw.$(XSA)/ XSA=$(XSA)
+	$(MAKE) -C Vitis_with_100Gbps_TCP-IP/ cmac_krnl DEVICE=$(PLATFORM) TEMP_DIR=_x.hw.$(XSA)/ XSA=$(XSA)
 
 $(TCP_DUMMY_XO):
-	make -C hls/dummy_tcp_stack DEVICE=$(FPGAPART) all
+	$(MAKE) -C hls/dummy_tcp_stack DEVICE=$(FPGAPART) all
 
 .PHONY: compression
 compression: $(COMPRESSION_XO)
 $(HP_SUM_XO):
-	make -C hls/hp_stream_add DEVICE=$(FPGAPART) all
+	$(MAKE) -C hls/hp_stream_add DEVICE=$(FPGAPART) all
 $(HP_DOWNCAST_XO):
-	make -C hls/fp_hp_stream_conv DEVICE=$(FPGAPART) all
+	$(MAKE) -C hls/fp_hp_stream_conv DEVICE=$(FPGAPART) all
 $(HP_UPCAST_XO):
-	make -C hls/hp_fp_stream_conv DEVICE=$(FPGAPART) all
+	$(MAKE) -C hls/hp_fp_stream_conv DEVICE=$(FPGAPART) all
 
 .PHONY: network_krnl
 network_krnl: $(TCP_XO)
 
 $(TCP_XO):
 	git submodule update --init --recursive Vitis_with_100Gbps_TCP-IP
-	make -C Vitis_with_100Gbps_TCP-IP/ network_krnl DEVICE=$(PLATFORM) TEMP_DIR=_x.hw.$(XSA)/ XSA=$(XSA)
+	$(MAKE) -C Vitis_with_100Gbps_TCP-IP/ network_krnl DEVICE=$(PLATFORM) TEMP_DIR=_x.hw.$(XSA)/ XSA=$(XSA)
 
 $(XCLBIN): $(XCCL_XO) $(OTHER_XO) $(CONFIGFILE)
 	v++ --link --platform $(PLATFORM) --kernel_frequency $(FREQUENCY) --save-temps --temp_dir $(BUILD_DIR) $(CONFIG) -o $@ $(XCCL_XO) $(OTHER_XO)
@@ -155,13 +155,13 @@ $(XCLBIN): $(XCCL_XO) $(OTHER_XO) $(CONFIGFILE)
 loopback: $(LOOPBACK_XO)
 
 $(LOOPBACK_XO):
-	make -C hls/loopback DEVICE=$(FPGAPART) loopback
+	$(MAKE) -C hls/loopback DEVICE=$(FPGAPART) loopback
 
 .PHONY: kernel
 kernel: $(XCCL_XO)
 
 $(XCCL_XO):
-	make -C ../../kernel PLATFORM=$(PLATFORM) DEBUG=$(DEBUG) MODE=$(MODE)
+	$(MAKE) -C ../../kernel PLATFORM=$(PLATFORM) DEBUG=$(DEBUG) MODE=$(MODE)
 
 distclean:
 	git clean -xfd
