@@ -445,7 +445,7 @@ unsigned int start_packetizer_message(communicator* world, unsigned int dst_rank
 	unsigned int src_rank, sequence_number, dst, net_tx, curr_len, i;
 	unsigned int transmitted = 0; 
 	//prepare header arguments
-	//TODO: how long does it take to access world (remind that world is in exchange memory)?
+	
 	src_rank 		= world->local_rank;
 	sequence_number = world->ranks[dst_rank].outbound_seq;
 	if (use_tcp){
@@ -810,56 +810,6 @@ static inline int dma_movement(
 					unsigned int what_DMAS) {
 	//issue multiple DMA commands to move data around.
 	//len keeps number of bytes still to transfer
-	/*unsigned int remaining_to_move, remaining_to_ack, moved, dma_tag_tmp, curr_len, i, first_flag, last_flag, num_transaction_to_ack;
-
-	remaining_to_move 	= len;
-	remaining_to_ack 	= len;
-	dma_tag_tmp 		= dma_tag;
-	first_flag			= 1;
-	last_flag			= 0;
-	//issue at most max_dma_in_flight of dma_transaction_size
-	//start transactions
-	curr_len = dma_transaction_size;
-	while(len > 0){
-		
-		for (i = 0; remaining_to_move > 0 && i < max_dma_in_flight ; i++){
-			if (remaining_to_move < dma_transaction_size){
-				curr_len 	= remaining_to_move ;
-				last_flag	= 1;
-			}
-			//start DMAs
-			dma_tag_tmp 		 = start_dma(curr_len, DMA0_rx_addr, DMA1_rx_addr, DMA1_tx_addr, DMA2_rx_addr, what_DMAS, dma_tag_tmp);
-			remaining_to_move 	-= curr_len;
-			DMA0_rx_addr 		+= curr_len;
-			DMA1_rx_addr 		+= curr_len;
-			DMA1_tx_addr 		+= curr_len;
-			DMA2_rx_addr 		+= curr_len;
-		}
-	
-		//verify dma response
-		curr_len = dma_transaction_size;
-		//but watch out in case the arith unit doesn't give the answer to the very last dma transfer that has been 
-		//enqueued. So if you program arith to receive 6 transfer but then you issue only 3 transfer waiting fot the first 3 to complete the 3rd won't
-		//be completed up until you send the next dma transfer. So if you plan to issue 6 transfer in 2 groups of 3 
-		//this is what will happen.
-		//			  6				| 
-		//			  |				| 
-		//			  V				| 
-		// C,B,A -> arith -> B,A 	| F,E,D -> arith -> F,E,D,C 	
-		num_transaction_to_ack = max_dma_in_flight + (first_flag ? -1: 0) + (last_flag ? 1: 0);
-		
-		for (i = 0; remaining_to_ack > 0 &&  i < num_transaction_to_ack; i++){
-			if (remaining_to_ack < dma_transaction_size)
-				curr_len = remaining_to_ack;
-			//wait for DMAs to finish
-			ack_dma(curr_len, what_DMAS);
-			
-			remaining_to_ack  -= curr_len;
-			len			      -= curr_len;
-			moved			  += curr_len;
-		}
-		first_flag = 0;
-	}*/
 	unsigned int remaining_to_move, remaining_to_ack, dma_tag_tmp, curr_len_move, curr_len_ack, i;
 	
 	remaining_to_move 	= len;
@@ -2029,6 +1979,9 @@ int all_reduce_share(
 		curr_send_addr  = dst_addr + len_div_size * curr_recv_chunk;
 		ret = receive_and_accumulate(&world, prev_in_ring, len_div_size, function, curr_recv_addr, curr_send_addr, TAG_ANY); 
 	}
+	//this is basically a parallel version of the following
+	// for i in ranks:
+	// 	reduce(addr+i*len/world.size, root=i )
 
 	//B) Share result stage at this point each of the ranks has at curr_recv_chunk the final result.
 	//they have to share it with the others so that all have the entire buffer
@@ -2087,7 +2040,7 @@ void init(void) {
 	int myoffset;
 	// Register irq handler
 	microblaze_register_handler((XInterruptHandler)stream_isr,(void*)0);
-	microblaze_enable_interrupts(); //TODO: check if we can remove
+	microblaze_enable_interrupts();
 
 	// initialize exchange memory to zero.
 	for ( myoffset = EXCHMEM_BASEADDR; myoffset < END_OF_EXCHMEM; myoffset +=4) {
@@ -2218,13 +2171,13 @@ int main() {
 						timeout = len;
 						break;
 					case INIT_CONNECTION:
-						retval = init_connection(comm);
+						retval  = init_connection(comm);
 						break;
 					case OPEN_PORT:
-						retval = openPort(comm);
+						retval  = openPort(comm);
 						break;
 					case OPEN_CON:
-						retval = openCon(comm);
+						retval  = openCon(comm);
 						break;
 					case USE_TCP_STACK:
 						use_tcp = 1;
