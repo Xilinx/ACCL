@@ -47,6 +47,7 @@ class CCLOp(IntEnum):
     bcast_rr                = 17
     scatter_rr              = 18
     allreduce_share_ring    = 19
+    reduce_scatter          = 20
     nop                     = 255
 
 class CCLOCfgFunc(IntEnum):
@@ -209,7 +210,7 @@ class cclo(DefaultIP):
                 self.exchange_mem.write(addr, 0)
 
         self.communicators_addr = addr+4
-        max_higher = 5
+        max_higher = 1
         self.utility_spare = pynq.allocate((bufsize*max_higher,), dtype=np.int8, target=devicemem[0])
 
         #Start irq-driven RX buffer scheduler and (de)packetizer
@@ -831,7 +832,7 @@ class cclo(DefaultIP):
         prevcall[0].wait()
         if not to_fpga and local_rank == root:
             rbuf[0:count].sync_from_device()
-
+ 
     @self_check_return_value
     def allreduce(self, comm_id, sbuf, rbuf, count, func, fused=False, sw=True,ring=True,share=True, from_fpga=False, to_fpga=False, run_async=False, waitfor=[]):
         if not to_fpga and run_async:
@@ -913,3 +914,33 @@ class cclo(DefaultIP):
         prevcall[0].wait()
         if not to_fpga:
             rbuf[0:count].sync_from_device()
+    
+    @self_check_return_value
+    def reduce_scatter(self, comm_id, sbuf, rbuf, count, func, from_fpga=False, to_fpga=False, run_async=False, waitfor=[]):
+        if not to_fpga and run_async:
+            warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
+        if count == 0:
+            warnings.warn("zero size buffer")
+            return
+        if not compatible_size(count,func):
+            warnings.warn("Non compatible with size")
+            return
+        if func > 3:
+            warnings.warn("Non-add reduce_scatter not implemented")
+            return
+        comm        = self.communicators[comm_id]
+        p           = len(comm["ranks"])
+        local_rank  = comm["local_rank"]
+
+        if not from_fpga:
+            sbuf[0:count*p].sync_to_device()
+
+        cclop    = CCLOp.reduce_scatter
+        prevcall = [self.start(scenario=cclop , len=count, comm=self.communicators[comm_id]["addr"], function=func, addr_0=sbuf, addr_1=rbuf, waitfor=waitfor)]
+
+        if run_async:
+            return prevcall[0]
+        
+        prevcall[0].wait()
+        if not to_fpga and local_rank == root:
+            rbuf[0:count*p].sync_from_device()

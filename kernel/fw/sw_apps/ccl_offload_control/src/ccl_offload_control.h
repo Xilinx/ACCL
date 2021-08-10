@@ -132,6 +132,7 @@ extern "C" {
 #define XCCL_BCAST_RR             17
 #define XCCL_SCATTER_RR           18
 #define XCCL_ALLREDUCE_SHARE_RING 19
+#define XCCL_REDUCE_SCATTER       20
 
 //XCCL_CONFIG SUBFUNCTIONS
 #define HOUSEKEEP_IRQEN           0
