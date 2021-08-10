@@ -28,23 +28,29 @@ void hostctrl(	ap_uint<32> scenario,
 				ap_uint<32> root_src_dst,
 				ap_uint<32> function,
 				ap_uint<32> msg_tag,
-				ap_uint<32> buf0_type,
-				ap_uint<32> buf1_type,
+				ap_uint<32> compression,
+				ap_uint<32> src_type,
+				ap_uint<32> dst_type,
 				ap_uint<64> addra,
 				ap_uint<64> addrb,
+				ap_uint<64> addrc,
 				stream<ap_uint<32>> &cmd,
 				stream<ap_uint<32>> &sts
 );
 
 int main(){
 	int nerrors = 0;
-	ap_uint<64> addrb;
-	addrb(31,0) = 5;
-	addrb(63,32) = 7;
+	ap_uint<64> addra, addrb, addrc;
+	addra(31,0) = 5;
+	addra(63,32) = 7;
+	addrb(31,0) = 3;
+	addrb(63,32) = 9;
+	addrc(31,0) = 1;
+	addrc(63,32) = 6;
 	stream<ap_uint<32>> cmd;
 	stream<ap_uint<32>> sts;
 	sts.write(1);
-	hostctrl(0, 1, 2, 3, 4, 5, 6, 7, 8, addrb, cmd, sts);
+	hostctrl(0, 1, 2, 3, 4, 5, 6, 7, 8, addra, addrb, addrc, cmd, sts);
 	nerrors += (cmd.read() != 0);
 	nerrors += (cmd.read() != 1);
 	nerrors += (cmd.read() != 2);
@@ -54,9 +60,15 @@ int main(){
 	nerrors += (cmd.read() != 6);
 	nerrors += (cmd.read() != 7);
 	nerrors += (cmd.read() != 8);
-	nerrors += (cmd.read() != 0);
+	
+	nerrors += (cmd.read() != addra(31,0));
+	nerrors += (cmd.read() != addra(63,32));
+	
 	nerrors += (cmd.read() != addrb(31,0));
 	nerrors += (cmd.read() != addrb(63,32));
+	
+	nerrors += (cmd.read() != addrc(31,0));
+	nerrors += (cmd.read() != addrc(63,32));
 	
 	return nerrors;
 }

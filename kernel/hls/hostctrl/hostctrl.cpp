@@ -28,9 +28,9 @@ void hostctrl(	ap_uint<32> scenario,
 				ap_uint<32> root_src_dst,
 				ap_uint<32> function,
 				ap_uint<32> msg_tag,
-				ap_uint<32> buf0_type,
-				ap_uint<32> buf1_type,
-				ap_uint<32> buf2_type,
+				ap_uint<32> compression,
+				ap_uint<32> src_type,
+				ap_uint<32> dst_type,
 				ap_uint<64> addra,
 				ap_uint<64> addrb,
 				ap_uint<64> addrc,
@@ -43,9 +43,9 @@ void hostctrl(	ap_uint<32> scenario,
 #pragma HLS INTERFACE s_axilite port=root_src_dst
 #pragma HLS INTERFACE s_axilite port=function
 #pragma HLS INTERFACE s_axilite port=msg_tag
-#pragma HLS INTERFACE s_axilite port=buf0_type
-#pragma HLS INTERFACE s_axilite port=buf1_type
-#pragma HLS INTERFACE s_axilite port=buf2_type
+#pragma HLS INTERFACE s_axilite port=compression
+#pragma HLS INTERFACE s_axilite port=src_type
+#pragma HLS INTERFACE s_axilite port=dst_type
 #pragma HLS INTERFACE s_axilite port=addra
 #pragma HLS INTERFACE s_axilite port=addrb
 #pragma HLS INTERFACE s_axilite port=addrc
@@ -67,11 +67,11 @@ io_section:{
 	ap_wait();
 	cmd.write(msg_tag);
 	ap_wait();
-	cmd.write(buf0_type);
+	cmd.write(compression);
 	ap_wait();
-	cmd.write(buf1_type);
+	cmd.write(src_type);
 	ap_wait();
-	cmd.write(buf2_type);
+	cmd.write(dst_type);
 	ap_wait();
 	cmd.write(addra(31,0));
 	ap_wait();

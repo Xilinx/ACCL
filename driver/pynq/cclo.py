@@ -79,6 +79,7 @@ def np_type_2_cclo_type(np_type):
         return CCLOReduceFunc.i32
     elif (np_type == np.int64   ):
         return CCLOReduceFunc.i64
+
 @unique
 class ErrorCode(IntEnum):
     COLLECTIVE_OP_SUCCESS             = 0  
@@ -145,11 +146,13 @@ class cclo(DefaultIP):
         self.communicators = []
         self.communicators_addr = self.rx_buffers_adr
         self.check_return_value_flag = True
+        #define an empty list of compressors
+        self.compressors = []
+        self.compressors_addr = self.communicators_addr
         #TODO: use description to gather info about where to allocate spare buffers
         self.segment_size = None
         from pynq import MMIO
         self.exchange_mem = MMIO(self.mmio.base_addr + EXCHANGE_MEM_OFFSET_ADDRESS, EXCHANGE_MEM_ADDRESS_RANGE)
-
 
     def dump_exchange_memory(self):
         print("exchange mem:")
@@ -159,7 +162,7 @@ class cclo(DefaultIP):
             for j in range(num_word_per_line):
                 memory.append(hex(self.exchange_mem.read(i+(j*4))))
             print(hex(self.exchange_mem.base_addr + i), memory)
-    
+
     def dump_host_control_memory(self):
         print("host control:")
         num_word_per_line=4
@@ -182,6 +185,26 @@ class cclo(DefaultIP):
             self.utility_spare.freebuffer()
         del self.utility_spare
         self.utility_spare = None
+
+    #define compressors. required info:
+    #TDEST IDs of each outbound stream (arith OPs 0/1, casting streams down/up)
+    #compression ratio expressed as nbytes_uncompressed/nbytes_compressed (integer)
+    def configure_compression(self, compressors):
+        assert len(self.communicators) > 0, "Communicators unconfigured, please call configure_communicator() first"
+        addr = self.compressors_addr
+        self.compressors = compressors
+        self.exchange_mem.write(addr,len(compressors))
+        addr += 4
+        for compressor in compressors:
+            #assemble a 32-bit word out of the four 8-bit TDEST IDs 
+            tdest_ids = 0
+            for i in range(4):
+                tdest_ids = tdest_ids*256 + compressor[i]
+            self.exchange_mem.write(addr, tdest_ids)
+            addr += 4
+            compression_ratio = compressor[4]
+            self.exchange_mem.write(addr, compression_ratio)
+            addr += 4
 
     def setup_rx_buffers(self, nbufs, bufsize, devicemem):
         addr = self.rx_buffers_adr
@@ -262,12 +285,12 @@ class cclo(DefaultIP):
                 content= "xxread failedxx"
             print(f"SPARE RX BUFFER{i}:\t ADDR: {hex(int(str(addrh)+str(addrl)))} \t STATUS: {status} \t OCCUPACY: {rxlen}/{maxsize} \t DMA TAG: {hex(dmatag)} \t  MPI TAG:{hex(rxtag)} \t SEQ: {seq} \t SRC:{rxsrc} \t content {content}")
 
-    def start(self, scenario=CCLOp.nop, len=1, comm=0, root_src_dst=0, function=0, tag=TAG_ANY, buf_0_type=0, buf_1_type=0, buf_2_type=0, addr_0=dummy_address, addr_1=dummy_address, addr_2=dummy_address, waitfor=[] ):
+    def start(self, scenario=CCLOp.nop, len=1, comm=0, root_src_dst=0, function=0, tag=TAG_ANY, compression=0, src_type=0, dst_type=0, addr_0=dummy_address, addr_1=dummy_address, addr_2=dummy_address, waitfor=[] ):
         #placeholder for kernel filled with default values
         #comm = self.communicators[comm_id]["addr"]
-        return DefaultIP.start(self, scenario, len, comm, root_src_dst, function, tag, buf_0_type, buf_1_type, buf_2_type, addr_0, addr_1, addr_2, waitfor=waitfor)        
+        return DefaultIP.start(self, scenario, len, comm, root_src_dst, function, tag, compression, src_type, dst_type, addr_0, addr_1, addr_2, waitfor=waitfor)        
 
-    def call(self, scenario=CCLOp.nop, len=1, comm=0, root_src_dst=0, function=0, tag=TAG_ANY, buf_0_type=0, buf_1_type=0, buf_2_type=0, addr_0=dummy_address, addr_1=dummy_address, addr_2=dummy_address ):
+    def call(self, scenario=CCLOp.nop, len=1, comm=0, root_src_dst=0, function=0, tag=TAG_ANY, compression=0, src_type=0, dst_type=0, addr_0=dummy_address, addr_1=dummy_address, addr_2=dummy_address ):
         #placeholder for kernel filled with default values
         #comm = self.communicators[comm_id]["addr"]
         #call_type
@@ -278,7 +301,7 @@ class cclo(DefaultIP):
         #tag
         #3xbuf_x_type
         #x3buf_x_ptr
-        return DefaultIP.call(self, scenario, len, comm, root_src_dst, function, tag, buf_0_type, buf_1_type, buf_2_type, addr_0, addr_1, addr_2)        
+        return DefaultIP.call(self, scenario, len, comm, root_src_dst, function, tag, compression, src_type, dst_type, addr_0, addr_1, addr_2)        
 
     def get_retcode(self):
         return self.exchange_mem.read(0xFFC) 
@@ -391,6 +414,7 @@ class cclo(DefaultIP):
             self.exchange_mem.write(addr, 0xFFFFFFFF)
             communicator["session_addr"][i] = addr
         self.communicators.append(communicator)
+        self.compressors_addr = addr + 4
         
     def dump_communicator(self):
         if len(self.communicators) == 0:

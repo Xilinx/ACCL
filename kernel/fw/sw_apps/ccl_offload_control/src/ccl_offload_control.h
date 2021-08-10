@@ -26,12 +26,6 @@ extern "C" {
 #define KERNEL_VENDOR  "Xilinx"
 #define KERNEL_LIBRARY "ACCL"
 
-// #define NUM_M_AXI      3
-// #define NUM_CLOCKS     1
-// #define NUM_INPUT_ARGS 1
-// #define NUM_CHAN       2
-// #define NUM_STREAMS    5
-
 //AXIS interfaces to/from MB 
 
 #define CMD_DMA0_TX  0
@@ -167,6 +161,8 @@ extern "C" {
 #define TCP_RXPKT_BASEADDR    0x50000
 #define TCP_TXPKT_BASEADDR    0x60000
 #define GPIO_BASEADDR         0x40000000
+#define GPIO_ARITH_BASEADDR   0x40010000
+#define GPIO_CONV_BASEADDR    0x40020000
 #define MAIN_SWITCH_BASEADDR  0x44A00000
 #define IRQCTRL_BASEADDR      0x44A10000
 #define TIMER_BASEADDR        0x44A20000
@@ -319,27 +315,6 @@ typedef struct {
   int    interface;
 } arg_t;
 
-// Total number of arguments
-static const int argc = 4;
-
-// Argument name, type, and interface
-static const arg_t argv[] = {
-  { "Control", type_control, S_AXI_CONTROL },
-  { "bar", type_uint, S_AXI_CONTROL },
-  { "m_axi_0", type_intptr, 0 },
-  { "m_axi_1", type_intptr, 1 }
-};
-
-// Number of arguments for each interface
-static const unsigned int num_args[] = {
-  1, 1
-};
-
-// Offset to first argument for each interface
-static const unsigned int offsets[] = {
-  0x10, 0x18, 0x20, 0x28, 0x30, 0x38, 0x40, 0x48, 0x50, 0x5c
-};
-
 typedef struct {
 	unsigned int addrl;
 	unsigned int addrh;
@@ -372,6 +347,14 @@ typedef struct {
 	unsigned int local_rank;
 	comm_rank* ranks;
 } communicator;
+
+typedef struct {
+	unsigned char tdest_arith_op0;
+  unsigned char tdest_arith_op1;
+  unsigned char tdest_conv_down;
+  unsigned char tdest_conv_up;
+	unsigned int compression_ratio;
+} compressor;
 
 #define TAG_ANY 0xFFFFFFFF
 

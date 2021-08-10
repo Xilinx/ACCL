@@ -30,7 +30,7 @@ static volatile unsigned int num_rx_enqueued = 0;
 static volatile unsigned int timeout 	 	 = 1 << 28;
 static volatile unsigned int dma_tag_lookup [MAX_DMA_TAGS]; //index of the spare buffer that has been issued with that dma tag. -1 otherwise
 static volatile	unsigned int dma_transaction_size = DMA_MAX_BTT;
-
+static compressor            comp;
 
 unsigned int enqueue_rx_buffers(void);
 int  dequeue_rx_buffers(void);
@@ -180,6 +180,16 @@ static inline void start_packetizer(long long base_addr,unsigned int max_pktsize
 
 static inline void start_depacketizer(long long base_addr) {
 	SET(		base_addr, CONTROL_REPEAT_MASK | CONTROL_START_MASK );
+}
+
+static inline void setup_compression(compressor comp, int direction){
+	Xil_Out32(GPIO_ARITH_BASEADDR, comp.tdest_arith_op0);//DATA1 reg
+	Xil_Out32(GPIO_ARITH_BASEADDR+8, comp.tdest_arith_op1);//DATA2 reg
+	if(direction == 0){
+		Xil_Out32(GPIO_CONV_BASEADDR, comp.tdest_conv_down);//DATA1 reg
+	} else {
+		Xil_Out32(GPIO_CONV_BASEADDR, comp.tdest_conv_up);//DATA1 reg
+	}
 }
 
 void stream_isr(void) {
@@ -491,6 +501,18 @@ communicator find_comm(unsigned int adr){
 	return ret;
 }
 
+//retrieves the compressor
+compressor find_compressor(unsigned int adr){
+	compressor ret;
+	unsigned int tdest = Xil_In32(adr);
+	ret.tdest_arith_op0 = tdest && 0xff;
+	ret.tdest_arith_op1 = tdest>>8 && 0xff;
+	ret.tdest_conv_down = tdest>>16 && 0xff;
+	ret.tdest_conv_up = tdest>>24 && 0xff;
+	ret.compression_ratio = Xil_In32(adr+4);
+	return ret;
+}
+
 //create the instructions for packetizer to send a message. Those infos include, among the others the message header.
 unsigned int start_packetizer_message(communicator* world, unsigned int dst_rank, unsigned int len, unsigned int tag){
 	unsigned int src_rank, sequence_number, dst, net_tx, curr_len, i;
@@ -635,20 +657,6 @@ int init_connection (unsigned int comm)
 	int retval = (ret_openPort | ret_openCon);
 
 	return retval;
-}
-
-
-//copy from mailbox memory into program memory
-//this will enable updating the elf without a debug port
-//TODO figure out how this can happen without the processor
-//overwriting its own program
-void update_program(void){
-	int i;
-	unsigned int val;
-	for(i=0; i<16384; i++){
-		val = Xil_In32(offsets[0]+4*i);
-		Xil_Out32(0x10000+4*i,val);
-	}
 }
 
 static inline unsigned int segment(unsigned int number_of_bytes,unsigned int segment_size){
@@ -1877,7 +1885,7 @@ int reduce_ext (	unsigned int len,
 int main() {
 	unsigned int retval;
 	unsigned int scenario, len, comm, root_src_dst, function, msg_tag;
-	unsigned int buf0_type, buf1_type, buf2_type;
+	unsigned int compression, src_type, dst_type;
 	unsigned int buf0_addrl, buf0_addrh, buf1_addrl, buf1_addrh, buf2_addrl, buf2_addrh;
 	unsigned long long buf0_addr, buf1_addr, buf2_addr;
 
@@ -1901,9 +1909,9 @@ int main() {
 		root_src_dst = getd(CMD_HOST);
 		function     = getd(CMD_HOST);
 		msg_tag      = getd(CMD_HOST);
-		buf0_type    = getd(CMD_HOST);
-		buf1_type    = getd(CMD_HOST);
-		buf2_type    = getd(CMD_HOST);
+		compression  = getd(CMD_HOST);
+		src_type     = getd(CMD_HOST);
+		dst_type     = getd(CMD_HOST);
 		buf0_addrl   = getd(CMD_HOST);
 		buf0_addrh   = getd(CMD_HOST);
 		buf1_addrl   = getd(CMD_HOST);
@@ -1913,6 +1921,9 @@ int main() {
 		buf0_addr =  ((long long) buf0_addrh << 32) | buf0_addrl;
 		buf1_addr =  ((long long) buf1_addrh << 32) | buf1_addrl;
 		buf2_addr =  ((long long) buf2_addrh << 32) | buf2_addrl;
+
+		comp = find_compressor(compression);
+
 		switch (scenario)
 		{
 			case XCCL_CONFIG:
