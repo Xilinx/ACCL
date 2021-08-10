@@ -29,18 +29,14 @@ static volatile unsigned int next_rx_tag 	 = 0;
 static volatile unsigned int num_rx_enqueued = 0;
 static volatile unsigned int timeout 	 	 = 1 << 28;
 static volatile unsigned int dma_tag_lookup [MAX_DMA_TAGS]; //index of the spare buffer that has been issued with that dma tag. -1 otherwise
-static volatile	unsigned int dma_transaction_size = DMA_MAX_BTT;
+static volatile	unsigned int dma_transaction_size 	= DMA_MAX_BTT;
+static volatile unsigned int max_dma_in_flight 		= DMA_MAX_TRANSACTIONS;
 static compressor            comp;
 
 unsigned int enqueue_rx_buffers(void);
 int  dequeue_rx_buffers(void);
 
-void check_hwid(void){
-	// read HWID from hardware and copy it to host-accessible memory
-	// TODO: check the HWID against expected
-	unsigned int hwid = Xil_In32(GPIO2_DATA_REG);
-	Xil_Out32(HWID_OFFSET, hwid);
-}
+//IRQ CTRL
 
 //enable interrupts from interrupt controller
 static inline void enable_irq(){
@@ -92,6 +88,8 @@ static inline int get_irq(void){
 	return Xil_In32(IRQCTRL_BASEADDR + IRQCTRL_INTERRUPT_PENDING_REGISTER_OFFSET);
 }
 
+//AXI Timer
+
 //creates a timeout that will interrupt the MB code execution 
 static inline void start_timeout(unsigned int time){
 	//1. set timer load register x(TLRx) with time so that TIMING_INTERVAL = (TLRx + 2) * AXI_CLOCK_PERIOD
@@ -128,6 +126,8 @@ static inline unsigned int read_timer1(){
 	return Xil_In32(TIMER_BASEADDR + TIMER1_COUNTER_REGISTER_OFFSET);
 }
 
+//ARITH
+
 //for hls ip protocols https://www.xilinx.com/html_docs/xilinx2020_2/vitis_doc/managing_interface_synthesis.html#qls1539734256651__ae476333
 void start_arith(unsigned int byte_count, unsigned int function, unsigned use_repeat) {
 	//get number of 512b/64B transfers corresponding to byte_count
@@ -135,12 +135,6 @@ void start_arith(unsigned int byte_count, unsigned int function, unsigned use_re
 	unsigned int bytes_tail 				= byte_count % dma_transaction_size;
 	unsigned int quad_word_per_dma_transfer = (unsigned int)((dma_transaction_size+63)/64);
 	unsigned int quad_word_per_tail			= (unsigned int)((bytes_tail+63)/64);
-	//limit the maximum number of transfers since at most we are issueing DMA_MAX_TRANSACTIONS.
-	if (num_dma_transfers + ( bytes_tail > 0 ? 1:0)> DMA_MAX_TRANSACTIONS){
-		num_dma_transfers = DMA_MAX_TRANSACTIONS;
-		quad_word_per_tail = 0;
-	}
-
 	unsigned int quad_word_stream_transfers = num_dma_transfers * quad_word_per_dma_transfer + quad_word_per_tail;
 	Xil_Out32(ARITH_BASEADDR+0x10, quad_word_stream_transfers);
 	Xil_Out32(ARITH_BASEADDR+0x18, function);
@@ -171,15 +165,19 @@ static inline void wait_arith(){
 	}
 }
 
-static inline void start_packetizer(long long base_addr,unsigned int max_pktsize) {
-	//get number of 512b/64B transfers corresponding to max_pktsize
-	unsigned int max_pkt_transfers = (max_pktsize+63)/64;
-	Xil_Out32(	base_addr +0x10	, max_pkt_transfers);
-	SET(		base_addr, CONTROL_REPEAT_MASK | CONTROL_START_MASK);
-}
-
-static inline void start_depacketizer(long long base_addr) {
-	SET(		base_addr, CONTROL_REPEAT_MASK | CONTROL_START_MASK );
+static inline int arith_number_of_bytes_per(unsigned int function){
+	switch (function)
+	{
+		case ARITH_fp:
+			return 4;
+		case ARITH_dp:
+			return 8;
+		case ARITH_i32:
+			return 4;
+		case ARITH_i64:
+			return 8;
+	}
+	return -1;
 }
 
 static inline void setup_compression(compressor comp, int direction){
@@ -219,77 +217,7 @@ void stream_isr(void) {
 	}
 	ack_irq(irq);
 }
-
-//initialize the system
-void init(void) {
-	int myoffset;
-	// Register irq handler
-	microblaze_register_handler((XInterruptHandler)stream_isr,(void*)0);
-	microblaze_enable_interrupts(); //TODO: check if we can remove
-
-	// initialize exchange memory to zero.
-	for ( myoffset = EXCHMEM_BASEADDR; myoffset < END_OF_EXCHMEM; myoffset +=4) {
-		Xil_Out32(myoffset, 0);
-	}
-	// Check hardware ID
-	check_hwid();
-	//initialize dma tag
-	dma_tag = 0;
-	for(int i=0; i < MAX_DMA_TAGS; i++){
-		dma_tag_lookup[i]=-1;
-	}
-	//deactivate reset of all peripherals
-	SET(GPIO_DATA_REG, GPIO_SWRST_MASK);
-	//enable access from host to exchange memory by removing reset of interface
-	SET(GPIO_DATA_REG, GPIO_READY_MASK);
-
-}
-
-
-
-//reset the control module
-//since this cancels any dma movement in flight and 
-//clears the queues it's necessary to reset the dma tag and dma_tag_lookup
-void encore_soft_reset(void){
-	int myoffset;
-	//disable interrupts (since this will toggle the irq pin)
-	microblaze_disable_interrupts();
-	setup_irq(0);
-	//1. activate reset pin  
-	CLR(GPIO_DATA_REG, GPIO_SWRST_MASK);
-	//2. clean up (exchange memory and static variables)
-	for ( myoffset = EXCHMEM_BASEADDR; myoffset < END_OF_EXCHMEM; myoffset +=4) {
-		Xil_Out32(myoffset, 0);
-	}
-	num_rx_enqueued = 0;
-	dma_tag = 0;
-	//next_rx_tag = 0;
-	//clear dma lookup table
-	for(int i=0; i < MAX_DMA_TAGS; i++){
-		dma_tag_lookup[i]=-1;
-	}
-	//3. recheck hardware ID
-	check_hwid();
-	//4. then deactivate reset of all other blocks
-	SET(GPIO_DATA_REG, GPIO_SWRST_MASK);
-}
-
-//poll for a call from the host
-static inline void wait_for_call(void) {
-	// Poll the host cmd queue
-	unsigned int invalid;
-	do {
-		invalid = 0;
-		invalid += tngetd(CMD_HOST);
-	} while (invalid);
-}
-
-//signal finish to the host and write ret value in exchange mem
-static inline void finalize_call(unsigned int retval) {
-	Xil_Out32(RETVAL_OFFSET, retval);
-    // Done: Set done and idle
-	putd(STS_HOST, retval);
-}
+//DMA functions
 
 //issue a dma command 
 static inline void dma_cmd_addrh_addrl(unsigned int channel, unsigned int btt, unsigned int addrh, unsigned int addrl, unsigned int tag){
@@ -300,14 +228,14 @@ static inline void dma_cmd_addrh_addrl(unsigned int channel, unsigned int btt, u
 }
 
 //start a DMA operations on a specific channel
-static inline void dma_cmd(unsigned int channel, unsigned int btt, unsigned long long addr, unsigned int tag) {
+static inline void dma_cmd(unsigned int channel, unsigned int btt, uint64_t addr, unsigned int tag) {
 	unsigned int addrl = addr & 0xFFFFFFFF;
 	unsigned int addrh = (addr >> 32) & 0xFFFFFFFF;
 
 	dma_cmd_addrh_addrl( channel,  btt, addrh, addrl, tag);
 }
 
-static inline void dma_cmd_without_EOF(unsigned int channel, unsigned int btt, unsigned long long addr, unsigned int tag) {
+static inline void dma_cmd_without_EOF(unsigned int channel, unsigned int btt, uint64_t addr, unsigned int tag) {
 	unsigned int addrl = addr & 0xFFFFFFFF;
 	unsigned int addrh = (addr >> 32) & 0xFFFFFFFF;
 
@@ -351,6 +279,8 @@ void check_DMA_status(unsigned int status, unsigned int expected_btt, unsigned i
 		}
 	}
 }
+
+//AXIS SWITCH management
 
 //configure a acis switch path from a source to a destination
 //PG085 page 26
@@ -486,9 +416,8 @@ void cfg_switch(unsigned int scenario, unsigned int arith) {
 }
 
 //retrieves the communicator
-communicator find_comm(unsigned int adr){
+static inline communicator find_comm(unsigned int adr){
 	communicator ret;
-	//TODO: it's not enough to set ret address?
 	ret.size 		= Xil_In32(adr);
 	ret.local_rank 	= Xil_In32(adr+4);
 	if(ret.size != 0 && ret.local_rank < ret.size){
@@ -513,12 +442,24 @@ compressor find_compressor(unsigned int adr){
 	return ret;
 }
 
+//Packetizer/Depacketizer
+static inline void start_packetizer(uint64_t base_addr,unsigned int max_pktsize) {
+	//get number of 512b/64B transfers corresponding to max_pktsize
+	unsigned int max_pkt_transfers = (max_pktsize+63)/64;
+	Xil_Out32(	base_addr +0x10	, max_pkt_transfers);
+	SET(		base_addr, CONTROL_REPEAT_MASK | CONTROL_START_MASK);
+}
+
+static inline void start_depacketizer(uint64_t base_addr) {
+	SET(		base_addr, CONTROL_REPEAT_MASK | CONTROL_START_MASK );
+}
+
 //create the instructions for packetizer to send a message. Those infos include, among the others the message header.
 unsigned int start_packetizer_message(communicator* world, unsigned int dst_rank, unsigned int len, unsigned int tag){
 	unsigned int src_rank, sequence_number, dst, net_tx, curr_len, i;
 	unsigned int transmitted = 0; 
 	//prepare header arguments
-	//TODO: how long does it take to access world (remind that world is in exchange memory)?
+	
 	src_rank 		= world->local_rank;
 	sequence_number = world->ranks[dst_rank].outbound_seq;
 	if (use_tcp){
@@ -529,7 +470,7 @@ unsigned int start_packetizer_message(communicator* world, unsigned int dst_rank
 		net_tx		 	= CMD_UDP_TX; 
 	}
 	//enqueue message headers
-	for(i=0; len > 0 && i < DMA_MAX_TRANSACTIONS; i++){
+	for(i=0; len > 0 && i < max_dma_in_flight; i++){
 		sequence_number++;
 
 		if(len > dma_transaction_size)
@@ -568,6 +509,8 @@ static inline void ack_packetizer(communicator * world, unsigned int dst_rank,un
 		num_msg -=1;
 	}
 }
+
+//TCP connection management
 
 //establish connection with every other rank in the communicator
 int openCon (unsigned int comm)
@@ -663,393 +606,7 @@ static inline unsigned int segment(unsigned int number_of_bytes,unsigned int seg
 	return  (number_of_bytes + segment_size - 1) / segment_size;
 } 
 
-
-int dma_movement_single( 	
-					unsigned int len,
-					unsigned long long DMA0_rx_addr,
-					unsigned long long DMA1_rx_addr,
-					unsigned long long DMA1_tx_addr,
-					unsigned long long DMA2_rx_addr,
-					unsigned int what_DMAS) {
-	unsigned int invalid, count, status, dma_tag_tmp;
-	if(len > DMA_MAX_BTT) return DMA_TRANSACTION_SIZE;
-	dma_tag_tmp = dma_tag;
-	//start DMAs 
-	if( what_DMAS & USE_DMA0_RX){
-		dma_tag_tmp = (dma_tag_tmp + 1) & 0xf;
-		dma_cmd(CMD_DMA0_RX, len, DMA0_rx_addr, dma_tag_tmp);
-
-	}
-	if( what_DMAS & USE_DMA1_RX){
-		dma_tag_tmp = (dma_tag_tmp + 1) & 0xf;
-		dma_cmd(CMD_DMA1_RX, len, DMA1_rx_addr, dma_tag_tmp);
-
-	}
-	if( what_DMAS & USE_DMA1_TX){
-		dma_tag_tmp = (dma_tag_tmp + 1) & 0xf;
-		dma_cmd(CMD_DMA1_TX, len, DMA1_tx_addr, dma_tag_tmp);
-
-	}
-	if( what_DMAS & USE_DMA1_TX_WITHOUT_TLAST){
-		dma_tag_tmp = (dma_tag_tmp + 1) & 0xf;
-		dma_cmd_without_EOF(CMD_DMA1_TX, len, DMA1_tx_addr, dma_tag_tmp);
-
-	}
-	if( what_DMAS & USE_DMA2_RX){
-		dma_tag_tmp = (dma_tag_tmp + 1) & 0xf;
-		dma_cmd(CMD_DMA2_RX, len, DMA2_rx_addr, dma_tag_tmp);
-
-	}
-			
-	//wait for DMAs to complete
-	count = 0;
-	do {
-		if(timeout != 0 && count >= timeout )
-			longjmp(excp_handler, DMA_TIMEOUT_ERROR);
-		count ++;
-		invalid = 0;
-		if( what_DMAS & USE_DMA0_RX){
-			invalid += tngetd(STS_DMA0_RX);
-		}
-		if( what_DMAS & USE_DMA1_RX){
-			invalid += tngetd(STS_DMA1_RX);
-		}
-		if( what_DMAS & (USE_DMA1_TX | USE_DMA1_TX_WITHOUT_TLAST)){
-			invalid += tngetd(STS_DMA1_TX);
-		}
-		if( what_DMAS & USE_DMA2_RX){
-			invalid += tngetd(STS_DMA2_RX);
-		}
-	} while (invalid);
-
-	if( what_DMAS & USE_DMA0_RX){
-		status = getd(STS_DMA0_RX);
-		dma_tag = (dma_tag + 1) & 0xf;
-		check_DMA_status(status, len, dma_tag, 0);
-	}
-	if( what_DMAS & USE_DMA1_RX){
-		status = getd(STS_DMA1_RX);
-		dma_tag = (dma_tag + 1) & 0xf;
-		check_DMA_status(status, len, dma_tag, 0);
-	}
-	if( what_DMAS & USE_DMA1_TX){
-		status = getd(STS_DMA1_TX);
-		dma_tag = (dma_tag + 1) & 0xf;
-		check_DMA_status(status, len, dma_tag, 1);
-	}
-	if( what_DMAS & USE_DMA1_TX_WITHOUT_TLAST){
-		status = getd(STS_DMA1_TX);
-		dma_tag = (dma_tag + 1) & 0xf;
-		check_DMA_status(status, len, dma_tag, 0);
-	}
-	if( what_DMAS & USE_DMA2_RX){
-		status = getd(STS_DMA2_RX);
-		dma_tag = (dma_tag + 1) & 0xf;
-		check_DMA_status(status, len, dma_tag, 0);
-	}
-
-	return COLLECTIVE_OP_SUCCESS;
-}
-
-int dma_movement_DMA_MAX_TRANSACTIONS(
-	unsigned int len,
-	unsigned long long DMA0_rx_addr,
-	unsigned long long DMA1_rx_addr,
-	unsigned long long DMA1_tx_addr,
-	unsigned long long DMA2_rx_addr,
-	unsigned int what_DMAS
-){
-	unsigned int remaining_to_move, remaining_to_ack, moved, dma_tag_tmp, curr_len, invalid, count, status, i;
-	moved 				= 0;
-	remaining_to_move 	= len;
-	remaining_to_ack 	= len;
-	dma_tag_tmp 		= dma_tag;
-
-	//issue at most DMA_MAX_TRANSACTIONS of dma_transaction_size
-	//start transactions
-	for (i = 0; remaining_to_move > 0 && i < DMA_MAX_TRANSACTIONS ; i++){
-		if (remaining_to_move > dma_transaction_size)
-			curr_len = dma_transaction_size;
-		else
-			curr_len = remaining_to_move ;
-		//start DMAs
-		if( what_DMAS & USE_DMA0_RX){
-			dma_tag_tmp = (dma_tag_tmp + 1) & 0xf;
-			dma_cmd(CMD_DMA0_RX, curr_len, DMA0_rx_addr, dma_tag_tmp);
-			DMA0_rx_addr += curr_len;
-		}
-		if( what_DMAS & USE_DMA1_RX){
-			dma_tag_tmp = (dma_tag_tmp + 1) & 0xf;
-			dma_cmd(CMD_DMA1_RX, curr_len, DMA1_rx_addr, dma_tag_tmp);
-			DMA1_rx_addr += curr_len;
-		}
-		if( what_DMAS & USE_DMA1_TX){
-			dma_tag_tmp = (dma_tag_tmp + 1) & 0xf;
-			dma_cmd(CMD_DMA1_TX, curr_len, DMA1_tx_addr, dma_tag_tmp);
-			DMA1_tx_addr += curr_len;
-		}
-		if( what_DMAS & USE_DMA1_TX_WITHOUT_TLAST){
-			dma_tag_tmp = (dma_tag_tmp + 1) & 0xf;
-			dma_cmd_without_EOF(CMD_DMA1_TX, len, DMA1_tx_addr, dma_tag_tmp);
-			DMA1_tx_addr += curr_len;
-		}
-		if( what_DMAS & USE_DMA2_RX){
-			dma_tag_tmp = (dma_tag_tmp + 1) & 0xf;
-			dma_cmd(CMD_DMA2_RX, curr_len, DMA2_rx_addr, dma_tag_tmp);
-			DMA2_rx_addr += curr_len;
-		}
-		remaining_to_move -= curr_len;
-	}
-
-	//verify dma response
-	for (i = 0; remaining_to_ack > 0 &&  i < DMA_MAX_TRANSACTIONS; i++){
-		if (remaining_to_ack > dma_transaction_size)
-			curr_len = dma_transaction_size;
-		else
-			curr_len = remaining_to_ack;
-		//wait for DMAs to finish
-		count = 0;
-		do {
-			if(timeout != 0 && count >= timeout )
-				longjmp(excp_handler, DMA_TIMEOUT_ERROR);
-			count ++;
-			invalid = 0;
-			if( what_DMAS & USE_DMA0_RX){
-				invalid += tngetd(STS_DMA0_RX);
-			}
-			if( what_DMAS & USE_DMA1_RX){
-				invalid += tngetd(STS_DMA1_RX);
-			}
-			if( what_DMAS & (USE_DMA1_TX | USE_DMA1_TX_WITHOUT_TLAST)){
-				invalid += tngetd(STS_DMA1_TX);
-			}
-			if( what_DMAS & USE_DMA2_RX){
-				invalid += tngetd(STS_DMA2_RX);
-			}
-			
-		} while (invalid);
-
-		if( what_DMAS & USE_DMA0_RX){
-			status = getd(STS_DMA0_RX);
-			dma_tag = (dma_tag + 1) & 0xf;
-			check_DMA_status(status, curr_len, dma_tag, 0);
-		}
-		if( what_DMAS & USE_DMA1_RX){
-			status = getd(STS_DMA1_RX);
-			dma_tag = (dma_tag + 1) & 0xf;
-			check_DMA_status(status, curr_len, dma_tag, 0);
-		}
-		if( what_DMAS & USE_DMA1_TX){
-			status = getd(STS_DMA1_TX);
-			dma_tag = (dma_tag + 1) & 0xf;
-			check_DMA_status(status, curr_len, dma_tag, 1);
-		}
-		if( what_DMAS & USE_DMA1_TX_WITHOUT_TLAST){
-			dma_tag_tmp = (dma_tag_tmp + 1) & 0xf;
-			dma_cmd_without_EOF(CMD_DMA1_TX, len, DMA1_tx_addr, dma_tag_tmp);
-			DMA1_tx_addr += curr_len;
-		}
-		if( what_DMAS & USE_DMA2_RX){
-			status = getd(STS_DMA2_RX);
-			dma_tag = (dma_tag + 1) & 0xf;
-			check_DMA_status(status, curr_len, dma_tag, 0);
-		}
-		
-		remaining_to_ack  -= curr_len;
-		len			      -= curr_len;
-		moved			  += curr_len;
-	}
-	return moved;
-}
-
-//before calling this method call cfg_switch
-//segment a logical dma command in multiple dma commands.
-//if one of the DMA is not used fill the corresponding address with NULL
-static inline int dma_movement( 	unsigned int len,
-					unsigned long long DMA0_rx_addr,
-					unsigned long long DMA1_rx_addr,
-					unsigned long long DMA1_tx_addr,
-					unsigned long long DMA2_rx_addr,
-					unsigned int what_DMAS) {
-	unsigned int curr_len;
-	//issue multiple DMA commands to move data around.
-	//len keeps number of bytes still to transfer
-	while ( len > 0){
-		curr_len = dma_movement_DMA_MAX_TRANSACTIONS( len, DMA0_rx_addr, DMA1_rx_addr, DMA1_tx_addr, DMA2_rx_addr, what_DMAS);
-		len			 -= curr_len;
-		DMA0_rx_addr += curr_len;
-		DMA1_rx_addr += curr_len;
-		DMA1_tx_addr += curr_len;
-		DMA2_rx_addr += curr_len;
-	}
-	
-	return COLLECTIVE_OP_SUCCESS;
-}
-
-
-//performs a copy using DMA1. DMA1 rx reads while DMA1 tx overwrites
-int dma_loopback(	unsigned int len,
-					unsigned long long src_addr,
-					unsigned long long dst_addr) {
-	
-	//configure switch
-	cfg_switch(DATAPATH_DMA_LOOPBACK, ARITH_NONE );
-	//call function that will control the DMAs
-	return dma_movement(len, 0, src_addr, dst_addr, 0, USE_DMA1_RX | USE_DMA1_TX);
-
-}
-
-//performs a copy using DMA1. DMA1 rx reads while DMA1 tx overwrites
-static inline int copy(	unsigned int len,
-						unsigned long long src_addr,
-						unsigned long long dst_addr) {
-	//synonym
-	return  dma_loopback(	  len, src_addr, dst_addr);
-}
-
-//performs a copy using DMA1. DMA1 rx reads while DMA1 tx overwrites
-//note that this function has to be used when len < DMA_MAX_BTT
-static inline int copy_single_dma_transaction(	unsigned int len,
-						unsigned long long src_addr,
-						unsigned long long dst_addr) {
-
-	//configure switch
-	cfg_switch(DATAPATH_DMA_LOOPBACK, ARITH_NONE );
-	//start both channels of the DMA1
-	return dma_movement_single(len, 0, src_addr, dst_addr, 0, USE_DMA1_RX | USE_DMA1_TX);
-
-}
-
-//performs an accumulate using DMA1 and DMA0. DMA0 rx reads op1 DMA1 rx reads op2 while DMA1 tx back to dst buffer
-int reduce_loopback(	unsigned int len,
-						unsigned int func,
-						unsigned long long op0_addr,
-						unsigned long long op1_addr,
-						unsigned long long dst_addr) {
-	
-	//configure switch
-	cfg_switch(DATAPATH_DMA_REDUCTION, ARITH_INTERNAL);
-
-	//start_arith(len, func, 0);
-	////start dma transfer
-	//unsigned int ret = dma_movement(len, op0_addr, op1_addr, dst_addr, 0, USE_DMA0_RX | USE_DMA1_RX | USE_DMA1_TX); //USE_DMA1_TX_WITHOUT_TLAST
-	////wait for arith to finish
-	//wait_arith();
-	//
-	//return ret;
-	unsigned int moved;
-	while(len > 0){
-		start_arith(len, func, 0);
-		//start dma transfer
-		moved = dma_movement_DMA_MAX_TRANSACTIONS(len, op0_addr, op1_addr, dst_addr, 0, USE_DMA0_RX | USE_DMA1_RX | USE_DMA1_TX);
-		//wait for arith to finish
-		wait_arith();
-		//
-		len 	 -= moved;
-		op0_addr += moved;
-		op1_addr += moved;
-		dst_addr += moved;
-	}
-	return COLLECTIVE_OP_SUCCESS;
-}
-
-//performs an accumulate using DMA1 and DMA0. DMA0 rx reads op1 DMA1 rx reads op2 while DMA1 tx overwrites op2 buffer
-static inline int accumulate (	
-						unsigned int len,
-						unsigned int func,
-						unsigned long long op1_addr,
-						unsigned long long op2_addr,
-						unsigned long long dst_addr) {
-	return reduce_loopback(	 len, func, op1_addr, op2_addr, dst_addr);
-}
-
-//transmits a buffer to a rank of the world communicator
-int transmit_offchip_world(
-	communicator *world,
-	unsigned int dst_rank,
-	unsigned int len,
-	unsigned long long src_addr,
-	unsigned int dst_tag
-){
-	unsigned int bytes_moved, messages;
-
-	cfg_switch(use_tcp ? DATAPATH_OFFCHIP_TX_TCP : DATAPATH_OFFCHIP_TX_UDP , ARITH_NONE);
-	//divide and send msg in multiple transactions each with a different id in the sequence 
-	//and ack them separately
-	while(len > 0){
-		messages 	= start_packetizer_message(world, dst_rank, len		, dst_tag);
-		bytes_moved = dma_movement_DMA_MAX_TRANSACTIONS(len, 0, src_addr, 0, 0, USE_DMA1_RX);
-		ack_packetizer(world, dst_rank, messages);
-
-		len 	 -= bytes_moved;
-		src_addr += bytes_moved;
-	}
-	return COLLECTIVE_OP_SUCCESS;
-}
-
-//transmits a buffer to a rank of the comm-esim communicator 
-static inline int transmit_offchip(	
-						unsigned int comm,
-						unsigned int dst_rank,
-						unsigned int len,
-						unsigned long long src_addr,
-						unsigned int dst_tag
-					) {
-	//find communicator
-	communicator world = find_comm(comm);
-	return transmit_offchip_world(&world, dst_rank, len, src_addr, dst_tag);
-}
-
-//performs an accumulate using DMA0 and DMA1 and internal arith unit. Then it forwards the result 
-//through tx_subsystem to dst_rank
-int reduce_offchip_world(
-	communicator *world,
-	unsigned int dst_rank,
-	unsigned int len, 
-	unsigned int func,
-	unsigned long long op0_addr,
-	unsigned long long op1_addr,
-	unsigned int dst_tag
-){
-	unsigned int moved;
-	//configure switch
-	cfg_switch(use_tcp ? DATAPATH_OFFCHIP_TCP_REDUCTION : DATAPATH_OFFCHIP_UDP_REDUCTION, ARITH_INTERNAL);
-	/*
-	start_arith(len, func, 0);
-	ret = dma_movement(len, op0_addr, op1_addr, 0, 0, USE_DMA0_RX | USE_DMA1_RX );	
-	wait_arith();
-	*/
-	while(len > 0){
-		start_arith(len, func, 0);
-		//start dma transfer
-		moved = dma_movement_DMA_MAX_TRANSACTIONS(len, op0_addr, op1_addr, 0, 0, USE_DMA0_RX | USE_DMA1_RX );
-		//wait for arith to finish
-		wait_arith();
-		//
-		len 	 -= moved;
-		op0_addr += moved;
-		op1_addr += moved;
-	}
-	return COLLECTIVE_OP_SUCCESS;
-
-}
-
-//performs an accumulate using DMA0 and DMA1 and then forwards the result 
-//through tx_subsystem to dst_rank
-static inline int reduce_offchip(	
-					unsigned int comm,
-					unsigned int dst_rank,
-					unsigned int len, 
-					unsigned int func,
-					unsigned long long op0_addr,
-					unsigned long long op1_addr,
-					unsigned int dst_tag) {
-	
-	//find communicator
-	communicator world = find_comm(comm);
-	//synonym function
-	return reduce_offchip_world(&world, dst_rank, len, func, op0_addr, op1_addr, dst_tag);
-}
+//DMA0/2 TX management 
 
 //enques cmd from DMA that receives from network stack. 
 //RX address queue management
@@ -1067,7 +624,6 @@ unsigned int enqueue_rx_buffers(void){
 		if(rx_buf_list[i].status   != STATUS_IDLE) continue;
 		//found a spare buffer to enqueue 
 		//look for a new dma tag
-		//TODO:speedup new_dma tag using dma_tag variable
 		for(new_dma_tag=0; new_dma_tag < MAX_DMA_TAGS && dma_tag_lookup[new_dma_tag] != -1; new_dma_tag++);
 		//new_dma_tag now holds the new dma tag to use
 		if( new_dma_tag >= MAX_DMA_TAGS) return ret; //but something probably wrong in num_rx_enqueued
@@ -1134,6 +690,411 @@ int dequeue_rx_buffers(void){
 	return 0;
 }
 
+//basic functionalities: send/recv/copy/accumulate
+static inline int start_dma( 	
+					unsigned int len,
+					uint64_t DMA0_rx_addr,
+					uint64_t DMA1_rx_addr,
+					uint64_t DMA1_tx_addr,
+					uint64_t DMA2_rx_addr,
+					unsigned int what_DMAS, 
+					unsigned int dma_tag_tmp) {
+	//BE CAREFUL!: if(len > DMA_MAX_BTT) return DMA_TRANSACTION_SIZE;
+	//start DMAs 
+	if( what_DMAS & USE_DMA0_RX){
+		dma_tag_tmp = (dma_tag_tmp + 1) & 0xf;
+		dma_cmd(CMD_DMA0_RX, len, DMA0_rx_addr, dma_tag_tmp);
+
+	}
+	if( what_DMAS & USE_DMA1_RX){
+		dma_tag_tmp = (dma_tag_tmp + 1) & 0xf;
+		dma_cmd(CMD_DMA1_RX, len, DMA1_rx_addr, dma_tag_tmp);
+
+	}
+	if( what_DMAS & USE_DMA1_TX){
+		dma_tag_tmp = (dma_tag_tmp + 1) & 0xf;
+		dma_cmd(CMD_DMA1_TX, len, DMA1_tx_addr, dma_tag_tmp);
+
+	}
+	if( what_DMAS & USE_DMA1_TX_WITHOUT_TLAST){
+		dma_tag_tmp = (dma_tag_tmp + 1) & 0xf;
+		dma_cmd_without_EOF(CMD_DMA1_TX, len, DMA1_tx_addr, dma_tag_tmp);
+
+	}
+	if( what_DMAS & USE_DMA2_RX){
+		dma_tag_tmp = (dma_tag_tmp + 1) & 0xf;
+		dma_cmd(CMD_DMA2_RX, len, DMA2_rx_addr, dma_tag_tmp);
+
+	}
+	return dma_tag_tmp;
+}
+
+static inline void ack_dma(
+	unsigned int len,
+	unsigned int what_DMAS) {
+	unsigned int invalid, count, status;
+	//wait for DMAs to complete
+	count = 0;
+	do {
+		if(timeout != 0 && count >= timeout )
+			longjmp(excp_handler, DMA_TIMEOUT_ERROR);
+		count ++;
+		invalid = 0;
+		if( what_DMAS & USE_DMA0_RX){
+			invalid += tngetd(STS_DMA0_RX);
+		}
+		if( what_DMAS & USE_DMA1_RX){
+			invalid += tngetd(STS_DMA1_RX);
+		}
+		if( what_DMAS & (USE_DMA1_TX | USE_DMA1_TX_WITHOUT_TLAST)){
+			invalid += tngetd(STS_DMA1_TX);
+		}
+		if( what_DMAS & USE_DMA2_RX){
+			invalid += tngetd(STS_DMA2_RX);
+		}
+	} while (invalid);
+
+	if( what_DMAS & USE_DMA0_RX){
+		status = getd(STS_DMA0_RX);
+		dma_tag = (dma_tag + 1) & 0xf;
+		check_DMA_status(status, len, dma_tag, 0);
+	}
+	if( what_DMAS & USE_DMA1_RX){
+		status = getd(STS_DMA1_RX);
+		dma_tag = (dma_tag + 1) & 0xf;
+		check_DMA_status(status, len, dma_tag, 0);
+	}
+	if( what_DMAS & USE_DMA1_TX){
+		status = getd(STS_DMA1_TX);
+		dma_tag = (dma_tag + 1) & 0xf;
+		check_DMA_status(status, len, dma_tag, 1);
+	}
+	if( what_DMAS & USE_DMA1_TX_WITHOUT_TLAST){
+		status = getd(STS_DMA1_TX);
+		dma_tag = (dma_tag + 1) & 0xf;
+		check_DMA_status(status, len, dma_tag, 0);
+	}
+	if( what_DMAS & USE_DMA2_RX){
+		status = getd(STS_DMA2_RX);
+		dma_tag = (dma_tag + 1) & 0xf;
+		check_DMA_status(status, len, dma_tag, 0);
+	}
+
+}
+
+int dma_movement_single( 	
+					unsigned int len,
+					uint64_t DMA0_rx_addr,
+					uint64_t DMA1_rx_addr,
+					uint64_t DMA1_tx_addr,
+					uint64_t DMA2_rx_addr,
+					unsigned int what_DMAS		   ) {
+	if(len > DMA_MAX_BTT) return DMA_TRANSACTION_SIZE;
+	//start DMAs 
+	start_dma(	len, DMA0_rx_addr, DMA1_rx_addr, DMA1_tx_addr, DMA2_rx_addr, what_DMAS, dma_tag);
+	//wait for DMAs to complete
+	ack_dma(	len, what_DMAS);
+
+	return COLLECTIVE_OP_SUCCESS;
+}
+
+//before calling this method call cfg_switch
+//segment a logical dma command in multiple dma commands.
+//if one of the DMA is not used fill the corresponding address with NULL
+static inline int dma_movement( 	
+					unsigned int len,
+					uint64_t DMA0_rx_addr,
+					uint64_t DMA1_rx_addr,
+					uint64_t DMA1_tx_addr,
+					uint64_t DMA2_rx_addr,
+					unsigned int what_DMAS) {
+	//issue multiple DMA commands to move data around.
+	//len keeps number of bytes still to transfer
+	unsigned int remaining_to_move, remaining_to_ack, dma_tag_tmp, curr_len_move, curr_len_ack, i;
+	
+	remaining_to_move 	= len;
+	remaining_to_ack 	= len;
+	dma_tag_tmp 		= dma_tag;
+
+	//default size of transaction is full size
+	curr_len_move = dma_transaction_size;
+	curr_len_ack  = dma_transaction_size;
+	//1. issue at most max_dma_in_flight of dma_transaction_size
+	for (i = 0; remaining_to_move > 0 && i < max_dma_in_flight ; i++){
+		if (remaining_to_move < dma_transaction_size){
+			curr_len_move 	= remaining_to_move ;
+		}
+		//start DMAs
+		dma_tag_tmp 		 = start_dma(curr_len_move, DMA0_rx_addr, DMA1_rx_addr, DMA1_tx_addr, DMA2_rx_addr, what_DMAS, dma_tag_tmp);
+		remaining_to_move 	-= curr_len_move;
+		DMA0_rx_addr 		+= curr_len_move;
+		DMA1_rx_addr 		+= curr_len_move;
+		DMA1_tx_addr 		+= curr_len_move;
+		DMA2_rx_addr 		+= curr_len_move;
+	}
+	//2.ack 1 and issue another dma transfer up until there's no more dma move to issue
+	while(remaining_to_move > 0){
+		if (remaining_to_ack < dma_transaction_size)
+			curr_len_ack = remaining_to_ack;
+		//wait for DMAs to finish
+		ack_dma(curr_len_ack, what_DMAS);
+		remaining_to_ack  -= curr_len_ack;
+
+		if (remaining_to_move < dma_transaction_size){
+			curr_len_move 	= remaining_to_move ;
+		}
+		//start DMAs
+		dma_tag_tmp 		 = start_dma(curr_len_move, DMA0_rx_addr, DMA1_rx_addr, DMA1_tx_addr, DMA2_rx_addr, what_DMAS, dma_tag_tmp);
+		remaining_to_move 	-= curr_len_move;
+		DMA0_rx_addr 		+= curr_len_move;
+		DMA1_rx_addr 		+= curr_len_move;
+		DMA1_tx_addr 		+= curr_len_move;
+		DMA2_rx_addr 		+= curr_len_move;
+	}
+	//3. finish ack the remaining
+	while(remaining_to_ack > 0){
+		if (remaining_to_ack < dma_transaction_size)
+			curr_len_ack = remaining_to_ack;
+		//wait for DMAs to finish
+		ack_dma(curr_len_ack, what_DMAS);
+		
+		remaining_to_ack  -= curr_len_ack;
+	}
+	return COLLECTIVE_OP_SUCCESS;
+}
+
+static inline int dma_movement_and_packetizer(
+					communicator* world, 	
+					unsigned int len,
+					uint64_t DMA0_rx_addr,
+					uint64_t DMA1_rx_addr,
+					uint64_t DMA1_tx_addr,
+					uint64_t DMA2_rx_addr,
+					unsigned int what_DMAS,
+					unsigned dst_rank,
+					unsigned mpi_tag
+					) {
+	unsigned int remaining_to_move, remaining_to_ack, dma_tag_tmp, curr_len_move, curr_len_ack, i;
+	remaining_to_move 	= len;
+	remaining_to_ack 	= len;
+	dma_tag_tmp 		= dma_tag;
+
+	//default size of transaction is full size
+	curr_len_move = dma_transaction_size;
+	curr_len_ack  = dma_transaction_size;
+	//1. issue at most max_dma_in_flight of dma_transaction_size
+	//start pack
+	start_packetizer_message(world, dst_rank, len, mpi_tag);
+	for (i = 0; remaining_to_move > 0 && i < max_dma_in_flight ; i++){
+		if (remaining_to_move < dma_transaction_size){
+			curr_len_move 	= remaining_to_move ;
+		}
+		//start DMAs
+		dma_tag_tmp 		 = start_dma(curr_len_move, DMA0_rx_addr, DMA1_rx_addr, DMA1_tx_addr, DMA2_rx_addr, what_DMAS, dma_tag_tmp);
+		remaining_to_move 	-= curr_len_move;
+		DMA0_rx_addr 		+= curr_len_move;
+		DMA1_rx_addr 		+= curr_len_move;
+		DMA1_tx_addr 		+= curr_len_move;
+		DMA2_rx_addr 		+= curr_len_move;
+	}
+	//2.ack 1 and issue another dma transfer up until there's no more dma move to issue
+	while(remaining_to_move > 0){
+		if (remaining_to_ack < dma_transaction_size)
+			curr_len_ack = remaining_to_ack;
+		//wait for DMAs to finish
+		ack_dma(curr_len_ack, what_DMAS);
+		//ack pack
+		ack_packetizer(world, dst_rank, 1);
+		remaining_to_ack  -= curr_len_ack;
+
+		if (remaining_to_move < dma_transaction_size){
+			curr_len_move 	= remaining_to_move ;
+		}
+		//start pack
+		start_packetizer_message(world, dst_rank, curr_len_move, mpi_tag);
+		//start DMAs
+		dma_tag_tmp 		 = start_dma(curr_len_move, DMA0_rx_addr, DMA1_rx_addr, DMA1_tx_addr, DMA2_rx_addr, what_DMAS, dma_tag_tmp);
+		remaining_to_move 	-= curr_len_move;
+		DMA0_rx_addr 		+= curr_len_move;
+		DMA1_rx_addr 		+= curr_len_move;
+		DMA1_tx_addr 		+= curr_len_move;
+		DMA2_rx_addr 		+= curr_len_move;
+	}
+	//3. finish ack the remaining
+	while(remaining_to_ack > 0){
+		if (remaining_to_ack < dma_transaction_size)
+			curr_len_ack = remaining_to_ack;
+		//wait for DMAs to finish
+		ack_dma(curr_len_ack, what_DMAS );
+		//ack pack
+		ack_packetizer(world, dst_rank, 1);		
+		remaining_to_ack  -= curr_len_ack;
+	}
+	return COLLECTIVE_OP_SUCCESS;
+}
+
+
+
+//performs a copy using DMA1. DMA1 rx reads while DMA1 tx overwrites
+int dma_loopback(	unsigned int len,
+					uint64_t src_addr,
+					uint64_t dst_addr) {
+	
+	//configure switch
+	cfg_switch(DATAPATH_DMA_LOOPBACK, ARITH_NONE );
+	//call function that will control the DMAs
+	return dma_movement(len, 0, src_addr, dst_addr, 0, USE_DMA1_RX | USE_DMA1_TX);
+
+}
+
+//performs a copy using DMA1. DMA1 rx reads while DMA1 tx overwrites
+static inline int copy(	unsigned int len,
+						uint64_t src_addr,
+						uint64_t dst_addr) {
+	//synonym
+	return  dma_loopback(	  len, src_addr, dst_addr);
+}
+
+//performs a copy using DMA1. DMA1 rx reads while DMA1 tx overwrites
+//note that this function has to be used when len < DMA_MAX_BTT
+static inline int copy_single_dma_transaction(	unsigned int len,
+						uint64_t src_addr,
+						uint64_t dst_addr) {
+
+	//configure switch
+	cfg_switch(DATAPATH_DMA_LOOPBACK, ARITH_NONE );
+	//start both channels of the DMA1
+	return dma_movement_single(len, 0, src_addr, dst_addr, 0, USE_DMA1_RX | USE_DMA1_TX);
+
+}
+
+//performs an accumulate using DMA1 and DMA0. DMA0 rx reads op1 DMA1 rx reads op2 while DMA1 tx back to dst buffer
+int reduce_loopback(	unsigned int len,
+						unsigned int func,
+						uint64_t op0_addr,
+						uint64_t op1_addr,
+						uint64_t dst_addr) {
+	
+	//configure switch
+	cfg_switch(DATAPATH_DMA_REDUCTION, ARITH_INTERNAL);
+	//start arith once with full size
+	start_arith(len, func, 0);
+	//start dma transfer
+	unsigned int ret = dma_movement(len, op0_addr, op1_addr, dst_addr, 0, USE_DMA0_RX | USE_DMA1_RX | USE_DMA1_TX);
+	//wait for arith to finish
+	wait_arith();
+	return ret;
+}
+
+//performs an accumulate using DMA1 and DMA0. DMA0 rx reads op1 DMA1 rx reads op2 while DMA1 tx overwrites op2 buffer
+static inline int accumulate (	
+						unsigned int len,
+						unsigned int func,
+						uint64_t op1_addr,
+						uint64_t op2_addr,
+						uint64_t dst_addr) {
+	return reduce_loopback(	 len, func, op1_addr, op2_addr, dst_addr);
+}
+
+//transmits a buffer to a rank of the world communicator
+int transmit_offchip_world(
+	communicator *world,
+	unsigned int dst_rank,
+	unsigned int len,
+	uint64_t src_addr,
+	unsigned int dst_tag
+){
+	cfg_switch(use_tcp ? DATAPATH_OFFCHIP_TX_TCP : DATAPATH_OFFCHIP_TX_UDP , ARITH_NONE);
+	return dma_movement_and_packetizer(world,len, 0, src_addr, 0,0, USE_DMA1_RX, dst_rank, dst_tag);
+}
+
+//transmits a buffer to a rank of the comm-esim communicator 
+static inline int transmit_offchip(	
+						unsigned int comm,
+						unsigned int dst_rank,
+						unsigned int len,
+						uint64_t src_addr,
+						unsigned int dst_tag
+					) {
+	//find communicator
+	communicator world = find_comm(comm);
+	return transmit_offchip_world(&world, dst_rank, len, src_addr, dst_tag);
+}
+
+//performs an accumulate using DMA0 and DMA1 and internal arith unit. Then it forwards the result 
+//through tx_subsystem to dst_rank
+int reduce_offchip_world(
+	communicator *world,
+	unsigned int dst_rank,
+	unsigned int len, 
+	unsigned int func,
+	uint64_t op0_addr,
+	uint64_t op1_addr,
+	unsigned int dst_tag
+){
+	//configure switch
+	cfg_switch(use_tcp ? DATAPATH_OFFCHIP_TCP_REDUCTION : DATAPATH_OFFCHIP_UDP_REDUCTION, ARITH_INTERNAL);
+	//configure arith
+	start_arith(len, func, 0);
+	return dma_movement_and_packetizer(world, len, op0_addr, op1_addr, 0, 0, USE_DMA0_RX | USE_DMA1_RX, dst_rank, dst_tag );
+}
+
+//performs an accumulate using DMA0 and DMA1 and then forwards the result 
+//through tx_subsystem to dst_rank
+static inline int reduce_offchip(	
+					unsigned int comm,
+					unsigned int dst_rank,
+					unsigned int len, 
+					unsigned int func,
+					uint64_t op0_addr,
+					uint64_t op1_addr,
+					unsigned int dst_tag) {
+	
+	//find communicator
+	communicator world = find_comm(comm);
+	//synonym function
+	return reduce_offchip_world(&world, dst_rank, len, func, op0_addr, op1_addr, dst_tag);
+}
+
+//tentative version of wait_receive_world
+//iterates over rx buffers until match is found or a timeout expires
+//matches len, src and tag if tag is not ANY
+//returns the index of the spare_buffer or -1 if not found
+int t_wait_receive_world_i(	
+						communicator *world,	
+						unsigned int src_rank,
+						unsigned int len,
+						unsigned int src_tag
+					){
+	unsigned int seq_num; //src_port TODO: use this variable to choose depending on tcp/udp session id or port
+	int i;
+	seq_num 	= world->ranks[src_rank].inbound_seq + 1;
+	//TODO: use a list to store recent message received to avoid scanning in the entire spare_buffer_struct.
+	//parse rx buffers until match is found
+	//matches len, src
+	//matches tag or tag is ANY
+	//return buffer index 
+	unsigned int nbufs = Xil_In32(RX_BUFFER_COUNT_OFFSET);
+	rx_buffer *rx_buf_list = (rx_buffer*)(RX_BUFFER_COUNT_OFFSET+4);
+	for(i=0; i<nbufs; i++){	
+		microblaze_disable_interrupts();
+		if(rx_buf_list[i].status == STATUS_RESERVED)
+		{
+			if((rx_buf_list[i].rx_src == src_rank) && (rx_buf_list[i].rx_len == len))
+			{
+				if(((rx_buf_list[i].rx_tag == src_tag) || (src_tag == TAG_ANY)) && (rx_buf_list[i].sequence_number == seq_num) )
+				{
+					//only now advance sequence number
+					world->ranks[src_rank].inbound_seq++;
+					microblaze_enable_interrupts();
+					return i;
+				}
+			}
+		}
+		microblaze_enable_interrupts();
+	}
+	return -1;
+}
 //iterates over rx buffers until match is found or a timeout expires
 //matches len, src and tag if tag is not ANY
 //returns the index of the spare_buffer
@@ -1144,33 +1105,11 @@ int wait_receive_world_i(
 						unsigned int len,
 						unsigned int src_tag
 					){
-	unsigned int seq_num, i; //src_port TODO: use this variable to choose depending on tcp/udp session id or port
-	seq_num 	= world->ranks[src_rank].inbound_seq + 1;
-	//TODO: use a list to store recent message received to avoid scanning in the entire spare_buffer_struct.
-	//parse rx buffers until match is found
-	//matches len, src
-	//matches tag or tag is ANY
-	//return buffer index 
-	unsigned int nbufs = Xil_In32(RX_BUFFER_COUNT_OFFSET);
-	rx_buffer *rx_buf_list = (rx_buffer*)(RX_BUFFER_COUNT_OFFSET+4);
-	for(unsigned int count = 0; timeout == 0 || count < timeout; count ++){
-		for(i=0; i<nbufs; i++){	
-			microblaze_disable_interrupts();
-			if(rx_buf_list[i].status == STATUS_RESERVED)
-			{
-				if((rx_buf_list[i].rx_src == src_rank) && (rx_buf_list[i].rx_len == len))
-				{
-					if(((rx_buf_list[i].rx_tag == src_tag) || (src_tag == TAG_ANY)) && (rx_buf_list[i].sequence_number == seq_num) )
-					{
-						//only now advance sequence number
-						world->ranks[src_rank].inbound_seq++;
-						microblaze_enable_interrupts();
-						return i;
-					}
-				}
-			}
-			microblaze_enable_interrupts();
-		}
+	unsigned int count;
+	int i;
+	for(count = 0; timeout == 0 || count < timeout; count ++){
+		i = t_wait_receive_world_i(world, src_rank, len, src_tag);
+		if(i >= 0) return i;
 	}
 	longjmp(excp_handler, RECEIVE_TIMEOUT_ERROR);
 }
@@ -1180,33 +1119,86 @@ int receive_offchip_world(
 						communicator *world,	
 						unsigned int src_rank,	
 						unsigned int len,
-						unsigned long long dst_addr,
+						uint64_t dst_addr,
 						unsigned int src_tag
 						){
-	unsigned long long rx_buff_addr;
-	unsigned int curr_len;
-	unsigned int ret=COLLECTIVE_OP_SUCCESS;
+	uint64_t rx_buff_addr;
+	unsigned int buf_idx;
+	unsigned int remaining_to_move, remaining_to_ack, dma_tag_tmp, curr_len_move, curr_len_ack, i;
 	rx_buffer *rx_buf_list = (rx_buffer*)(RX_BUFFER_COUNT_OFFSET+4);
 
-	//default fullsize transfer
-	curr_len = dma_transaction_size;
-	for (; len > 0 && ret == COLLECTIVE_OP_SUCCESS ;  len -= curr_len, dst_addr+=curr_len){
-		if(len < dma_transaction_size){
-			curr_len = len;
-		}	
+	uint8_t spare_buffer_indexes [max_dma_in_flight];
+	uint8_t spare_buffer_indexes_start = 0, spare_buffer_indexes_end = 0;
 
-		int buf_idx = wait_receive_world_i(world, src_rank, curr_len, src_tag);
-		if  (buf_idx < 0 )
-			return RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID;
-		rx_buff_addr = ((long long) rx_buf_list[buf_idx].addrh << 32) | rx_buf_list[buf_idx].addrl;
-		ret = copy_single_dma_transaction(curr_len, rx_buff_addr, dst_addr);
-		//set spare buffer as reserved (i.e. valid and not in DMA0 queue)
+	cfg_switch(DATAPATH_DMA_LOOPBACK, ARITH_NONE);
+	
+	remaining_to_move 	= len;
+	remaining_to_ack 	= len;
+	dma_tag_tmp 		= dma_tag;
+
+	//default size of transaction is full size
+	curr_len_move = dma_transaction_size;
+	curr_len_ack  = dma_transaction_size;
+	//1. issue at most max_dma_in_flight of dma_transaction_size
+	for (i = 0; remaining_to_move > 0 && i < max_dma_in_flight ; i++){
+		if (remaining_to_move < dma_transaction_size){
+			curr_len_move 	= remaining_to_move ;
+		}
+		//wait for segment to come
+		buf_idx = wait_receive_world_i(world, src_rank, curr_len_move, src_tag);
+		if  (buf_idx < 0 ) return RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID;
+		rx_buff_addr = ((uint64_t) rx_buf_list[buf_idx].addrh << 32) | rx_buf_list[buf_idx].addrl;
+		//save spare buffer id
+		spare_buffer_indexes[spare_buffer_indexes_end] = buf_idx;
+		spare_buffer_indexes_end = (spare_buffer_indexes_end + 1) % max_dma_in_flight;
+		//start DMAs
+		dma_tag_tmp 		 = start_dma(curr_len_move, 0, rx_buff_addr, dst_addr, 0, USE_DMA1_RX | USE_DMA1_TX, dma_tag_tmp);
+		remaining_to_move 	-= curr_len_move;
+		dst_addr 			+= curr_len_move;
+	}
+	//2.ack 1 and issue another dma transfer up until there's no more dma move to issue
+	while(remaining_to_move > 0){
+		if (remaining_to_ack < dma_transaction_size)
+			curr_len_ack = remaining_to_ack;
+		//wait for DMAs to finish
+		ack_dma(curr_len_ack, USE_DMA1_RX | USE_DMA1_TX);
+		//set spare buffer as free
+		buf_idx = spare_buffer_indexes[spare_buffer_indexes_start];
+		spare_buffer_indexes_start = (spare_buffer_indexes_start + 1) % max_dma_in_flight;
 		microblaze_disable_interrupts();
 		rx_buf_list[buf_idx].status = STATUS_IDLE;
 		microblaze_enable_interrupts();
+		remaining_to_ack  -= curr_len_ack;
+		//enqueue other DMA movement
+		if (remaining_to_move < dma_transaction_size){
+			curr_len_move 	= remaining_to_move ;
+		}
+		//wait for segment to come
+		buf_idx = wait_receive_world_i(world, src_rank, curr_len_move, src_tag);
+		if  (buf_idx < 0 ) return RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID;
+		rx_buff_addr = ((uint64_t) rx_buf_list[buf_idx].addrh << 32) | rx_buf_list[buf_idx].addrl;
+		spare_buffer_indexes[spare_buffer_indexes_end] = buf_idx;
+		spare_buffer_indexes_end = (spare_buffer_indexes_end + 1) % max_dma_in_flight;
+		//start DMAs
+		dma_tag_tmp 		 = start_dma(curr_len_move, 0, rx_buff_addr, dst_addr, 0, USE_DMA1_RX | USE_DMA1_TX, dma_tag_tmp);
+		remaining_to_move 	-= curr_len_move;
+		dst_addr 			+= curr_len_move;
 	}
-
-	return ret;
+	//3. finish ack the remaining
+	while(remaining_to_ack > 0){
+		if (remaining_to_ack < dma_transaction_size)
+			curr_len_ack = remaining_to_ack;
+		//wait for DMAs to finish
+		ack_dma(curr_len_ack, USE_DMA1_RX | USE_DMA1_TX);
+		//set spare buffer as free
+		buf_idx = spare_buffer_indexes[spare_buffer_indexes_start];
+		spare_buffer_indexes_start = (spare_buffer_indexes_start + 1) % max_dma_in_flight;
+		microblaze_disable_interrupts();
+		rx_buf_list[buf_idx].status = STATUS_IDLE;
+		microblaze_enable_interrupts();
+		remaining_to_ack  -= curr_len_ack;
+	}
+	return COLLECTIVE_OP_SUCCESS;
 }
 
 //1) receives from a rank 
@@ -1217,38 +1209,89 @@ int receive_and_accumulate(
 		unsigned int src_rank,
 		unsigned int len, 
 		unsigned int func,
-		unsigned long long op0_addr,
-		unsigned long long dst_addr,
-		unsigned int dst_tag)
+		uint64_t op0_addr,
+		uint64_t dst_addr,
+		unsigned int src_tag)
 	{
-	unsigned long long buf_addr;
-	unsigned int curr_len, buf_idx;
+	uint64_t rx_buff_addr;
+	unsigned int buf_idx;
+	unsigned int remaining_to_move, remaining_to_ack, dma_tag_tmp, curr_len_move, curr_len_ack, i;
 	rx_buffer *rx_buf_list = (rx_buffer*)(RX_BUFFER_COUNT_OFFSET+4);
-	//configure switch
+
+	uint8_t spare_buffer_indexes [max_dma_in_flight];
+	uint8_t spare_buffer_indexes_start = 0, spare_buffer_indexes_end = 0;
+
 	cfg_switch(DATAPATH_DMA_REDUCTION, ARITH_INTERNAL);
-	//default fullsize transfer
-	curr_len = dma_transaction_size;
-	for (; len > 0 ; len -= curr_len, op0_addr += curr_len,	dst_addr += curr_len ){
-		if(len < dma_transaction_size ) {
-			//last transaction
-			curr_len = len;
-		}	
-		//start arithmetic unit 
-		start_arith(curr_len, func, 0);
-		//1. receive part of data from previous in rank and retrieve spare buffer index
-		buf_idx = wait_receive_world_i(world, src_rank, curr_len, TAG_ANY);
+	start_arith(len, func, 0);
+	remaining_to_move 	= len;
+	remaining_to_ack 	= len;
+	dma_tag_tmp 		= dma_tag;
+
+	//default size of transaction is full size
+	curr_len_move = dma_transaction_size;
+	curr_len_ack  = dma_transaction_size;
+	//1. issue at most max_dma_in_flight of dma_transaction_size
+	for (i = 0; remaining_to_move > 0 && i < max_dma_in_flight ; i++){
+		if (remaining_to_move < dma_transaction_size){
+			curr_len_move 	= remaining_to_move ;
+		}
+		//wait for segment to come
+		buf_idx = wait_receive_world_i(world, src_rank, curr_len_move, src_tag);
 		if  (buf_idx < 0 ) return RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID;
-		buf_addr = ((long long) rx_buf_list[buf_idx].addrh << 32) | rx_buf_list[buf_idx].addrl;
-		//start dma transfer
-		dma_movement_single(curr_len, op0_addr, buf_addr, dst_addr, 0, USE_DMA0_RX | USE_DMA1_RX | USE_DMA1_TX);
-		
-		//3. release spare buffer
+		rx_buff_addr = ((uint64_t) rx_buf_list[buf_idx].addrh << 32) | rx_buf_list[buf_idx].addrl;
+		//save spare buffer id
+		spare_buffer_indexes[spare_buffer_indexes_end] = buf_idx;
+		spare_buffer_indexes_end = (spare_buffer_indexes_end + 1) % max_dma_in_flight;
+		//start DMAs
+		dma_tag_tmp 		 = start_dma(curr_len_move, op0_addr, rx_buff_addr, dst_addr, 0, USE_DMA0_RX | USE_DMA1_RX | USE_DMA1_TX, dma_tag_tmp);
+		remaining_to_move 	-= curr_len_move;
+		op0_addr 			+= curr_len_move;
+		dst_addr 			+= curr_len_move;
+	}
+	//2.ack 1 and issue another dma transfer up until there's no more dma move to issue
+	while(remaining_to_move > 0){
+		if (remaining_to_ack < dma_transaction_size)
+			curr_len_ack = remaining_to_ack;
+		//wait for DMAs to finish
+		ack_dma(curr_len_ack, USE_DMA0_RX | USE_DMA1_RX | USE_DMA1_TX);
+		//set spare buffer as free
+		buf_idx = spare_buffer_indexes[spare_buffer_indexes_start];
+		spare_buffer_indexes_start = (spare_buffer_indexes_start + 1) % max_dma_in_flight;
 		microblaze_disable_interrupts();
 		rx_buf_list[buf_idx].status = STATUS_IDLE;
 		microblaze_enable_interrupts();
- 
-		wait_arith();
+		remaining_to_ack  -= curr_len_ack;
+		//enqueue other DMA movement
+		if (remaining_to_move < dma_transaction_size){
+			curr_len_move 	= remaining_to_move ;
+		}
+		//wait for segment to come
+		buf_idx = wait_receive_world_i(world, src_rank, curr_len_move, src_tag);
+		if  (buf_idx < 0 ) return RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID;
+		rx_buff_addr = ((uint64_t) rx_buf_list[buf_idx].addrh << 32) | rx_buf_list[buf_idx].addrl;
+		spare_buffer_indexes[spare_buffer_indexes_end] = buf_idx;
+		spare_buffer_indexes_end = (spare_buffer_indexes_end + 1) % max_dma_in_flight;
+		//start DMAs
+		dma_tag_tmp 		 = start_dma(curr_len_move, op0_addr, rx_buff_addr, dst_addr, 0, USE_DMA0_RX | USE_DMA1_RX | USE_DMA1_TX, dma_tag_tmp);
+		remaining_to_move 	-= curr_len_move;
+		op0_addr 			+= curr_len_move;
+		dst_addr 			+= curr_len_move;
 	}
+	//3. finish ack the remaining
+	while(remaining_to_ack > 0){
+		if (remaining_to_ack < dma_transaction_size)
+			curr_len_ack = remaining_to_ack;
+		//wait for DMAs to finish
+		ack_dma(curr_len_ack, USE_DMA0_RX | USE_DMA1_RX | USE_DMA1_TX);
+		//set spare buffer as free
+		buf_idx = spare_buffer_indexes[spare_buffer_indexes_start];
+		spare_buffer_indexes_start = (spare_buffer_indexes_start + 1) % max_dma_in_flight;
+		microblaze_disable_interrupts();
+		rx_buf_list[buf_idx].status = STATUS_IDLE;
+		microblaze_enable_interrupts();
+		remaining_to_ack  -= curr_len_ack;
+	}
+	wait_arith();
 	return COLLECTIVE_OP_SUCCESS;
 }
 
@@ -1261,39 +1304,96 @@ int receive_and_reduce_offchip(
 		unsigned int dst_rank,
 		unsigned int len, 
 		unsigned int func,
-		unsigned long long op0_addr,
-		unsigned int dst_tag)
+		uint64_t op0_addr,
+		unsigned int mpi_tag)
 	{
-	unsigned long long buf_addr;
-	unsigned int curr_len, buf_idx, messages;
+	
+	uint64_t rx_buff_addr;
+	unsigned int buf_idx;
+	unsigned int remaining_to_move, remaining_to_ack, dma_tag_tmp, curr_len_move, curr_len_ack, i;
 	rx_buffer *rx_buf_list = (rx_buffer*)(RX_BUFFER_COUNT_OFFSET+4);
-	//configure switch
-	cfg_switch( use_tcp ? DATAPATH_OFFCHIP_TCP_REDUCTION : DATAPATH_OFFCHIP_UDP_REDUCTION, ARITH_INTERNAL);
 
-	//default fullsize transfer
-	curr_len = dma_transaction_size;
-	for (; len > 0 ; len -= curr_len, op0_addr += curr_len){
-		if(len < dma_transaction_size) {
-			//last transaction
-			curr_len = len;
-		}	
-		//start arithmetic unit 
-		start_arith(curr_len, func, 0);
-		//1. receive part of data from previous in rank and retrieve spare buffer index
-		buf_idx = wait_receive_world_i(world, src_rank, curr_len, TAG_ANY);
+	uint8_t spare_buffer_indexes [max_dma_in_flight];
+	uint8_t spare_buffer_indexes_start = 0, spare_buffer_indexes_end = 0;
+
+	cfg_switch( use_tcp ? DATAPATH_OFFCHIP_TCP_REDUCTION : DATAPATH_OFFCHIP_UDP_REDUCTION, ARITH_INTERNAL);
+	start_arith(len, func, 0);
+
+	remaining_to_move 	= len;
+	remaining_to_ack 	= len;
+	dma_tag_tmp 		= dma_tag;
+
+	//default size of transaction is full size
+	curr_len_move = dma_transaction_size;
+	curr_len_ack  = dma_transaction_size;
+	//1. issue at most max_dma_in_flight of dma_transaction_size
+	//start pack
+	start_packetizer_message(world, dst_rank, len, mpi_tag);
+	for (i = 0; remaining_to_move > 0 && i < max_dma_in_flight ; i++){
+		if (remaining_to_move < dma_transaction_size){
+			curr_len_move 	= remaining_to_move ;
+		}
+		//wait for segment to come
+		buf_idx = wait_receive_world_i(world, src_rank, curr_len_move, mpi_tag);
 		if  (buf_idx < 0 ) return RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID;
-		buf_addr = ((long long) rx_buf_list[buf_idx].addrh << 32) | rx_buf_list[buf_idx].addrl;
-		//start packetizer
-		messages = start_packetizer_message(world, dst_rank, curr_len, TAG_ANY);
-		//start dma transfer
-		dma_movement_single(curr_len, op0_addr, buf_addr, 0, 0, USE_DMA0_RX | USE_DMA1_RX );
-		//3. release spare buffer
+		rx_buff_addr = ((uint64_t) rx_buf_list[buf_idx].addrh << 32) | rx_buf_list[buf_idx].addrl;
+		//save spare buffer id
+		spare_buffer_indexes[spare_buffer_indexes_end] = buf_idx;
+		spare_buffer_indexes_end = (spare_buffer_indexes_end + 1) % max_dma_in_flight;
+		//start DMAs
+		dma_tag_tmp 		 = start_dma(curr_len_move, op0_addr, rx_buff_addr, 0, 0, USE_DMA0_RX | USE_DMA1_RX , dma_tag_tmp);
+		remaining_to_move 	-= curr_len_move;
+		op0_addr 			+= curr_len_move;
+	}
+	//2.ack 1 and issue another dma transfer up until there's no more dma move to issue
+	while(remaining_to_move > 0){
+		if (remaining_to_ack < dma_transaction_size)
+			curr_len_ack = remaining_to_ack;
+		//wait for DMAs to finish
+		ack_dma(curr_len_ack, USE_DMA0_RX | USE_DMA1_RX);
+		//ack pack
+		ack_packetizer(world, dst_rank, 1);
+		//set spare buffer as free
+		buf_idx = spare_buffer_indexes[spare_buffer_indexes_start];
+		spare_buffer_indexes_start = (spare_buffer_indexes_start + 1) % max_dma_in_flight;
 		microblaze_disable_interrupts();
 		rx_buf_list[buf_idx].status = STATUS_IDLE;
 		microblaze_enable_interrupts();
-		wait_arith();
-		ack_packetizer(world, dst_rank, messages);
+		remaining_to_ack  -= curr_len_ack;
+		//enqueue other DMA movement
+		if (remaining_to_move < dma_transaction_size){
+			curr_len_move 	= remaining_to_move ;
+		}
+		//wait for segment to come
+		buf_idx = wait_receive_world_i(world, src_rank, curr_len_move, mpi_tag);
+		if  (buf_idx < 0 ) return RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID;
+		rx_buff_addr = ((uint64_t) rx_buf_list[buf_idx].addrh << 32) | rx_buf_list[buf_idx].addrl;
+		spare_buffer_indexes[spare_buffer_indexes_end] = buf_idx;
+		spare_buffer_indexes_end = (spare_buffer_indexes_end + 1) % max_dma_in_flight;
+		//start pack
+		start_packetizer_message(world, dst_rank, curr_len_move, mpi_tag);
+		//start DMAs
+		dma_tag_tmp 		 = start_dma(curr_len_move, op0_addr, rx_buff_addr, 0, 0, USE_DMA0_RX | USE_DMA1_RX , dma_tag_tmp);
+		remaining_to_move 	-= curr_len_move;
+		op0_addr 			+= curr_len_move;
 	}
+	//3. finish ack the remaining
+	while(remaining_to_ack > 0){
+		if (remaining_to_ack < dma_transaction_size)
+			curr_len_ack = remaining_to_ack;
+		//wait for DMAs to finish
+		ack_dma(curr_len_ack, USE_DMA0_RX | USE_DMA1_RX);
+		//ack pack
+		ack_packetizer(world, dst_rank, 1);
+		//set spare buffer as free
+		buf_idx = spare_buffer_indexes[spare_buffer_indexes_start];
+		spare_buffer_indexes_start = (spare_buffer_indexes_start + 1) % max_dma_in_flight;
+		microblaze_disable_interrupts();
+		rx_buf_list[buf_idx].status = STATUS_IDLE;
+		microblaze_enable_interrupts();
+		remaining_to_ack  -= curr_len_ack;
+	}
+	wait_arith();
 	return COLLECTIVE_OP_SUCCESS;
 }
 
@@ -1303,45 +1403,102 @@ int relay_to_other_rank(
 		unsigned int src_rank,
 		unsigned int dst_rank,
 		unsigned int len, 
-		unsigned int dst_tag){
-		
-		unsigned int curr_len, buf_idx, messages;
-		unsigned long long buf_addr;
-		rx_buffer *rx_buf_list = (rx_buffer*)(RX_BUFFER_COUNT_OFFSET+4);
-		//configure switch
-		cfg_switch( use_tcp ? DATAPATH_OFFCHIP_TX_TCP: DATAPATH_OFFCHIP_TX_UDP, ARITH_NONE);
+		unsigned int mpi_tag){
+	uint64_t rx_buff_addr;
+	unsigned int buf_idx;
+	unsigned int remaining_to_move, remaining_to_ack, dma_tag_tmp, curr_len_move, curr_len_ack, i;
+	rx_buffer *rx_buf_list = (rx_buffer*)(RX_BUFFER_COUNT_OFFSET+4);
 
-		for (; len > 0 ; len -= curr_len ){
-			if (len < dma_transaction_size)
-				curr_len = len;
-			else	
-				curr_len = dma_transaction_size;
+	uint8_t spare_buffer_indexes [max_dma_in_flight];
+	uint8_t spare_buffer_indexes_start = 0, spare_buffer_indexes_end = 0;
 
-			//1. receive part of data from previous in rank and retrieve spare buffer index
-			buf_idx = wait_receive_world_i(world, src_rank, curr_len, TAG_ANY);
-			if  (buf_idx < 0 ) return RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID;
-			//2. accumulate in buffer: user_buffer = user_buffer + spare_buffer 
-			//configure switch
-			buf_addr = ((long long) rx_buf_list[buf_idx].addrh << 32) | rx_buf_list[buf_idx].addrl;
-			messages = start_packetizer_message(world, dst_rank, curr_len, TAG_ANY);
-			//start dma transfer
-			dma_movement_single(curr_len, 0, buf_addr, 0, 0, USE_DMA1_RX );
-			//3. release spare buffer
-			microblaze_disable_interrupts();
-			rx_buf_list[buf_idx].status = STATUS_IDLE;
-			microblaze_enable_interrupts();
-			ack_packetizer(world, dst_rank, messages);
+	//configure switch
+	cfg_switch( use_tcp ? DATAPATH_OFFCHIP_TX_TCP: DATAPATH_OFFCHIP_TX_UDP, ARITH_NONE);
+
+	remaining_to_move 	= len;
+	remaining_to_ack 	= len;
+	dma_tag_tmp 		= dma_tag;
+
+	//default size of transaction is full size
+	curr_len_move = dma_transaction_size;
+	curr_len_ack  = dma_transaction_size;
+	//1. issue at most max_dma_in_flight of dma_transaction_size
+	//start pack
+	start_packetizer_message(world, dst_rank, len, mpi_tag);
+	for (i = 0; remaining_to_move > 0 && i < max_dma_in_flight ; i++){
+		if (remaining_to_move < dma_transaction_size){
+			curr_len_move 	= remaining_to_move ;
 		}
-		return COLLECTIVE_OP_SUCCESS;
+		//wait for segment to come
+		buf_idx = wait_receive_world_i(world, src_rank, curr_len_move, mpi_tag);
+		if  (buf_idx < 0 ) return RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID;
+		rx_buff_addr = ((uint64_t) rx_buf_list[buf_idx].addrh << 32) | rx_buf_list[buf_idx].addrl;
+		//save spare buffer id
+		spare_buffer_indexes[spare_buffer_indexes_end] = buf_idx;
+		spare_buffer_indexes_end = (spare_buffer_indexes_end + 1) % max_dma_in_flight;
+		//start DMAs
+		dma_tag_tmp 		 = start_dma(curr_len_move, 0, rx_buff_addr, 0, 0,  USE_DMA1_RX , dma_tag_tmp);
+		remaining_to_move 	-= curr_len_move;
+	}
+	//2.ack 1 and issue another dma transfer up until there's no more dma move to issue
+	while(remaining_to_move > 0){
+		if (remaining_to_ack < dma_transaction_size)
+			curr_len_ack = remaining_to_ack;
+		//wait for DMAs to finish
+		ack_dma(curr_len_ack, USE_DMA1_RX);
+		//ack pack
+		ack_packetizer(world, dst_rank, 1);
+		//set spare buffer as free
+		buf_idx = spare_buffer_indexes[spare_buffer_indexes_start];
+		spare_buffer_indexes_start = (spare_buffer_indexes_start + 1) % max_dma_in_flight;
+		microblaze_disable_interrupts();
+		rx_buf_list[buf_idx].status = STATUS_IDLE;
+		microblaze_enable_interrupts();
+		remaining_to_ack  -= curr_len_ack;
+		//enqueue other DMA movement
+		if (remaining_to_move < dma_transaction_size){
+			curr_len_move 	= remaining_to_move ;
+		}
+		//wait for segment to come
+		buf_idx = wait_receive_world_i(world, src_rank, curr_len_move, mpi_tag);
+		if  (buf_idx < 0 ) return RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID;
+		rx_buff_addr = ((uint64_t) rx_buf_list[buf_idx].addrh << 32) | rx_buf_list[buf_idx].addrl;
+		spare_buffer_indexes[spare_buffer_indexes_end] = buf_idx;
+		spare_buffer_indexes_end = (spare_buffer_indexes_end + 1) % max_dma_in_flight;
+		//start pack
+		start_packetizer_message(world, dst_rank, curr_len_move, mpi_tag);
+		//start DMAs
+		dma_tag_tmp 		 = start_dma(curr_len_move, 0, rx_buff_addr, 0, 0,  USE_DMA1_RX , dma_tag_tmp);
+		remaining_to_move 	-= curr_len_move;
+	}
+	//3. finish ack the remaining
+	while(remaining_to_ack > 0){
+		if (remaining_to_ack < dma_transaction_size)
+			curr_len_ack = remaining_to_ack;
+		//wait for DMAs to finish
+		ack_dma(curr_len_ack, USE_DMA1_RX);
+		//ack pack
+		ack_packetizer(world, dst_rank, 1);
+		//set spare buffer as free
+		buf_idx = spare_buffer_indexes[spare_buffer_indexes_start];
+		spare_buffer_indexes_start = (spare_buffer_indexes_start + 1) % max_dma_in_flight;
+		microblaze_disable_interrupts();
+		rx_buf_list[buf_idx].status = STATUS_IDLE;
+		microblaze_enable_interrupts();
+		remaining_to_ack  -= curr_len_ack;
+	}
 
+	return COLLECTIVE_OP_SUCCESS;
 }
+
+//COLLECTIVES
 
 static inline int send(		
 				unsigned int comm,
 				unsigned int len,
 				unsigned int tag,
 				unsigned int dst_rank,
-				unsigned long long buf_addr){
+				uint64_t buf_addr){
 	//send synonym
 	return transmit_offchip(comm, dst_rank, len, buf_addr, tag);
 }
@@ -1351,7 +1508,7 @@ static inline int recv(
 				unsigned int len,
 				unsigned int tag,
 				unsigned int src_rank,
-				unsigned long long buf_addr){
+				uint64_t buf_addr){
 	//find communicator
 	communicator world = find_comm(comm);
 	return receive_offchip_world(&world, src_rank, len, buf_addr,  tag);
@@ -1362,7 +1519,7 @@ int broadcast(
 				unsigned int comm,
 				unsigned int len,
 				unsigned int src_rank,
-				unsigned long long buf_addr){
+				uint64_t buf_addr){
 	int i;
 	int ret = COLLECTIVE_OP_SUCCESS;
 	//find communicator
@@ -1386,7 +1543,7 @@ int broadcast_round_robin(
 				unsigned int comm,
 				unsigned int len,
 				unsigned int src_rank,
-				unsigned long long buf_addr){
+				uint64_t buf_addr){
 	unsigned int curr_len, i;
 	//find communicator
 	communicator world = find_comm(comm);
@@ -1432,8 +1589,8 @@ int scatter(
 				unsigned int comm,
 				unsigned int len,
 				unsigned int src_rank,
-				unsigned long long src_buf_addr,
-				unsigned long long dst_buf_addr){
+				uint64_t src_buf_addr,
+				uint64_t dst_buf_addr){
 	int i;
 	int ret = COLLECTIVE_OP_SUCCESS;
 	//find communicator
@@ -1462,10 +1619,10 @@ int scatter_rr(
 				unsigned int comm,
 				unsigned int len,
 				unsigned int src_rank,
-				unsigned long long src_buf_addr,
-				unsigned long long dst_buf_addr){
+				uint64_t src_buf_addr,
+				uint64_t dst_buf_addr){
 	unsigned int curr_len, i, offset_next_rank_buffer;
-	unsigned long long tmp_src_buf_base_addr, tmp_src_buf_offset_addr;
+	uint64_t tmp_src_buf_base_addr, tmp_src_buf_offset_addr;
 	offset_next_rank_buffer = len;
 	//find communicator
 	communicator world = find_comm(comm);
@@ -1522,8 +1679,8 @@ int gather(
 				unsigned int comm,
 				unsigned int len,
 				unsigned int root_rank,
-				unsigned long long src_buf_addr,
-				unsigned long long dst_buf_addr){
+				uint64_t src_buf_addr,
+				uint64_t dst_buf_addr){
 	int i;
 	int ret = COLLECTIVE_OP_SUCCESS;
 	return COLLECTIVE_NOT_IMPLEMENTED; //at this moment is not safe to run non ring based collectives. they are not handled at depacketizer level.
@@ -1554,15 +1711,15 @@ int gather_ring(
 				unsigned int comm,
 				unsigned int len,
 				unsigned int root_rank,
-				unsigned long long src_buf_addr,
-				unsigned long long dst_buf_addr){
-	unsigned long long tmp_buf_addr;
+				uint64_t src_buf_addr,
+				uint64_t dst_buf_addr){
+	uint64_t tmp_buf_addr;
 	unsigned int i,curr_pos, next_in_ring, prev_in_ring, number_of_shift;
 	int ret = COLLECTIVE_OP_SUCCESS;
 	//find communicator
 	communicator world = find_comm(comm);
-	next_in_ring = (world.local_rank+1			   ) % world.size	;
-	prev_in_ring = (world.local_rank+world.size-1 ) % world.size	;
+	next_in_ring = (world.local_rank + 1			  ) % world.size	;
+	prev_in_ring = (world.local_rank + world.size - 1 ) % world.size	;
 	
 	if(root_rank == world.local_rank){ //root ranks mainly receives
 
@@ -1597,8 +1754,8 @@ static inline int allgather(
 				unsigned int comm,
 				unsigned int len,
 				unsigned int internal_root,
-				unsigned long long src_addr,
-				unsigned long long dst_addr){	
+				uint64_t src_addr,
+				uint64_t dst_addr){	
 	int ret = 0;
 	//find communicator
 	communicator world = find_comm(comm);
@@ -1611,9 +1768,9 @@ static inline int allgather(
 int allgather_ring(
 				unsigned int comm,
 				unsigned int len,
-				unsigned long long src_buf_addr,
-				unsigned long long dst_buf_addr){
-	unsigned long long tmp_buf_addr;
+				uint64_t src_buf_addr,
+				uint64_t dst_buf_addr){
+	uint64_t tmp_buf_addr;
 	unsigned int i,curr_pos, next_in_ring, prev_in_ring;
 	int ret = COLLECTIVE_OP_SUCCESS;
 	//find communicator
@@ -1649,18 +1806,13 @@ int reduce(
 				unsigned int len,
 				unsigned int function,
 				unsigned int root_rank,
-				unsigned long long src_addr,
-				unsigned long long dst_addr
+				uint64_t src_addr,
+				uint64_t dst_addr
 			){
 	return COLLECTIVE_NOT_IMPLEMENTED; //at this moment is not safe to run non ring based collectives. they are not handled at depacketizer level.
 	int ret = COLLECTIVE_OP_SUCCESS;
-	int buf_idx;
-	long long buf_addr;
 	//find communicator
 	communicator world = find_comm(comm);
-	//get rx_buff_location //TODO: write a function for that or move it into a static variable
-	unsigned int nbufs 	   = 	 Xil_In32(RX_BUFFER_COUNT_OFFSET);
-	rx_buffer *rx_buf_list = (rx_buffer*)(RX_BUFFER_COUNT_OFFSET+4);
 	//determine if we're sending or receiving
 	if(root_rank == world.local_rank){
 		//0. copy src_buffer of master in dst_buffer
@@ -1671,20 +1823,9 @@ int reduce(
 			//0. skip if we are root rank
 			if(i == root_rank)
 				continue;
-			//1. receive part of data and retrieve spare buffer index
-			buf_idx = wait_receive_world_i(&world, i, len, TAG_ANY);
-			if  (buf_idx < 0 || buf_idx >= nbufs )
-				return RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID;
-			//2. accumulate in buffer: user_buffer = user_buffer + spare_buffer 
-			//configure switch
-			buf_addr = ((long long) rx_buf_list[buf_idx].addrh << 32) | rx_buf_list[buf_idx].addrl;
-
-			ret = accumulate(len, function, buf_addr, dst_addr,  dst_addr);
-			//3. release buffer
-			microblaze_disable_interrupts();
-			rx_buf_list[buf_idx].status = STATUS_IDLE;
-			microblaze_enable_interrupts();
-			//move to next rank
+			//1. receive part of data and retrieve spare buffer index and accumulate in buffer: user_buffer = user_buffer + spare_buffer 
+			ret = receive_and_accumulate(&world, i, len, function, dst_addr, dst_addr, TAG_ANY);
+			//2. move to next rank
 		}
 	}else{
 		ret += transmit_offchip_world(&world, root_rank, len, src_addr,  TAG_ANY);
@@ -1698,8 +1839,8 @@ int reduce_ring_streaming(
 				unsigned int len,
 				unsigned int function,
 				unsigned int root_rank,
-				unsigned long long src_addr,
-				unsigned long long dst_addr){
+				uint64_t src_addr,
+				uint64_t dst_addr){
 	int ret;
 	//find communicator
 	communicator world 		  = find_comm(comm);
@@ -1725,8 +1866,8 @@ int allreduce(
 				unsigned int len,
 				unsigned int function,
 				unsigned int internal_root,
-				unsigned long long src_addr,
-				unsigned long long dst_addr){
+				uint64_t src_addr,
+				uint64_t dst_addr){
 
 	int ret = 0;
 	//let 0 be the root
@@ -1740,8 +1881,8 @@ int allreduce_fused_ring(
 				unsigned int comm,
 				unsigned int len,
 				unsigned int function,
-				unsigned long long src_addr,
-				unsigned long long dst_addr){
+				uint64_t src_addr,
+				uint64_t dst_addr){
 
 	int ret;
 	//find communicator
@@ -1751,7 +1892,7 @@ int allreduce_fused_ring(
 	//get rx_buff_location
 	rx_buffer *rx_buf_list 	  	= (rx_buffer*)(RX_BUFFER_COUNT_OFFSET+4);
 	unsigned int buf_idx, tmp_len, curr_len;
-	unsigned long long buf_addr, tmp_addr; 
+	uint64_t buf_addr, tmp_addr; 
 	//every member of the communicator 
 	// 0.  sends its data to the next rank
 	// 1. put their own data in their buffer
@@ -1772,11 +1913,12 @@ int allreduce_fused_ring(
 		for(tmp_len = len; tmp_len > 0 && ret == COLLECTIVE_OP_SUCCESS; tmp_len-=curr_len, tmp_addr+=curr_len){
 			if(tmp_len < dma_transaction_size)
 				curr_len = tmp_len;
+				//2.3.4 can be overlapped: dma0 rx read spare, dma1 rx read operand, dma2rx read operand, dma2rx is forwarded to next in the ring. dma0,1rx are used for sum
 			//2. receive part of data from previous rank and retrieve spare buffer index
 			buf_idx = wait_receive_world_i(&world, prev_in_ring, curr_len, TAG_ANY);
-			if  (buf_idx < 0 )
-				return RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID;
-			buf_addr = ((long long) rx_buf_list[buf_idx].addrh << 32) | rx_buf_list[buf_idx].addrl; 
+			if  (buf_idx < 0 ) return RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID;
+			buf_addr = ((uint64_t) rx_buf_list[buf_idx].addrh << 32) | rx_buf_list[buf_idx].addrl; 
+			//3.4. can be done together
 			//3. relay others data only if it's not the last iteration.  
 			if ( i+1<world.size-1){
 				ret = transmit_offchip_world(&world, next_in_ring, curr_len, buf_addr, TAG_ANY);
@@ -1794,75 +1936,92 @@ int allreduce_fused_ring(
 	return ret;
 }
 
-//2 stage allreduce: distribute sums across the ranks. smaller bandwidth between ranks and use multiple arith at the same time.
+//scatter_reduce: (a,b,c), (1,2,3), (X,Y,Z) -> (a+1+X,,) (,b+2+Y,) (,,c+3+Z)
+//len == size of chunks
+int scatter_reduce(
+				unsigned int comm,
+				unsigned int len, 
+				unsigned int function,
+				uint64_t src_addr,
+				uint64_t dst_addr){
+	unsigned int ret,i;
+	uint64_t curr_recv_addr, curr_send_addr;
+	//find communicator
+	communicator world 		  	 = find_comm(comm);
+	unsigned int next_in_ring 	 = (world.local_rank + 1			) % world.size	;
+	unsigned int prev_in_ring 	 = (world.local_rank + world.size-1 ) % world.size	;
+	unsigned int curr_send_chunk = prev_in_ring;
+	unsigned int curr_recv_chunk = (prev_in_ring + world.size-1 ) % world.size	;
+
+	//1. each rank send its own chunk to the next rank in the ring
+	curr_send_addr = src_addr + len * curr_send_chunk;
+	ret = transmit_offchip_world(&world, next_in_ring,	len, curr_send_addr, TAG_ANY);
+	if(ret != COLLECTIVE_OP_SUCCESS) return ret;
+	//2. for n-1 times sum the chunk that is coming from previous rank with your chunk at the same location. then forward the result to
+	// the next rank in the ring
+	for (i = 0; i < world.size -2; ++i, curr_recv_chunk=(curr_recv_chunk + world.size - 1) % world.size)
+	{
+		curr_recv_addr = src_addr + len * curr_recv_chunk;
+		//2. receive part of data from previous in rank and accumulate to the part you have at the same address
+		//ad forwar dto the next rank in the ring
+		ret = receive_and_reduce_offchip(&world, prev_in_ring, next_in_ring, len, function, curr_recv_addr, TAG_ANY); 
+		if(ret != COLLECTIVE_OP_SUCCESS) return ret;
+	}
+	//at last iteration (n-1) you can sum and save the result at the same location (which is the right place to be)
+	if (i > 0 ){
+		curr_recv_addr  = src_addr + len * curr_recv_chunk; 
+		curr_send_addr  = dst_addr + len * curr_recv_chunk;
+		ret = receive_and_accumulate(&world, prev_in_ring, len, function, curr_recv_addr, curr_send_addr, TAG_ANY); 
+		if(ret != COLLECTIVE_OP_SUCCESS) return ret;
+	}
+	return COLLECTIVE_OP_SUCCESS;
+}
+
+//2 stage allreduce: distribute sums across the ranks. smaller bandwidth between ranks and use multiple arith at the same time. scatter_reduce+all_gather
 int all_reduce_share(
 				unsigned int comm,
 				unsigned int len,
 				unsigned int function,
-				unsigned long long src_addr,
-				unsigned long long dst_addr){
-	unsigned int ret;
-	uint64_t curr_src_addr, curr_accu_addr, curr_dst_addr;
+				uint64_t src_addr,
+				uint64_t dst_addr){
+	unsigned int ret,i;
+	uint64_t curr_recv_addr, curr_send_addr;
 	//find communicator
 	communicator world 		  	 = find_comm(comm);
+	int curr_send_chunk	, curr_recv_chunk			  = world.local_rank;			 
+	//divide into chunks 
+	unsigned int len_div_size 	 	= len/world.size; 
+	unsigned int min_operand_width  = arith_number_of_bytes_per(function);
+	unsigned int tail				= len_div_size % min_operand_width;
+	len_div_size += - tail + (tail == 0 ? 0 : min_operand_width); //TODO: now when processing last chunk it will assume that buffers are same length and part of non buffer will be processed.
 	unsigned int next_in_ring 	 = (world.local_rank+1			  )%world.size	;
 	unsigned int prev_in_ring 	 = (world.local_rank+world.size-1 )%world.size	;
-
-	unsigned int len_div_size 	 = len/world.size; //TODO: ensure is compatible with operation we are performing
-	unsigned int curr_send_chunk = world.local_rank;
-	unsigned int curr_recv_chunk = (curr_send_chunk + world.size - 1) % world.size;
-
-	//A) Share reduce stage
-	for (int i = 0; i < world.size -1; ++i)
+	//scatter reduce
+	scatter_reduce( comm, len_div_size, function, src_addr, dst_addr);
+	//allgather in place on dst_buffer
+	for (i = 0; i < world.size -1; ++i)
 	{
-		curr_src_addr  = src_addr + len_div_size * curr_send_chunk;
-		curr_accu_addr = src_addr + len_div_size * curr_recv_chunk;
-
-		// TODO: 1 and 2 can actually overlapped
-		// 1.send our data from src buffer
-		ret = transmit_offchip_world(&world, next_in_ring,	len_div_size, curr_src_addr, TAG_ANY);
-		if(ret != COLLECTIVE_OP_SUCCESS) return ret;
-		//2. receive part of data from previous in rank and accumulate in src buffer: src_buffer = src_buffer + spare_buffer 
-		ret = receive_and_accumulate(&world, prev_in_ring, len_div_size, function, curr_accu_addr, curr_accu_addr, TAG_ANY); 
-		if(ret != COLLECTIVE_OP_SUCCESS) return ret;
-		//3. if last iteration, copy the reduced result from src buffer to corresponding position of the dst buffer
-		if (i == world.size - 2)
-		{
-			curr_dst_addr = dst_addr + len_div_size * curr_recv_chunk;
-
-			ret = copy(len_div_size, curr_accu_addr, curr_dst_addr);
-			if(ret != COLLECTIVE_OP_SUCCESS) return ret;
-		}
-
-		curr_send_chunk = curr_recv_chunk;
+		curr_send_chunk =  curr_recv_chunk;
 		curr_recv_chunk = (curr_recv_chunk + world.size - 1) % world.size;
-	}
-
-	//B) Share result stage
-	for (int i = 0; i < world.size -1; ++i)
-	{
+		curr_send_addr  = dst_addr + len_div_size * curr_send_chunk;
+		curr_recv_addr  = dst_addr + len_div_size * curr_recv_chunk;
+		//TODO: 5.6. can be done together since we have 3 dmas (1rx read from spare, 1tx write in the final dest, 2rx can read and transmit to next in the ring)
 		//5. send the local reduced results to next rank
-		curr_dst_addr = dst_addr + len_div_size * curr_send_chunk;
-		ret = transmit_offchip_world(&world, next_in_ring,	len_div_size, curr_dst_addr, TAG_ANY);
+		ret = transmit_offchip_world(&world, next_in_ring,	len_div_size, curr_send_addr, TAG_ANY);
 		if(ret != COLLECTIVE_OP_SUCCESS) return ret;
 		//6. receive the reduced results from previous rank and put into correct dst buffer position
-		curr_dst_addr = dst_addr + len_div_size * curr_recv_chunk;
-
-		ret = receive_offchip_world(&world, prev_in_ring,	len_div_size, curr_dst_addr, TAG_ANY);
+		ret = receive_offchip_world(&world, prev_in_ring,	len_div_size, curr_recv_addr, TAG_ANY);
 		if(ret != COLLECTIVE_OP_SUCCESS) return ret;
-		curr_send_chunk = curr_recv_chunk;
-		curr_recv_chunk = (curr_recv_chunk + world.size - 1) % world.size;
 	}
 
 	return COLLECTIVE_OP_SUCCESS;
 }
 
 
-
 int ext_kernel_stream(
 						unsigned int len,
-						unsigned long long src_addr,
-						unsigned long long dst_addr
+						uint64_t src_addr,
+						uint64_t dst_addr
 ){
 	//configure switch
 	cfg_switch(DATAPATH_DMA_EXT_LOOPBACK, ARITH_NONE);
@@ -1870,9 +2029,9 @@ int ext_kernel_stream(
 }
 
 int reduce_ext (	unsigned int len,
-					unsigned long long op1_addr,
-					unsigned long long op2_addr,
-					unsigned long long dst_addr
+					uint64_t op1_addr,
+					uint64_t op2_addr,
+					uint64_t dst_addr
 				) {
 	
 	//configure switch
@@ -1881,13 +2040,90 @@ int reduce_ext (	unsigned int len,
 	
 }
 
+//startup and main
+
+void check_hwid(void){
+	// read HWID from hardware and copy it to host-accessible memory
+	// TODO: check the HWID against expected
+	unsigned int hwid = Xil_In32(GPIO2_DATA_REG);
+	Xil_Out32(HWID_OFFSET, hwid);
+}
+
+//initialize the system
+void init(void) {
+	int myoffset;
+	// Register irq handler
+	microblaze_register_handler((XInterruptHandler)stream_isr,(void*)0);
+	microblaze_enable_interrupts();
+
+	// initialize exchange memory to zero.
+	for ( myoffset = EXCHMEM_BASEADDR; myoffset < END_OF_EXCHMEM; myoffset +=4) {
+		Xil_Out32(myoffset, 0);
+	}
+	// Check hardware ID
+	check_hwid();
+	//initialize dma tag
+	dma_tag = 0;
+	for(int i=0; i < MAX_DMA_TAGS; i++){
+		dma_tag_lookup[i]=-1;
+	}
+	//deactivate reset of all peripherals
+	SET(GPIO_DATA_REG, GPIO_SWRST_MASK);
+	//enable access from host to exchange memory by removing reset of interface
+	SET(GPIO_DATA_REG, GPIO_READY_MASK);
+
+}
+
+//reset the control module
+//since this cancels any dma movement in flight and 
+//clears the queues it's necessary to reset the dma tag and dma_tag_lookup
+void encore_soft_reset(void){
+	int myoffset;
+	//disable interrupts (since this procedure will toggle the irq pin)
+	microblaze_disable_interrupts();
+	setup_irq(0);
+	//1. activate reset pin  
+	CLR(GPIO_DATA_REG, GPIO_SWRST_MASK);
+	//2. clean up (exchange memory and static variables)
+	for ( myoffset = EXCHMEM_BASEADDR; myoffset < END_OF_EXCHMEM; myoffset +=4) {
+		Xil_Out32(myoffset, 0);
+	}
+	num_rx_enqueued = 0;
+	dma_tag = 0;
+	//next_rx_tag = 0;
+	//clear dma lookup table
+	for(int i=0; i < MAX_DMA_TAGS; i++){
+		dma_tag_lookup[i]=-1;
+	}
+	//3. recheck hardware ID
+	check_hwid();
+	//4. then deactivate reset of all other blocks
+	SET(GPIO_DATA_REG, GPIO_SWRST_MASK);
+}
+
+//poll for a call from the host
+static inline void wait_for_call(void) {
+	// Poll the host cmd queue
+	unsigned int invalid;
+	do {
+		invalid = 0;
+		invalid += tngetd(CMD_HOST);
+	} while (invalid);
+}
+
+//signal finish to the host and write ret value in exchange mem
+static inline void finalize_call(unsigned int retval) {
+	Xil_Out32(RETVAL_OFFSET, retval);
+    // Done: Set done and idle
+	putd(STS_HOST, retval);
+}
 
 int main() {
 	unsigned int retval;
 	unsigned int scenario, len, comm, root_src_dst, function, msg_tag;
 	unsigned int compression, src_type, dst_type;
 	unsigned int buf0_addrl, buf0_addrh, buf1_addrl, buf1_addrh, buf2_addrl, buf2_addrh;
-	unsigned long long buf0_addr, buf1_addr, buf2_addr;
+	uint64_t buf0_addr, buf1_addr, buf2_addr;
 
 	init();
 	//register exception handler though setjmp. it will save stack status to unroll stack when the jmp is performed 
@@ -1918,12 +2154,13 @@ int main() {
 		buf1_addrh   = getd(CMD_HOST);
 		buf2_addrl   = getd(CMD_HOST);
 		buf2_addrh   = getd(CMD_HOST);
-		buf0_addr =  ((long long) buf0_addrh << 32) | buf0_addrl;
-		buf1_addr =  ((long long) buf1_addrh << 32) | buf1_addrl;
-		buf2_addr =  ((long long) buf2_addrh << 32) | buf2_addrl;
+
+		buf0_addr =  ((uint64_t) buf0_addrh << 32) | buf0_addrl;
+		buf1_addr =  ((uint64_t) buf1_addrh << 32) | buf1_addrl;
+		buf2_addr =  ((uint64_t) buf2_addrh << 32) | buf2_addrl;
 
 		comp = find_compressor(compression);
-
+		
 		switch (scenario)
 		{
 			case XCCL_CONFIG:
@@ -1952,13 +2189,13 @@ int main() {
 						timeout = len;
 						break;
 					case INIT_CONNECTION:
-						retval = init_connection(comm);
+						retval  = init_connection(comm);
 						break;
 					case OPEN_PORT:
-						retval = openPort(comm);
+						retval  = openPort(comm);
 						break;
 					case OPEN_CON:
-						retval = openCon(comm);
+						retval  = openCon(comm);
 						break;
 					case USE_TCP_STACK:
 						use_tcp = 1;
@@ -1972,9 +2209,20 @@ int main() {
 						retval = COLLECTIVE_OP_SUCCESS;
 						break;
 					case SET_DMA_TRANSACTION_SIZE:
-						dma_transaction_size = len;
-						start_timer1();
-						Xil_Out32(TIME_TO_ACCESS_EXCH_MEM, read_timer1());
+						retval = DMA_NOT_EXPECTED_BTT_ERROR;
+						if(len < DMA_MAX_BTT){
+							dma_transaction_size = len;
+							start_timer1();
+							Xil_Out32(TIME_TO_ACCESS_EXCH_MEM, read_timer1());
+							retval = COLLECTIVE_OP_SUCCESS;
+						}
+						break;
+					case SET_MAX_DMA_TRANSACTIONS:
+						retval = DMA_NOT_OKAY_ERROR;
+						if(len < DMA_MAX_TRANSACTIONS){
+							max_dma_in_flight = len;
+							retval = COLLECTIVE_OP_SUCCESS;
+						}
 						break;
 					default:
 						break;
@@ -2038,8 +2286,11 @@ int main() {
 			case XCCL_EXT_REDUCE:
 				retval = reduce_ext(				  len, 			 				buf0_addr, buf1_addr, buf2_addr);
 				break;
+			case XCCL_REDUCE_SCATTER:
+				retval = scatter_reduce(		comm, len, function, 				buf0_addr, buf1_addr);
+				break;
 			default:
-				retval = 0;
+				retval = COLLECTIVE_OP_SUCCESS;
 				break;
 		}
 

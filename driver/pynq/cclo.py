@@ -47,22 +47,24 @@ class CCLOp(IntEnum):
     bcast_rr                = 17
     scatter_rr              = 18
     allreduce_share_ring    = 19
+    reduce_scatter          = 20
     nop                     = 255
 
 class CCLOCfgFunc(IntEnum):
-    enable_irq  = 0
-    disable_irq = 1
-    reset_periph= 2
-    enable_pkt  = 3
-    set_timeout = 4
-    init_connection = 5
-    open_port       = 6
-    open_con        = 7
-    use_tcp_stack   = 8
-    use_udp_stack   = 9
-    start_profiling = 10
-    end_profiling   = 11
+    enable_irq               = 0
+    disable_irq              = 1
+    reset_periph             = 2
+    enable_pkt               = 3
+    set_timeout              = 4
+    init_connection          = 5
+    open_port                = 6
+    open_con                 = 7
+    use_tcp_stack            = 8
+    use_udp_stack            = 9
+    start_profiling          = 10
+    end_profiling            = 11
     set_dma_transaction_size = 12
+    set_max_dma_transactions = 13
     
 class CCLOReduceFunc(IntEnum):
     fp          = 0
@@ -128,7 +130,7 @@ def compatible_size(nbytes,type):
 
 class cclo(DefaultIP):
     """
-    This class wraps the common function of the collectives offload kernel
+    This class wrapps the common function of the collectives offload kernel
     """
 
     bindto = ["Xilinx:ACCL:ccl_offload:1.0"]
@@ -149,6 +151,8 @@ class cclo(DefaultIP):
         #define an empty list of compressors
         self.compressors = []
         self.compressors_addr = self.communicators_addr
+        #enable safety checks by default
+        self.ignore_safety_checks = False
         #TODO: use description to gather info about where to allocate spare buffers
         self.segment_size = None
         from pynq import MMIO
@@ -230,7 +234,7 @@ class cclo(DefaultIP):
                 self.exchange_mem.write(addr, 0)
 
         self.communicators_addr = addr+4
-        max_higher = 5
+        max_higher = 1
         self.utility_spare = pynq.allocate((bufsize*max_higher,), dtype=np.int8, target=devicemem[0])
 
         #Start irq-driven RX buffer scheduler and (de)packetizer
@@ -240,6 +244,7 @@ class cclo(DefaultIP):
         print("time taken to enqueue buffers", self.exchange_mem.read(0x0FF4))
         #set segmentation size equal to buffer size
         self.set_dma_transaction_size(bufsize)
+        self.set_max_dma_transaction_flight(10)
     
     def dump_rx_buffers_spares(self, nbufs=None):
         addr = self.rx_buffers_adr
@@ -370,13 +375,21 @@ class cclo(DefaultIP):
     @self_check_return_value
     def set_dma_transaction_size(self, value=0):
         if value % 8 != 0:
-            warnings.warn("XCCL: dma transaction must be divisible by 8 to use reduce collectives")
+            warnings.warn("ACCL: dma transaction must be divisible by 8 to use reduce collectives")
         elif value > self.rx_buffer_size:
-            warnings.warn("XCCL: transaction size should be less or equal to configured buffer size!")
+            warnings.warn("ACCL: transaction size should be less or equal to configured buffer size!")
             return
         self.call(scenario=CCLOp.config, function=CCLOCfgFunc.set_dma_transaction_size, len=value)   
         self.segment_size = value
         print("time taken to start and stop timer", self.exchange_mem.read(0x0FF4))
+
+    @self_check_return_value
+    def set_max_dma_transaction_flight(self, value=0):
+     
+        if value > 20:
+            warnings.warn("ACCL: transaction size should be less or equal to configured buffer size!")
+            return
+        self.call(scenario=CCLOp.config, function=CCLOCfgFunc.set_max_dma_transactions, len=value)   
 
     def configure_communicator(self, ranks, local_rank, vnx=False):
         assert len(self.rx_buffer_spares) > 0, "RX buffers unconfigured, please call setup_rx_buffers() first"
@@ -457,6 +470,7 @@ class cclo(DefaultIP):
     @self_check_return_value
     def send(self, comm_id, srcbuf, dst, tag=TAG_ANY, from_fpga=False, run_async=False, waitfor=[]):
         if srcbuf.nbytes == 0:
+            warnings.warn("zero size buffer")
             return
         if not from_fpga:
             srcbuf.sync_to_device()
@@ -469,8 +483,9 @@ class cclo(DefaultIP):
     @self_check_return_value
     def recv(self, comm_id, dstbuf, src, tag=TAG_ANY, to_fpga=False, run_async=False, waitfor=[]):
         if not to_fpga and run_async:
-            warnings.warn("XCCL: async run returns data on FPGA, user must sync_from_device() after waiting")
+            warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
         if dstbuf.nbytes == 0:
+            warnings.warn("zero size buffer")
             return
         handle = self.start(scenario=CCLOp.recv, len=dstbuf.nbytes, comm=self.communicators[comm_id]["addr"], root_src_dst=src, tag=tag, addr_0=dstbuf, waitfor=waitfor)
         if run_async:
@@ -483,8 +498,9 @@ class cclo(DefaultIP):
     @self_check_return_value
     def copy(self, srcbuf, dstbuf,  from_fpga=False,  to_fpga=False, run_async=False, waitfor=[]):
         if not to_fpga and run_async:
-            warnings.warn("XCCL: async run returns data on FPGA, user must sync_from_device() after waiting")
+            warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
         if srcbuf.nbytes == 0:
+            warnings.warn("zero size buffer")
             return
         # performs dstbuf = srcbuf
         if not from_fpga:
@@ -500,10 +516,12 @@ class cclo(DefaultIP):
     @self_check_return_value
     def accumulate(self, func, val, acc, val_from_fpga=False, acc_from_fpga=False, to_fpga=False, run_async=False, waitfor=[]):
         if not to_fpga and run_async:
-            warnings.warn("XCCL: async run returns data on FPGA, user must sync_from_device() after waiting")
+            warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
         if val.nbytes == 0:
+            warnings.warn("zero size buffer")
             return
         if not compatible_size(val.nbytes,func):
+            warnings.warn("Non compatible with size")
             return
         # performs acc = val + acc
         if not val_from_fpga:
@@ -521,8 +539,9 @@ class cclo(DefaultIP):
     @self_check_return_value
     def external_reduce(self, op1, op2, res, op1_from_fpga=False, op2_from_fpga=False, to_fpga=False, run_async=False, waitfor=[]):
         if not to_fpga and run_async:
-            warnings.warn("XCCL: async run returns data on FPGA, user must sync_from_device() after waiting")
+            warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
         if op1.nbytes == 0 or op2.nbytes == 0:
+            warnings.warn("zero size buffer")
             return
 
 
@@ -544,8 +563,9 @@ class cclo(DefaultIP):
     @self_check_return_value
     def external_stream_kernel(self, src_buf, dst_buf, from_fpga=False, to_fpga=False, run_async=False, waitfor=[]):
         if not to_fpga and run_async:
-            warnings.warn("XCCL: async run returns data on FPGA, user must sync_from_device() after waiting")
+            warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
         if src_buf.nbytes <= 4:
+            warnings.warn("size of buffer not compatible")
             return
 
         if not from_fpga:
@@ -564,8 +584,9 @@ class cclo(DefaultIP):
         comm = self.communicators[comm_id]
         is_root = comm["local_rank"] == root
         if not to_fpga and not(is_root) and run_async:
-            warnings.warn("XCCL: async run returns data on FPGA, user must sync_from_device() after waiting")
+            warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
         if buf.nbytes == 0:
+            warnings.warn("zero size buffer")
             return
         # sync the transmit source in one go
         if not from_fpga and is_root:
@@ -594,8 +615,9 @@ class cclo(DefaultIP):
     @self_check_return_value
     def scatter(self, comm_id, sbuf, rbuf, count, root, sw=True, from_fpga=False, to_fpga=False, run_async=False, waitfor=[], rr=True):
         if not to_fpga and run_async:
-            warnings.warn("XCCL: async run returns data on FPGA, user must sync_from_device() after waiting")
+            warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
         if count == 0:
+            warnings.warn("zero size buffer")
             return
         comm        = self.communicators[comm_id]
         local_rank  = comm["local_rank"]
@@ -627,18 +649,20 @@ class cclo(DefaultIP):
         prevcall[0].wait()
         if not to_fpga:
             rbuf[0:count].sync_from_device()
+
     @self_check_return_value
     def gather(self, comm_id, sbuf, rbuf, count, root, sw=True, shift=True, from_fpga=False, to_fpga=False, run_async=False, waitfor=[]):
         #print(hex(self.mmio.base_addr), count, root, sw, shift)
         if not to_fpga and run_async:
-            warnings.warn("XCCL: async run returns data on FPGA, user must sync_from_device() after waiting")
+            warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
         if count == 0:
+            warnings.warn("zero size buffer")
             return
         comm        = self.communicators[comm_id]
         local_rank  = comm["local_rank"]
         p           = len(comm["ranks"])
 
-        if (count + self.segment_size-1)//self.segment_size * p > len(self.rx_buffer_spares):
+        if not self.ignore_safety_checks and (count + self.segment_size-1)//self.segment_size * p > len(self.rx_buffer_spares):
                 warnings.warn("gather can't be executed safely with this number of spare buffers")
                 return
         
@@ -691,13 +715,13 @@ class cclo(DefaultIP):
     @self_check_return_value
     def allgather(self, comm_id, sbuf, rbuf, count, fused=False, sw=True, ring=True, from_fpga=False, to_fpga=False, run_async=False, waitfor=[]):
         if not to_fpga and run_async:
-            warnings.warn("XCCL: async run returns data on FPGA, user must sync_from_device() after waiting")
+            warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
         if count == 0:
             return
         comm    = self.communicators[comm_id]
         p       = len(comm["ranks"])
 
-        if (count + self.segment_size-1)//self.segment_size * p > len(self.rx_buffer_spares):
+        if not self.ignore_safety_checks and (count + self.segment_size-1)//self.segment_size * p > len(self.rx_buffer_spares):
             warnings.warn("All gather can't be executed safely with this number of spare buffers")
             return
         
@@ -760,10 +784,12 @@ class cclo(DefaultIP):
     @self_check_return_value
     def reduce(self, comm_id, sbuf, rbuf, count, root, func, sw=False, shift=True, from_fpga=False, to_fpga=False, run_async=False, waitfor=[]):
         if not to_fpga and run_async:
-            warnings.warn("XCCL: async run returns data on FPGA, user must sync_from_device() after waiting")
+            warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
         if count == 0:
+            warnings.warn("zero size buffer")
             return
         if not compatible_size(count,func):
+            warnings.warn("Non compatible with size")
             return
         if func > 3:
             warnings.warn("Non-add reduce not implemented")
@@ -782,11 +808,11 @@ class cclo(DefaultIP):
             #use self.utility_spare as intermediate storage when needed
             #root will receive and accumulate in its rbuf from receives (does not send)
             if shift:
-                if (count + self.segment_size-1)//self.segment_size * p > len(self.rx_buffer_spares):
-                    warnings.warn("ring reduce can't be executed safely with this number of spare buffers")
-                    return
                 if(self.utility_spare.size < sbuf.size):
                     warnings.warn("utility buffer can't accommodate intermediate data")
+                    return
+                if (count + self.segment_size-1)//self.segment_size * p > len(self.rx_buffer_spares):
+                    warnings.warn("ring reduce can't be executed safely with this number of spare buffers")
                     return
                 prev_in_ring = (local_rank+p-1)%p
                 next_in_ring = (local_rank+1)%p
@@ -831,14 +857,15 @@ class cclo(DefaultIP):
         prevcall[0].wait()
         if not to_fpga and local_rank == root:
             rbuf[0:count].sync_from_device()
-
+ 
     @self_check_return_value
-    def allreduce(self, comm_id, sbuf, rbuf, count, func, fused=False, sw=True, ring=True, from_fpga=False, to_fpga=False, run_async=False, waitfor=[], share=True):
+    def allreduce(self, comm_id, sbuf, rbuf, count, func, fused=False, sw=True,ring=True,share=True, from_fpga=False, to_fpga=False, run_async=False, waitfor=[]):
         if not to_fpga and run_async:
-            warnings.warn("XCCL: async run returns data on FPGA, user must sync_from_device() after waiting")
+            warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
         if count == 0:
             return
         if not compatible_size(count,func):
+            warnings.warn("Non compatible with size")
             return
         if func > 3:
             warnings.warn("Non-add reduce not implemented")
@@ -903,14 +930,42 @@ class cclo(DefaultIP):
                 return
             else:
                 cclop = CCLOp.allreduce
-                
+
             prevcall = [self.start(scenario=cclop, len=count, comm=self.communicators[comm_id]["addr"], function=func, addr_0=sbuf, addr_1=rbuf, waitfor=waitfor)]
 
         if run_async:
-                return prevcall[0]
+            return prevcall[0]
 
         prevcall[0].wait()
         if not to_fpga:
             rbuf[0:count].sync_from_device()
+    
+    @self_check_return_value
+    def reduce_scatter(self, comm_id, sbuf, rbuf, count, func, from_fpga=False, to_fpga=False, run_async=False, waitfor=[]):
+        if not to_fpga and run_async:
+            warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
+        if count == 0:
+            warnings.warn("zero size buffer")
+            return
+        if not compatible_size(count,func):
+            warnings.warn("Non compatible with size")
+            return
+        if func > 3:
+            warnings.warn("Non-add reduce_scatter not implemented")
+            return
+        comm        = self.communicators[comm_id]
+        p           = len(comm["ranks"])
+        local_rank  = comm["local_rank"]
 
+        if not from_fpga:
+            sbuf[0:count*p].sync_to_device()
 
+        cclop    = CCLOp.reduce_scatter
+        prevcall = [self.start(scenario=cclop , len=count, comm=self.communicators[comm_id]["addr"], function=func, addr_0=sbuf, addr_1=rbuf, waitfor=waitfor)]
+
+        if run_async:
+            return prevcall[0]
+        
+        prevcall[0].wait()
+        if not to_fpga and local_rank == root:
+            rbuf[0:count*p].sync_from_device()
