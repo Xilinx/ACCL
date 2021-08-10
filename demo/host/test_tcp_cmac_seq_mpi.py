@@ -50,7 +50,7 @@ def configure_xccl(xclbin, board_idx, nbufs=16, bufsize=1024*1024):
         devicemem = ol.bank0
     elif local_alveo.name == 'xilinx_u280_xdma_201920_3':
         devicemem = ol.HBM0
-        rxbufmem = [ol.HBM0, ol.HBM1, ol.HBM2, ol.HBM3, ol.HBM4, ol.HBM5 ]
+        rxbufmem = [ ol.HBM1, ol.HBM2, ol.HBM3, ol.HBM4, ol.HBM5 ]
         networkmem = ol.HBM6
 
     cclo           = ol.ccl_offload_0
@@ -72,7 +72,7 @@ def configure_xccl(xclbin, board_idx, nbufs=16, bufsize=1024*1024):
 
         arp_addr.append(ip_network[i])
         
-
+    cclo.use_tcp()
     print(f"CCLO {rank_id}: Configuring RX Buffers")
     cclo.setup_rx_buffers(nbufs, bufsize, rxbufmem)
     print(f"CCLO {rank_id}: Configuring a communicator")
@@ -80,8 +80,8 @@ def configure_xccl(xclbin, board_idx, nbufs=16, bufsize=1024*1024):
     print(f"CCLO {rank_id}: Configuring network stack")
 
     #assign 64 MB network tx and rx buffer
-    tx_buf_network = pynq.allocate((64*1024*1024,), dtype=np.int8, target=networkmem)
-    rx_buf_network = pynq.allocate((64*1024*1024,), dtype=np.int8, target=networkmem)
+    tx_buf_network = pynq.allocate((128*1024*1024,), dtype=np.int8, target=networkmem)
+    rx_buf_network = pynq.allocate((128*1024*1024,), dtype=np.int8, target=networkmem)
     
     tx_buf_network.sync_to_device()
     rx_buf_network.sync_to_device()
@@ -116,7 +116,7 @@ def configure_xccl(xclbin, board_idx, nbufs=16, bufsize=1024*1024):
 
 def test_sendrecv(bsize, to_from_fpga=True):
     print("========================================")
-    print("SendRecv")
+    print("SendRecv 1 -> 0")
     print("========================================")
     naccel = 2
     # test sending from each cclo 
@@ -130,16 +130,17 @@ def test_sendrecv(bsize, to_from_fpga=True):
     for j in range (niter):
         if rank     == 0:
             for i in range(num_message):
-                cclo.recv(0, rx_buf, 1, tag=i, to_fpga=to_from_fpga)
+                cclo.recv(0, rx_buf, src=1, tag=i, to_fpga=to_from_fpga)
         elif rank   == 1 :
             for i in range(num_message):
-                cclo.send(0, tx_buf, 0, tag=i, from_fpga=to_from_fpga)
-                # cclo.dump_rx_buffers(nbufs=16)
-                # if not to_from_fpga:
-                #     if not (rx_buf == tx_buf).all():
-                #         print("Message {} Send/Recv {} -> {} failed".format(i, 0, 1))
-                #     else:
-                #         print("Message {} Send/Recv {} -> {} succeeded".format(i, 0, 1))
+                cclo.send(0, tx_buf, dst=0, tag=i, from_fpga=to_from_fpga)
+                if args.debug and to_from_fpga:
+                    cclo.dump_rx_buffers_spares()
+                    if not to_from_fpga:
+                        if not (rx_buf == tx_buf).all():
+                            print("Message {} Send/Recv {} -> {} failed".format(i, 0, 1))
+                        else:
+                            print("Message {} Send/Recv {} -> {} succeeded".format(i, 0, 1))
         #to synchronize the processes
         comm.barrier()
     end = time.perf_counter()        
@@ -147,12 +148,16 @@ def test_sendrecv(bsize, to_from_fpga=True):
     throughput_gbps = num_message*bsize*1024*8/(duration_us*1000)
     if to_from_fpga:
         print("Size[KB],{},Num device,{},*Duration[us],{},throughput[gbps],{}".format(bsize,naccel, duration_us, throughput_gbps))
+        if rank == 0 :
+            csv_writer.writerow(["Sendrecv ", naccel, bsize, duration_us, throughput_gbps])
     else:
         print("FullPath,Size[KB],{},Num device,{},&Duration[us],{},throughput[gbps],{}".format(bsize,naccel, duration_us, throughput_gbps))
+        if rank == 0 :
+            csv_writer.writerow(["Sendrecv FullPath", naccel, bsize, duration_us, throughput_gbps])
 
 def test_bcast(bsize, naccel, to_from_fpga=True):
     print("========================================")
-    print("Broadcast")
+    print("Broadcast (0)")
     print("========================================")
     tx_buf[:]=np.arange(0,bsize*1024)
     rx_buf[:]=np.zeros(rx_buf.shape)# clear rx buffers
@@ -164,18 +169,19 @@ def test_bcast(bsize, naccel, to_from_fpga=True):
     for j in range (niter):
         if rank == 0:
             for i in range(num_message):
-                cclo.bcast(0, tx_buf, 0, sw=False, from_fpga=to_from_fpga, to_fpga=to_from_fpga, run_async=False)
+                cclo.bcast(0, tx_buf, root=0, sw=False, rr=True, from_fpga=to_from_fpga, to_fpga=to_from_fpga, run_async=False)
                 # print("rank 0 finishes")
         else :
             for i in range(num_message):
-                cclo.bcast(0, rx_buf, 0, sw=False, from_fpga=to_from_fpga, to_fpga=to_from_fpga, run_async=False)
-                # cclo.dump_rx_buffers(nbufs=16)
-                # print(f"rank {rank} finishes")
-                # if not to_from_fpga:
-                #     if not (rx_buf == tx_buf).all():
-                #         print("Rank {} Message {} Bcast failed".format(rank, i))
-                #     else:
-                #         print("Rank {} Message {} Bcast succeeded".format(rank, i))
+                cclo.bcast(0, rx_buf, root=0, sw=False, rr=True, from_fpga=to_from_fpga, to_fpga=to_from_fpga, run_async=False)
+                if args.debug and to_from_fpga:
+                    cclo.dump_rx_buffers_spares()
+                    print(f"rank {rank} finishes")
+                    if not to_from_fpga:
+                        if not (rx_buf == tx_buf).all():
+                            print("Rank {} Message {} Bcast failed".format(rank, i))
+                        else:
+                            print("Rank {} Message {} Bcast succeeded".format(rank, i))
         #to synchronize the processes
         comm.barrier()
     end = time.perf_counter()        
@@ -183,12 +189,16 @@ def test_bcast(bsize, naccel, to_from_fpga=True):
     throughput_gbps = (naccel-1)*num_message*bsize*1024*8/(duration_us*1000)
     if to_from_fpga:
         print("Size[KB],{},Num device,{},*Duration[us],{},throughput[gbps],{}".format(bsize,naccel, duration_us, throughput_gbps))
+        if rank == 0 :
+            csv_writer.writerow(["Broadcast ", naccel, bsize, duration_us, throughput_gbps])
     else:
         print("FullPath,Size[KB],{},Num device,{},&Duration[us],{},throughput[gbps],{}".format(bsize,naccel, duration_us, throughput_gbps))
+        if rank == 0 :
+            csv_writer.writerow(["Broadcast FullPath", naccel, bsize, duration_us, throughput_gbps])
 
 def test_ring_reduce(bsize, naccel, to_from_fpga=True):
     print("========================================")
-    print("Ring-reduce")
+    print("Ring-reduce (0)")
     print("========================================")
     tx_buf[0]=0
     rx_buf[0]=0
@@ -202,18 +212,21 @@ def test_ring_reduce(bsize, naccel, to_from_fpga=True):
         if rank     == 0:
             for i in range(num_message):
                 tx_buf[0]=i+1
-                cclo.reduce(0, tx_buf, rx_buf, count, 0, func=2, sw=False, shift=True, from_fpga=to_from_fpga, to_fpga=to_from_fpga, run_async=False)
-                # cclo.dump_rx_buffers_spares(nbufs=16)
-                # if rx_buf[0]== (tx_buf[0]*naccel):
-                #     print("Message {} Ring-reduce succeeded".format(i))
-                # else:
-                #     print("Message {} Ring-reduce failed, expected {} got {}".format(i, (tx_buf[0]*naccel), rx_buf[0]))
+                cclo.reduce(0, tx_buf, rx_buf, count, root=0, func=2, sw=False, shift=True, from_fpga=to_from_fpga, to_fpga=to_from_fpga, run_async=False)
+
+                if args.debug and to_from_fpga:
+                    cclo.dump_rx_buffers_spares()
+                    if rx_buf[0]== (tx_buf[0]*naccel):
+                        print("Message {} Ring-reduce succeeded".format(i))
+                    else:
+                        print("Message {} Ring-reduce failed, expected {} got {}".format(i, (tx_buf[0]*naccel), rx_buf[0]))
         else :
             for i in range(num_message):
-                # cclo.dump_rx_buffers(nbufs=16)
+                # cclo.dump_rx_buffers_spares(nbufs=16)
                 tx_buf[0]=i+1
-                cclo.reduce(0, tx_buf, rx_buf, count, 0, func=2, sw=False, shift=True, from_fpga=to_from_fpga, to_fpga=to_from_fpga, run_async=False)
-                # print(f"Finishes rank {rank}")
+                cclo.reduce(0, tx_buf, rx_buf, count, root=0, func=2, sw=False, shift=True, from_fpga=to_from_fpga, to_fpga=to_from_fpga, run_async=False)
+                if args.debug and to_from_fpga:
+                    print(f"Finishes rank {rank}")
         #to synchronize the processes
         comm.barrier()
     end = time.perf_counter()
@@ -221,8 +234,12 @@ def test_ring_reduce(bsize, naccel, to_from_fpga=True):
     throughput_gbps = (naccel)*num_message*bsize*1024*8/(duration_us*1000)
     if to_from_fpga:
         print("Size[KB],{},Num device,{},*Duration[us],{},throughput[gbps],{}".format(bsize,naccel, duration_us, throughput_gbps))
+        if rank == 0 :
+            csv_writer.writerow(["Reduce ", naccel, bsize, duration_us, throughput_gbps])
     else:
         print("FullPath,Size[KB],{},Num device,{},&Duration[us],{},throughput[gbps],{}".format(bsize,naccel, duration_us, throughput_gbps))
+        if rank == 0 :
+            csv_writer.writerow(["Reduce FullPath", naccel, bsize, duration_us, throughput_gbps])
 
 def test_ring_all_reduce(bsize, naccel, to_from_fpga=True):
     print("========================================")
@@ -243,18 +260,20 @@ def test_ring_all_reduce(bsize, naccel, to_from_fpga=True):
         if rank == 0:
             for i in range(num_message):
                 cclo.allreduce(0, tx_buf, rx_buf, count, func=2, fused=True, sw=False, ring=True, from_fpga=to_from_fpga, to_fpga=to_from_fpga, run_async=False)
-                # cclo.dump_rx_buffers_spares(nbufs=16)
-                # print("rank 0 finishes")
+                if args.debug and to_from_fpga:
+                    cclo.dump_rx_buffers_spares()
+                    print("rank 0 finishes")
         else :
             for i in range(num_message):
                 cclo.allreduce(0, tx_buf, rx_buf, count, func=2, fused=True, sw=False, ring=True, from_fpga=to_from_fpga, to_fpga=to_from_fpga, run_async=False)
-                # cclo.dump_rx_buffers(nbufs=16)
-                # print(f"rank {rank} finishes")
-                # if not to_from_fpga:
-                #     if not (rx_buf == result).all():
-                #         print("Rank {} Message {} Ring_All_Reduce failed".format(rank, i))
-                #     else:
-                #         print("Rank {} Message {} Ring_All_Reduce succeeded".format(rank, i))
+                if args.debug and to_from_fpga:
+                    cclo.dump_rx_buffers_spares()
+                    print(f"rank {rank} finishes")
+                    if not to_from_fpga:
+                        if not (rx_buf == result).all():
+                            print("Rank {} Message {} Ring_All_Reduce failed".format(rank, i))
+                        else:
+                            print("Rank {} Message {} Ring_All_Reduce succeeded".format(rank, i))
         #to synchronize the processes
         comm.barrier()
     end = time.perf_counter()        
@@ -262,18 +281,22 @@ def test_ring_all_reduce(bsize, naccel, to_from_fpga=True):
     throughput_gbps = (naccel)*num_message*bsize*1024*8/(duration_us*1000)
     if to_from_fpga:
         print("Size[KB],{},Num device,{},*Duration[us],{},throughput[gbps],{}".format(bsize,naccel, duration_us, throughput_gbps))
+        if rank == 0 :
+            csv_writer.writerow(["Allreduce ", naccel, bsize, duration_us, throughput_gbps])
     else:
         print("FullPath,Size[KB],{},Num device,{},&Duration[us],{},throughput[gbps],{}".format(bsize,naccel, duration_us, throughput_gbps))
+        if rank == 0 :
+            csv_writer.writerow(["Allreduce FullPath", naccel, bsize, duration_us, throughput_gbps])
 
 def test_scatter(bsize, naccel, to_from_fpga=True):
     print("========================================")
-    print("Scatter")
+    print("Scatter (0)")
     print("========================================")
     tx_buf[:]=np.arange(0,bsize*1024)
     rx_buf[:]=np.zeros(rx_buf.shape)# clear rx buffers
     count = tx_buf.nbytes//naccel
     print(f"Scatter Send count:{count}")
-    # to_from_fpga = True
+    #to_from_fpga = True
     niter = 10
     num_message=1
     comm.barrier()
@@ -281,18 +304,20 @@ def test_scatter(bsize, naccel, to_from_fpga=True):
     for j in range (niter):
         if rank == 0:
             for i in range(num_message):
-                cclo.scatter(0, tx_buf, rx_buf, count, 0,  sw=False, from_fpga=to_from_fpga, to_fpga=to_from_fpga, run_async=False)
-                # print("rank 0 finishes")
+                cclo.scatter(0, tx_buf, rx_buf, count, root=0,  sw=False, rr=True, from_fpga=to_from_fpga, to_fpga=to_from_fpga, run_async=False)
+                if args.debug and to_from_fpga:
+                    print("rank 0 finishes")
         else :
             for i in range(num_message):
-                cclo.scatter(0, tx_buf, rx_buf, count, 0,  sw=False, from_fpga=to_from_fpga, to_fpga=to_from_fpga, run_async=False)
-                # cclo.dump_rx_buffers(nbufs=16)
-                # print(f"rank {rank} finishes")
-                # if not to_from_fpga:
-                #     if not (rx_buf[0:count-1] == tx_buf[(count*rank):(count*(rank+1)-1)]).all():
-                #         print("Rank {} Message {} Scatter failed".format(rank, i))
-                #     else:
-                #         print("Rank {} Message {} Scatter succeeded".format(rank, i))
+                cclo.scatter(0, tx_buf, rx_buf, count, root=0,  sw=False, rr=True, from_fpga=to_from_fpga, to_fpga=to_from_fpga, run_async=False)
+                if args.debug and to_from_fpga:
+                    cclo.dump_rx_buffers_spares()
+                    print(f"rank {rank} finishes")
+                    if not to_from_fpga:
+                        if not (rx_buf[0:count-1] == tx_buf[(count*rank):(count*(rank+1)-1)]).all():
+                            print("Rank {} Message {} Scatter failed".format(rank, i))
+                        else:
+                            print("Rank {} Message {} Scatter succeeded".format(rank, i))
         #to synchronize the processes
         comm.barrier()
     end = time.perf_counter()        
@@ -300,20 +325,24 @@ def test_scatter(bsize, naccel, to_from_fpga=True):
     throughput_gbps = num_message*bsize*1024*8/(duration_us*1000)
     if to_from_fpga:
         print("Size[KB],{},Num device,{},*Duration[us],{},throughput[gbps],{}".format(bsize,naccel, duration_us, throughput_gbps))
+        if rank == 0 :
+            csv_writer.writerow(["Scatter ", naccel, bsize, duration_us, throughput_gbps])
     else:
         print("FullPath,Size[KB],{},Num device,{},&Duration[us],{},throughput[gbps],{}".format(bsize,naccel, duration_us, throughput_gbps))
+        if rank == 0 :
+            csv_writer.writerow(["Scatter FullPath", naccel, bsize, duration_us, throughput_gbps])
 
 
 
 def test_gather(bsize, naccel, to_from_fpga=True):
     print("========================================")
-    print("Gather")
+    print("Gather (0)")
     print("========================================")
     tx_buf[:]=np.arange(0,bsize*1024)
     rx_buf[:]=np.zeros(rx_buf.shape)# clear rx buffers
     count = tx_buf.nbytes//naccel
     print(f"Gather Send count:{count}")
-    # to_from_fpga = True
+    #to_from_fpga = True
     niter = 10
     num_message=1
     comm.barrier()
@@ -321,18 +350,20 @@ def test_gather(bsize, naccel, to_from_fpga=True):
     for j in range (niter):
         if rank == 0:
             for i in range(num_message):
-                cclo.gather(0, tx_buf, rx_buf, count, 0, sw=False, shift=True, from_fpga=to_from_fpga, to_fpga=to_from_fpga, run_async=False)
-                # print("rank 0 finishes")
-                # if not to_from_fpga:
-                #     if not (tx_buf[0:count-1] == rx_buf[(count*rank):(count*(rank+1)-1)]).all():
-                #         print("Rank {} Message {} Gather failed".format(rank, i))
-                #     else:
-                #         print("Rank {} Message {} Gather succeeded".format(rank, i))
+                cclo.gather(0, tx_buf, rx_buf, count, root=0, sw=False, shift=True, from_fpga=to_from_fpga, to_fpga=to_from_fpga, run_async=False)
+                if args.debug and to_from_fpga:
+                    print("rank 0 finishes")
+                    if not to_from_fpga:
+                        if not (tx_buf[0:count-1] == rx_buf[(count*rank):(count*(rank+1)-1)]).all():
+                            print("Rank {} Message {} Gather failed".format(rank, i))
+                        else:
+                            print("Rank {} Message {} Gather succeeded".format(rank, i))
         else :
             for i in range(num_message):
-                cclo.gather(0, tx_buf, rx_buf, count, 0, sw=False, shift=True, from_fpga=to_from_fpga, to_fpga=to_from_fpga, run_async=False)
-                # cclo.dump_rx_buffers(nbufs=16)
-                # print(f"rank {rank} finishes")
+                cclo.gather(0, tx_buf, rx_buf, count, root=0, sw=False, shift=True, from_fpga=to_from_fpga, to_fpga=to_from_fpga, run_async=False)
+                if args.debug and to_from_fpga:
+                    cclo.dump_rx_buffers_spares()
+                    print(f"rank {rank} finishes")
         #to synchronize the processes
         comm.barrier()
     end = time.perf_counter()        
@@ -340,8 +371,12 @@ def test_gather(bsize, naccel, to_from_fpga=True):
     throughput_gbps = num_message*bsize*1024*8/(duration_us*1000)
     if to_from_fpga:
         print("Size[KB],{},Num device,{},*Duration[us],{},throughput[gbps],{}".format(bsize,naccel, duration_us, throughput_gbps))
+        if rank == 0 :
+            csv_writer.writerow(["Gather ", naccel, bsize, duration_us, throughput_gbps])
     else:
         print("FullPath,Size[KB],{},Num device,{},&Duration[us],{},throughput[gbps],{}".format(bsize,naccel, duration_us, throughput_gbps))
+        if rank == 0 :
+            csv_writer.writerow(["Gather FullPath", naccel, bsize, duration_us, throughput_gbps])
 
 def test_allgather(bsize, naccel, to_from_fpga=True):
     print("========================================")
@@ -351,7 +386,7 @@ def test_allgather(bsize, naccel, to_from_fpga=True):
     rx_buf[:]=np.zeros(rx_buf.shape)# clear rx buffers
     count = tx_buf.nbytes//naccel
     print(f"All_Gather Send count:{count}")
-    # to_from_fpga = True
+    #to_from_fpga = True
     niter = 10
     num_message=1
     comm.barrier()
@@ -360,17 +395,19 @@ def test_allgather(bsize, naccel, to_from_fpga=True):
         if rank == 0:
             for i in range(num_message):
                 cclo.allgather(0, tx_buf, rx_buf, count, fused=True, sw=False, ring=True, from_fpga=to_from_fpga, to_fpga=to_from_fpga, run_async=False)
-                # print("rank 0 finishes")
-                # if not to_from_fpga:
-                #     if not (tx_buf[0:count-1] == rx_buf[(count*rank):(count*(rank+1)-1)]).all():
-                #         print("Rank {} Message {} All_Gather failed".format(rank, i))
-                #     else:
-                #         print("Rank {} Message {} All_Gather succeeded".format(rank, i))
+                if args.debug and to_from_fpga:
+                    print("rank 0 finishes")
+                    if not to_from_fpga:
+                        if not (tx_buf[0:count-1] == rx_buf[(count*rank):(count*(rank+1)-1)]).all():
+                            print("Rank {} Message {} All_Gather failed".format(rank, i))
+                        else:
+                            print("Rank {} Message {} All_Gather succeeded".format(rank, i))
         else :
             for i in range(num_message):
                 cclo.allgather(0, tx_buf, rx_buf, count, fused=True, sw=False, ring=True, from_fpga=to_from_fpga, to_fpga=to_from_fpga, run_async=False)
-                # cclo.dump_rx_buffers(nbufs=16)
-                # print(f"rank {rank} finishes")
+                if args.debug and to_from_fpga:
+                    cclo.dump_rx_buffers_spares()
+                    print(f"rank {rank} finishes")
         #to synchronize the processes
         comm.barrier()
     end = time.perf_counter()        
@@ -378,26 +415,32 @@ def test_allgather(bsize, naccel, to_from_fpga=True):
     throughput_gbps = (naccel)*num_message*bsize*1024*8/(duration_us*1000)
     if to_from_fpga:
         print("Size[KB],{},Num device,{},*Duration[us],{},throughput[gbps],{}".format(bsize,naccel, duration_us, throughput_gbps))
+        if rank == 0 :
+            csv_writer.writerow(["AllGather ", naccel, bsize, duration_us, throughput_gbps])
     else:
         print("FullPath,Size[KB],{},Num device,{},&Duration[us],{},throughput[gbps],{}".format(bsize,naccel, duration_us, throughput_gbps))
+        if rank == 0 :
+            csv_writer.writerow(["AllGather FullPath", naccel, bsize, duration_us, throughput_gbps])
 
 
 parser = argparse.ArgumentParser(description='Tests for MPI collectives offload with UDP (VNx) backend')
 parser.add_argument('--xclbin',         type=str, default=None,             help='Accelerator image file (xclbin)', required=True)
-parser.add_argument('--device_index', type=int, default=1, help='Card index')
+parser.add_argument('--device_index',   type=int, default=1,                help='Card index')
 parser.add_argument('--nruns',          type=int, default=1,                help='How many times to run each test')
-parser.add_argument('--bsize', type=int, default=1024, help='How many KB per buffer')
-parser.add_argument('--sendrecv', action='store_true', default=False, help='Run send/recv test')
-parser.add_argument('--bcast', action='store_true', default=False, help='Run bcast test')
-parser.add_argument('--scatter', action='store_true', default=False, help='Run scatter test')
-parser.add_argument('--gather', action='store_true', default=False, help='Run gather test')
-parser.add_argument('--allgather', action='store_true', default=False, help='Run allgather test')
-parser.add_argument('--reduce', action='store_true', default=False, help='Run reduce test')
-parser.add_argument('--allreduce', action='store_true', default=False, help='Run allreduce test')
-parser.add_argument('--sum', action='store_true', default=False, help='Run fp/dp/i32/i64 test')
-parser.add_argument('--fused', action='store_true', default=False, help='For all-* collectives, run the fused implementation')
-parser.add_argument('--dump_rx_regs', type=int, default=0, help='Print RX regs of specified ')
-
+parser.add_argument('--nbufs',          type=int, default=16,               help='How many times to run each test')
+parser.add_argument('--bsize',          type=int, default=1024,             help='How many KB per buffer')
+parser.add_argument('--segment_size',   type=int, default=1024,             help='How many KB per spare_buffer')
+parser.add_argument('--dump_rx_regs',   type=int, default=0,    	        help='Print RX regs of specified ')
+parser.add_argument('--sendrecv',       action='store_true', default=False, help='Run send/recv test')
+parser.add_argument('--bcast',          action='store_true', default=False, help='Run bcast test')
+parser.add_argument('--scatter',        action='store_true', default=False, help='Run scatter test')
+parser.add_argument('--gather',         action='store_true', default=False, help='Run gather test')
+parser.add_argument('--allgather',      action='store_true', default=False, help='Run allgather test')
+parser.add_argument('--reduce',         action='store_true', default=False, help='Run reduce test')
+parser.add_argument('--allreduce',      action='store_true', default=False, help='Run allreduce test')
+parser.add_argument('--sum',            action='store_true', default=False, help='Run fp/dp/i32/i64 test')
+parser.add_argument('--fused',          action='store_true', default=False, help='For all-* collectives, run the fused implementation')
+parser.add_argument('--debug',          action='store_true', default=False, help='activate tests')
 args = parser.parse_args()
 
 comm         = MPI.COMM_WORLD
@@ -409,7 +452,7 @@ rank         = comm.Get_rank()
 if __name__ == "__main__":    
     try:
         #configure FPGA and CCLO cores with the default 16 RX buffers of 16KB each
-        ol, cclo, devicemem = configure_xccl(args.xclbin, args.device_index)
+        ol, cclo, devicemem = configure_xccl(args.xclbin, args.device_index, nbufs=args.nbufs ,bufsize=args.segment_size*1024 )
 
         tx_buf = pynq.allocate((args.bsize*1024,), dtype=np.int8, target=devicemem)
         rx_buf = pynq.allocate((args.bsize*1024,), dtype=np.int8, target=devicemem)
@@ -420,7 +463,15 @@ if __name__ == "__main__":
 
         if rank == 0:
             # if args.dump_rx_regs >= 0:
-            cclo.dump_rx_buffers_spares(nbufs=16)
+            cclo.dump_rx_buffers_spares(nbufs=32)
+        
+        csv_file = open(f"bench_naccel{args.naccel}nruns{args.nruns}_bsize{args.bsize}_segment_size{args.segment_size}.csv", "w", newline="") 
+        import csv
+        global csv_writer
+        csv_writer = csv.writer(csv_file, delimiter=",", quoting=csv.QUOTE_MINIMAL)
+        csv_writer.writerow(["bsize[KB]", args.bsize, "segment[KB]", args.segment_size])
+        csv_writer.writerow(["collective", "size communicator" ,"size [KB]", "execution time [us]", "throughput[Gbps]", ])
+
 
         cclo.set_timeout(10_000_000)
 
@@ -464,9 +515,15 @@ if __name__ == "__main__":
 
     except KeyboardInterrupt:
         print("CTR^C")
+        print("Rank", rank)
+        cclo.dump_rx_buffers_spares()
+        exit(1)
     except Exception as e:
+        print("Rank", rank)
         print(e)
         import traceback
         traceback.print_tb(e.__traceback__)
+        cclo.dump_rx_buffers_spares()
+        exit(1)
     cclo.deinit()
    

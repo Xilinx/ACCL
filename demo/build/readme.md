@@ -1,9 +1,9 @@
 1. clone the submodule
 
     `git submodule update --init --recursive Vitis_with_100Gbps_TCP-IP`
-2. build `fpga-network-stack`:
+2. build `Vitis_with_100Gbps_TCP-IP`:
     
-    `cd fpga-network-stack`
+    `cd Vitis_with_100Gbps_TCP-IP/ `
 
     0. source Vitis 2020.1
          
