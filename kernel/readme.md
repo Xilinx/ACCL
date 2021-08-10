@@ -48,9 +48,9 @@
 
         a. vnx      : uses 1 NIC with tcp stack
         b. vnx_dual : uses 2 NICs with tcp stack
-        c. loopback : uses 1 XCCL_offload with axi packetizers to emaulte the stack with a single board
-        c. dual     : uses 2 XCCL_offload with axi packetizers to emaulte the stack with a single board
-        d. quad     : uses 4 XCCL_offload with axi packetizers to emaulte the stack with a single board 
+        c. loopback : uses 1 XCCL_offload with axi packetizers to emulate the stack with a single board
+        c. dual     : uses 2 XCCL_offload with axi packetizers to emulate the stack with a single board
+        d. quad     : uses 4 XCCL_offload with axi packetizers to emulate the stack with a single board 
     0. How does the makefile work?
         
 

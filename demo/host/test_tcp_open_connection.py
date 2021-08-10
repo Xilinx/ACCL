@@ -42,7 +42,8 @@ def configure_xccl(xclbin, board_idx, nbufs=16, bufsize=1024*1024):
         devicemem = [ol.bank0]
     elif local_alveo.name == 'xilinx_u280_xdma_201920_3':
         devicemem = [ol.HBM0]
-        networkmem = ol.HBM2
+        rxbufmem = [ ol.HBM1, ol.HBM2, ol.HBM3, ol.HBM4, ol.HBM5 ]
+        networkmem = ol.HBM6
 
     cclo           = ol.ccl_offload_0
     network_kernel = ol.network_krnl_0
@@ -66,14 +67,14 @@ def configure_xccl(xclbin, board_idx, nbufs=16, bufsize=1024*1024):
         
     cclo.use_tcp()
     print(f"CCLO {rank_id}: Configuring RX Buffers")
-    cclo.setup_rx_buffers(nbufs, bufsize, devicemem)
+    cclo.setup_rx_buffers(nbufs, bufsize, rxbufmem)
     print(f"CCLO {rank_id}: Configuring a communicator")
     cclo.configure_communicator(ranks, rank_id)
     print(f"CCLO {rank_id}: Configuring network stack")
    
     #assign 64 MB network tx and rx buffer
-    tx_buf_network = pynq.allocate((64*1024*1024,), dtype=np.int8, target=networkmem)
-    rx_buf_network = pynq.allocate((64*1024*1024,), dtype=np.int8, target=networkmem)
+    tx_buf_network = pynq.allocate((128*1024*1024,), dtype=np.int8, target=networkmem)
+    rx_buf_network = pynq.allocate((128*1024*1024,), dtype=np.int8, target=networkmem)
     
     tx_buf_network.sync_to_device()
     rx_buf_network.sync_to_device()
