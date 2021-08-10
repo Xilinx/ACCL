@@ -27,7 +27,7 @@ set_property board_part $boardpart [current_project]
 create_ip -name rtl_kernel_wizard -vendor xilinx.com -library ip -version 1.0 -module_name ccl_offload
 # configure general properties of RTL kernel
 set_property -dict [list CONFIG.KERNEL_NAME {ccl_offload} CONFIG.KERNEL_TYPE {Block_Design} CONFIG.NUM_CLOCKS {1} CONFIG.NUM_RESETS {1} CONFIG.DEBUG_ENABLED {1}] [get_ips ccl_offload]
-set_property -dict [list CONFIG.Component_Name {ccl_offload} CONFIG.KERNEL_NAME {ccl_offload} CONFIG.KERNEL_VENDOR {Xilinx} CONFIG.KERNEL_LIBRARY {XCCL}] [get_ips ccl_offload]
+set_property -dict [list CONFIG.Component_Name {ccl_offload} CONFIG.KERNEL_NAME {ccl_offload} CONFIG.KERNEL_VENDOR {Xilinx} CONFIG.KERNEL_LIBRARY {ACCL}] [get_ips ccl_offload]
 # configure number, names and types of scalar arguments
 set_property -dict [list CONFIG.NUM_INPUT_ARGS {9}] [get_ips ccl_offload] 
 set_property -dict [list CONFIG.ARG00_NAME {call_type} CONFIG.ARG00_TYPE {uint}] [get_ips ccl_offload]
