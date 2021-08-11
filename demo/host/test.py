@@ -36,10 +36,8 @@ def configure_xccl(xclbin, board_idx, nbufs=16, bufsize=1024):
     if local_alveo.name == 'xilinx_u250_xdma_201830_2':
         devicemem = [ol.__getattr__(f"bank{i}") for i in range(args.naccel)]
     elif local_alveo.name == 'xilinx_u280_xdma_201920_3':
-        if args.single_bank:
-            devicemem = [[ol.__getattr__(f"HBM{j}") for j in range(i*6, i*6+1) ] for i in range(args.naccel)]
-        else:
-            devicemem = [[ol.__getattr__(f"HBM{j}") for j in range(i*6, i*6+6) ] for i in range(args.naccel)]
+        hbm_bank_stride = 6
+        devicemem = [[ol.__getattr__(f"HBM{j}") for j in range(i*hbm_bank_stride, i*hbm_bank_stride+args.num_banks) ] for i in range(args.naccel)]
         #devicemem = [[ol.__getattr__(f"HBM0") ] for i in range(args.naccel)] #tcp_cmac v
         
 
@@ -683,7 +681,7 @@ def test_allreduce(fused=False, sw=False):
     print("AllReduce ","Fused" if fused else "Non-Fused","sw" if sw else "hw")
     print("========================================")
     #for each type
-    for np_type in  [np.float32, np.float64, np.int32, np.int64]:
+    for np_type in  [ np.int32, np.int64, np.float32, np.float64]:
 
         #initialize buffers with random data. 
         for j in range(args.naccel):
@@ -1205,7 +1203,7 @@ if __name__ == "__main__":
     parser.add_argument('--bsize',          type=int, default=1024,             help='How many B per user buffer')
     parser.add_argument('--segment_size',   type=int, default=1024,             help='How many B per spare buffer')
     parser.add_argument('--dump_rx_regs',   type=int, default=-1,               help='Print RX regs of specified ')
-    parser.add_argument('--single_bank',    action='store_true', default=False, help='use a single memory bank per CCL_Offload instance')
+    parser.add_argument('--num_banks',      type=int, default=6,                help='for U280 specifies how many memory banks to use per CCL_Offload instance')
     parser.add_argument('--debug',          action='store_true', default=False, help='enable debug mode')
     parser.add_argument('--all',            action='store_true', default=False, help='Select all collectives')
     parser.add_argument('--nop',            action='store_true', default=False, help='Run nop test')

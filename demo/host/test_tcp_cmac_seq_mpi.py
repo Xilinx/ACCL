@@ -43,18 +43,18 @@ def configure_xccl(xclbin, board_idx, nbufs=16, bufsize=1024*1024):
 
     print("Allocating 1MB scratchpad memory")
     if local_alveo.name == 'xilinx_u250_gen3x16_xdma_shell_3_1':
-        devicemem = ol.bank1
-        rxbufmem = ol.bank1
-        networkmem = ol.bank1
+        devicemem   = ol.bank1
+        rxbufmem    = ol.bank1
+        networkmem  = ol.bank1
     elif local_alveo.name == 'xilinx_u250_xdma_201830_2':
-        devicemem = ol.bank0
+        devicemem   = ol.bank0
     elif local_alveo.name == 'xilinx_u280_xdma_201920_3':
-        devicemem = ol.HBM0
-        rxbufmem = [ ol.HBM1, ol.HBM2, ol.HBM3, ol.HBM4, ol.HBM5 ]
-        networkmem = ol.HBM6
+        devicemem   = ol.HBM0
+        rxbufmem    = [ol.__getattr__(f"HBM{j}") for j in range(1, args.num_banks) ] 
+        networkmem  = ol.HBM6
 
-    cclo           = ol.ccl_offload_0
-    network_kernel = ol.network_krnl_0
+    cclo            = ol.ccl_offload_0
+    network_kernel  = ol.network_krnl_0
 
     print("CCLO {} HWID: {} at {}".format(rank_id, hex(cclo.get_hwid()), hex(cclo.mmio.base_addr)))
 
@@ -431,6 +431,7 @@ parser.add_argument('--nbufs',          type=int, default=16,               help
 parser.add_argument('--bsize',          type=int, default=1024,             help='How many KB per buffer')
 parser.add_argument('--segment_size',   type=int, default=1024,             help='How many KB per spare_buffer')
 parser.add_argument('--dump_rx_regs',   type=int, default=0,    	        help='Print RX regs of specified ')
+parser.add_argument('--num_banks',      type=int, default=6,                help='for U280 specifies how many memory banks to use per CCL_Offload instance')
 parser.add_argument('--sendrecv',       action='store_true', default=False, help='Run send/recv test')
 parser.add_argument('--bcast',          action='store_true', default=False, help='Run bcast test')
 parser.add_argument('--scatter',        action='store_true', default=False, help='Run scatter test')
