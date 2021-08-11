@@ -1961,7 +1961,7 @@ int scatter_reduce(
 		if(ret != COLLECTIVE_OP_SUCCESS) return ret;
 	}
 	//at last iteration (n-1) you can sum and save the result at the same location (which is the right place to be)
-	if (i > 0 ){
+	if (world.size > 1 ){
 		curr_recv_addr  = src_addr + len * curr_recv_chunk; 
 		curr_send_addr  = dst_addr + len * curr_recv_chunk;
 		ret = receive_and_accumulate(&world, prev_in_ring, len, function, curr_recv_addr, curr_send_addr, TAG_ANY); 
