@@ -160,7 +160,7 @@ static inline void arith_disable_auto_repeat() {
 static inline void wait_arith(){
 	//wait for arithmetich unit to finish
 	for(unsigned int count=0; !arith_is_idle() ; count++){
-		if(count > timeout)
+		if(timeout != 0 && count >= timeout )
 			longjmp(excp_handler, ARITH_ERROR);
 	}
 }
@@ -475,7 +475,7 @@ static inline void ack_packetizer(communicator * world, unsigned int dst_rank,un
 	while(num_msg > 0){
 
 		for(count=0; tngetd(packetizer_sts_stream); count++){
-			if(count > timeout){
+			if(timeout != 0 && count >= timeout )
 				longjmp(excp_handler, PACK_TIMEOUT_STS_ERROR);
 			}
 		}
