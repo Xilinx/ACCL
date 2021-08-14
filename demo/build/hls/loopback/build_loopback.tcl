@@ -51,12 +51,12 @@ switch $command {
 }
 
 
-open_project build_vnx_loopback
+open_project build_loopback
 
-add_files vnx_loopback.cpp -cflags "-std=c++14"
-add_files -tb tb_vnx_loopback.cpp -cflags "-std=c++14"
+add_files loopback.cpp -cflags "-std=c++14"
+add_files -tb tb_loopback.cpp -cflags "-std=c++14"
 
-set_top vnx_loopback
+set_top loopback
 
 open_solution sol1
 config_export -format xo

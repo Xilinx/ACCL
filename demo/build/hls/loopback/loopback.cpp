@@ -24,7 +24,7 @@ using namespace std;
 
 #define DATA_WIDTH 512
 
-void vnx_loopback(	stream<ap_axiu<DATA_WIDTH,0,0,16> > & in,
+void loopback(	stream<ap_axiu<DATA_WIDTH,0,0,16> > & in,
 			stream<ap_axiu<DATA_WIDTH,0,0,16> > & out) {
 #pragma HLS INTERFACE axis register both port=in
 #pragma HLS INTERFACE axis register both port=out
@@ -32,16 +32,12 @@ void vnx_loopback(	stream<ap_axiu<DATA_WIDTH,0,0,16> > & in,
 
 unsigned const bytes_per_word = DATA_WIDTH/8;
 
-//copy count from header into sts stream
 ap_axiu<DATA_WIDTH,0,0,16> tmp;
-tmp = in.read();
-int count = (tmp.data)(31,0);
-out.write(tmp);
 
-while(count > 0){
+do{
 #pragma HLS PIPELINE II=1
-	out.write(in.read());
-	count -= bytes_per_word;
-}
+	tmp = in.read();
+	out.write(tmp);
+} while(tmp.last == 0);
 
 }

@@ -17,12 +17,12 @@
 # *******************************************************************************/
 
 DEVICE=xcu250-figd2104-2L-e
-LOOPBACK_IP=build_vnx_loopback/sol1/impl/export.xo
+LOOPBACK_IP=build_loopback/sol1/impl/export.xo
 TARGET=ip
 
 all: $(LOOPBACK_IP)
 
 loopback: $(LOOPBACK_IP)
 
-$(LOOPBACK_IP): build_vnx_loopback.tcl vnx_loopback.cpp
+$(LOOPBACK_IP): build_loopback.tcl loopback.cpp
 	vitis_hls $< -tclargs $(TARGET) $(DEVICE)
