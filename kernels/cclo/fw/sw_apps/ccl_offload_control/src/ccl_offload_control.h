@@ -269,6 +269,7 @@ extern "C" {
 #define ARITH_ERROR                                   20 
 #define PACK_TIMEOUT_STS_ERROR                        21
 #define PACK_SEQ_NUMBER_ERROR                         22
+#define COMPRESSION_ERROR                             23
 
 //ARITH functions
 #define ARITH_fp    0
@@ -282,6 +283,14 @@ extern "C" {
 #define USE_DMA1_TX 4
 #define USE_DMA2_RX 8
 #define USE_DMA1_TX_WITHOUT_TLAST 16
+
+//the following indicate whether
+//any DMA is being used to source
+//initial data or sink final data
+#define USE_DMA0_SRC 1
+#define USE_DMA1_SRC 2
+#define USE_DMA1_DST 4
+#define USE_DMA2_SRC 8
 
 #define S_AXI_CONTROL -1
 
@@ -355,13 +364,44 @@ typedef struct {
 	comm_rank* ranks;
 } communicator;
 
+//Compression-related structures for:
+//compressor definition
+//conversion definition
+//reducer definition
 typedef struct {
-	unsigned char tdest_arith_op0;
-  unsigned char tdest_arith_op1;
-  unsigned char tdest_conv_down;
-  unsigned char tdest_conv_up;
-	unsigned int compression_ratio;
+	unsigned int nfunctions;
+	unsigned int * tdest;
+} reducer;
+
+typedef struct {
+	unsigned int tdest;
+	unsigned int ratio_d;
+  unsigned int ratio_m;
+} caster;
+
+typedef struct {
+  unsigned int s2t_cast_idx;
+  unsigned int t2d_cast_idx;
+  unsigned int reducer_idx;
 } compressor;
+
+#define COMPRESSOR_SPEC_OFFSET (COMM_OFFSET+4*(2 + Xil_In32(COMM_OFFSET)*5))
+typedef struct {
+	unsigned int ncompressors;
+	compressor* compressors;
+} compressor_spec;
+
+#define CASTER_SPEC_OFFSET (COMPRESSOR_SPEC_OFFSET+4*(1 + Xil_In32(COMPRESSOR_SPEC_OFFSET)*3))
+typedef struct {
+	unsigned int ncasters;
+	caster* casters;
+} caster_spec;
+
+#define REDUCER_SPEC_OFFSET (CASTER_SPEC_OFFSET+4*(1 + Xil_In32(CASTER_SPEC_OFFSET)*3))
+typedef struct {
+	unsigned int nreducers;
+	reducer* reducers;
+} reducer_spec;
 
 #define TAG_ANY 0xFFFFFFFF
 

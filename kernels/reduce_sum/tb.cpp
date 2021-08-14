@@ -20,25 +20,34 @@
 #include "ap_int.h"
 #include<iostream>
 #include <cstdlib>
+#include <stdint.h>
 
 using namespace hls;
 using namespace std;
 
+#ifndef DATA_WIDTH
 #define DATA_WIDTH 512
+#endif
 
-void hp_stream_add(	stream<ap_axiu<DATA_WIDTH,0,0,0> > & in1,
-            stream<ap_axiu<DATA_WIDTH,0,0,0> > & in2,
-            stream<ap_axiu<DATA_WIDTH,0,0,0> > & out);
+#ifndef DATA_TYPE
+#define DATA_TYPE float
+#endif
+
+#define specialization(dt, dw) reduce_sum_ ## dt ## _ ## dw
+#define top(dt, dw) specialization(dt, dw)
+
+void top(DATA_TYPE, DATA_WIDTH)(stream<ap_axiu<2*DATA_WIDTH,0,0,0> > & in,
+				stream<ap_axiu<DATA_WIDTH,0,0,0> > & out);
 
 int main(){
 
-    stream<ap_axiu<DATA_WIDTH,0,0,0> > in1;
-    stream<ap_axiu<DATA_WIDTH,0,0,0> > in2;
+    stream<ap_axiu<2*DATA_WIDTH,0,0,0> > in;
     stream<ap_axiu<DATA_WIDTH,0,0,0> > out;
     stream<ap_axiu<DATA_WIDTH,0,0,0> > golden;
     
-    ap_axiu<DATA_WIDTH,0,0,0> inword1;
-    ap_axiu<DATA_WIDTH,0,0,0> inword2;
+    ap_uint<DATA_WIDTH> inword1;
+    ap_uint<DATA_WIDTH> inword2;
+    ap_axiu<2*DATA_WIDTH,0,0,0> inword;
     ap_axiu<DATA_WIDTH,0,0,0> outword;
     ap_axiu<DATA_WIDTH,0,0,0> goldenword;
 
@@ -46,29 +55,30 @@ int main(){
 
     //130B transfer
     int len = 130;
-    half h1, h2;
+    DATA_TYPE h1, h2;
+    int dwt = 8*sizeof(DATA_TYPE);
+    int simd = DATA_WIDTH/dwt;
 
     for(int i=len; i>0; i-=(DATA_WIDTH/8)){
-        for(int j=0; j<(DATA_WIDTH/16); j++){
-            h1 = (static_cast <half> (rand()) / static_cast <half> (RAND_MAX));
-            h2 = (static_cast <half> (rand()) / static_cast <half> (RAND_MAX));
-            half sum = h1+h2;
-            inword1.data((j+1)*16-1,j*16) = *reinterpret_cast<ap_uint<DATA_WIDTH>*>(&h1);
-            inword2.data((j+1)*16-1,j*16) = *reinterpret_cast<ap_uint<DATA_WIDTH>*>(&h2);
-            goldenword.data((j+1)*16-1,j*16) = *reinterpret_cast<ap_uint<DATA_WIDTH>*>(&sum);
+        for(int j=0; j<simd; j++){
+            h1 = (static_cast <DATA_TYPE> (rand()) / static_cast <DATA_TYPE> (RAND_MAX));
+            h2 = (static_cast <DATA_TYPE> (rand()) / static_cast <DATA_TYPE> (RAND_MAX)); 
+            DATA_TYPE sum = h1+h2;
+            inword1((j+1)*dwt-1,j*dwt) = *reinterpret_cast<ap_uint<DATA_WIDTH>*>(&h1);
+            inword2((j+1)*dwt-1,j*dwt) = *reinterpret_cast<ap_uint<DATA_WIDTH>*>(&h2);
+            goldenword.data((j+1)*dwt-1,j*dwt) = *reinterpret_cast<ap_uint<DATA_WIDTH>*>(&sum);
         }
-        inword1.last = (i < (DATA_WIDTH/8));
-        inword1.keep = (((long long)1<<i)-1);
-        inword2.last = inword1.last;
-        inword2.keep = inword1.keep;
-        goldenword.last = inword1.last;
-        goldenword.keep = inword1.keep;
-        in1.write(inword1);
-        in2.write(inword2);
+        inword.data(DATA_WIDTH-1, 0) = inword1;
+        inword.data(2*DATA_WIDTH-1, DATA_WIDTH) = inword2;
+        inword.last = (i < (DATA_WIDTH/8));
+        inword.keep = (((long long)1<<i)-1);
+        goldenword.last = inword.last;
+        goldenword.keep = inword.keep;
+        in.write(inword);
         golden.write(goldenword);
     }
     
-    hp_stream_add(in1, in2, out);
+    top(DATA_TYPE, DATA_WIDTH)(in, out);
     
     //parse data
     for(int i=len; i>0; i-=(DATA_WIDTH/8)){
@@ -76,6 +86,10 @@ int main(){
         goldenword = golden.read();
         if(outword.data != goldenword.data){
             cout << hex << outword.data << ":" << goldenword.data << dec << endl;
+            for(int j=0; j<simd; j++){
+                cout << "Output Word " << j << (DATA_TYPE)outword.data((j+1)*dwt-1,j*dwt) << endl;
+                cout << "Golden Word " << j << (DATA_TYPE)goldenword.data((j+1)*dwt-1,j*dwt) << endl;
+            }
             return 1;
         }
         if(outword.last != goldenword.last) return 1;

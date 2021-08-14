@@ -31,7 +31,18 @@ static volatile unsigned int timeout 	 	 = 1 << 28;
 static volatile unsigned int dma_tag_lookup [MAX_DMA_TAGS]; //index of the spare buffer that has been issued with that dma tag. -1 otherwise
 static volatile	unsigned int dma_transaction_size 	= DMA_MAX_BTT;
 static volatile unsigned int max_dma_in_flight 		= DMA_MAX_TRANSACTIONS;
-static compressor            comp;
+
+static unsigned int arith_ext = 0;
+static unsigned int arith_tdest_op0;
+static unsigned int arith_tdest_op1;
+static unsigned int arith_int_func;
+static unsigned int s2t_tdest;
+static unsigned int s2t_ratio_d;
+static unsigned int s2t_ratio_m;
+static unsigned int t2d_tdest;
+static unsigned int t2d_ratio_d;
+static unsigned int t2d_ratio_m;
+
 
 unsigned int enqueue_rx_buffers(void);
 int  dequeue_rx_buffers(void);
@@ -180,14 +191,9 @@ static inline int arith_number_of_bytes_per(unsigned int function){
 	return -1;
 }
 
-static inline void setup_compression(compressor comp, int direction){
-	Xil_Out32(GPIO_ARITH_BASEADDR, comp.tdest_arith_op0);//DATA1 reg
-	Xil_Out32(GPIO_ARITH_BASEADDR+8, comp.tdest_arith_op1);//DATA2 reg
-	if(direction == 0){
-		Xil_Out32(GPIO_CONV_BASEADDR, comp.tdest_conv_down);//DATA1 reg
-	} else {
-		Xil_Out32(GPIO_CONV_BASEADDR, comp.tdest_conv_up);//DATA1 reg
-	}
+static inline void setup_ext_arith(){
+	Xil_Out32(GPIO_ARITH_BASEADDR, arith_tdest_op0);
+	Xil_Out32(GPIO_ARITH_BASEADDR+8, arith_tdest_op1);
 }
 
 void stream_isr(void) {
@@ -431,15 +437,54 @@ static inline communicator find_comm(unsigned int adr){
 }
 
 //retrieves the compressor
-compressor find_compressor(unsigned int adr){
-	compressor ret;
-	unsigned int tdest = Xil_In32(adr);
-	ret.tdest_arith_op0 = tdest && 0xff;
-	ret.tdest_arith_op1 = tdest>>8 && 0xff;
-	ret.tdest_conv_down = tdest>>16 && 0xff;
-	ret.tdest_conv_up = tdest>>24 && 0xff;
-	ret.compression_ratio = Xil_In32(adr+4);
-	return ret;
+int setup_arithmetic(unsigned int comp_idx, unsigned int func_idx){
+	compressor comp;
+	reducer red;
+	caster cst;
+	compressor_spec * comp_spec = (compressor_spec*)(COMPRESSOR_SPEC_OFFSET);
+	caster_spec * cast_spec = (caster_spec*)(CASTER_SPEC_OFFSET);
+	reducer_spec * red_spec = (reducer_spec*)(REDUCER_SPEC_OFFSET);
+	if(comp_idx < comp_spec->ncompressors){
+		comp = comp_spec->compressors[comp_idx];
+	} else {
+		return -1;
+	}
+	unsigned int s2t_cast_idx = comp.s2t_cast_idx;
+	unsigned int t2d_cast_idx = comp.t2d_cast_idx;
+	unsigned int reducer_idx = comp.reducer_idx;
+	//retrieve arith_tdest
+	if(reducer_idx < red_spec->nreducers){
+		red = red_spec->reducers[reducer_idx];
+		if(func_idx < red.nfunctions){
+			arith_tdest_op0 = red.tdest[func_idx] & 0xff;
+			arith_tdest_op1 = (red.tdest[func_idx] >> 8) & 0xff;
+			arith_int_func  = (red.tdest[func_idx] >> 16) & 0xff;
+			arith_ext = red.tdest[func_idx] >> 24;
+		} else {
+			return -1;
+		}
+	} else {
+		return -1;
+	}
+	//retrieve caster tdests
+	if(s2t_cast_idx < cast_spec->ncasters){
+		cst = cast_spec->casters[s2t_cast_idx];
+		s2t_tdest = cst.tdest;
+		s2t_ratio_d = cst.ratio_d;
+		s2t_ratio_m = cst.ratio_m
+	} else {
+		return -1;
+	}
+	if(t2d_cast_idx < cast_spec->ncasters){
+		cst = cast_spec->casters[t2d_cast_idx];
+		t2d_tdest = cst.tdest;
+		t2d_ratio_d = cst.ratio_d;
+		t2d_ratio_m = cst.ratio_m
+	} else {
+		return -1;
+	}
+	//all good, return 0
+	return 0;
 }
 
 //Packetizer/Depacketizer
@@ -697,7 +742,8 @@ static inline int start_dma(
 					uint64_t DMA1_rx_addr,
 					uint64_t DMA1_tx_addr,
 					uint64_t DMA2_rx_addr,
-					unsigned int what_DMAS, 
+					unsigned int what_DMAS,
+					unsigned int is_transport,
 					unsigned int dma_tag_tmp) {
 	//BE CAREFUL!: if(len > DMA_MAX_BTT) return DMA_TRANSACTION_SIZE;
 	//start DMAs 
@@ -884,7 +930,8 @@ static inline int dma_movement_and_packetizer(
 	curr_len_ack  = dma_transaction_size;
 	//1. issue at most max_dma_in_flight of dma_transaction_size
 	//start pack
-	start_packetizer_message(world, dst_rank, len, mpi_tag);
+	unsigned int pkt_len = (len*s2t_ratio_m)/s2t_ratio_d;
+	start_packetizer_message(world, dst_rank, pkt_len, mpi_tag);
 	for (i = 0; remaining_to_move > 0 && i < max_dma_in_flight ; i++){
 		if (remaining_to_move < dma_transaction_size){
 			curr_len_move 	= remaining_to_move ;
@@ -976,9 +1023,13 @@ int reduce_loopback(	unsigned int len,
 						uint64_t dst_addr) {
 	
 	//configure switch
-	cfg_switch(DATAPATH_DMA_REDUCTION, ARITH_INTERNAL);
+	cfg_switch(DATAPATH_DMA_REDUCTION, (arith_ext == 0) ? ARITH_INTERNAL : ARITH_EXTERNAL);
 	//start arith once with full size
-	start_arith(len, func, 0);
+	if(arith_ext == 0){
+		start_arith(len, func, 0);
+	} else {
+		setup_ext_arith();
+	}
 	//start dma transfer
 	unsigned int ret = dma_movement(len, op0_addr, op1_addr, dst_addr, 0, USE_DMA0_RX | USE_DMA1_RX | USE_DMA1_TX);
 	//wait for arith to finish
@@ -1033,9 +1084,13 @@ int reduce_offchip_world(
 	unsigned int dst_tag
 ){
 	//configure switch
-	cfg_switch(use_tcp ? DATAPATH_OFFCHIP_TCP_REDUCTION : DATAPATH_OFFCHIP_UDP_REDUCTION, ARITH_INTERNAL);
+	cfg_switch(use_tcp ? DATAPATH_OFFCHIP_TCP_REDUCTION : DATAPATH_OFFCHIP_UDP_REDUCTION, (arith_ext == 0) ? ARITH_INTERNAL : ARITH_EXTERNAL);
 	//configure arith
-	start_arith(len, func, 0);
+	if(arith_ext == 0){
+		start_arith(len, func, 0);
+	} else {
+		setup_ext_arith();
+	}
 	return dma_movement_and_packetizer(world, len, op0_addr, op1_addr, 0, 0, USE_DMA0_RX | USE_DMA1_RX, dst_rank, dst_tag );
 }
 
@@ -1221,8 +1276,12 @@ int receive_and_accumulate(
 	uint8_t spare_buffer_indexes [max_dma_in_flight];
 	uint8_t spare_buffer_indexes_start = 0, spare_buffer_indexes_end = 0;
 
-	cfg_switch(DATAPATH_DMA_REDUCTION, ARITH_INTERNAL);
-	start_arith(len, func, 0);
+	cfg_switch(DATAPATH_DMA_REDUCTION, (arith_ext == 0) ? ARITH_INTERNAL : ARITH_EXTERNAL);
+	if(arith_ext == 0){
+		start_arith(len, func, 0);
+	} else {
+		setup_ext_arith();
+	}
 	remaining_to_move 	= len;
 	remaining_to_ack 	= len;
 	dma_tag_tmp 		= dma_tag;
@@ -1316,8 +1375,12 @@ int receive_and_reduce_offchip(
 	uint8_t spare_buffer_indexes [max_dma_in_flight];
 	uint8_t spare_buffer_indexes_start = 0, spare_buffer_indexes_end = 0;
 
-	cfg_switch( use_tcp ? DATAPATH_OFFCHIP_TCP_REDUCTION : DATAPATH_OFFCHIP_UDP_REDUCTION, ARITH_INTERNAL);
-	start_arith(len, func, 0);
+	cfg_switch( use_tcp ? DATAPATH_OFFCHIP_TCP_REDUCTION : DATAPATH_OFFCHIP_UDP_REDUCTION, (arith_ext) ? ARITH_INTERNAL : ARITH_EXTERNAL);
+	if(arith_ext == 0){
+		start_arith(len, func, 0);
+	} else {
+		setup_ext_arith();
+	}
 
 	remaining_to_move 	= len;
 	remaining_to_ack 	= len;
@@ -2159,7 +2222,13 @@ int main() {
 		buf1_addr =  ((uint64_t) buf1_addrh << 32) | buf1_addrl;
 		buf2_addr =  ((uint64_t) buf2_addrh << 32) | buf2_addrl;
 
-		comp = find_compressor(compression);
+		//gather pipeline arithmetic configuration or signal error
+		if(setup_arithmetic(compression, function) != 0){
+			finalize_call(COMPRESSION_ERROR);
+			continue;
+		}
+		//remap function to the value gathered from the arith spec
+		function = arith_int_func;
 		
 		switch (scenario)
 		{

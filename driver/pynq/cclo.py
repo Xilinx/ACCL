@@ -26,6 +26,7 @@ import numpy as np
 import ipaddress
 from enum import IntEnum, unique
 
+@unique
 class CCLOp(IntEnum):
     config                  = 0
     send                    = 1
@@ -50,6 +51,7 @@ class CCLOp(IntEnum):
     reduce_scatter          = 20
     nop                     = 255
 
+@unique
 class CCLOCfgFunc(IntEnum):
     enable_irq               = 0
     disable_irq              = 1
@@ -65,22 +67,85 @@ class CCLOCfgFunc(IntEnum):
     end_profiling            = 11
     set_dma_transaction_size = 12
     set_max_dma_transactions = 13
-    
-class CCLOReduceFunc(IntEnum):
-    fp          = 0
-    dp          = 1
-    i32         = 2
-    i64         = 3
 
-def np_type_2_cclo_type(np_type):
-    if   (np_type == np.float32 ):
-        return CCLOReduceFunc.fp
-    elif (np_type == np.float64 ):
-        return CCLOReduceFunc.dp
-    elif (np_type == np.int32   ):
-        return CCLOReduceFunc.i32
-    elif (np_type == np.int64   ):
-        return CCLOReduceFunc.i64
+@unique
+class MPIReduceFunctions(IntEnum):
+    MAX = 0
+    MIN = 1
+    SUM = 2
+    PROD = 3
+    LAND = 4
+    LOR = 5
+    BAND = 6
+    BOR = 7
+    MAXLOC = 8
+    MINLOC = 9
+
+# define the supported data types in a set
+# {types}
+CCLO_DEFAULT_DTYPES = {np.float32, np.float64, np.int32, np.int64}
+# define available reduction functions and the data types they apply to
+# {function: {types}}
+# by default we have SUM for all the default types
+CCLO_DEFAULT_FUNCTIONS = {MPIReduceFunctions.SUM: CCLO_DEFAULT_DTYPES}
+# define available type conversion functions
+# {srctype: {dsttypes}}
+# by default we have no conversions
+CCLO_DEFAULT_CONVERSIONS = {}
+
+# define casting config for CCLO
+# {(srctype, transmittype, dsttype): (s2t_id, s2t_ratio, t2d_id, t2d_ratio)}
+# s2t_id is the TDEST to apply when converting from srctype to transmittype
+# t2d_id is the TDEST to apply when converting from transmittype to dsttype
+# ratios are between the bitwidth of the input and output datatypes respectively 
+CCLO_DEFAULT_CAST_CONFIG = {
+    (np.float32, np.float32, np.float32): (0, 1, 0, 1),
+    (np.float64, np.float64, np.float64): (0, 1, 0, 1),
+    (np.int32,   np.int32,   np.int32  ): (0, 1, 0, 1),
+    (np.int64,   np.int64,   np.int64  ): (0, 1, 0, 1)
+}
+
+# define arithmetic config for CCLO
+# {(transmittype, function): arith_id}
+# arith_id is the TDESTs to apply to operand stream. The arithmetic operates on transmittype 
+CCLO_DEFAULT_ARITH_CONFIG = {
+    (np.float32, MPIReduceFunctions.SUM): 0,
+    (np.float64, MPIReduceFunctions.SUM): 1,
+    (np.int32,   MPIReduceFunctions.SUM): 2,
+    (np.int64,   MPIReduceFunctions.SUM): 3
+}
+
+# generate a compression/arithmetic config from the functions and conversions
+def gen_arith_config_template(functions, conversions):
+    ret = dict()
+    # first create the arith config
+    for function in functions.keys():
+        for type in functions[function]:
+            ret[(type, type, type, function)] = None
+    # then based on the available conversions, determine
+    # the compression options
+    # first determine options for compressing,
+    # keeping in mind that the arithmetic is performed on compressed data
+    for key in list(ret):
+        base_type = key[0]
+        func = key[-1]
+        if base_type not in conversions:
+            continue
+        for conv_type in conversions[base_type]:
+            if func is not None:
+                if conv_type not in functions[func]:
+                    continue
+            ret[(base_type, conv_type, conv_type, function)] = None
+    # then determine options for decompressing
+    for key in list(ret):
+        base_type = key[1]
+        if base_type not in conversions:
+            continue
+        for conv_type in conversions[base_type]:
+            ret[(key[0], base_type, conv_type, function)] = None
+    # done, dictionary is populated with correct keys
+    # users must fill in the values based on HW set-up
+    return ret
 
 @unique
 class ErrorCode(IntEnum):
@@ -107,26 +172,14 @@ class ErrorCode(IntEnum):
     ARITH_ERROR                       = 20
     PACK_TIMEOUT_STS_ERROR            = 21
     PACK_SEQ_NUMBER_ERROR             = 22
+    COMPRESSION_ERROR                 = 23
     def __contains__(cls, item): 
         return item in [v.value for v in cls.__members__.values()] 
-
-class dummy_address_class:
-    def __init__(self):
-        self.device_address = 0x0000_0000_0000_0000
-dummy_address = dummy_address_class()
 
 TAG_ANY = 0xFFFF_FFFF
 EXCHANGE_MEM_OFFSET_ADDRESS= 0x1000
 EXCHANGE_MEM_ADDRESS_RANGE = 0x1000
 HOST_CTRL_ADDRESS_RANGE    = 0x800
-
-def compatible_size(nbytes,type):
-        if   (type == CCLOReduceFunc.fp or type == CCLOReduceFunc.i32 ):
-            return True if (nbytes % 4) == 0 else False
-        elif   (type == CCLOReduceFunc.dp or type == CCLOReduceFunc.i64 ):
-            return True if (nbytes % 8) == 0 else False
-
-
 
 class cclo(DefaultIP):
     """
@@ -138,6 +191,10 @@ class cclo(DefaultIP):
     def __init__(self, description):
         super().__init__(description=description)
         self._fullpath = description['fullpath']
+        #define supported types and functions
+        self.supported_types = CCLO_DEFAULT_DTYPES
+        self.supported_functions = CCLO_DEFAULT_FUNCTIONS
+        self.supported_conversions = CCLO_DEFAULT_CONVERSIONS
         #define an empty list of RX spare buffers
         self.rx_buffer_spares = []
         self.rx_buffer_size = 0
@@ -157,6 +214,10 @@ class cclo(DefaultIP):
         self.segment_size = None
         from pynq import MMIO
         self.exchange_mem = MMIO(self.mmio.base_addr + EXCHANGE_MEM_OFFSET_ADDRESS, EXCHANGE_MEM_ADDRESS_RANGE)
+
+    class dummy_address:
+        def __init__(self, adr=0):
+            self.device_address = adr
 
     def dump_exchange_memory(self):
         print("exchange mem:")
@@ -193,9 +254,15 @@ class cclo(DefaultIP):
     #define compressors. required info:
     #TDEST IDs of each outbound stream (arith OPs 0/1, casting streams down/up)
     #compression ratio expressed as nbytes_uncompressed/nbytes_compressed (integer)
-    def configure_compression(self, compressors):
+    def configure_compression(self, compressors, types=None, functions=None):
         assert len(self.communicators) > 0, "Communicators unconfigured, please call configure_communicator() first"
         addr = self.compressors_addr
+        if types is not None:
+            self.supported_types = types
+            #TODO: sanity checking
+        if functions is not None:
+            self.supported_functions = functions
+            #TODO: sanity checking
         self.compressors = compressors
         self.exchange_mem.write(addr,len(compressors))
         addr += 4
@@ -290,12 +357,18 @@ class cclo(DefaultIP):
                 content= "xxread failedxx"
             print(f"SPARE RX BUFFER{i}:\t ADDR: {hex(int(str(addrh)+str(addrl)))} \t STATUS: {status} \t OCCUPACY: {rxlen}/{maxsize} \t DMA TAG: {hex(dmatag)} \t  MPI TAG:{hex(rxtag)} \t SEQ: {seq} \t SRC:{rxsrc} \t content {content}")
 
-    def start(self, scenario=CCLOp.nop, len=1, comm=0, root_src_dst=0, function=0, tag=TAG_ANY, compression=0, src_type=0, dst_type=0, addr_0=dummy_address, addr_1=dummy_address, addr_2=dummy_address, waitfor=[] ):
+    def start(self, scenario=CCLOp.nop, len=1, comm=0, root_src_dst=0, function=0, tag=TAG_ANY, compression=0, src_type=0, dst_type=0, addr_0=None, addr_1=None, addr_2=None, waitfor=[] ):
         #placeholder for kernel filled with default values
         #comm = self.communicators[comm_id]["addr"]
+        if addr_0 is None:
+            addr_0 = self.dummy_address()
+        if addr_1 is None:
+            addr_1 = self.dummy_address()
+        if addr_2 is None:
+            addr_2 = self.dummy_address()
         return DefaultIP.start(self, scenario, len, comm, root_src_dst, function, tag, compression, src_type, dst_type, addr_0, addr_1, addr_2, waitfor=waitfor)        
 
-    def call(self, scenario=CCLOp.nop, len=1, comm=0, root_src_dst=0, function=0, tag=TAG_ANY, compression=0, src_type=0, dst_type=0, addr_0=dummy_address, addr_1=dummy_address, addr_2=dummy_address ):
+    def call(self, scenario=CCLOp.nop, len=1, comm=0, root_src_dst=0, function=0, tag=TAG_ANY, compression=0, src_type=0, dst_type=0, addr_0=None, addr_1=None, addr_2=None):
         #placeholder for kernel filled with default values
         #comm = self.communicators[comm_id]["addr"]
         #call_type
@@ -306,6 +379,12 @@ class cclo(DefaultIP):
         #tag
         #3xbuf_x_type
         #x3buf_x_ptr
+        if addr_0 is None:
+            addr_0 = self.dummy_address()
+        if addr_1 is None:
+            addr_1 = self.dummy_address()
+        if addr_2 is None:
+            addr_2 = self.dummy_address()
         return DefaultIP.call(self, scenario, len, comm, root_src_dst, function, tag, compression, src_type, dst_type, addr_0, addr_1, addr_2)        
 
     def get_retcode(self):
@@ -520,9 +599,7 @@ class cclo(DefaultIP):
         if val.nbytes == 0:
             warnings.warn("zero size buffer")
             return
-        if not compatible_size(val.nbytes,func):
-            warnings.warn("Non compatible with size")
-            return
+        assert type(val.flatten()[0]) in self.supported_functions[func], "Data type not supported for requested function"
         # performs acc = val + acc
         if not val_from_fpga:
             val.sync_to_device()
@@ -788,12 +865,9 @@ class cclo(DefaultIP):
         if count == 0:
             warnings.warn("zero size buffer")
             return
-        if not compatible_size(count,func):
-            warnings.warn("Non compatible with size")
-            return
-        if func > 3:
-            warnings.warn("Non-add reduce not implemented")
-            return
+        assert type(sbuf.flatten()[0]) in self.supported_functions[func], "Data type not supported for requested function"
+        assert count % sbuf.itemsize == 0, "Count not a multiple of input element size"
+
         comm        = self.communicators[comm_id]
         p           = len(comm["ranks"])
         local_rank  = comm["local_rank"]
@@ -864,12 +938,9 @@ class cclo(DefaultIP):
             warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
         if count == 0:
             return
-        if not compatible_size(count,func):
-            warnings.warn("Non compatible with size")
-            return
-        if func > 3:
-            warnings.warn("Non-add reduce not implemented")
-            return
+        assert type(sbuf.flatten()[0]) in self.supported_functions[func], "Data type not supported for requested function"
+        assert count % sbuf.itemsize == 0, "Count not a multiple of input element size"
+
         if not from_fpga:
             sbuf[0:count].sync_to_device()
 
@@ -947,12 +1018,10 @@ class cclo(DefaultIP):
         if count == 0:
             warnings.warn("zero size buffer")
             return
-        if not compatible_size(count,func):
-            warnings.warn("Non compatible with size")
-            return
-        if func > 3:
-            warnings.warn("Non-add reduce_scatter not implemented")
-            return
+
+        assert type(sbuf.flatten()[0]) in self.supported_functions[func], "Data type not supported for requested function"
+        assert count % sbuf.itemsize == 0, "Count not a multiple of input element size"
+
         comm        = self.communicators[comm_id]
         p           = len(comm["ranks"])
         local_rank  = comm["local_rank"]

@@ -17,10 +17,13 @@
 
 TARGET=ip
 DEVICE=xcu250-figd2104-2L-e
-REDUCE_IP=build_hp_stream_add/sol1/impl/export.xo
+DTYPES=float half double int32_t int64_t
+DWIDTH=512
+REDUCE_IP = $(addsuffix _$(DWIDTH).xo, $(addprefix reduce_sum_, $(DTYPES)))
 
 all: $(REDUCE_IP)
 
-$(REDUCE_IP): build.tcl hp_stream_add.cpp 
-	vitis_hls $< -tclargs $(TARGET) $(DEVICE)
+reduce_sum_%_$(DWIDTH).xo: build.tcl hp_stream_add.cpp
+	vitis_hls $< -tclargs $(TARGET) $(DEVICE) $* $(DWIDTH)
+
 

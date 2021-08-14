@@ -51,15 +51,15 @@ switch $command {
 }
 
 
-open_project build_hp_stream_add
+open_project build_hp_fp_stream_conv
 
-add_files hp_stream_add.cpp -cflags "-std=c++14"
+add_files hp_fp_stream_conv.cpp -cflags "-std=c++14"
 add_files -tb tb.cpp -cflags "-std=c++14"
 
-set_top hp_stream_add
+set_top hp_fp_stream_conv
 
 open_solution sol1
-config_export -format xo
+config_export -format xo -library ACCL
 
 if {$do_sim} {
     csim_design -clean
