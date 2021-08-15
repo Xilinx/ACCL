@@ -17,7 +17,7 @@
 
 TARGET=ip
 DEVICE=xcu250-figd2104-2L-e
-REDUCE_IP=build_hp_fp_stream_conv/sol1/impl/export.xo
+REDUCE_IP=hp_fp_stream_conv.xo
 
 all: $(REDUCE_IP)
 

@@ -16,13 +16,12 @@
 #
 # *******************************************************************************/
 
+IPS = loopback reduce_sum fp_hp_stream_conv hp_fp_stream_conv cclo 
 DEVICE=xcu250-figd2104-2L-e
-LOOPBACK_IP=build_loopback/sol1/impl/export.xo
 TARGET=ip
 
-all: $(LOOPBACK_IP)
+all: $(IPS)
 
-loopback: $(LOOPBACK_IP)
-
-$(LOOPBACK_IP): build_loopback.tcl loopback.cpp
-	vitis_hls $< -tclargs $(TARGET) $(DEVICE)
+.PHONY: loopback cclo reduce_sum fp_hp_stream_conv hp_fp_stream_conv
+$(IPS):
+	$(MAKE) -C $@ DEVICE=$(DEVICE) TARGET=$(TARGET)

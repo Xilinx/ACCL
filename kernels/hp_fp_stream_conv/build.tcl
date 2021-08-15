@@ -59,7 +59,7 @@ add_files -tb tb.cpp -cflags "-std=c++14"
 set_top hp_fp_stream_conv
 
 open_solution sol1
-config_export -format xo -library ACCL
+config_export -format xo -library ACCL -output [pwd]/hp_fp_stream_conv.xo
 
 if {$do_sim} {
     csim_design -clean

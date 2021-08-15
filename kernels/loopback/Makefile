@@ -1,3 +1,4 @@
+
 # /*******************************************************************************
 #  Copyright (C) 2021 Xilinx, Inc
 #
@@ -15,15 +16,13 @@
 #
 # *******************************************************************************/
 
-TARGET=ip
 DEVICE=xcu250-figd2104-2L-e
-DTYPES=float half double int32_t int64_t
-DWIDTH=512
-REDUCE_IP = $(addsuffix _$(DWIDTH).xo, $(addprefix reduce_sum_, $(DTYPES)))
+LOOPBACK_IP=loopback.xo
+TARGET=ip
 
-all: $(REDUCE_IP)
+all: $(LOOPBACK_IP)
 
-reduce_sum_%_$(DWIDTH).xo: build.tcl reduce_sum.cpp
-	vitis_hls $< -tclargs $(TARGET) $(DEVICE) $* $(DWIDTH)
+loopback: $(LOOPBACK_IP)
 
-
+$(LOOPBACK_IP): build_loopback.tcl loopback.cpp
+	vitis_hls $< -tclargs $(TARGET) $(DEVICE)

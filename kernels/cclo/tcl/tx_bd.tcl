@@ -176,19 +176,11 @@ proc create_hier_cell_tcp_tx_subsystem { parentCell nameHier } {
                                                    [get_bd_pins tcp_openConResp_0/ap_clk] \
                                                    [get_bd_pins tcp_packetizer_0/ap_clk] \
                                                    [get_bd_pins tcp_txHandler_0/ap_clk] \
-                                                   [get_bd_pins axi_interconnect_0/ACLK] \
-                                                   [get_bd_pins axi_interconnect_0/S00_ACLK] \
-                                                   [get_bd_pins axi_interconnect_0/M00_ACLK] \
-                                                   [get_bd_pins axi_interconnect_0/M01_ACLK] \
                                                    [get_bd_pins tx_fifo/s_axis_aclk]
   connect_bd_net -net ap_rst_n [get_bd_pins ap_rst_n] [get_bd_pins tcp_openConReq_0/ap_rst_n] \
                                                       [get_bd_pins tcp_openConResp_0/ap_rst_n] \
                                                       [get_bd_pins tcp_packetizer_0/ap_rst_n] \
                                                       [get_bd_pins tcp_txHandler_0/ap_rst_n] \
-                                                      [get_bd_pins axi_interconnect_0/ARESETN] \
-                                                      [get_bd_pins axi_interconnect_0/S00_ARESETN] \
-                                                      [get_bd_pins axi_interconnect_0/M00_ARESETN] \
-                                                      [get_bd_pins axi_interconnect_0/M01_ARESETN] \
                                                       [get_bd_pins tx_fifo/s_axis_aresetn]
 
   # Restore current instance

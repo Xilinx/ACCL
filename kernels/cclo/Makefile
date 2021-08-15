@@ -19,7 +19,7 @@ PLATFORM ?= xilinx_u280_xdma_201920_3
 DEBUG ?= none
 XCCL_ELF=vitis_ws/ccl_offload_control/Debug/ccl_offload_control.elf
 XCCL_XSA=ccl_offload_ex/ccl_offload.xsa
-XCCL_XO=ccl_offload_ex/exports/ccl_offload.xo
+XCCL_XO=ccl_offload.xo
 
 FW_SOURCES = $(shell find fw -name '*.c') $(shell find fw -name '*.h') $(shell find fw -name '*.tcl')
 
@@ -42,10 +42,8 @@ all: $(XCCL_XO)
 .PHONY: xsa
 xsa: $(XCCL_XSA)
 
-
 $(XCCL_XSA): $(GEN_KERNEL_TCL) $(REBUILD_BD_TCL)  tcl/control_bd.tcl tcl/dma_bd.tcl tcl/rx_bd.tcl tcl/tx_bd.tcl
 	$(MAKE) -C hls/hostctrl DEVICE=$(FPGAPART)
-	$(MAKE) -C hls/arith DEVICE=$(FPGAPART)
 	$(MAKE) -C hls/vnx_intf DEVICE=$(FPGAPART)
 	$(MAKE) -C hls/tcp_intf DEVICE=$(FPGAPART)
 	vivado -mode batch -source $< -tclargs $(FPGAPART) $(BOARDPART) $(DEBUG) $(XCCL_XSA)

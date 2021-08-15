@@ -59,7 +59,7 @@ add_files -tb tb_loopback.cpp -cflags "-std=c++14"
 set_top loopback
 
 open_solution sol1
-config_export -format xo
+config_export -format xo -library ACCL -output [pwd]/loopback.xo
 
 if {$do_sim} {
     csim_design -clean

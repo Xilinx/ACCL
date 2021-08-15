@@ -103,8 +103,7 @@ proc edit_core {core} {
     config_axis_if $core "m_axis_krnl" "ap_clk" 64 0 0 4 1 0 1 1
     
     config_axis_if $core "s_axis_arith_res" "ap_clk" 64 0 0 0 1 0 1 1
-    config_axis_if $core "m_axis_arith_op0" "ap_clk" 64 0 0 4 1 0 1 1
-    config_axis_if $core "m_axis_arith_op1" "ap_clk" 64 0 0 4 1 0 1 1
+    config_axis_if $core "m_axis_arith_op" "ap_clk" 128 0 0 4 1 0 1 1
 
     # Specify the freq_hz parameter 
     set clkbif      [::ipx::get_bus_interfaces -of $core "ap_clk"]
@@ -229,7 +228,7 @@ write_checkpoint ./ccl_offload_ex/ccl_offload_ex.runs/synth_1/packaged.dcp
 write_xdc ./ccl_offload_ex/ccl_offload_ex.runs/synth_1/packaged.xdc
 close_design
 package_project_dcp_and_xdc ./ccl_offload_ex/ccl_offload_ex.runs/synth_1/packaged.dcp ./ccl_offload_ex/ccl_offload_ex.runs/synth_1/packaged.xdc ./ccl_offload_ex/ccl_offload $kernel_vendor $kernel_library $kernel_name
-package_xo  -xo_path ./ccl_offload_ex/exports/ccl_offload.xo -kernel_name ccl_offload -ip_directory ./ccl_offload_ex/ccl_offload -kernel_xml ./xml/cclo.xml
+package_xo  -xo_path [pwd]/cclo_offload.xo -kernel_name ccl_offload -ip_directory ./ccl_offload_ex/ccl_offload -kernel_xml ./xml/cclo.xml
 
 # close and exit
 close_project
