@@ -32,16 +32,12 @@ static volatile unsigned int dma_tag_lookup [MAX_DMA_TAGS]; //index of the spare
 static volatile	unsigned int dma_transaction_size 	= DMA_MAX_BTT;
 static volatile unsigned int max_dma_in_flight 		= DMA_MAX_TRANSACTIONS;
 
-static unsigned int arith_ext = 0;
-static unsigned int arith_tdest_op0;
-static unsigned int arith_tdest_op1;
-static unsigned int arith_int_func;
+static unsigned int arith_op_tdest;
+static unsigned int arith_op_bits;
 static unsigned int s2t_tdest;
-static unsigned int s2t_ratio_d;
-static unsigned int s2t_ratio_m;
+static unsigned int src_op_bits;
 static unsigned int t2d_tdest;
-static unsigned int t2d_ratio_d;
-static unsigned int t2d_ratio_m;
+static unsigned int dst_op_bits;
 
 
 unsigned int enqueue_rx_buffers(void);
@@ -138,62 +134,12 @@ static inline unsigned int read_timer1(){
 }
 
 //ARITH
-
-//for hls ip protocols https://www.xilinx.com/html_docs/xilinx2020_2/vitis_doc/managing_interface_synthesis.html#qls1539734256651__ae476333
-void start_arith(unsigned int byte_count, unsigned int function, unsigned use_repeat) {
-	//get number of 512b/64B transfers corresponding to byte_count
-	unsigned int num_dma_transfers 			= (unsigned int)( byte_count / dma_transaction_size);
-	unsigned int bytes_tail 				= byte_count % dma_transaction_size;
-	unsigned int quad_word_per_dma_transfer = (unsigned int)((dma_transaction_size+63)/64);
-	unsigned int quad_word_per_tail			= (unsigned int)((bytes_tail+63)/64);
-	unsigned int quad_word_stream_transfers = num_dma_transfers * quad_word_per_dma_transfer + quad_word_per_tail;
-	Xil_Out32(ARITH_BASEADDR+0x10, quad_word_stream_transfers);
-	Xil_Out32(ARITH_BASEADDR+0x18, function);
-	SET(ARITH_BASEADDR, CONTROL_START_MASK | (use_repeat == 1 ? CONTROL_REPEAT_MASK : 0) );
+static inline void setup_arith_tdest(unsigned int val){
+	Xil_Out32(GPIO_TDEST_BASEADDR, val);
 }
 
-static inline void stop_arith() {
-	CLR(ARITH_BASEADDR, CONTROL_START_MASK | CONTROL_REPEAT_MASK);
-}
-
-static inline int arith_is_idle() {
-	return Xil_In32(ARITH_BASEADDR) & CONTROL_IDLE_MASK ;
-}
-
-static inline int arith_is_ready() {
-	return Xil_In32(ARITH_BASEADDR) & CONTROL_START_MASK ;
-}
-
-static inline void arith_disable_auto_repeat() {
-	CLR(ARITH_BASEADDR, CONTROL_REPEAT_MASK);
-}
-
-static inline void wait_arith(){
-	//wait for arithmetich unit to finish
-	for(unsigned int count=0; !arith_is_idle() ; count++){
-		if(count > timeout)
-			longjmp(excp_handler, ARITH_ERROR);
-	}
-}
-
-static inline int arith_number_of_bytes_per(unsigned int function){
-	switch (function)
-	{
-		case ARITH_fp:
-			return 4;
-		case ARITH_dp:
-			return 8;
-		case ARITH_i32:
-			return 4;
-		case ARITH_i64:
-			return 8;
-	}
-	return -1;
-}
-
-static inline void setup_ext_arith(){
-	Xil_Out32(GPIO_ARITH_BASEADDR, arith_tdest_op0);
-	Xil_Out32(GPIO_ARITH_BASEADDR+8, arith_tdest_op1);
+static inline void setup_krnl_tdest(unsigned int val){
+	Xil_Out32(GPIO_TDEST_BASEADDR+8, val);
 }
 
 void stream_isr(void) {
@@ -330,95 +276,69 @@ static inline void apply_switch_config(unsigned int base) {
 //   									Arith Res -> TCP TX (TCP packetizer)
 //7 == DATAPATH_DMA_EXT_LOOPBACK:		DMA0_RX -> M_EXT_KRNL (TX)
 //										S_EXT_KRNL (RX) -> DMA1_TX
-//there's a subswitch that is specific for reduce:
-// you can select where to redirect operands to internal or external arithmetic unit 
-//									result from  "             "          "       " 
-// ARITH_NONE leaves the current arithmetic switch configuration 
-void cfg_switch(unsigned int scenario, unsigned int arith) {
+void cfg_switch(unsigned int scenario) {
 	switch (scenario)
 	{
 		case DATAPATH_DMA_LOOPBACK:
-			set_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_S_DMA1_RX, MAIN_SWITCH_M_DMA1_TX);
-			disable_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_M_ARITH_OP0);
-			disable_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_M_ARITH_OP1);
-			disable_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_M_UDP_TX);
-			disable_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_M_TCP_TX);
-			disable_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_M_EXT_KRNL);			
+			set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_DMA1_RX, SWITCH_M_DMA1_TX);
+			disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_ARITH_OP0);
+			disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_ARITH_OP1);
+			disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_UDP_TX);
+			disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_TCP_TX);
+			disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_EXT_KRNL);			
 			break;
 		case DATAPATH_DMA_REDUCTION:
-			set_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_S_DMA0_RX, MAIN_SWITCH_M_ARITH_OP0);
-			set_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_S_DMA1_RX, MAIN_SWITCH_M_ARITH_OP1);
-			set_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_S_ARITH_RES, MAIN_SWITCH_M_DMA1_TX);
-			disable_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_M_UDP_TX);
-			disable_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_M_TCP_TX);
-			disable_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_M_EXT_KRNL);	
+			set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_DMA0_RX, SWITCH_M_ARITH_OP0);
+			set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_DMA1_RX, SWITCH_M_ARITH_OP1);
+			set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_ARITH_RES, SWITCH_M_DMA1_TX);
+			disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_UDP_TX);
+			disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_TCP_TX);
+			disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_EXT_KRNL);	
 			break;
 		case DATAPATH_OFFCHIP_TX_UDP:
-			set_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_S_DMA1_RX, MAIN_SWITCH_M_UDP_TX);
-			disable_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_M_ARITH_OP0);
-			disable_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_M_ARITH_OP1);
-			disable_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_M_DMA1_TX);
-			disable_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_M_TCP_TX);
-			disable_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_M_EXT_KRNL);	
+			set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_DMA1_RX, SWITCH_M_UDP_TX);
+			disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_ARITH_OP0);
+			disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_ARITH_OP1);
+			disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_DMA1_TX);
+			disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_TCP_TX);
+			disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_EXT_KRNL);	
 			break;
 		case DATAPATH_OFFCHIP_TX_TCP:
-			set_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_S_DMA1_RX, MAIN_SWITCH_M_TCP_TX);
-			disable_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_M_ARITH_OP0);
-			disable_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_M_ARITH_OP1);
-			disable_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_M_DMA1_TX);
-			disable_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_M_UDP_TX);
-			disable_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_M_EXT_KRNL);	
+			set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_DMA1_RX, SWITCH_M_TCP_TX);
+			disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_ARITH_OP0);
+			disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_ARITH_OP1);
+			disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_DMA1_TX);
+			disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_UDP_TX);
+			disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_EXT_KRNL);	
 			break;
 		case DATAPATH_OFFCHIP_UDP_REDUCTION:
-			set_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_S_DMA0_RX, MAIN_SWITCH_M_ARITH_OP0);
-			set_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_S_DMA1_RX, MAIN_SWITCH_M_ARITH_OP1);
-			set_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_S_ARITH_RES, MAIN_SWITCH_M_UDP_TX);
-			disable_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_M_DMA1_TX);
-			disable_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_M_TCP_TX);
-			disable_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_M_EXT_KRNL);	
+			set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_DMA0_RX, SWITCH_M_ARITH_OP0);
+			set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_DMA1_RX, SWITCH_M_ARITH_OP1);
+			set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_ARITH_RES, SWITCH_M_UDP_TX);
+			disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_DMA1_TX);
+			disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_TCP_TX);
+			disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_EXT_KRNL);	
 			break;
 		case DATAPATH_OFFCHIP_TCP_REDUCTION:
-			set_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_S_DMA0_RX, MAIN_SWITCH_M_ARITH_OP0);
-			set_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_S_DMA1_RX, MAIN_SWITCH_M_ARITH_OP1);
-			set_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_S_ARITH_RES, MAIN_SWITCH_M_TCP_TX);
-			disable_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_M_DMA1_TX);
-			disable_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_M_UDP_TX);
-			disable_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_M_EXT_KRNL);	
+			set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_DMA0_RX, SWITCH_M_ARITH_OP0);
+			set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_DMA1_RX, SWITCH_M_ARITH_OP1);
+			set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_ARITH_RES, SWITCH_M_TCP_TX);
+			disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_DMA1_TX);
+			disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_UDP_TX);
+			disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_EXT_KRNL);	
 			break;
 		case DATAPATH_DMA_EXT_LOOPBACK:
-			set_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_S_DMA0_RX, MAIN_SWITCH_M_EXT_KRNL);
-			set_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_S_EXT_KRNL, MAIN_SWITCH_M_DMA1_TX);
-			disable_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_M_ARITH_OP0);
-			disable_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_M_ARITH_OP1);
-			disable_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_M_TCP_TX);
-			disable_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_M_UDP_TX);
+			set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_DMA0_RX, SWITCH_M_EXT_KRNL);
+			set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_EXT_KRNL, SWITCH_M_DMA1_TX);
+			disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_ARITH_OP0);
+			disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_ARITH_OP1);
+			disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_TCP_TX);
+			disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_UDP_TX);
 			break;//TODO: add DATAPATH_OFFCHIP_RX
 		default:
 			return;
 	}
-	apply_switch_config(MAIN_SWITCH_BASEADDR);
-	switch (arith)
-	{
-		case ARITH_EXTERNAL:
-			set_switch_datapath(ARITH_SWITCH_BASEADDR, ARITH_SWITCH_S_OP0, ARITH_SWITCH_M_EXT_OP0);
-			set_switch_datapath(ARITH_SWITCH_BASEADDR, ARITH_SWITCH_S_OP1, ARITH_SWITCH_M_EXT_OP1);
-			set_switch_datapath(ARITH_SWITCH_BASEADDR, ARITH_SWITCH_S_EXT_RES, ARITH_SWITCH_M_RES);
-			disable_switch_datapath(ARITH_SWITCH_BASEADDR, ARITH_SWITCH_M_INT_OP0);
-			disable_switch_datapath(ARITH_SWITCH_BASEADDR, ARITH_SWITCH_M_INT_OP1);
-			break;
-		case ARITH_INTERNAL:
-			set_switch_datapath(ARITH_SWITCH_BASEADDR, ARITH_SWITCH_S_OP0, ARITH_SWITCH_M_INT_OP0);
-			set_switch_datapath(ARITH_SWITCH_BASEADDR, ARITH_SWITCH_S_OP1, ARITH_SWITCH_M_INT_OP1);
-			set_switch_datapath(ARITH_SWITCH_BASEADDR, ARITH_SWITCH_S_INT_RES, ARITH_SWITCH_M_RES);
-			disable_switch_datapath(ARITH_SWITCH_BASEADDR, ARITH_SWITCH_M_EXT_OP0);
-			disable_switch_datapath(ARITH_SWITCH_BASEADDR, ARITH_SWITCH_M_EXT_OP1);
-			break;
-		case ARITH_NONE:
-			return;
-		default:
-			break;
-	}
-	apply_switch_config(ARITH_SWITCH_BASEADDR);
+	apply_switch_config(SWITCH_BASEADDR);
 }
 
 //retrieves the communicator
@@ -455,11 +375,9 @@ int setup_arithmetic(unsigned int comp_idx, unsigned int func_idx){
 	//retrieve arith_tdest
 	if(reducer_idx < red_spec->nreducers){
 		red = red_spec->reducers[reducer_idx];
+		arith_op_bits = red.op_bits;
 		if(func_idx < red.nfunctions){
-			arith_tdest_op0 = red.tdest[func_idx] & 0xff;
-			arith_tdest_op1 = (red.tdest[func_idx] >> 8) & 0xff;
-			arith_int_func  = (red.tdest[func_idx] >> 16) & 0xff;
-			arith_ext = red.tdest[func_idx] >> 24;
+			arith_op_tdest = red.tdest[func_idx];
 		} else {
 			return -1;
 		}
@@ -470,16 +388,14 @@ int setup_arithmetic(unsigned int comp_idx, unsigned int func_idx){
 	if(s2t_cast_idx < cast_spec->ncasters){
 		cst = cast_spec->casters[s2t_cast_idx];
 		s2t_tdest = cst.tdest;
-		s2t_ratio_d = cst.ratio_d;
-		s2t_ratio_m = cst.ratio_m
+		src_op_bits = cst.op_bits;
 	} else {
 		return -1;
 	}
 	if(t2d_cast_idx < cast_spec->ncasters){
 		cst = cast_spec->casters[t2d_cast_idx];
 		t2d_tdest = cst.tdest;
-		t2d_ratio_d = cst.ratio_d;
-		t2d_ratio_m = cst.ratio_m
+		dst_op_bits = cst.op_bits;
 	} else {
 		return -1;
 	}
@@ -743,7 +659,6 @@ static inline int start_dma(
 					uint64_t DMA1_tx_addr,
 					uint64_t DMA2_rx_addr,
 					unsigned int what_DMAS,
-					unsigned int is_transport,
 					unsigned int dma_tag_tmp) {
 	//BE CAREFUL!: if(len > DMA_MAX_BTT) return DMA_TRANSACTION_SIZE;
 	//start DMAs 
@@ -847,7 +762,8 @@ int dma_movement_single(
 //before calling this method call cfg_switch
 //segment a logical dma command in multiple dma commands.
 //if one of the DMA is not used fill the corresponding address with NULL
-static inline int dma_movement( 	
+//TODO: static inline?
+int dma_movement( 	
 					unsigned int len,
 					uint64_t DMA0_rx_addr,
 					uint64_t DMA1_rx_addr,
@@ -909,7 +825,8 @@ static inline int dma_movement(
 	return COLLECTIVE_OP_SUCCESS;
 }
 
-static inline int dma_movement_and_packetizer(
+//TODO: static inline?
+int dma_movement_and_packetizer(
 					communicator* world, 	
 					unsigned int len,
 					uint64_t DMA0_rx_addr,
@@ -929,8 +846,10 @@ static inline int dma_movement_and_packetizer(
 	curr_len_move = dma_transaction_size;
 	curr_len_ack  = dma_transaction_size;
 	//1. issue at most max_dma_in_flight of dma_transaction_size
-	//start pack
-	unsigned int pkt_len = (len*s2t_ratio_m)/s2t_ratio_d;
+	//start packetizer
+	//the length is computed based on bitwidths of source and transport types
+	//TODO: handle cases where bitwidths arent divisible
+	unsigned int pkt_len = (len*arith_op_bits)/src_op_bits;
 	start_packetizer_message(world, dst_rank, pkt_len, mpi_tag);
 	for (i = 0; remaining_to_move > 0 && i < max_dma_in_flight ; i++){
 		if (remaining_to_move < dma_transaction_size){
@@ -988,7 +907,7 @@ int dma_loopback(	unsigned int len,
 					uint64_t dst_addr) {
 	
 	//configure switch
-	cfg_switch(DATAPATH_DMA_LOOPBACK, ARITH_NONE );
+	cfg_switch(DATAPATH_DMA_LOOPBACK);
 	//call function that will control the DMAs
 	return dma_movement(len, 0, src_addr, dst_addr, 0, USE_DMA1_RX | USE_DMA1_TX);
 
@@ -1009,7 +928,7 @@ static inline int copy_single_dma_transaction(	unsigned int len,
 						uint64_t dst_addr) {
 
 	//configure switch
-	cfg_switch(DATAPATH_DMA_LOOPBACK, ARITH_NONE );
+	cfg_switch(DATAPATH_DMA_LOOPBACK);
 	//start both channels of the DMA1
 	return dma_movement_single(len, 0, src_addr, dst_addr, 0, USE_DMA1_RX | USE_DMA1_TX);
 
@@ -1023,17 +942,11 @@ int reduce_loopback(	unsigned int len,
 						uint64_t dst_addr) {
 	
 	//configure switch
-	cfg_switch(DATAPATH_DMA_REDUCTION, (arith_ext == 0) ? ARITH_INTERNAL : ARITH_EXTERNAL);
-	//start arith once with full size
-	if(arith_ext == 0){
-		start_arith(len, func, 0);
-	} else {
-		setup_ext_arith();
-	}
+	cfg_switch(DATAPATH_DMA_REDUCTION);
+
 	//start dma transfer
 	unsigned int ret = dma_movement(len, op0_addr, op1_addr, dst_addr, 0, USE_DMA0_RX | USE_DMA1_RX | USE_DMA1_TX);
-	//wait for arith to finish
-	wait_arith();
+
 	return ret;
 }
 
@@ -1055,7 +968,7 @@ int transmit_offchip_world(
 	uint64_t src_addr,
 	unsigned int dst_tag
 ){
-	cfg_switch(use_tcp ? DATAPATH_OFFCHIP_TX_TCP : DATAPATH_OFFCHIP_TX_UDP , ARITH_NONE);
+	cfg_switch(use_tcp ? DATAPATH_OFFCHIP_TX_TCP : DATAPATH_OFFCHIP_TX_UDP);
 	return dma_movement_and_packetizer(world,len, 0, src_addr, 0,0, USE_DMA1_RX, dst_rank, dst_tag);
 }
 
@@ -1084,13 +997,8 @@ int reduce_offchip_world(
 	unsigned int dst_tag
 ){
 	//configure switch
-	cfg_switch(use_tcp ? DATAPATH_OFFCHIP_TCP_REDUCTION : DATAPATH_OFFCHIP_UDP_REDUCTION, (arith_ext == 0) ? ARITH_INTERNAL : ARITH_EXTERNAL);
-	//configure arith
-	if(arith_ext == 0){
-		start_arith(len, func, 0);
-	} else {
-		setup_ext_arith();
-	}
+	cfg_switch(use_tcp ? DATAPATH_OFFCHIP_TCP_REDUCTION : DATAPATH_OFFCHIP_UDP_REDUCTION);
+
 	return dma_movement_and_packetizer(world, len, op0_addr, op1_addr, 0, 0, USE_DMA0_RX | USE_DMA1_RX, dst_rank, dst_tag );
 }
 
@@ -1185,7 +1093,7 @@ int receive_offchip_world(
 	uint8_t spare_buffer_indexes [max_dma_in_flight];
 	uint8_t spare_buffer_indexes_start = 0, spare_buffer_indexes_end = 0;
 
-	cfg_switch(DATAPATH_DMA_LOOPBACK, ARITH_NONE);
+	cfg_switch(DATAPATH_DMA_LOOPBACK);
 	
 	remaining_to_move 	= len;
 	remaining_to_ack 	= len;
@@ -1276,12 +1184,8 @@ int receive_and_accumulate(
 	uint8_t spare_buffer_indexes [max_dma_in_flight];
 	uint8_t spare_buffer_indexes_start = 0, spare_buffer_indexes_end = 0;
 
-	cfg_switch(DATAPATH_DMA_REDUCTION, (arith_ext == 0) ? ARITH_INTERNAL : ARITH_EXTERNAL);
-	if(arith_ext == 0){
-		start_arith(len, func, 0);
-	} else {
-		setup_ext_arith();
-	}
+	cfg_switch(DATAPATH_DMA_REDUCTION);
+
 	remaining_to_move 	= len;
 	remaining_to_ack 	= len;
 	dma_tag_tmp 		= dma_tag;
@@ -1350,7 +1254,7 @@ int receive_and_accumulate(
 		microblaze_enable_interrupts();
 		remaining_to_ack  -= curr_len_ack;
 	}
-	wait_arith();
+
 	return COLLECTIVE_OP_SUCCESS;
 }
 
@@ -1375,12 +1279,7 @@ int receive_and_reduce_offchip(
 	uint8_t spare_buffer_indexes [max_dma_in_flight];
 	uint8_t spare_buffer_indexes_start = 0, spare_buffer_indexes_end = 0;
 
-	cfg_switch( use_tcp ? DATAPATH_OFFCHIP_TCP_REDUCTION : DATAPATH_OFFCHIP_UDP_REDUCTION, (arith_ext) ? ARITH_INTERNAL : ARITH_EXTERNAL);
-	if(arith_ext == 0){
-		start_arith(len, func, 0);
-	} else {
-		setup_ext_arith();
-	}
+	cfg_switch( use_tcp ? DATAPATH_OFFCHIP_TCP_REDUCTION : DATAPATH_OFFCHIP_UDP_REDUCTION);
 
 	remaining_to_move 	= len;
 	remaining_to_ack 	= len;
@@ -1456,7 +1355,7 @@ int receive_and_reduce_offchip(
 		microblaze_enable_interrupts();
 		remaining_to_ack  -= curr_len_ack;
 	}
-	wait_arith();
+
 	return COLLECTIVE_OP_SUCCESS;
 }
 
@@ -1476,7 +1375,7 @@ int relay_to_other_rank(
 	uint8_t spare_buffer_indexes_start = 0, spare_buffer_indexes_end = 0;
 
 	//configure switch
-	cfg_switch( use_tcp ? DATAPATH_OFFCHIP_TX_TCP: DATAPATH_OFFCHIP_TX_UDP, ARITH_NONE);
+	cfg_switch( use_tcp ? DATAPATH_OFFCHIP_TX_TCP: DATAPATH_OFFCHIP_TX_UDP);
 
 	remaining_to_move 	= len;
 	remaining_to_ack 	= len;
@@ -1614,9 +1513,9 @@ int broadcast_round_robin(
 	if(src_rank == world.local_rank){
 		
 		if (use_tcp){
-			cfg_switch(DATAPATH_OFFCHIP_TX_TCP, ARITH_NONE);
+			cfg_switch(DATAPATH_OFFCHIP_TX_TCP);
 		}else{
-			cfg_switch(DATAPATH_OFFCHIP_TX_UDP, ARITH_NONE);
+			cfg_switch(DATAPATH_OFFCHIP_TX_UDP);
 		}
 		//send to all members of the communicator 1 segment of the buffer at the time
 		curr_len = dma_transaction_size;
@@ -1693,9 +1592,9 @@ int scatter_rr(
 	if(src_rank == world.local_rank){
 		
 		if (use_tcp){
-			cfg_switch(DATAPATH_OFFCHIP_TX_TCP, ARITH_NONE);
+			cfg_switch(DATAPATH_OFFCHIP_TX_TCP);
 		}else{
-			cfg_switch(DATAPATH_OFFCHIP_TX_UDP, ARITH_NONE);
+			cfg_switch(DATAPATH_OFFCHIP_TX_UDP);
 		}
 		tmp_src_buf_base_addr = src_buf_addr;
 
@@ -2054,7 +1953,7 @@ int all_reduce_share(
 	int curr_send_chunk	, curr_recv_chunk			  = world.local_rank;			 
 	//divide into chunks 
 	unsigned int len_div_size 	 	= len/world.size; 
-	unsigned int min_operand_width  = arith_number_of_bytes_per(function);
+	unsigned int min_operand_width  = 8*arith_op_bits;//TODO: what if the arith op is not a multiple of 1 byte?
 	unsigned int tail				= len_div_size % min_operand_width;
 	len_div_size += - tail + (tail == 0 ? 0 : min_operand_width); //TODO: now when processing last chunk it will assume that buffers are same length and part of non buffer will be processed.
 	unsigned int next_in_ring 	 = (world.local_rank+1			  )%world.size	;
@@ -2087,20 +1986,8 @@ int ext_kernel_stream(
 						uint64_t dst_addr
 ){
 	//configure switch
-	cfg_switch(DATAPATH_DMA_EXT_LOOPBACK, ARITH_NONE);
+	cfg_switch(DATAPATH_DMA_EXT_LOOPBACK);
 	return dma_movement(len, 0, src_addr, dst_addr, 0, USE_DMA1_RX | USE_DMA1_TX);
-}
-
-int reduce_ext (	unsigned int len,
-					uint64_t op1_addr,
-					uint64_t op2_addr,
-					uint64_t dst_addr
-				) {
-	
-	//configure switch
-	cfg_switch(DATAPATH_DMA_REDUCTION, ARITH_EXTERNAL);
-	return dma_movement(len, op1_addr, op2_addr, dst_addr, 0, USE_DMA0_RX | USE_DMA1_RX | USE_DMA1_TX);
-	
 }
 
 //startup and main
@@ -2228,7 +2115,9 @@ int main() {
 			continue;
 		}
 		//remap function to the value gathered from the arith spec
-		function = arith_int_func;
+		setup_arith_tdest(arith_op_tdest);
+		//initialize external kernel interface to tdest=0
+		setup_krnl_tdest(0);
 		
 		switch (scenario)
 		{
@@ -2351,9 +2240,6 @@ int main() {
 				break;
 			case XCCL_EXT_STREAM_KRNL:
 				retval = ext_kernel_stream( 		  len, 			 				buf0_addr, buf1_addr);
-				break;
-			case XCCL_EXT_REDUCE:
-				retval = reduce_ext(				  len, 			 				buf0_addr, buf1_addr, buf2_addr);
 				break;
 			case XCCL_REDUCE_SCATTER:
 				retval = scatter_reduce(		comm, len, function, 				buf0_addr, buf1_addr);

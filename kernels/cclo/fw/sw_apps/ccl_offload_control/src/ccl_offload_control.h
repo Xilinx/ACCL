@@ -66,34 +66,18 @@ extern "C" {
 //#define DATAPATH_OFFCHIP_RX_UDP      8 not used up to now since DMA are physically linked to depacketizer
 //#define DATAPATH_OFFCHIP_RX_TCP      9 not used up to now since DMA are physically linked to depacketizer
 
-#define MAIN_SWITCH_M_UDP_TX    0
-#define MAIN_SWITCH_M_TCP_TX    1
-#define MAIN_SWITCH_M_DMA1_TX   2
-#define MAIN_SWITCH_M_ARITH_OP0 3
-#define MAIN_SWITCH_M_ARITH_OP1 4
-#define MAIN_SWITCH_M_EXT_KRNL  5
+#define SWITCH_M_UDP_TX    0
+#define SWITCH_M_TCP_TX    1
+#define SWITCH_M_DMA1_TX   2
+#define SWITCH_M_ARITH_OP0 3
+#define SWITCH_M_ARITH_OP1 4
+#define SWITCH_M_EXT_KRNL  5
 
-#define MAIN_SWITCH_S_DMA0_RX   0
-#define MAIN_SWITCH_S_DMA1_RX   1
-#define MAIN_SWITCH_S_DMA2_RX   2
-#define MAIN_SWITCH_S_ARITH_RES 3
-#define MAIN_SWITCH_S_EXT_KRNL  4
-
-//ARITH SWITCH
-#define ARITH_INTERNAL         0
-#define ARITH_EXTERNAL         1
-#define ARITH_NONE             2
-
-#define ARITH_SWITCH_M_INT_OP0 0
-#define ARITH_SWITCH_M_INT_OP1 1
-#define ARITH_SWITCH_M_EXT_OP0 2
-#define ARITH_SWITCH_M_EXT_OP1 3
-#define ARITH_SWITCH_M_RES     4
-
-#define ARITH_SWITCH_S_OP0     0
-#define ARITH_SWITCH_S_OP1     1
-#define ARITH_SWITCH_S_INT_RES 2
-#define ARITH_SWITCH_S_EXT_RES 3
+#define SWITCH_S_DMA0_RX   0
+#define SWITCH_S_DMA1_RX   1
+#define SWITCH_S_DMA2_RX   2
+#define SWITCH_S_ARITH_RES 3
+#define SWITCH_S_EXT_KRNL  4
 
 //PACKT CONST
 #define MAX_PACKETSIZE 1536
@@ -122,11 +106,10 @@ extern "C" {
 #define XCCL_GATHER_RING          13
 #define XCCL_ALLGATHER_RING       14
 #define XCCL_EXT_STREAM_KRNL      15
-#define XCCL_EXT_REDUCE           16
-#define XCCL_BCAST_RR             17
-#define XCCL_SCATTER_RR           18
-#define XCCL_ALLREDUCE_SHARE_RING 19
-#define XCCL_REDUCE_SCATTER       20
+#define XCCL_BCAST_RR             16
+#define XCCL_SCATTER_RR           17
+#define XCCL_ALLREDUCE_SHARE_RING 18
+#define XCCL_REDUCE_SCATTER       19
 
 //XCCL_CONFIG SUBFUNCTIONS
 #define HOUSEKEEP_IRQEN           0
@@ -157,18 +140,15 @@ extern "C" {
 
 #define HOSTCTRL_BASEADDR     0x0        
 #define EXCHMEM_BASEADDR      0x1000
-#define ARITH_BASEADDR        0x20000
 #define UDP_RXPKT_BASEADDR    0x30000
 #define UDP_TXPKT_BASEADDR    0x40000
 #define TCP_RXPKT_BASEADDR    0x50000
 #define TCP_TXPKT_BASEADDR    0x60000
 #define GPIO_BASEADDR         0x40000000
-#define GPIO_ARITH_BASEADDR   0x40010000
-#define GPIO_CONV_BASEADDR    0x40020000
-#define MAIN_SWITCH_BASEADDR  0x44A00000
+#define GPIO_TDEST_BASEADDR   0x40010000
+#define SWITCH_BASEADDR  0x44A00000
 #define IRQCTRL_BASEADDR      0x44A10000
 #define TIMER_BASEADDR        0x44A20000
-#define ARITH_SWITCH_BASEADDR 0x44B00000
 //https://www.xilinx.com/html_docs/xilinx2020_2/vitis_doc/managing_interface_synthesis.html#tzw1539734223235
 #define CONTROL_START_MASK      0x00000001
 #define CONTROL_DONE_MASK       0x00000001 << 1
@@ -271,12 +251,6 @@ extern "C" {
 #define PACK_SEQ_NUMBER_ERROR                         22
 #define COMPRESSION_ERROR                             23
 
-//ARITH functions
-#define ARITH_fp    0
-#define ARITH_dp    1
-#define ARITH_i32   2
-#define ARITH_i64   3
-
 //USE DMAS for DMA movement
 #define USE_DMA0_RX 1
 #define USE_DMA1_RX 2
@@ -370,13 +344,13 @@ typedef struct {
 //reducer definition
 typedef struct {
 	unsigned int nfunctions;
+  unsigned int op_bits;
 	unsigned int * tdest;
 } reducer;
 
 typedef struct {
 	unsigned int tdest;
-	unsigned int ratio_d;
-  unsigned int ratio_m;
+	unsigned int op_bits;
 } caster;
 
 typedef struct {

@@ -207,8 +207,7 @@ proc package_project_dcp_and_xdc {path_to_dcp path_to_xdc path_to_packaged kerne
 # open project
 open_project ./ccl_offload_ex/ccl_offload_ex.xpr
 
-# replace the default top with the modified wrapper
-remove_files ./ccl_offload_ex/imports/ccl_offload.v
+# add wrapper
 add_files -norecurse ./hdl/ccl_offload.v
 update_compile_order -fileset sources_1
 
