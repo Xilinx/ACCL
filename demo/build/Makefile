@@ -21,7 +21,7 @@ DEBUG ?= all
 PROFILE ?= all
 MODE ?= tcp
 FREQUENCY = 250
-XCCL_XO=../../kernel/ccl_offload_ex/exports/ccl_offload.xo
+CCL_XO=../../kernels/cclo/ccl_offload.xo
 
 VNX=xup_vitis_network_example
 NETLAYERDIR = $(VNX)/NetLayers
@@ -34,15 +34,17 @@ FW_SOURCES = $(shell find fw -name '*.c') $(shell find fw -name '*.h') $(shell f
 ETH_IF=0
 CMAC_UDP_XO=$(VNX)/Ethernet/_x.$(PLATFORM)/cmac_$(ETH_IF).xo
 UDP_XO=$(VNX)/NetLayers/_x.$(PLATFORM)/networklayer.xo
-LOOPBACK_XO=hls/loopback/build_vnx_loopback/sol1/impl/export.xo
 TCP_DUMMY_XO=hls/dummy_tcp_stack/build_tcp_stack/sol1/impl/export.xo
 TCP_XO=Vitis_with_100Gbps_TCP-IP/_x.hw.$(XSA)/network_krnl.xo
 CMAC_TCP_XO=Vitis_with_100Gbps_TCP-IP/_x.hw.$(XSA)/cmac_krnl.xo
 XCLBIN=$(BUILD_DIR)/ccl_offload.xclbin
-HP_SUM_XO=hls/hp_stream_add/build_hp_stream_add/sol1/impl/export.xo
-HP_UPCAST_XO=hls/hp_fp_stream_conv/build_hp_fp_stream_conv/sol1/impl/export.xo
-HP_DOWNCAST_XO=hls/fp_hp_stream_conv/build_fp_hp_stream_conv/sol1/impl/export.xo
-COMPRESSION_XO = $(HP_SUM_XO) $(HP_UPCAST_XO) $(HP_DOWNCAST_XO)
+
+SUM_XO=$(wildcard ../../kernels/reduce_sum/*.xo)
+HP_UPCAST_XO=../../kernels/hp_fp_stream_conv/hp_fp_stream_conv.xo
+HP_DOWNCAST_XO=../../kernels/fp_hp_stream_conv/fp_hp_stream_conv.xo
+LOOPBACK_XO=../../kernels/loopback/loopback.xo
+
+ARITHMETIC_XO = $(SUM_XO) $(HP_UPCAST_XO) $(HP_DOWNCAST_XO)
 
 ifeq (all,$(PROFILE))
 	PROFILE_OPTS := --profile.data all:all:all --profile.exec all:all:all --profile.stall all:all:all
@@ -86,12 +88,12 @@ ifeq (vnx,$(MODE))
 	endif
 	CONFIG += --connectivity.nk cmac_$(ETH_IF):1:cmac_inst
 	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/$(VNX)/post_sys_link.tcl
-	OTHER_XO = $(CMAC_UDP_XO) $(UDP_XO) $(COMPRESSION_XO)
+	OTHER_XO = $(CMAC_UDP_XO) $(UDP_XO)
 	CONFIG += --user_ip_repo_paths $(CMAC_IP_FOLDER)
 	CONFIG += --user_ip_repo_paths $(HLS_IP_FOLDER)
 else ifeq (tri,$(MODE))
 	ETH_IF := none
-	OTHER_XO = $(TCP_DUMMY_XO) $(COMPRESSION_XO)
+	OTHER_XO = $(TCP_DUMMY_XO)
 	ifeq (u250,$(findstring u250, $(PLATFORM)))
 		CONFIGFILE = config/link_config_u250_tri.ini
 	endif
@@ -101,7 +103,7 @@ else ifeq (tri,$(MODE))
 	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/tcl/post_sys_link_tri.tcl
 else ifeq (tcp, $(MODE))
 	CMAC_TCP_XO=Vitis_with_100Gbps_TCP-IP/_x.hw.$(XSA)/cmac_krnl.xo
-	OTHER_XO = $(TCP_XO) $(CMAC_TCP_XO) $(LOOPBACK_XO) $(COMPRESSION_XO)
+	OTHER_XO = $(TCP_XO) $(CMAC_TCP_XO) $(LOOPBACK_XO)
 	CONFIGFILE = config/link_config_$(BOARD)_tcp_cmac.ini
 	CONFIG := --config $(CONFIGFILE) 
 	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/Vitis_with_100Gbps_TCP-IP/scripts/post_sys_link.tcl
@@ -132,15 +134,6 @@ $(CMAC_TCP_XO):
 $(TCP_DUMMY_XO):
 	$(MAKE) -C hls/dummy_tcp_stack DEVICE=$(FPGAPART) all
 
-.PHONY: compression
-compression: $(COMPRESSION_XO)
-$(HP_SUM_XO):
-	$(MAKE) -C hls/hp_stream_add DEVICE=$(FPGAPART) all
-$(HP_DOWNCAST_XO):
-	$(MAKE) -C hls/fp_hp_stream_conv DEVICE=$(FPGAPART) all
-$(HP_UPCAST_XO):
-	$(MAKE) -C hls/hp_fp_stream_conv DEVICE=$(FPGAPART) all
-
 .PHONY: network_krnl
 network_krnl: $(TCP_XO)
 
@@ -148,20 +141,9 @@ $(TCP_XO):
 	git submodule update --init --recursive Vitis_with_100Gbps_TCP-IP
 	$(MAKE) -C Vitis_with_100Gbps_TCP-IP/ network_krnl DEVICE=$(PLATFORM) TEMP_DIR=_x.hw.$(XSA)/ XSA=$(XSA)
 
-$(XCLBIN): $(XCCL_XO) $(OTHER_XO) $(CONFIGFILE)
-	v++ --link --platform $(PLATFORM) --kernel_frequency $(FREQUENCY) --save-temps --temp_dir $(BUILD_DIR) $(CONFIG) -o $@ $(XCCL_XO) $(OTHER_XO)
-
-.PHONY: loopback
-loopback: $(LOOPBACK_XO)
-
-$(LOOPBACK_XO):
-	$(MAKE) -C hls/loopback DEVICE=$(FPGAPART) loopback
-
-.PHONY: kernel
-kernel: $(XCCL_XO)
-
-$(XCCL_XO):
-	$(MAKE) -C ../../kernel PLATFORM=$(PLATFORM) DEBUG=$(DEBUG) MODE=$(MODE)
+$(XCLBIN): $(OTHER_XO) $(CONFIGFILE)
+	$(MAKE) -C ../../kernels PLATFORM=$(PLATFORM) DEBUG=$(DEBUG)
+	v++ --link --platform $(PLATFORM) --kernel_frequency $(FREQUENCY) --save-temps --temp_dir $(BUILD_DIR) $(CONFIG) -o $@ $(CCL_XO) $(ARITHMETIC_XO) $(OTHER_XO)
 
 distclean:
 	git clean -xfd

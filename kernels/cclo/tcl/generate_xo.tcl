@@ -227,7 +227,7 @@ write_checkpoint ./ccl_offload_ex/ccl_offload_ex.runs/synth_1/packaged.dcp
 write_xdc ./ccl_offload_ex/ccl_offload_ex.runs/synth_1/packaged.xdc
 close_design
 package_project_dcp_and_xdc ./ccl_offload_ex/ccl_offload_ex.runs/synth_1/packaged.dcp ./ccl_offload_ex/ccl_offload_ex.runs/synth_1/packaged.xdc ./ccl_offload_ex/ccl_offload $kernel_vendor $kernel_library $kernel_name
-package_xo  -xo_path [pwd]/cclo_offload.xo -kernel_name ccl_offload -ip_directory ./ccl_offload_ex/ccl_offload -kernel_xml ./xml/cclo.xml
+package_xo  -xo_path [pwd]/ccl_offload.xo -kernel_name ccl_offload -ip_directory ./ccl_offload_ex/ccl_offload -kernel_xml ./xml/cclo.xml
 
 # close and exit
 close_project

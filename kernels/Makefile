@@ -16,12 +16,25 @@
 #
 # *******************************************************************************/
 
-IPS = loopback reduce_sum fp_hp_stream_conv hp_fp_stream_conv cclo 
-DEVICE=xcu250-figd2104-2L-e
+PERIPHERAL_IPS = loopback reduce_sum fp_hp_stream_conv hp_fp_stream_conv 
 TARGET=ip
+PLATFORM ?= xilinx_u280_xdma_201920_3
+DEBUG ?= none
 
-all: $(IPS)
+ifeq (u250,$(findstring u250, $(PLATFORM)))
+	FPGAPART=xcu250-figd2104-2L-e
+else ifeq (u280,$(findstring u280, $(PLATFORM)))
+	FPGAPART=xcu280-fsvh2892-2L-e
+else
+	$(error Unsupported PLATFORM)
+endif
+
+all: $(PERIPHERAL_IPS) cclo
 
 .PHONY: loopback cclo reduce_sum fp_hp_stream_conv hp_fp_stream_conv
-$(IPS):
-	$(MAKE) -C $@ DEVICE=$(DEVICE) TARGET=$(TARGET)
+
+$(PERIPHERAL_IPS):
+	$(MAKE) -C $@ DEVICE=$(FPGAPART) TARGET=$(TARGET)
+
+cclo:
+	$(MAKE) -C $@ PLATFORM=$(FPGAPART) DEBUG=$(DEBUG)

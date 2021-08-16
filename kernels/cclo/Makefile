@@ -48,7 +48,7 @@ $(XCCL_XSA): $(GEN_KERNEL_TCL) $(REBUILD_BD_TCL)  tcl/control_bd.tcl tcl/dma_bd.
 	$(MAKE) -C hls/tcp_intf DEVICE=$(FPGAPART)
 	vivado -mode batch -source $< -tclargs $(FPGAPART) $(BOARDPART) $(DEBUG) $(XCCL_XSA)
 
-OPTIMIZATION=0
+OPTIMIZATION=s
 #valid values 0,1,2,3,s,g
 ifeq ($(OPTIMIZATION),0)
    OPTIMIZATION_STRING = "None (-O0)"
