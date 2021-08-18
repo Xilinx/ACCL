@@ -16,8 +16,8 @@
 # *******************************************************************************/
 
 PLATFORM ?= xilinx_u280_xdma_201920_3
-#error reported No IP matching VLNV 'ethz.systems:hls:toe:1.6' was found.
-#xilinx_u250_xdma_201830_2 not supported for cmac
+#xilinx_u250_xdma_201830_2 not supported 
+#xilinx_u250_gen3x16_xdma_3_1_202020_1
 #xilinx_u280_xdma_201920_3
 XSA := $(strip $(patsubst %.xpfm, % , $(shell basename $(PLATFORM))))
 DEBUG ?= all
