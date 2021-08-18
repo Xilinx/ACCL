@@ -370,7 +370,7 @@ void cfg_switch(unsigned int scenario, unsigned int arith) {
 			disable_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_M_EXT_KRNL);	
 			break;
 		case DATAPATH_DMA_EXT_LOOPBACK:
-			set_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_S_DMA0_RX, MAIN_SWITCH_M_EXT_KRNL);
+			set_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_S_DMA1_RX, MAIN_SWITCH_M_EXT_KRNL);
 			set_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_S_EXT_KRNL, MAIN_SWITCH_M_DMA1_TX);
 			disable_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_M_ARITH_OP0);
 			disable_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_M_ARITH_OP1);
