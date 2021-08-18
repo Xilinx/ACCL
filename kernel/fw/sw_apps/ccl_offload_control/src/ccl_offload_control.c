@@ -434,13 +434,13 @@ static inline void start_depacketizer(uint64_t base_addr) {
 }
 
 //create the instructions for packetizer to send a message. Those infos include, among the others the message header.
-unsigned int start_packetizer_message(communicator* world, unsigned int dst_rank, unsigned int len, unsigned int tag){
+unsigned int start_packetizer_message(communicator* world, unsigned int dst_rank, unsigned int len, unsigned int tag, unsigned int sequence_number_offset){
 	unsigned int src_rank, sequence_number, dst, net_tx, curr_len, i;
 	unsigned int transmitted = 0; 
 	//prepare header arguments
 	
 	src_rank 		= world->local_rank;
-	sequence_number = world->ranks[dst_rank].outbound_seq;
+	sequence_number = world->ranks[dst_rank].outbound_seq + sequence_number_offset;
 	if (use_tcp){
 		dst 			= world->ranks[dst_rank].session; 
 		net_tx 			= CMD_TCP_TX; 
@@ -877,7 +877,7 @@ static inline int dma_movement_and_packetizer(
 	curr_len_ack  = dma_transaction_size;
 	//1. issue at most max_dma_in_flight of dma_transaction_size
 	//start pack
-	start_packetizer_message(world, dst_rank, len, mpi_tag);
+	start_packetizer_message(world, dst_rank, len, mpi_tag, 0);
 	for (i = 0; remaining_to_move > 0 && i < max_dma_in_flight ; i++){
 		if (remaining_to_move < dma_transaction_size){
 			curr_len_move 	= remaining_to_move ;
@@ -904,7 +904,7 @@ static inline int dma_movement_and_packetizer(
 			curr_len_move 	= remaining_to_move ;
 		}
 		//start pack
-		start_packetizer_message(world, dst_rank, curr_len_move, mpi_tag);
+		start_packetizer_message(world, dst_rank, curr_len_move, mpi_tag, max_dma_in_flight - 1);
 		//start DMAs
 		dma_tag_tmp 		 = start_dma(curr_len_move, DMA0_rx_addr, DMA1_rx_addr, DMA1_tx_addr, DMA2_rx_addr, what_DMAS, dma_tag_tmp);
 		remaining_to_move 	-= curr_len_move;
@@ -1321,7 +1321,7 @@ int receive_and_reduce_offchip(
 	curr_len_ack  = dma_transaction_size;
 	//1. issue at most max_dma_in_flight of dma_transaction_size
 	//start pack
-	start_packetizer_message(world, dst_rank, len, mpi_tag);
+	start_packetizer_message(world, dst_rank, len, mpi_tag, 0);
 	for (i = 0; remaining_to_move > 0 && i < max_dma_in_flight ; i++){
 		if (remaining_to_move < dma_transaction_size){
 			curr_len_move 	= remaining_to_move ;
@@ -1364,7 +1364,7 @@ int receive_and_reduce_offchip(
 		spare_buffer_indexes[spare_buffer_indexes_end] = buf_idx;
 		spare_buffer_indexes_end = (spare_buffer_indexes_end + 1) % max_dma_in_flight;
 		//start pack
-		start_packetizer_message(world, dst_rank, curr_len_move, mpi_tag);
+		start_packetizer_message(world, dst_rank, curr_len_move, mpi_tag, max_dma_in_flight - 1);
 		//start DMAs
 		dma_tag_tmp 		 = start_dma(curr_len_move, op0_addr, rx_buff_addr, 0, 0, USE_DMA0_RX | USE_DMA1_RX , dma_tag_tmp);
 		remaining_to_move 	-= curr_len_move;
@@ -1417,7 +1417,7 @@ int relay_to_other_rank(
 	curr_len_ack  = dma_transaction_size;
 	//1. issue at most max_dma_in_flight of dma_transaction_size
 	//start pack
-	start_packetizer_message(world, dst_rank, len, mpi_tag);
+	start_packetizer_message(world, dst_rank, len, mpi_tag, 0);
 	for (i = 0; remaining_to_move > 0 && i < max_dma_in_flight ; i++){
 		if (remaining_to_move < dma_transaction_size){
 			curr_len_move 	= remaining_to_move ;
@@ -1459,7 +1459,7 @@ int relay_to_other_rank(
 		spare_buffer_indexes[spare_buffer_indexes_end] = buf_idx;
 		spare_buffer_indexes_end = (spare_buffer_indexes_end + 1) % max_dma_in_flight;
 		//start pack
-		start_packetizer_message(world, dst_rank, curr_len_move, mpi_tag);
+		start_packetizer_message(world, dst_rank, curr_len_move, mpi_tag, max_dma_in_flight - 1);
 		//start DMAs
 		dma_tag_tmp 		 = start_dma(curr_len_move, 0, rx_buff_addr, 0, 0,  USE_DMA1_RX , dma_tag_tmp);
 		remaining_to_move 	-= curr_len_move;
@@ -1557,7 +1557,7 @@ int broadcast_round_robin(
 			for(i=0; i<world.size; i++){
 				if(i == world.local_rank) continue;
 				//start packetizer messages and issue a single dma command for eachrank
-				start_packetizer_message(&world, i, curr_len, TAG_ANY);
+				start_packetizer_message(&world, i, curr_len, TAG_ANY, 0);
 				dma_movement_single(curr_len, 0, buf_addr, 0, 0, USE_DMA1_RX);
 			}
 			//ack packetizer 
@@ -1641,7 +1641,7 @@ int scatter_rr(
 			for(i=0; i<world.size; i++){
 				if(i != world.local_rank){
 					//start packetizer messages and issue a single dma command for eachrank
-					start_packetizer_message(&world, i, curr_len, TAG_ANY);
+					start_packetizer_message(&world, i, curr_len, TAG_ANY, 0);
 					dma_movement_single(curr_len, 0, tmp_src_buf_offset_addr, 0, 0, USE_DMA1_RX);
 				}
 				tmp_src_buf_offset_addr += offset_next_rank_buffer;
