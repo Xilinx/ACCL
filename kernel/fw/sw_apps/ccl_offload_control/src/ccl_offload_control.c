@@ -2199,7 +2199,7 @@ int main() {
 						break;
 					case SET_DMA_TRANSACTION_SIZE:
 						retval = DMA_NOT_EXPECTED_BTT_ERROR;
-						if(len < DMA_MAX_BTT){
+						if(len <= DMA_MAX_BTT){
 							dma_transaction_size = len;
 							start_timer1();
 							Xil_Out32(TIME_TO_ACCESS_EXCH_MEM, read_timer1());
@@ -2208,7 +2208,7 @@ int main() {
 						break;
 					case SET_MAX_DMA_TRANSACTIONS:
 						retval = DMA_NOT_OKAY_ERROR;
-						if(len < DMA_MAX_TRANSACTIONS){
+						if(len <= DMA_MAX_TRANSACTIONS){
 							max_dma_in_flight = len;
 							retval = COLLECTIVE_OP_SUCCESS;
 						}
