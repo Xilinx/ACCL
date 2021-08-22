@@ -21,7 +21,7 @@
 <root versionMajor="1" versionMinor="6">
   <kernel name="ccl_offload" language="ip_c" vlnv="Xilinx:ACCL:ccl_offload:1.0" attributes="" preferredWorkGroupSizeMultiple="0" workGroupSize="1" interrupt="false" hwControlProtocol="ap_ctrl_hs">
     <ports>
-      <port name="s_axi_control" mode="slave" range="0x1000" dataWidth="32" portType="addressable" base="0x0"/>
+      <port name="s_axi_control" mode="slave" range="0x2000" dataWidth="32" portType="addressable" base="0x0"/>
       <port name="m_axi_0" mode="master" range="0xFFFFFFFFFFFFFFFF" dataWidth="512" portType="addressable" base="0x0"/>
       <port name="m_axi_1" mode="master" range="0xFFFFFFFFFFFFFFFF" dataWidth="512" portType="addressable" base="0x0"/>
       <port name="m_axi_2" mode="master" range="0xFFFFFFFFFFFFFFFF" dataWidth="512" portType="addressable" base="0x0"/>
