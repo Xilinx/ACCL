@@ -105,7 +105,6 @@ extern "C" {
 #define XCCL_ALLREDUCE_FUSED_RING 12
 #define XCCL_GATHER_RING          13
 #define XCCL_ALLGATHER_RING       14
-#define XCCL_EXT_STREAM_KRNL      15
 #define XCCL_BCAST_RR             16
 #define XCCL_SCATTER_RR           17
 #define XCCL_ALLREDUCE_SHARE_RING 18
@@ -251,20 +250,14 @@ extern "C" {
 #define PACK_SEQ_NUMBER_ERROR                         22
 #define COMPRESSION_ERROR                             23
 
-//USE DMAS for DMA movement
+//blocks used for data movement
+#define USE_NONE    0
 #define USE_DMA0_RX 1
 #define USE_DMA1_RX 2
 #define USE_DMA1_TX 4
 #define USE_DMA2_RX 8
 #define USE_DMA1_TX_WITHOUT_TLAST 16
-
-//the following indicate whether
-//any DMA is being used to source
-//initial data or sink final data
-#define USE_DMA0_SRC 1
-#define USE_DMA1_SRC 2
-#define USE_DMA1_DST 4
-#define USE_DMA2_SRC 8
+#define USE_PACKETIZER 32
 
 #define S_AXI_CONTROL -1
 
