@@ -21,8 +21,8 @@ PLATFORM ?= xilinx_u280_xdma_201920_3
 #xilinx_u280_xdma_201920_3
 XSA := $(strip $(patsubst %.xpfm, % , $(shell basename $(PLATFORM))))
 DEBUG ?= all
-MODE ?= tcp_cmac
-FREQUENCY = 100
+MODE ?= vnx
+FREQUENCY = 250
 XCCL_XO=../../kernel/ccl_offload_ex/exports/ccl_offload.xo
 VNX=xup_vitis_network_example
 
@@ -56,7 +56,7 @@ endif
 CONFIGFILE := config/link_config_$(BOARD)_$(MODE).ini
 CONFIG := --config $(CONFIGFILE)
 ifeq (vnx,$(MODE))
-	CMAC_IP_FOLDER = $(shell readlink -f ./$(CMACDIR)/cmac)
+	CMAC_IP_FOLDER = $(shell readlink -f ./$(CMACDIR)/packaged_kernel_cmac_0_$(PLATFORM))
 	ifeq (u50,$(findstring u50, $(PLATFORM)))
 		HLS_IP_FOLDER  = $(shell readlink -f ./$(NETLAYERHLS)/synthesis_results_HMB)
 	endif
@@ -69,12 +69,11 @@ ifeq (vnx,$(MODE))
 	ifeq (u280,$(findstring u280, $(PLATFORM)))
 		HLS_IP_FOLDER  = $(shell readlink -f ./$(NETLAYERHLS)/synthesis_results_HMB)
 	endif
-	CONFIG += --connectivity.nk cmac_$(ETH_IF):1:cmac_inst
 	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/$(VNX)/post_sys_link.tcl
-	VNX_XO = $(CMAC_UDP_XO) $(UDP_XO)
+	VNX_XO = $(CMAC_UDP_XO) $(UDP_XO) $(TCP_DUMMY_XO) $(LOOPBACK_XO) $(ARITH_XO)
 	CONFIG += --user_ip_repo_paths $(CMAC_IP_FOLDER)
 	CONFIG += --user_ip_repo_paths $(HLS_IP_FOLDER)
-	CMAC_IP_FOLDER ?= $(shell readlink -f ./$(CMACDIR)/cmac)
+	CMAC_IP_FOLDER ?= $(shell readlink -f ./$(CMACDIR)/packaged_kernel_cmac_0_$(PLATFORM))
 else ifeq (vnx_dual,$(MODE))
 	CMAC_IP_FOLDER = $(shell readlink -f ./$(CMACDIR)/cmac)
 	CMAC_UDP_XO := $(VNX)/Ethernet/_x.$(PLATFORM)/cmac_0.xo
