@@ -32,14 +32,7 @@ static volatile unsigned int dma_tag_lookup [MAX_DMA_TAGS]; //index of the spare
 static volatile	unsigned int dma_transaction_size 	= DMA_MAX_BTT;
 static volatile unsigned int max_dma_in_flight 		= DMA_MAX_TRANSACTIONS;
 
-static unsigned int arith_op_tdest;
-static unsigned int arith_op_bits;
-static unsigned int s2t_tdest;
-static unsigned int src_op_bits;
-static unsigned int t2d_tdest;
-static unsigned int dst_op_bits;
-static unsigned int current_krnl_tdest;
-
+static arith_config arcfg;
 communicator world;
 
 unsigned int enqueue_rx_buffers(void);
@@ -141,10 +134,7 @@ static inline void setup_arith_tdest(unsigned int val){
 }
 
 static inline void setup_krnl_tdest(unsigned int val){
-    if(current_krnl_tdest != val){
-        Xil_Out32(GPIO_TDEST_BASEADDR+8, val);
-        current_krnl_tdest = val;
-    }
+    Xil_Out32(GPIO_TDEST_BASEADDR+8, val);
 }
 
 void stream_isr(void) {
@@ -358,53 +348,6 @@ static inline communicator find_comm(unsigned int adr){
         ret.ranks = NULL;
     }
     return ret;
-}
-
-//retrieves the compressor
-int setup_arithmetic(unsigned int comp_idx, unsigned int func_idx){
-    compressor comp;
-    reducer red;
-    caster cst;
-    compressor_spec * comp_spec = (compressor_spec*)(COMPRESSOR_SPEC_OFFSET);
-    caster_spec * cast_spec = (caster_spec*)(CASTER_SPEC_OFFSET);
-    reducer_spec * red_spec = (reducer_spec*)(REDUCER_SPEC_OFFSET);
-    if(comp_idx < comp_spec->ncompressors){
-        comp = comp_spec->compressors[comp_idx];
-    } else {
-        return -1;
-    }
-    unsigned int s2t_cast_idx = comp.s2t_cast_idx;
-    unsigned int t2d_cast_idx = comp.t2d_cast_idx;
-    unsigned int reducer_idx = comp.reducer_idx;
-    //retrieve arith_tdest
-    if(reducer_idx < red_spec->nreducers){
-        red = red_spec->reducers[reducer_idx];
-        arith_op_bits = red.op_bits;
-        if(func_idx < red.nfunctions){
-            arith_op_tdest = red.tdest[func_idx];
-        } else {
-            return -1;
-        }
-    } else {
-        return -1;
-    }
-    //retrieve caster tdests
-    if(s2t_cast_idx < cast_spec->ncasters){
-        cst = cast_spec->casters[s2t_cast_idx];
-        s2t_tdest = cst.tdest;
-        src_op_bits = cst.op_bits;
-    } else {
-        return -1;
-    }
-    if(t2d_cast_idx < cast_spec->ncasters){
-        cst = cast_spec->casters[t2d_cast_idx];
-        t2d_tdest = cst.tdest;
-        dst_op_bits = cst.op_bits;
-    } else {
-        return -1;
-    }
-    //all good, return 0
-    return 0;
 }
 
 //Packetizer/Depacketizer
@@ -676,8 +619,8 @@ static inline int start_dma(
     if( what_DMAS & USE_DMA0_RX){
         dma_tag_tmp = (dma_tag_tmp + 1) & 0xf;
         if(casting & USE_DMA0_RX){
-            setup_krnl_tdest(s2t_tdest);
-            true_len = len*src_op_bits/arith_op_bits;
+            setup_krnl_tdest(arcfg.s2t_tdest);
+            true_len = len*arcfg.src_op_bits/arcfg.arith_op_bits;
         } else {
             true_len = len;
         }
@@ -687,8 +630,8 @@ static inline int start_dma(
     if( what_DMAS & USE_DMA1_RX){
         dma_tag_tmp = (dma_tag_tmp + 1) & 0xf;
         if(casting & USE_DMA1_RX){
-            setup_krnl_tdest(s2t_tdest);
-            true_len = len*src_op_bits/arith_op_bits;
+            setup_krnl_tdest(arcfg.s2t_tdest);
+            true_len = len*arcfg.src_op_bits/arcfg.arith_op_bits;
         } else {
             true_len = len;
         }
@@ -698,8 +641,8 @@ static inline int start_dma(
     if( what_DMAS & USE_DMA1_TX){
         dma_tag_tmp = (dma_tag_tmp + 1) & 0xf;
         if(casting & USE_DMA1_TX){
-            setup_krnl_tdest(t2d_tdest);
-            true_len = len*dst_op_bits/arith_op_bits;
+            setup_krnl_tdest(arcfg.t2d_tdest);
+            true_len = len*arcfg.dst_op_bits/arcfg.arith_op_bits;
         } else {
             true_len = len;
         }
@@ -709,8 +652,8 @@ static inline int start_dma(
     if( what_DMAS & USE_DMA1_TX_WITHOUT_TLAST){
         dma_tag_tmp = (dma_tag_tmp + 1) & 0xf;
         if(casting & USE_DMA1_TX_WITHOUT_TLAST){
-            setup_krnl_tdest(t2d_tdest);
-            true_len = len*dst_op_bits/arith_op_bits;
+            setup_krnl_tdest(arcfg.t2d_tdest);
+            true_len = len*arcfg.dst_op_bits/arcfg.arith_op_bits;
         } else {
             true_len = len;
         }
@@ -720,8 +663,8 @@ static inline int start_dma(
     if( what_DMAS & USE_DMA2_RX){
         dma_tag_tmp = (dma_tag_tmp + 1) & 0xf;
         if(casting & USE_DMA2_RX){
-            setup_krnl_tdest(s2t_tdest);
-            true_len = len*src_op_bits/arith_op_bits;
+            setup_krnl_tdest(arcfg.s2t_tdest);
+            true_len = len*arcfg.src_op_bits/arcfg.arith_op_bits;
         } else {
             true_len = len;
         }
@@ -770,7 +713,7 @@ static inline void ack_dma(
         status = getd(STS_DMA0_RX);
         dma_tag = (dma_tag + 1) & 0xf;
         if(casting & USE_DMA0_RX){
-            true_len = len*src_op_bits/arith_op_bits;
+            true_len = len*arcfg.src_op_bits/arcfg.arith_op_bits;
         } else {
             true_len = len;
         }
@@ -780,7 +723,7 @@ static inline void ack_dma(
         status = getd(STS_DMA1_RX);
         dma_tag = (dma_tag + 1) & 0xf;
         if(casting & USE_DMA1_RX){
-            true_len = len*src_op_bits/arith_op_bits;
+            true_len = len*arcfg.src_op_bits/arcfg.arith_op_bits;
         } else {
             true_len = len;
         }
@@ -790,7 +733,7 @@ static inline void ack_dma(
         status = getd(STS_DMA1_TX);
         dma_tag = (dma_tag + 1) & 0xf;
         if(casting & USE_DMA1_TX){
-            true_len = len*dst_op_bits/arith_op_bits;
+            true_len = len*arcfg.dst_op_bits/arcfg.arith_op_bits;
         } else {
             true_len = len;
         }
@@ -800,7 +743,7 @@ static inline void ack_dma(
         status = getd(STS_DMA1_TX);
         dma_tag = (dma_tag + 1) & 0xf;
         if(casting & USE_DMA1_TX_WITHOUT_TLAST){
-            true_len = len*dst_op_bits/arith_op_bits;
+            true_len = len*arcfg.dst_op_bits/arcfg.arith_op_bits;
         } else {
             true_len = len;
         }
@@ -810,7 +753,7 @@ static inline void ack_dma(
         status = getd(STS_DMA2_RX);
         dma_tag = (dma_tag + 1) & 0xf;
         if(casting & USE_DMA2_RX){
-            true_len = len*src_op_bits/arith_op_bits;
+            true_len = len*arcfg.src_op_bits/arcfg.arith_op_bits;
         } else {
             true_len = len;
         }
@@ -857,22 +800,22 @@ int dma_movement(
 
         //increment addresses based on casting spec
         if(casting & USE_DMA0_RX){
-            DMA0_rx_addr 		+= curr_len_move*src_op_bits/arith_op_bits;
+            DMA0_rx_addr 		+= curr_len_move*arcfg.src_op_bits/arcfg.arith_op_bits;
         } else {
             DMA0_rx_addr 		+= curr_len_move;
         }
         if(casting & USE_DMA1_RX){
-            DMA1_rx_addr 		+= curr_len_move*src_op_bits/arith_op_bits;
+            DMA1_rx_addr 		+= curr_len_move*arcfg.src_op_bits/arcfg.arith_op_bits;
         } else {
             DMA1_rx_addr 		+= curr_len_move;
         }
         if(casting & USE_DMA1_TX){
-            DMA1_tx_addr 		+= curr_len_move*dst_op_bits/arith_op_bits;
+            DMA1_tx_addr 		+= curr_len_move*arcfg.dst_op_bits/arcfg.arith_op_bits;
         } else {
             DMA1_tx_addr 		+= curr_len_move;
         }
         if(casting & USE_DMA2_RX){
-            DMA2_rx_addr 		+= curr_len_move*src_op_bits/arith_op_bits;
+            DMA2_rx_addr 		+= curr_len_move*arcfg.src_op_bits/arcfg.arith_op_bits;
         } else {
             DMA2_rx_addr 		+= curr_len_move;
         }
@@ -902,22 +845,22 @@ int dma_movement(
 
         //increment addresses based on casting spec
         if(casting & USE_DMA0_RX){
-            DMA0_rx_addr 		+= curr_len_move*src_op_bits/arith_op_bits;
+            DMA0_rx_addr 		+= curr_len_move*arcfg.src_op_bits/arcfg.arith_op_bits;
         } else {
             DMA0_rx_addr 		+= curr_len_move;
         }
         if(casting & USE_DMA1_RX){
-            DMA1_rx_addr 		+= curr_len_move*src_op_bits/arith_op_bits;
+            DMA1_rx_addr 		+= curr_len_move*arcfg.src_op_bits/arcfg.arith_op_bits;
         } else {
             DMA1_rx_addr 		+= curr_len_move;
         }
         if(casting & USE_DMA1_TX){
-            DMA1_tx_addr 		+= curr_len_move*dst_op_bits/arith_op_bits;
+            DMA1_tx_addr 		+= curr_len_move*arcfg.dst_op_bits/arcfg.arith_op_bits;
         } else {
             DMA1_tx_addr 		+= curr_len_move;
         }
         if(casting & USE_DMA2_RX){
-            DMA2_rx_addr 		+= curr_len_move*src_op_bits/arith_op_bits;
+            DMA2_rx_addr 		+= curr_len_move*arcfg.src_op_bits/arcfg.arith_op_bits;
         } else {
             DMA2_rx_addr 		+= curr_len_move;
         }
@@ -1123,7 +1066,7 @@ int receive_offchip_world(
         //start DMAs
         dma_tag_tmp 		 = start_dma(curr_len_move, 0, rx_buff_addr, dst_addr, 0, USE_DMA1_RX | USE_DMA1_TX, USE_DMA1_TX, dma_tag_tmp);
         remaining_to_move 	-= curr_len_move;
-        dst_addr 			+= curr_len_move*dst_op_bits/arith_op_bits;
+        dst_addr 			+= curr_len_move*arcfg.dst_op_bits/arcfg.arith_op_bits;
     }
     //2.ack 1 and issue another dma transfer up until there's no more dma move to issue
     while(remaining_to_move > 0){
@@ -1151,7 +1094,7 @@ int receive_offchip_world(
         //start DMAs
         dma_tag_tmp 		 = start_dma(curr_len_move, 0, rx_buff_addr, dst_addr, 0, USE_DMA1_RX | USE_DMA1_TX, USE_DMA1_TX, dma_tag_tmp);
         remaining_to_move 	-= curr_len_move;
-        dst_addr 			+= curr_len_move*dst_op_bits/arith_op_bits;
+        dst_addr 			+= curr_len_move*arcfg.dst_op_bits/arcfg.arith_op_bits;
     }
     //3. finish ack the remaining
     while(remaining_to_ack > 0){
@@ -1216,7 +1159,7 @@ int receive_and_accumulate(
         remaining_to_move 	-= curr_len_move;
         op0_addr 			+= curr_len_move;
         if(use_casting)
-            dst_addr 			+= curr_len_move*dst_op_bits/arith_op_bits;
+            dst_addr 			+= curr_len_move*arcfg.dst_op_bits/arcfg.arith_op_bits;
         else
             dst_addr 			+= curr_len_move;
     }
@@ -1248,7 +1191,7 @@ int receive_and_accumulate(
         remaining_to_move 	-= curr_len_move;
         op0_addr 			+= curr_len_move;
         if(use_casting)
-            dst_addr 			+= curr_len_move*dst_op_bits/arith_op_bits;
+            dst_addr 			+= curr_len_move*arcfg.dst_op_bits/arcfg.arith_op_bits;
         else
             dst_addr 			+= curr_len_move;
     }
@@ -1318,7 +1261,7 @@ int receive_and_reduce_offchip(
         dma_tag_tmp 		 = start_dma(curr_len_move, op0_addr, rx_buff_addr, 0, 0, USE_DMA0_RX | USE_DMA1_RX, use_casting ? USE_DMA0_RX : USE_NONE, dma_tag_tmp);
         remaining_to_move 	-= curr_len_move;
         if(use_casting)
-            op0_addr += curr_len_move*src_op_bits/arith_op_bits;   
+            op0_addr += curr_len_move*arcfg.src_op_bits/arcfg.arith_op_bits;   
         else
             op0_addr += curr_len_move;
     }
@@ -1353,7 +1296,7 @@ int receive_and_reduce_offchip(
         dma_tag_tmp 		 = start_dma(curr_len_move, op0_addr, rx_buff_addr, 0, 0, USE_DMA0_RX | USE_DMA1_RX, use_casting ? USE_DMA0_RX : USE_NONE, dma_tag_tmp);
         remaining_to_move 	-= curr_len_move;
         if(use_casting)
-            op0_addr += curr_len_move*src_op_bits/arith_op_bits;   
+            op0_addr += curr_len_move*arcfg.src_op_bits/arcfg.arith_op_bits;   
         else
             op0_addr += curr_len_move;
     }
@@ -1490,30 +1433,8 @@ static inline int recv(
     return receive_offchip_world(&world, src_rank, len, buf_addr, tag);
 }
 
-//naive bcast: root sends to each rank
-int broadcast(
-                unsigned int len,
-                unsigned int src_rank,
-                uint64_t buf_addr){
-    int i;
-    int ret = COLLECTIVE_OP_SUCCESS;
-    //determine if we're sending or receiving
-    if(src_rank == world.local_rank){
-        //send to all other members of the communicator
-        for(i=0; i<world.size && ret == COLLECTIVE_OP_SUCCESS ; i++){
-            if(i != world.local_rank){
-                ret = transmit_offchip(&world, i, len, buf_addr, TAG_ANY);
-            }
-        }
-    }else{
-        ret = 	receive_offchip_world(	&world, src_rank, len, buf_addr, TAG_ANY);
-    }
-    return ret;
-}
-
 //root read multiple times the same segment and send it to each rank before moving to the next part of the buffer to be transmitted. 
-int broadcast_round_robin(
-                unsigned int len,
+int broadcast(  unsigned int len,
                 unsigned int src_rank,
                 uint64_t buf_addr){
     unsigned int curr_len, i;
@@ -1555,39 +1476,12 @@ int broadcast_round_robin(
     
 }
 
-//naive: root sends to each rank the buffer.
-int scatter(
-                unsigned int len,
-                unsigned int src_rank,
-                uint64_t src_buf_addr,
-                uint64_t dst_buf_addr){
-    int i;
-    int ret = COLLECTIVE_OP_SUCCESS;
-    //determine if we're sending or receiving
-    if(src_rank == world.local_rank){
-        //for root rank configure switch
-        for(i = 0; i < world.size && ret == COLLECTIVE_OP_SUCCESS; i++){
-            if (i == world.local_rank){
-                //for root copy
-                ret = copy(	len, src_buf_addr, dst_buf_addr);
-            }else{
-                ret = transmit_offchip(&world, i, len, src_buf_addr, TAG_ANY);
-            }
-            src_buf_addr += len;
-        }
-    }else{
-        return receive_offchip_world(&world, src_rank, len, dst_buf_addr, TAG_ANY);
-    }
-
-    return ret;
-}
-
 //scatter segment at a time. root sends each rank a segment in a round robin fashion 
-int scatter_rr(
-                unsigned int len,
-                unsigned int src_rank,
-                uint64_t src_buf_addr,
-                uint64_t dst_buf_addr){
+int scatter(unsigned int len,
+            unsigned int src_rank,
+            uint64_t src_buf_addr,
+            uint64_t dst_buf_addr){
+
     unsigned int curr_len, i, offset_next_rank_buffer;
     uint64_t tmp_src_buf_base_addr, tmp_src_buf_offset_addr;
     offset_next_rank_buffer = len;
@@ -1640,42 +1534,12 @@ int scatter_rr(
     }
 
 }
-//naive gather: every rank send to root. Root place them in the correct part of dst buffer.
-int gather(
-                unsigned int len,
-                unsigned int root_rank,
-                uint64_t src_buf_addr,
-                uint64_t dst_buf_addr){
-    int i;
-    int ret = COLLECTIVE_OP_SUCCESS;
-    return COLLECTIVE_NOT_IMPLEMENTED; //at this moment is not safe to run non ring based collectives. they are not handled at depacketizer level.
-
-    //determine if we're sending or receiving
-    if(root_rank == world.local_rank){
-        //receive from all members of the communicator
-        for(i=0; i<world.size && ret == COLLECTIVE_OP_SUCCESS; i++){
-            //TODO: optimize receives; what we want is to move any data which arrives into the correct segment of the buffer
-            //currently this will go sequentially through the segments, which is slower and also requires more spare RX buffers
-            if(i==world.local_rank)
-            { // root copies
-                ret	= copy(				len, src_buf_addr, dst_buf_addr);
-            }else{
-                ret = receive_offchip_world(&world, i, len, dst_buf_addr, TAG_ANY);
-            }
-            dst_buf_addr += len;
-        }
-    }else{
-        ret = 		transmit_offchip(&world, root_rank, len, src_buf_addr, TAG_ANY);
-    }
-    return ret;
-}
 
 //naive gather: non root relay data to the root. root copy segments in dst buffer as they come.
-int gather_ring(
-                unsigned int len,
-                unsigned int root_rank,
-                uint64_t src_buf_addr,
-                uint64_t dst_buf_addr){
+int gather( unsigned int len,
+            unsigned int root_rank,
+            uint64_t src_buf_addr,
+            uint64_t dst_buf_addr){
     uint64_t tmp_buf_addr;
     unsigned int i,curr_pos, next_in_ring, prev_in_ring, number_of_shift;
     int ret = COLLECTIVE_OP_SUCCESS;
@@ -1711,22 +1575,8 @@ int gather_ring(
     return ret;
 }
 
-//naive: gather + bcast
-static inline int allgather(
-                unsigned int len,
-                unsigned int internal_root,
-                uint64_t src_addr,
-                uint64_t dst_addr){	
-    int ret = 0;
-
-    ret = gather_ring(len, internal_root, src_addr, dst_addr);
-    if (ret != COLLECTIVE_OP_SUCCESS ) return ret;
-    return broadcast(len*world.size, internal_root, dst_addr);
-}
-
 //naive fused: 1) receive a segment 2) move in the dest buffer 3) relay to next rank 
-int allgather_ring(
-                unsigned int len,
+int allgather(  unsigned int len,
                 uint64_t src_buf_addr,
                 uint64_t dst_buf_addr){
     uint64_t tmp_buf_addr;
@@ -1758,42 +1608,11 @@ int allgather_ring(
     return ret;
 }
 
-//naive. every rank forwards its buffer they are received and sum by the root
-int reduce(
-                unsigned int len,
-                unsigned int root_rank,
-                uint64_t src_addr,
-                uint64_t dst_addr
-            ){
-    return COLLECTIVE_NOT_IMPLEMENTED; //at this moment is not safe to run non ring based collectives. they are not handled at depacketizer level.
-    int ret = COLLECTIVE_OP_SUCCESS;
-
-    //determine if we're sending or receiving
-    if(root_rank == world.local_rank){
-        //0. copy src_buffer of master in dst_buffer
-        // from now on dst_buffer will represent the accumulator
-        ret += copy(len, src_addr, dst_addr);
-        //receive and accumulate from all members of the communicator
-        for(int i=0; i<world.size && ret == COLLECTIVE_OP_SUCCESS; i++){
-            //0. skip if we are root rank
-            if(i == root_rank)
-                continue;
-            //1. receive part of data and retrieve spare buffer index and accumulate in buffer: user_buffer = user_buffer + spare_buffer 
-            ret = receive_and_accumulate(&world, i, len, dst_addr, dst_addr, TAG_ANY, dst_op_bits != arith_op_bits);
-            //2. move to next rank
-        }
-    }else{
-        ret += transmit_offchip(&world, root_rank, len, src_addr,  TAG_ANY);
-    }
-    return ret;
-}
-
 //every rank receives a buffer it sums its own buffer and forwards to next rank in the ring
-int reduce_ring_streaming(
-                unsigned int len,
-                unsigned int root_rank,
-                uint64_t src_addr,
-                uint64_t dst_addr){
+int reduce( unsigned int len,
+            unsigned int root_rank,
+            uint64_t src_addr,
+            uint64_t dst_addr){
     int ret;
 
     unsigned int next_in_ring = (world.local_rank+1			   ) % world.size	;
@@ -1804,81 +1623,10 @@ int reduce_ring_streaming(
         ret = transmit_offchip(&world, next_in_ring, len, src_addr, TAG_ANY);
     }else if (world.local_rank != root_rank){
         //non root ranks sends their data + data received from previous rank to the next rank in sequence as a daisy chain
-        ret = receive_and_reduce_offchip(&world, prev_in_ring, next_in_ring, len, src_addr,  TAG_ANY, src_op_bits != arith_op_bits);
+        ret = receive_and_reduce_offchip(&world, prev_in_ring, next_in_ring, len, src_addr,  TAG_ANY, arcfg.src_op_bits != arcfg.arith_op_bits);
     }else{	
         //root only receive from previous node in the ring, add its local buffer and save in destination buffer 
-        ret = receive_and_accumulate(&world, prev_in_ring, len, src_addr, dst_addr, TAG_ANY, dst_op_bits != arith_op_bits);
-    }
-    return ret;
-}
-
-//naive non fused allreduce: reduce+broadcast
-int allreduce(
-                unsigned int len,
-                unsigned int internal_root,
-                uint64_t src_addr,
-                uint64_t dst_addr){
-
-    int ret = 0;
-    //let 0 be the root
-    ret = reduce_ring_streaming(len, internal_root, src_addr, dst_addr);
-    if (ret != COLLECTIVE_OP_SUCCESS ) return ret;
-    return broadcast(len, internal_root, dst_addr);
-}
-
-//naive: relay buffers along the ring and each rank accumulates them.
-int allreduce_fused_ring(
-                unsigned int len,
-                uint64_t src_addr,
-                uint64_t dst_addr){
-
-    int ret;
-
-    unsigned int next_in_ring 	= (world.local_rank+1			   )%world.size	;
-    unsigned int prev_in_ring 	= (world.local_rank+world.size-1 )%world.size	;
-    //get rx_buff_location
-    rx_buffer *rx_buf_list 	  	= (rx_buffer*)(RX_BUFFER_COUNT_OFFSET+4);
-    unsigned int buf_idx, tmp_len, curr_len;
-    uint64_t buf_addr, tmp_addr; 
-    //every member of the communicator 
-    // 0.  sends its data to the next rank
-    // 1. put their own data in their buffer
-    // then receive others data:
-    // 2.  receives data from previous rank
-    // 3.  relay data to the next in sequence
-    // 4.  accumulates data in the destination buffer
-    // 0.send our data
-    ret = copy(len, src_addr, dst_addr);
-    if (ret != COLLECTIVE_OP_SUCCESS) return ret;
-
-    //1. copy src_buffer of master in dst_buffer
-    // from now on dst_buffer will represent the accumulator
-    ret = transmit_offchip(&world, next_in_ring,			len, src_addr, TAG_ANY);
-    for(int i=0; i < world.size-1 && ret == COLLECTIVE_OP_SUCCESS; i++){
-        tmp_addr = dst_addr;
-        curr_len = dma_transaction_size;
-        for(tmp_len = len; tmp_len > 0 && ret == COLLECTIVE_OP_SUCCESS; tmp_len-=curr_len, tmp_addr+=curr_len){
-            if(tmp_len < dma_transaction_size)
-                curr_len = tmp_len;
-                //2.3.4 can be overlapped: dma0 rx read spare, dma1 rx read operand, dma2rx read operand, dma2rx is forwarded to next in the ring. dma0,1rx are used for sum
-            //2. receive part of data from previous rank and retrieve spare buffer index
-            buf_idx = wait_receive_world_i(&world, prev_in_ring, curr_len, TAG_ANY);
-            if  (buf_idx < 0 ) return RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID;
-            buf_addr = ((uint64_t) rx_buf_list[buf_idx].addrh << 32) | rx_buf_list[buf_idx].addrl; 
-            //3.4. can be done together
-            //3. relay others data only if it's not the last iteration.  
-            if ( i+1<world.size-1){
-                ret = transmit_offchip(&world, next_in_ring, curr_len, buf_addr, TAG_ANY);
-            }
-            //4. accumulate in buffer: user_buffer = user_buffer + spare_buffer 
-            if (ret != COLLECTIVE_OP_SUCCESS) return ret;
-            ret = accumulate(curr_len, buf_addr, tmp_addr, tmp_addr);
-            //housekeeping: release spare buffer
-            microblaze_disable_interrupts();
-            rx_buf_list[buf_idx].status = STATUS_IDLE;
-            microblaze_enable_interrupts();
-            //TODO: use reduce_offchip when using tree based collectives
-        }
+        ret = receive_and_accumulate(&world, prev_in_ring, len, src_addr, dst_addr, TAG_ANY, arcfg.dst_op_bits != arcfg.arith_op_bits);
     }
     return ret;
 }
@@ -1908,21 +1656,21 @@ int scatter_reduce(
         curr_recv_addr = src_addr + len * curr_recv_chunk;
         //2. receive part of data from previous in rank and accumulate to the part you have at the same address
         //ad forwar dto the next rank in the ring
-        ret = receive_and_reduce_offchip(&world, prev_in_ring, next_in_ring, len, curr_recv_addr, TAG_ANY, src_op_bits != arith_op_bits); 
+        ret = receive_and_reduce_offchip(&world, prev_in_ring, next_in_ring, len, curr_recv_addr, TAG_ANY, arcfg.src_op_bits != arcfg.arith_op_bits); 
         if(ret != COLLECTIVE_OP_SUCCESS) return ret;
     }
     //at last iteration (n-1) you can sum and save the result at the same location (which is the right place to be)
     if (i > 0 ){
         curr_recv_addr  = src_addr + len * curr_recv_chunk; 
         curr_send_addr  = dst_addr + len * curr_recv_chunk;
-        ret = receive_and_accumulate(&world, prev_in_ring, len, curr_recv_addr, curr_send_addr, TAG_ANY, dst_op_bits != arith_op_bits); 
+        ret = receive_and_accumulate(&world, prev_in_ring, len, curr_recv_addr, curr_send_addr, TAG_ANY, arcfg.dst_op_bits != arcfg.arith_op_bits); 
         if(ret != COLLECTIVE_OP_SUCCESS) return ret;
     }
     return COLLECTIVE_OP_SUCCESS;
 }
 
 //2 stage allreduce: distribute sums across the ranks. smaller bandwidth between ranks and use multiple arith at the same time. scatter_reduce+all_gather
-int all_reduce_share(
+int allreduce(
                 unsigned int len,
                 uint64_t src_addr,
                 uint64_t dst_addr){
@@ -1932,7 +1680,7 @@ int all_reduce_share(
     int curr_send_chunk	, curr_recv_chunk			  = world.local_rank;			 
     //divide into chunks 
     unsigned int len_div_size 	 	= len/world.size; 
-    unsigned int min_operand_width  = arith_op_bits/8;//TODO: what if the arith op is not a multiple of 1 byte?
+    unsigned int min_operand_width  = arcfg.arith_op_bits/8;//TODO: what if the arith op is not a multiple of 1 byte?
     unsigned int tail				= len_div_size % min_operand_width;
     len_div_size += - tail + (tail == 0 ? 0 : min_operand_width); //TODO: now when processing last chunk it will assume that buffers are same length and part of non buffer will be processed.
     unsigned int next_in_ring 	 = (world.local_rank+1			  )%world.size	;
@@ -2099,19 +1847,21 @@ int main() {
         buf1_addr =  ((uint64_t) buf1_addrh << 32) | buf1_addrl;
         buf2_addr =  ((uint64_t) buf2_addrh << 32) | buf2_addrl;
 
-        //gather pipeline arithmetic configuration or signal error
-        if(setup_arithmetic(compression, function) != 0){
-            finalize_call(COMPRESSION_ERROR);
-            continue;
+        //gather pipeline arithmetic configuration
+        if(scenario != XCCL_CONFIG){
+            arcfg = *((arith_config *)compression);
+            //remap function to the value gathered from the arith spec
+            if(function >= MAX_REDUCE_FUNCTIONS){
+                longjmp(excp_handler, COMPRESSION_ERROR);
+            }
+            setup_arith_tdest(arcfg.arith_op_tdest[function]);
+            //initialize external kernel interface to tdest=0 (loopback)
+            setup_krnl_tdest(0);
+            //calculate internal len based on compression parameters
+            //len is in number of elements, and the byte length
+            //depends on bitwidths
+            len = len*arcfg.arith_op_bits/8;
         }
-        //remap function to the value gathered from the arith spec
-        setup_arith_tdest(arith_op_tdest);
-        //initialize external kernel interface to tdest=0 (loopback)
-        setup_krnl_tdest(0);
-        //calculate internal len based on compression parameters
-        //len is in number of elements, and the byte length
-        //depends on bitwidths
-        len = len*arith_op_bits/8;
 
         //initialize communicator
         world = find_comm(comm);
@@ -2191,14 +1941,8 @@ int main() {
             case XCCL_BCAST:
                 retval = broadcast(               len,           root_src_dst,     buf0_addr);
                 break;
-            case XCCL_BCAST_RR:
-                retval = broadcast_round_robin(   len,           root_src_dst,     buf0_addr);
-                break;
             case XCCL_SCATTER:    
                 retval = scatter(                 len,           root_src_dst,     buf0_addr, buf1_addr);
-                break;
-            case XCCL_SCATTER_RR:    
-                retval = scatter_rr(              len,           root_src_dst,     buf0_addr, buf1_addr);
                 break;
             case XCCL_GATHER:
                 retval = gather(                  len,           root_src_dst,     buf0_addr, buf1_addr);
@@ -2207,31 +1951,16 @@ int main() {
                 retval = reduce(                  len,           root_src_dst,     buf0_addr, buf1_addr);
                 break;
             case XCCL_ALLGATHER:
-                retval = allgather(               len,           root_src_dst,    buf0_addr, buf1_addr);
+                retval = allgather(len, buf0_addr, buf1_addr);
                 break;
             case XCCL_ALLREDUCE:
-                retval = allreduce(               len,           root_src_dst,  buf0_addr, buf1_addr );
+                retval = allreduce(len,  buf0_addr, buf1_addr);
                 break;
             case XCCL_ACC:
                 retval = accumulate(              len,                           buf0_addr, buf1_addr, buf1_addr);
                 break;
             case XCCL_COPY:
                 retval = copy(                    len,                             buf0_addr, buf1_addr);
-                break;
-            case XCCL_REDUCE_RING:
-                retval = reduce_ring_streaming(   len,           root_src_dst,     buf0_addr, buf1_addr);
-                break;
-            case XCCL_ALLREDUCE_FUSED_RING:
-                retval = allreduce_fused_ring(    len,                           buf0_addr, buf1_addr);
-                break;
-            case XCCL_ALLREDUCE_SHARE_RING:
-                retval = all_reduce_share    (    len,                           buf0_addr, buf1_addr);
-                break;
-            case XCCL_GATHER_RING:
-                retval = gather_ring(             len,           root_src_dst,     buf0_addr, buf1_addr);
-                break;
-            case XCCL_ALLGATHER_RING:
-                retval = allgather_ring(          len,                             buf0_addr, buf1_addr);
                 break;
             case XCCL_REDUCE_SCATTER:
                 retval = scatter_reduce(          len,                           buf0_addr, buf1_addr);

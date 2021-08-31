@@ -88,27 +88,23 @@ extern "C" {
 #define DMA_TRANSACTION_SIZE     4194304 //info: can correspond to MAX_BTT
 
 //******************************
-//**  XCC COLLECTIVE          **
+//**  XCC Operations          **
 //******************************
+//Housekeeping
 #define XCCL_CONFIG               0
-#define XCCL_SEND                 1 
-#define XCCL_RECV                 2
-#define XCCL_BCAST                3
-#define XCCL_SCATTER              4
-#define XCCL_GATHER               5
-#define XCCL_REDUCE               6
-#define XCCL_ALLGATHER            7
-#define XCCL_ALLREDUCE            8
-#define XCCL_ACC                  9
-#define XCCL_COPY                 10
-#define XCCL_REDUCE_RING          11
-#define XCCL_ALLREDUCE_FUSED_RING 12
-#define XCCL_GATHER_RING          13
-#define XCCL_ALLGATHER_RING       14
-#define XCCL_BCAST_RR             16
-#define XCCL_SCATTER_RR           17
-#define XCCL_ALLREDUCE_SHARE_RING 18
-#define XCCL_REDUCE_SCATTER       19
+//Primitives
+#define XCCL_COPY                 1
+#define XCCL_ACC                  2
+#define XCCL_SEND                 3 
+#define XCCL_RECV                 4
+//Collectives
+#define XCCL_BCAST                5
+#define XCCL_SCATTER              6
+#define XCCL_GATHER               7
+#define XCCL_REDUCE               8
+#define XCCL_ALLGATHER            9
+#define XCCL_ALLREDUCE            10
+#define XCCL_REDUCE_SCATTER       11
 
 //XCCL_CONFIG SUBFUNCTIONS
 #define HOUSEKEEP_IRQEN           0
@@ -331,44 +327,20 @@ typedef struct {
 	comm_rank* ranks;
 } communicator;
 
-//Compression-related structures for:
-//compressor definition
-//conversion definition
-//reducer definition
-typedef struct {
-	unsigned int nfunctions;
-  unsigned int op_bits;
-	unsigned int * tdest;
-} reducer;
+//structure defining arithmetic config parameters
+//TODO: make unsigned char to save on space
+#define MAX_REDUCE_FUNCTIONS 10
 
 typedef struct {
-	unsigned int tdest;
-	unsigned int op_bits;
-} caster;
+  unsigned int s2t_tdest;
+  unsigned int src_op_bits;
+  unsigned int t2d_tdest;
+  unsigned int dst_op_bits;
+  unsigned int arith_op_bits;
+  unsigned int arith_nfunctions;
+  unsigned int arith_op_tdest[MAX_REDUCE_FUNCTIONS];
 
-typedef struct {
-  unsigned int s2t_cast_idx;
-  unsigned int t2d_cast_idx;
-  unsigned int reducer_idx;
-} compressor;
-
-#define COMPRESSOR_SPEC_OFFSET (COMM_OFFSET+4*(2 + Xil_In32(COMM_OFFSET)*5))
-typedef struct {
-	unsigned int ncompressors;
-	compressor* compressors;
-} compressor_spec;
-
-#define CASTER_SPEC_OFFSET (COMPRESSOR_SPEC_OFFSET+4*(1 + Xil_In32(COMPRESSOR_SPEC_OFFSET)*3))
-typedef struct {
-	unsigned int ncasters;
-	caster* casters;
-} caster_spec;
-
-#define REDUCER_SPEC_OFFSET (CASTER_SPEC_OFFSET+4*(1 + Xil_In32(CASTER_SPEC_OFFSET)*3))
-typedef struct {
-	unsigned int nreducers;
-	reducer* reducers;
-} reducer_spec;
+} arith_config;
 
 #define TAG_ANY 0xFFFFFFFF
 
