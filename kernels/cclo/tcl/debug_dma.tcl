@@ -1,3 +1,4 @@
+
 # /*******************************************************************************
 #  Copyright (C) 2021 Xilinx, Inc
 #
@@ -15,45 +16,29 @@
 #
 # *******************************************************************************/
 
-# Add DMA/switch debug
-set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {control_m01_cmd}]
-set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {axis_switch_0_M01_AXIS}]
-set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {axis_switch_0_M02_AXIS}]
-set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {axis_switch_0_M03_AXIS}]
-set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {control_M3_AXIS}]
-set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {dma_1_m00_axis}]
-set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {dma_1_m00_sts}]
-set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {dma_1_M_AXIS}]
-set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {S_AXIS_1}]
-set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {control_m00_cmd}]
-set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {dma_0_foo}]
-set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {dma_0_m00_axis}]
-set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {dma_0_m00_sts}]
-set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {control_M00_AXI}]
-set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {control_M02_AXI}]
-set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {reduce_arith_0_out_r}]
+# Add DMA debug
+proc dma_debug {idx} {
+    create_bd_cell -type ip -vlnv xilinx.com:ip:system_ila:1.1 ila_dma${idx}
+    set_property -dict [list CONFIG.C_NUM_MONITOR_SLOTS {6} CONFIG.C_DATA_DEPTH {1024}] [get_bd_cells ila_dma${idx}]
+    set_property -dict [list CONFIG.C_SLOT_0_INTF_TYPE {xilinx.com:interface:axis_rtl:1.0}] [get_bd_cells ila_dma${idx}]
+    set_property -dict [list CONFIG.C_SLOT_1_INTF_TYPE {xilinx.com:interface:axis_rtl:1.0}] [get_bd_cells ila_dma${idx}]
+    set_property -dict [list CONFIG.C_SLOT_2_INTF_TYPE {xilinx.com:interface:axis_rtl:1.0}] [get_bd_cells ila_dma${idx}]
+    set_property -dict [list CONFIG.C_SLOT_3_INTF_TYPE {xilinx.com:interface:axis_rtl:1.0}] [get_bd_cells ila_dma${idx}]
+    set_property -dict [list CONFIG.C_SLOT_4_INTF_TYPE {xilinx.com:interface:axis_rtl:1.0}] [get_bd_cells ila_dma${idx}]
+    set_property -dict [list CONFIG.C_SLOT_5_INTF_TYPE {xilinx.com:interface:axis_rtl:1.0}] [get_bd_cells ila_dma${idx}]
+    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins ila_dma${idx}/clk]
+    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins ila_dma${idx}/resetn]
+    connect_bd_intf_net [get_bd_intf_pins ila_dma${idx}/SLOT_0_AXIS] -boundary_type upper [get_bd_intf_pins dma_0/dma_mm2s_cmd]
+    connect_bd_intf_net [get_bd_intf_pins ila_dma${idx}/SLOT_1_AXIS] -boundary_type upper [get_bd_intf_pins udp_rx_subsystem/m_axis_data]
+    connect_bd_intf_net [get_bd_intf_pins ila_dma${idx}/SLOT_2_AXIS] -boundary_type upper [get_bd_intf_pins dma_0/dma_s2mm_cmd]
+    connect_bd_intf_net [get_bd_intf_pins ila_dma${idx}/SLOT_3_AXIS] -boundary_type upper [get_bd_intf_pins dma_0/dma_s2mm_sts]
+    connect_bd_intf_net [get_bd_intf_pins ila_dma${idx}/SLOT_4_AXIS] -boundary_type upper [get_bd_intf_pins dma_0/dma_mm2s]
+    connect_bd_intf_net [get_bd_intf_pins ila_dma${idx}/SLOT_5_AXIS] -boundary_type upper [get_bd_intf_pins dma_0/dma_mm2s_sts]
+}
 
+dma_debug 0
+dma_debug 1
+dma_debug 2
 
-apply_bd_automation -rule xilinx.com:bd_rule:debug -dict [list \
-  [get_bd_intf_nets axis_switch_0_M01_AXIS] {AXIS_SIGNALS "Data and Trigger" CLK_SRC "/ap_clk" SYSTEM_ILA "Auto" APC_EN "0" } \
-  [get_bd_intf_nets axis_switch_0_M02_AXIS] {AXIS_SIGNALS "Data and Trigger" CLK_SRC "/ap_clk" SYSTEM_ILA "Auto" APC_EN "0" } \
-  [get_bd_intf_nets axis_switch_0_M03_AXIS] {AXIS_SIGNALS "Data and Trigger" CLK_SRC "/ap_clk" SYSTEM_ILA "Auto" APC_EN "0" } \
-  [get_bd_intf_nets control_M3_AXIS] {AXIS_SIGNALS "Data and Trigger" CLK_SRC "/ap_clk" SYSTEM_ILA "Auto" APC_EN "0" } \
-  [get_bd_intf_nets control_M00_AXI] {AXI_R_ADDRESS "Data and Trigger" AXI_R_DATA "Data and Trigger" AXI_W_ADDRESS "Data and Trigger" AXI_W_DATA "Data and Trigger" AXI_W_RESPONSE "Data and Trigger" CLK_SRC "/ap_clk" SYSTEM_ILA "Auto" APC_EN "0" } \
-  [get_bd_intf_nets control_M02_AXI] {AXI_R_ADDRESS "Data and Trigger" AXI_R_DATA "Data and Trigger" AXI_W_ADDRESS "Data and Trigger" AXI_W_DATA "Data and Trigger" AXI_W_RESPONSE "Data and Trigger" CLK_SRC "/ap_clk" SYSTEM_ILA "Auto" APC_EN "0" } \
-  [get_bd_intf_nets control_m00_cmd] {AXIS_SIGNALS "Data and Trigger" CLK_SRC "/ap_clk" SYSTEM_ILA "Auto" APC_EN "0" } \
-  [get_bd_intf_nets control_m01_cmd] {AXIS_SIGNALS "Data and Trigger" CLK_SRC "/ap_clk" SYSTEM_ILA "Auto" APC_EN "0" } \
-  [get_bd_intf_nets dma_0_foo] {AXIS_SIGNALS "Data and Trigger" CLK_SRC "/ap_clk" SYSTEM_ILA "Auto" APC_EN "0" } \
-  [get_bd_intf_nets dma_0_m00_axis] {AXIS_SIGNALS "Data and Trigger" CLK_SRC "/ap_clk" SYSTEM_ILA "Auto" APC_EN "0" } \
-  [get_bd_intf_nets dma_0_m00_sts] {AXIS_SIGNALS "Data and Trigger" CLK_SRC "/ap_clk" SYSTEM_ILA "Auto" APC_EN "0" } \
-  [get_bd_intf_nets dma_1_m00_axis] {AXIS_SIGNALS "Data and Trigger" CLK_SRC "/ap_clk" SYSTEM_ILA "Auto" APC_EN "0" } \
-  [get_bd_intf_nets dma_1_m00_sts] {AXIS_SIGNALS "Data and Trigger" CLK_SRC "/ap_clk" SYSTEM_ILA "Auto" APC_EN "0" } \
-  [get_bd_intf_nets dma_1_M_AXIS] {AXIS_SIGNALS "Data and Trigger" CLK_SRC "/ap_clk" SYSTEM_ILA "Auto" APC_EN "0" } \
-  [get_bd_intf_nets S_AXIS_1] {AXIS_SIGNALS "Data and Trigger" CLK_SRC "/ap_clk" SYSTEM_ILA "Auto" APC_EN "0" } \
-  [get_bd_intf_nets reduce_arith_0_out_r] {AXIS_SIGNALS "Data and Trigger" CLK_SRC "/ap_clk" SYSTEM_ILA "Auto" APC_EN "0" } \
-
-]
 save_bd_design
 validate_bd_design
-
-
