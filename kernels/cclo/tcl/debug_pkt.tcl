@@ -15,41 +15,30 @@
 #
 # *******************************************************************************/
 
-set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {control_M03_AXI}]
-set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {vnx_depacketizer_0_out_r}]
-set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {vnx_depacketizer_0_sts_V}]
-set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {net_rx_1}]
-set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {control_M4_AXIS}]
-set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {axis_switch_0_M00_AXIS}]
-set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {control_M04_AXI}]
-set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {axis_data_fifo_1_M_AXIS}]
+# VNX Packetizer
+create_bd_cell -type ip -vlnv xilinx.com:ip:system_ila:1.1 ila_packetizer
+set_property -dict [list CONFIG.C_NUM_MONITOR_SLOTS {3} CONFIG.C_DATA_DEPTH {1024}] [get_bd_cells ila_packetizer]
+set_property -dict [list CONFIG.C_SLOT_0_INTF_TYPE {xilinx.com:interface:axis_rtl:1.0}] [get_bd_cells ila_packetizer]
+set_property -dict [list CONFIG.C_SLOT_1_INTF_TYPE {xilinx.com:interface:axis_rtl:1.0}] [get_bd_cells ila_packetizer]
+set_property -dict [list CONFIG.C_SLOT_2_INTF_TYPE {xilinx.com:interface:axis_rtl:1.0}] [get_bd_cells ila_packetizer]
+connect_bd_net [get_bd_ports ap_clk] [get_bd_pins ila_packetizer/clk]
+connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins ila_packetizer/resetn]
+connect_bd_intf_net [get_bd_intf_pins ila_packetizer/SLOT_0_AXIS] -boundary_type upper [get_bd_intf_pins udp_tx_subsystem/s_axis_command]
+connect_bd_intf_net [get_bd_intf_pins ila_packetizer/SLOT_1_AXIS] -boundary_type upper [get_bd_intf_pins udp_tx_subsystem/s_axis_data]
+connect_bd_intf_net [get_bd_intf_pins ila_packetizer/SLOT_2_AXIS] -boundary_type upper [get_bd_intf_pins udp_tx_subsystem/m_axis_data]
 
-set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {dma_0_foo}]
-set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {control_m00_cmd}]
-set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {s_axi_control}]
-set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {control/microblaze_0_M0_AXIS}]
-set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {control/axis_fifo_sts_3_M_AXIS}]
-set_property HDL_ATTRIBUTE.DEBUG true [get_bd_nets {control/util_reduced_logic_1_Res }]
-set_property HDL_ATTRIBUTE.DEBUG true [get_bd_nets {control/util_reduced_logic_0_Res }]
-set_property HDL_ATTRIBUTE.DEBUG true [get_bd_nets {control/util_vector_logic_0_Res }]
+# VNX Depacketizer
+create_bd_cell -type ip -vlnv xilinx.com:ip:system_ila:1.1 ila_depacketizer
+set_property -dict [list CONFIG.C_NUM_MONITOR_SLOTS {2} CONFIG.C_DATA_DEPTH {1024}] [get_bd_cells ila_depacketizer]
+set_property -dict [list CONFIG.C_SLOT_0_INTF_TYPE {xilinx.com:interface:axis_rtl:1.0}] [get_bd_cells ila_depacketizer]
+set_property -dict [list CONFIG.C_SLOT_1_INTF_TYPE {xilinx.com:interface:axis_rtl:1.0}] [get_bd_cells ila_depacketizer]
+connect_bd_net [get_bd_ports ap_clk] [get_bd_pins ila_depacketizer/clk]
+connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins ila_depacketizer/resetn]
+connect_bd_intf_net [get_bd_intf_pins ila_depacketizer/SLOT_0_AXIS] -boundary_type upper [get_bd_intf_pins udp_rx_subsystem/s_axis_data]
+connect_bd_intf_net [get_bd_intf_pins ila_depacketizer/SLOT_1_AXIS] -boundary_type upper [get_bd_intf_pins udp_rx_subsystem/m_axis_status]
 
-apply_bd_automation -rule xilinx.com:bd_rule:debug -dict [list \
-    [get_bd_intf_nets axis_data_fifo_1_M_AXIS] {AXIS_SIGNALS "Data and Trigger" CLK_SRC "/ap_clk" SYSTEM_ILA "Auto" APC_EN "0" } \
-    [get_bd_intf_nets axis_switch_0_M00_AXIS] {AXIS_SIGNALS "Data and Trigger" CLK_SRC "/ap_clk" SYSTEM_ILA "Auto" APC_EN "0" } \
-    [get_bd_intf_nets control_M4_AXIS] {AXIS_SIGNALS "Data and Trigger" CLK_SRC "/ap_clk" SYSTEM_ILA "Auto" APC_EN "0" } \
-    [get_bd_intf_nets control_M03_AXI] {AXI_R_ADDRESS "Data and Trigger" AXI_R_DATA "Data and Trigger" AXI_W_ADDRESS "Data and Trigger" AXI_W_DATA "Data and Trigger" AXI_W_RESPONSE "Data and Trigger" CLK_SRC "/ap_clk" SYSTEM_ILA "Auto" APC_EN "0" } \
-    [get_bd_intf_nets control_M04_AXI] {AXI_R_ADDRESS "Data and Trigger" AXI_R_DATA "Data and Trigger" AXI_W_ADDRESS "Data and Trigger" AXI_W_DATA "Data and Trigger" AXI_W_RESPONSE "Data and Trigger" CLK_SRC "/ap_clk" SYSTEM_ILA "Auto" APC_EN "0" } \
-    [get_bd_intf_nets net_rx_1] {AXIS_SIGNALS "Data and Trigger" CLK_SRC "/ap_clk" SYSTEM_ILA "Auto" APC_EN "0" } \
-    [get_bd_intf_nets vnx_depacketizer_0_out_r] {AXIS_SIGNALS "Data and Trigger" CLK_SRC "/ap_clk" SYSTEM_ILA "Auto" APC_EN "0" } \
-    [get_bd_intf_nets vnx_depacketizer_0_sts_V] {AXIS_SIGNALS "Data and Trigger" CLK_SRC "/ap_clk" SYSTEM_ILA "Auto" APC_EN "0" } \
-    [get_bd_intf_nets control_m00_cmd] {AXIS_SIGNALS "Data and Trigger" CLK_SRC "/ap_clk" SYSTEM_ILA "Auto" APC_EN "0" } \
-    [get_bd_intf_nets dma_0_foo] {AXIS_SIGNALS "Data and Trigger" CLK_SRC "/ap_clk" SYSTEM_ILA "Auto" APC_EN "0" } \
-    [get_bd_intf_nets control/microblaze_0_M0_AXIS] {AXIS_SIGNALS "Data and Trigger" CLK_SRC "/ap_clk" SYSTEM_ILA "Auto" APC_EN "0" } \
-    [get_bd_intf_nets control/axis_fifo_sts_3_M_AXIS] {AXIS_SIGNALS "Data and Trigger" CLK_SRC "/ap_clk" SYSTEM_ILA "Auto" APC_EN "0" } \
-    [get_bd_nets control/util_reduced_logic_0_Res] {PROBE_TYPE "Data and Trigger" CLK_SRC "/ap_clk" SYSTEM_ILA "Auto" } \
-    [get_bd_nets control/util_reduced_logic_1_Res] {PROBE_TYPE "Data and Trigger" CLK_SRC "/ap_clk" SYSTEM_ILA "Auto" } \
-    [get_bd_nets control/util_vector_logic_0_Res] {PROBE_TYPE "Data and Trigger" CLK_SRC "/ap_clk" SYSTEM_ILA "Auto" } \
-    [get_bd_intf_nets s_axi_control] {AXI_R_ADDRESS "Data and Trigger" AXI_R_DATA "Data and Trigger" AXI_W_ADDRESS "Data and Trigger" AXI_W_DATA "Data and Trigger" AXI_W_RESPONSE "Data and Trigger" CLK_SRC "/ap_clk" SYSTEM_ILA "Auto" APC_EN "0" } \
-]
+# TODO: add tcp packetizer/depacketizer
+
+
 save_bd_design
 validate_bd_design

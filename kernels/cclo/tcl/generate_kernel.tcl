@@ -41,10 +41,20 @@ if [string equal $debug "dma"] {
 } elseif [string equal $debug "pkt"] {
   puts "Adding (de)packetizer debug to block design"
   source  -notrace tcl/debug_pkt.tcl
+} elseif [string equal $debug "arith"] {
+  puts "Adding arithmetic debug to block design"
+  source  -notrace tcl/debug_arith.tcl
+} elseif [string equal $debug "control"] {
+  puts "Adding control debug to block design"
+  source  -notrace tcl/debug_control.tcl
 } elseif [string equal $debug "all"] {
   puts "Adding all debug cores to block design"
-  source  -notrace tcl/debug_all.tcl
+  source  -notrace tcl/debug_dma.tcl
+  source  -notrace tcl/debug_pkt.tcl
+  source  -notrace tcl/debug_arith.tcl
+  source  -notrace tcl/debug_control.tcl
 }
+
 #generate final version of bd 
 update_compile_order -fileset sources_1
 generate_target all [get_files  ./ccl_offload_ex/ccl_offload_ex.srcs/sources_1/bd/ccl_offload_bd/ccl_offload_bd.bd]
