@@ -55,7 +55,8 @@ if [string equal $debug "dma"] {
   source  -notrace tcl/debug_control.tcl
 }
 
-#generate final version of bd 
+# add wrapper
+add_files -norecurse ./hdl/ccl_offload.v
 update_compile_order -fileset sources_1
 generate_target all [get_files  ./ccl_offload_ex/ccl_offload_ex.srcs/sources_1/bd/ccl_offload_bd/ccl_offload_bd.bd]
 #build a .xsa file handoff

@@ -207,10 +207,6 @@ proc package_project_dcp_and_xdc {path_to_dcp path_to_xdc path_to_packaged kerne
 # open project
 open_project ./ccl_offload_ex/ccl_offload_ex.xpr
 
-# add wrapper
-add_files -norecurse ./hdl/ccl_offload.v
-update_compile_order -fileset sources_1
-
 # add elf file and associate it
 add_files -norecurse $elf
 update_compile_order -fileset sources_1
