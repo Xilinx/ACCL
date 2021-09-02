@@ -15,6 +15,21 @@
 #
 # *******************************************************************************/
 
+proc connect_clk_rst {clksig rstsig rstslr} {
+    if {![catch { connect_bd_net [get_bd_ports clkwiz_kernel_clk_out1] [get_bd_pins $clksig] } ]} {
+        puts "Inferred shell xilinx_u280_xdma_201920_3"
+        connect_bd_net [get_bd_pins slr${rstslr}/peripheral_aresetn] [get_bd_pins $rstsig]
+    }
+    if {![catch { connect_bd_net [get_bd_pins slr1/clkwiz_kernel_clk_out_gen] [get_bd_pins $clksig] } ]} {
+        puts "Inferred shell xilinx_u250_xdma_201830_2"
+        connect_bd_net [get_bd_pins slr${rstslr}/peripheral_aresetn] [get_bd_pins $rstsig]
+    }
+    if {![catch { connect_bd_net [get_bd_pins ss_ucs/aclk_kernel_00] [get_bd_pins $clksig] } ]} {
+        puts "Inferred shell xilinx_u250_gen3x16_xdma_3_1_202020_1"
+        connect_bd_net [get_bd_pins ip_psr_aresetn_kernel_00_slr${rstslr}/peripheral_aresetn] [get_bd_pins $rstsig]
+    }
+}
+
 # Break existing UDP connections and redo them through an AXI switch
 create_bd_cell -type ip -vlnv xilinx.com:ip:axis_switch:1.1 udp_axis_switch
 set_property -dict [list CONFIG.HAS_TLAST.VALUE_SRC USER CONFIG.TDEST_WIDTH.VALUE_SRC USER] [get_bd_cells udp_axis_switch]
@@ -22,14 +37,7 @@ set_property -dict [list CONFIG.NUM_SI {3} CONFIG.NUM_MI {3} CONFIG.HAS_TLAST {1
 set_property -dict [list CONFIG.HAS_TSTRB.VALUE_SRC USER CONFIG.HAS_TKEEP.VALUE_SRC USER] [get_bd_cells udp_axis_switch]
 set_property -dict [list CONFIG.HAS_TSTRB {1} CONFIG.HAS_TKEEP {1}] [get_bd_cells udp_axis_switch]
 set_property -dict [list CONFIG.ARB_ALGORITHM {3}] [get_bd_cells udp_axis_switch]
-if {![catch { connect_bd_net [get_bd_ports clkwiz_kernel_clk_out1] [get_bd_pins udp_axis_switch/aclk] } ]} {
-    puts "Inferred shell xilinx_u280_xdma_201920_3"
-    connect_bd_net [get_bd_pins udp_axis_switch/aresetn] [get_bd_pins slr1/peripheral_aresetn]
-} 
-if {![catch { connect_bd_net [get_bd_pins udp_axis_switch/aclk] [get_bd_pins slr1/clkwiz_kernel_clk_out_gen] } ]} {
-    puts "Inferred shell xilinx_u250_xdma_201830_2"
-    connect_bd_net [get_bd_pins udp_axis_switch/aresetn] [get_bd_pins slr1/peripheral_aresetn]
-}
+connect_clk_rst udp_axis_switch/aclk udp_axis_switch/aresetn 1
 
 delete_bd_objs [get_bd_intf_nets ccl_offload_0_m_axis_udp_tx_data]
 delete_bd_objs [get_bd_intf_nets ccl_offload_1_m_axis_udp_tx_data]
@@ -48,14 +56,7 @@ set_property -dict [list CONFIG.NUM_SI {3} CONFIG.NUM_MI {3} CONFIG.HAS_TLAST {1
 set_property -dict [list CONFIG.HAS_TSTRB.VALUE_SRC USER CONFIG.HAS_TKEEP.VALUE_SRC USER] [get_bd_cells tcp_axis_switch]
 set_property -dict [list CONFIG.HAS_TSTRB {1} CONFIG.HAS_TKEEP {1}] [get_bd_cells tcp_axis_switch]
 set_property -dict [list CONFIG.ARB_ALGORITHM {3}] [get_bd_cells tcp_axis_switch]
-if {![catch { connect_bd_net [get_bd_ports clkwiz_kernel_clk_out1] [get_bd_pins tcp_axis_switch/aclk] } ]} {
-    puts "Inferred shell xilinx_u280_xdma_201920_3"
-    connect_bd_net [get_bd_pins tcp_axis_switch/aresetn] [get_bd_pins slr1/peripheral_aresetn]
-} 
-if {![catch { connect_bd_net [get_bd_pins tcp_axis_switch/aclk] [get_bd_pins slr1/clkwiz_kernel_clk_out_gen] } ]} {
-    puts "Inferred shell xilinx_u250_xdma_201830_2"
-    connect_bd_net [get_bd_pins tcp_axis_switch/aresetn] [get_bd_pins slr1/peripheral_aresetn]
-}
+connect_clk_rst tcp_axis_switch/aclk tcp_axis_switch/aresetn 1
 
 delete_bd_objs [get_bd_intf_nets network_krnl_2_net_tx]
 delete_bd_objs [get_bd_intf_nets network_krnl_0_net_tx]
@@ -76,14 +77,7 @@ proc rewire_cast {idx} {
     set_property -dict [list CONFIG.HAS_TSTRB {0} CONFIG.HAS_TKEEP {1}] [get_bd_cells cclo${idx}_krnl_axis_switch]
     set_property -dict [list CONFIG.ARB_ALGORITHM {3}] [get_bd_cells cclo${idx}_krnl_axis_switch]
     set_property -dict [list CONFIG.M01_S01_CONNECTIVITY {0} CONFIG.M01_S02_CONNECTIVITY {0} CONFIG.M02_S01_CONNECTIVITY {0} CONFIG.M02_S02_CONNECTIVITY {0}] [get_bd_cells cclo${idx}_krnl_axis_switch]
-    if {![catch { connect_bd_net [get_bd_ports clkwiz_kernel_clk_out1] [get_bd_pins cclo${idx}_krnl_axis_switch/aclk] } ]} {
-        puts "Inferred shell xilinx_u280_xdma_201920_3"
-        connect_bd_net [get_bd_pins cclo${idx}_krnl_axis_switch/aresetn] [get_bd_pins slr${idx}/peripheral_aresetn]
-    } 
-    if {![catch { connect_bd_net [get_bd_pins cclo${idx}_krnl_axis_switch/aclk] [get_bd_pins slr1/clkwiz_kernel_clk_out_gen] } ]} {
-        puts "Inferred shell xilinx_u250_xdma_201830_2"
-        connect_bd_net [get_bd_pins cclo${idx}_krnl_axis_switch/aresetn] [get_bd_pins slr${idx}/peripheral_aresetn]
-    }
+    connect_clk_rst cclo${idx}_krnl_axis_switch/aclk cclo${idx}_krnl_axis_switch/aresetn $idx
 
     delete_bd_objs [get_bd_intf_nets upcast_${idx}_out_r]
     delete_bd_objs [get_bd_intf_nets ccl_offload_${idx}_m_axis_krnl]
@@ -95,10 +89,6 @@ proc rewire_cast {idx} {
     connect_bd_intf_net [get_bd_intf_pins cclo${idx}_krnl_axis_switch/M02_AXIS] [get_bd_intf_pins upcast_${idx}/in_r]
     connect_bd_intf_net [get_bd_intf_pins upcast_${idx}/out_r] [get_bd_intf_pins cclo${idx}_krnl_axis_switch/S02_AXIS]
 }
-
-rewire_cast 0
-rewire_cast 1
-rewire_cast 2
 
 # break sum kernel connections and redo them through switches
 proc rewire_sum {idx} {
@@ -117,14 +107,7 @@ proc rewire_sum {idx} {
     set_property -dict [list CONFIG.HAS_TSTRB.VALUE_SRC USER CONFIG.HAS_TKEEP.VALUE_SRC USER] [get_bd_cells cclo${idx}_sum_op_axis_switch]
     set_property -dict [list CONFIG.HAS_TSTRB {0} CONFIG.HAS_TKEEP {1}] [get_bd_cells cclo${idx}_sum_op_axis_switch]
     set_property -dict [list CONFIG.ARB_ALGORITHM {3}] [get_bd_cells cclo${idx}_sum_op_axis_switch]
-    if {![catch { connect_bd_net [get_bd_ports clkwiz_kernel_clk_out1] [get_bd_pins cclo${idx}_sum_op_axis_switch/aclk] } ]} {
-        puts "Inferred shell xilinx_u280_xdma_201920_3"
-        connect_bd_net [get_bd_pins cclo${idx}_sum_op_axis_switch/aresetn] [get_bd_pins slr${idx}/peripheral_aresetn]
-    } 
-    if {![catch { connect_bd_net [get_bd_pins cclo${idx}_sum_op_axis_switch/aclk] [get_bd_pins slr1/clkwiz_kernel_clk_out_gen] } ]} {
-        puts "Inferred shell xilinx_u250_xdma_201830_2"
-        connect_bd_net [get_bd_pins cclo${idx}_sum_op_axis_switch/aresetn] [get_bd_pins slr${idx}/peripheral_aresetn]
-    }
+    connect_clk_rst cclo${idx}_sum_op_axis_switch/aclk cclo${idx}_sum_op_axis_switch/aresetn $idx
 
     # create switch for result
     create_bd_cell -type ip -vlnv xilinx.com:ip:axis_switch:1.1 cclo${idx}_sum_res_axis_switch
@@ -133,14 +116,7 @@ proc rewire_sum {idx} {
     set_property -dict [list CONFIG.HAS_TSTRB.VALUE_SRC USER CONFIG.HAS_TKEEP.VALUE_SRC USER] [get_bd_cells cclo${idx}_sum_res_axis_switch]
     set_property -dict [list CONFIG.HAS_TSTRB {0} CONFIG.HAS_TKEEP {1}] [get_bd_cells cclo${idx}_sum_res_axis_switch]
     set_property -dict [list CONFIG.ARB_ALGORITHM {3}] [get_bd_cells cclo${idx}_sum_res_axis_switch]
-    if {![catch { connect_bd_net [get_bd_ports clkwiz_kernel_clk_out1] [get_bd_pins cclo${idx}_sum_res_axis_switch/aclk] } ]} {
-        puts "Inferred shell xilinx_u280_xdma_201920_3"
-        connect_bd_net [get_bd_pins cclo${idx}_sum_res_axis_switch/aresetn] [get_bd_pins slr${idx}/peripheral_aresetn]
-    } 
-    if {![catch { connect_bd_net [get_bd_pins cclo${idx}_sum_res_axis_switch/aclk] [get_bd_pins slr1/clkwiz_kernel_clk_out_gen] } ]} {
-        puts "Inferred shell xilinx_u250_xdma_201830_2"
-        connect_bd_net [get_bd_pins cclo${idx}_sum_res_axis_switch/aresetn] [get_bd_pins slr${idx}/peripheral_aresetn]
-    }
+    connect_clk_rst cclo${idx}_sum_res_axis_switch/aclk cclo${idx}_sum_res_axis_switch/aresetn $idx
 
     # connect IPs to switches
     connect_bd_intf_net [get_bd_intf_pins ccl_offload_${idx}/m_axis_arith_op] [get_bd_intf_pins cclo${idx}_sum_op_axis_switch/S00_AXIS]
@@ -159,6 +135,9 @@ proc rewire_sum {idx} {
 
 }
 
+rewire_cast 0
+rewire_cast 1
+rewire_cast 2
 rewire_sum 0
 rewire_sum 1
 rewire_sum 2

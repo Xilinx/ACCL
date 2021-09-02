@@ -195,7 +195,7 @@ class cclo(DefaultIP):
 
     def deinit(self):
         print("Removing CCLO object at ",hex(self.mmio.base_addr))
-        self.call(scenario=CCLOp.config, function=CCLOCfgFunc.reset_periph)
+        self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.reset_periph)
 
         for buf in self.rx_buffer_spares:
             buf.freebuffer()
@@ -244,9 +244,9 @@ class cclo(DefaultIP):
         self.utility_spare = pynq.allocate((bufsize*max_higher,), dtype=np.int8, target=devicemem[0])
 
         #Start irq-driven RX buffer scheduler and (de)packetizer
-        #self.call(scenario=CCLOp.config, function=CCLOCfgFunc.reset_periph)
-        self.call(scenario=CCLOp.config, function=CCLOCfgFunc.enable_irq)
-        self.call(scenario=CCLOp.config, function=CCLOCfgFunc.enable_pkt)
+        #self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.reset_periph)
+        self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.enable_irq)
+        self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.enable_pkt)
         print("time taken to enqueue buffers", self.exchange_mem.read(0x0FF4))
         #set segmentation size equal to buffer size
         self.set_dma_transaction_size(bufsize)
@@ -296,35 +296,35 @@ class cclo(DefaultIP):
                 content= "xxread failedxx"
             print(f"SPARE RX BUFFER{i}:\t ADDR: {hex(int(str(addrh)+str(addrl)))} \t STATUS: {status} \t OCCUPACY: {rxlen}/{maxsize} \t DMA TAG: {hex(dmatag)} \t  MPI TAG:{hex(rxtag)} \t SEQ: {seq} \t SRC:{rxsrc} \t content {content}")
 
-    def start(self, scenario=CCLOp.nop, len=1, comm=0, root_src_dst=0, function=0, tag=TAG_ANY, arithcfg=None, src_type=0, dst_type=0, addr_0=None, addr_1=None, addr_2=None, waitfor=[] ):
-        if addr_0 is None:
-            addr_0 = self.dummy_address()
-        if addr_1 is None:
-            addr_1 = self.dummy_address()
-        if addr_2 is None:
-            addr_2 = self.dummy_address()
+    def call_async(self, scenario=CCLOp.nop, len=1, comm=0, root_src_dst=0, function=0, tag=TAG_ANY, arithcfg=None, src_type=0, dst_type=0, addr_0=None, addr_1=None, addr_2=None, waitfor=[] ):
         if arithcfg is None:
             if addr_0 is None:
                 arithcfg = 0
             else:
                 #no config specified, use default config for datatype
                 arithcfg = self.arith_config[addr_0.dtype].addr
-        return DefaultIP.start(self, scenario, len, comm, root_src_dst, function, tag, arithcfg, src_type, dst_type, addr_0, addr_1, addr_2, waitfor=waitfor)        
+        if addr_0 is None:
+            addr_0 = self.dummy_address()
+        if addr_1 is None:
+            addr_1 = self.dummy_address()
+        if addr_2 is None:
+            addr_2 = self.dummy_address()
+        return self.start(scenario, len, comm, root_src_dst, function, tag, arithcfg, src_type, dst_type, addr_0, addr_1, addr_2, waitfor=waitfor)        
 
-    def call(self, scenario=CCLOp.nop, len=1, comm=0, root_src_dst=0, function=0, tag=TAG_ANY, arithcfg=0, src_type=0, dst_type=0, addr_0=None, addr_1=None, addr_2=None):
-        if addr_0 is None:
-            addr_0 = self.dummy_address()
-        if addr_1 is None:
-            addr_1 = self.dummy_address()
-        if addr_2 is None:
-            addr_2 = self.dummy_address()
+    def call_sync(self, scenario=CCLOp.nop, len=1, comm=0, root_src_dst=0, function=0, tag=TAG_ANY, arithcfg=None, src_type=0, dst_type=0, addr_0=None, addr_1=None, addr_2=None):
         if arithcfg is None:
             if addr_0 is None:
                 arithcfg = 0
             else:
                 #no config specified, use default config for datatype
                 arithcfg = self.arith_config[addr_0.dtype].addr
-        return DefaultIP.call(self, scenario, len, comm, root_src_dst, function, tag, arithcfg, src_type, dst_type, addr_0, addr_1, addr_2)        
+        if addr_0 is None:
+            addr_0 = self.dummy_address()
+        if addr_1 is None:
+            addr_1 = self.dummy_address()
+        if addr_2 is None:
+            addr_2 = self.dummy_address()
+        return self.call(scenario, len, comm, root_src_dst, function, tag, arithcfg, src_type, dst_type, addr_0, addr_1, addr_2)        
 
     def get_retcode(self):
         return self.exchange_mem.read(0xFFC) 
@@ -351,44 +351,44 @@ class cclo(DefaultIP):
         return self.exchange_mem.read(0xFF8) 
 
     def set_timeout(self, value, run_async=False, waitfor=[]):
-        handle = self.start(scenario=CCLOp.config, len=value, function=CCLOCfgFunc.set_timeout, waitfor=waitfor)
+        handle = self.call_async(scenario=CCLOp.config, len=value, function=CCLOCfgFunc.set_timeout, waitfor=waitfor)
         if run_async:
             return handle
         else:
             handle.wait()
 
     def start_profiling(self, run_async=False, waitfor=[]):
-        handle = self.start(scenario=CCLOp.config, function=CCLOCfgFunc.start_profiling, waitfor=waitfor)
+        handle = self.call_async(scenario=CCLOp.config, function=CCLOCfgFunc.start_profiling, waitfor=waitfor)
         if run_async:
             return handle
         else:
             handle.wait()
 
     def end_profiling(self, run_async=False, waitfor=[]):
-        handle = self.start(scenario=CCLOp.config, function=CCLOCfgFunc.end_profiling, waitfor=waitfor)
+        handle = self.call_async(scenario=CCLOp.config, function=CCLOCfgFunc.end_profiling, waitfor=waitfor)
         if run_async:
             return handle
         else:
             handle.wait()     
 
     def init_connection (self, comm_id=0):
-        self.call(scenario=CCLOp.config, comm=self.communicators[comm_id]["addr"], function=CCLOCfgFunc.init_connection)
+        self.call_sync(scenario=CCLOp.config, comm=self.communicators[comm_id]["addr"], function=CCLOCfgFunc.init_connection)
     
     @self_check_return_value
     def open_port(self, comm_id=0):
-        self.call(scenario=CCLOp.config, comm=self.communicators[comm_id]["addr"], function=CCLOCfgFunc.open_port)
+        self.call_sync(scenario=CCLOp.config, comm=self.communicators[comm_id]["addr"], function=CCLOCfgFunc.open_port)
     
     @self_check_return_value
     def open_con(self, comm_id=0):
-        self.call(scenario=CCLOp.config, comm=self.communicators[comm_id]["addr"], function=CCLOCfgFunc.open_con)
+        self.call_sync(scenario=CCLOp.config, comm=self.communicators[comm_id]["addr"], function=CCLOCfgFunc.open_con)
     
     @self_check_return_value
     def use_udp(self, comm_id=0):
-        self.call(scenario=CCLOp.config, function=CCLOCfgFunc.use_udp_stack)
+        self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.use_udp_stack)
     
     @self_check_return_value
     def use_tcp(self, comm_id=0):
-        self.call(scenario=CCLOp.config, function=CCLOCfgFunc.use_tcp_stack)   
+        self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.use_tcp_stack)   
     
     @self_check_return_value
     def set_dma_transaction_size(self, value=0):
@@ -397,7 +397,7 @@ class cclo(DefaultIP):
         elif value > self.rx_buffer_size:
             warnings.warn("ACCL: transaction size should be less or equal to configured buffer size!")
             return
-        self.call(scenario=CCLOp.config, function=CCLOCfgFunc.set_dma_transaction_size, len=value)   
+        self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.set_dma_transaction_size, len=value)   
         self.segment_size = value
         print("time taken to start and stop timer", self.exchange_mem.read(0x0FF4))
 
@@ -407,7 +407,7 @@ class cclo(DefaultIP):
         if value > 20:
             warnings.warn("ACCL: transaction size should be less or equal to configured buffer size!")
             return
-        self.call(scenario=CCLOp.config, function=CCLOCfgFunc.set_max_dma_transactions, len=value)   
+        self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.set_max_dma_transactions, len=value)   
 
     def configure_communicator(self, ranks, local_rank, vnx=False):
         assert len(self.rx_buffer_spares) > 0, "RX buffers unconfigured, please call setup_rx_buffers() first"
@@ -479,7 +479,7 @@ class cclo(DefaultIP):
     @self_check_return_value
     def nop(self, run_async=False, waitfor=[]):
         #calls the accelerator with no work. Useful for measuring call latency
-        handle = self.start(scenario=CCLOp.nop, waitfor=waitfor)
+        handle = self.call_async(scenario=CCLOp.nop, waitfor=waitfor)
         if run_async:
             return handle 
         else:
@@ -492,7 +492,7 @@ class cclo(DefaultIP):
             return
         if not from_fpga:
             srcbuf.sync_to_device()
-        handle = self.start(scenario=CCLOp.send, len=srcbuf.nbytes, comm=self.communicators[comm_id]["addr"], root_src_dst=dst, tag=tag, addr_0=srcbuf, waitfor=waitfor)
+        handle = self.call_async(scenario=CCLOp.send, len=srcbuf.nbytes, comm=self.communicators[comm_id]["addr"], root_src_dst=dst, tag=tag, addr_0=srcbuf, waitfor=waitfor)
         if run_async:
             return handle 
         else:
@@ -505,7 +505,7 @@ class cclo(DefaultIP):
         if dstbuf.nbytes == 0:
             warnings.warn("zero size buffer")
             return
-        handle = self.start(scenario=CCLOp.recv, len=dstbuf.nbytes, comm=self.communicators[comm_id]["addr"], root_src_dst=src, tag=tag, addr_0=dstbuf, waitfor=waitfor)
+        handle = self.call_async(scenario=CCLOp.recv, len=dstbuf.nbytes, comm=self.communicators[comm_id]["addr"], root_src_dst=src, tag=tag, addr_0=dstbuf, waitfor=waitfor)
         if run_async:
             return handle
         else:
@@ -523,7 +523,7 @@ class cclo(DefaultIP):
         # performs dstbuf = srcbuf
         if not from_fpga:
             srcbuf.sync_to_device()
-        handle = self.start(scenario=CCLOp.copy, len=srcbuf.nbytes,addr_0=srcbuf, addr_1=dstbuf, waitfor=waitfor)
+        handle = self.call_async(scenario=CCLOp.copy, len=srcbuf.nbytes,addr_0=srcbuf, addr_1=dstbuf, waitfor=waitfor)
         if run_async:
             return handle
         
@@ -544,7 +544,7 @@ class cclo(DefaultIP):
             val.sync_to_device()
         if not acc_from_fpga:
             acc.sync_to_device()
-        handle = self.start(scenario=CCLOp.accumulate, len=val.nbytes, function=func, addr_0=val, addr_1=acc, waitfor=waitfor)
+        handle = self.call_async(scenario=CCLOp.accumulate, len=val.nbytes, function=func, addr_0=val, addr_1=acc, waitfor=waitfor)
         if run_async:
             return handle
         
@@ -563,7 +563,7 @@ class cclo(DefaultIP):
         if not from_fpga:
             src_buf.sync_to_device()
 
-        handle = self.start(scenario=CCLOp.ext_stream_krnl, len=src_buf.nbytes, addr_0=src_buf, addr_1=dst_buf, waitfor=waitfor)
+        handle = self.call_async(scenario=CCLOp.ext_stream_krnl, len=src_buf.nbytes, addr_0=src_buf, addr_1=dst_buf, waitfor=waitfor)
         if run_async:
             return handle
         
@@ -584,7 +584,7 @@ class cclo(DefaultIP):
         if not from_fpga and is_root:
             buf.sync_to_device()
 
-        prevcall = [self.start(scenario=CCLOp.bcast, len=buf.nbytes, comm=self.communicators[comm_id]["addr"], root_src_dst=root, addr_0=buf, waitfor=waitfor)]
+        prevcall = [self.call_async(scenario=CCLOp.bcast, len=buf.nbytes, comm=self.communicators[comm_id]["addr"], root_src_dst=root, addr_0=buf, waitfor=waitfor)]
         
         if run_async:
             return prevcall[0]
@@ -607,7 +607,7 @@ class cclo(DefaultIP):
         if not from_fpga and local_rank == root:
             sbuf[:count*p].sync_to_device()
 
-        prevcall = [self.start(scenario=CCLOp.scatter, len=rbuf[0:count].nbytes, comm=comm["addr"], root_src_dst=root, addr_0=sbuf, addr_1=rbuf[0:count], waitfor=waitfor)]
+        prevcall = [self.call_async(scenario=CCLOp.scatter, len=rbuf[0:count].nbytes, comm=comm["addr"], root_src_dst=root, addr_0=sbuf, addr_1=rbuf[0:count], waitfor=waitfor)]
 
         if run_async:
             return prevcall[0]
@@ -634,7 +634,7 @@ class cclo(DefaultIP):
         if not from_fpga:
             sbuf[0:count].sync_to_device()
             
-        prevcall = [self.start(scenario=CCLOp.gather, len=rbuf[0:count].nbytes, comm=comm["addr"], root_src_dst=root, addr_0=sbuf, addr_1=rbuf, waitfor=waitfor)]
+        prevcall = [self.call_async(scenario=CCLOp.gather, len=rbuf[0:count].nbytes, comm=comm["addr"], root_src_dst=root, addr_0=sbuf, addr_1=rbuf, waitfor=waitfor)]
             
         if run_async:
             return prevcall[0]
@@ -659,7 +659,7 @@ class cclo(DefaultIP):
         if not from_fpga:
             sbuf[0:count].sync_to_device()
 
-        prevcall = [self.start(scenario=CCLOp.allgather, len=rbuf[0:count].nbytes, comm=comm["addr"], addr_0=sbuf, addr_1=rbuf, waitfor=waitfor)]
+        prevcall = [self.call_async(scenario=CCLOp.allgather, len=rbuf[0:count].nbytes, comm=comm["addr"], addr_0=sbuf, addr_1=rbuf, waitfor=waitfor)]
             
         if run_async:
             return prevcall[0]
@@ -687,7 +687,7 @@ class cclo(DefaultIP):
         if not from_fpga:
             sbuf[0:count].sync_to_device()
 
-        prevcall = [self.start(scenario=CCLOp.reduce, len=count, comm=self.communicators[comm_id]["addr"], root_src_dst=root, function=func, addr_0=sbuf, addr_1=rbuf, waitfor=waitfor)]
+        prevcall = [self.call_async(scenario=CCLOp.reduce, len=count, comm=self.communicators[comm_id]["addr"], root_src_dst=root, function=func, addr_0=sbuf, addr_1=rbuf, waitfor=waitfor)]
 
         if run_async:
             return prevcall[0]
@@ -708,7 +708,7 @@ class cclo(DefaultIP):
         if not from_fpga:
             sbuf[0:count].sync_to_device()
 
-        prevcall = [self.start(scenario=CCLOp.allreduce, len=count, comm=self.communicators[comm_id]["addr"], function=func, addr_0=sbuf, addr_1=rbuf, waitfor=waitfor)]
+        prevcall = [self.call_async(scenario=CCLOp.allreduce, len=count, comm=self.communicators[comm_id]["addr"], function=func, addr_0=sbuf, addr_1=rbuf, waitfor=waitfor)]
 
         if run_async:
             return prevcall[0]
@@ -735,7 +735,7 @@ class cclo(DefaultIP):
         if not from_fpga:
             sbuf[0:count*p].sync_to_device()
 
-        prevcall = [self.start(scenario=CCLOp.reduce_scatter, len=count, comm=self.communicators[comm_id]["addr"], function=func, addr_0=sbuf, addr_1=rbuf, waitfor=waitfor)]
+        prevcall = [self.call_async(scenario=CCLOp.reduce_scatter, len=count, comm=self.communicators[comm_id]["addr"], function=func, addr_0=sbuf, addr_1=rbuf, waitfor=waitfor)]
 
         if run_async:
             return prevcall[0]
