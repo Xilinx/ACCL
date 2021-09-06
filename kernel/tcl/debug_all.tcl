@@ -101,12 +101,12 @@ set_property -dict [list CONFIG.C_SLOT_4_INTF_TYPE {xilinx.com:interface:axis_rt
 set_property -dict [list CONFIG.C_SLOT_5_INTF_TYPE {xilinx.com:interface:axis_rtl:1.0}] [get_bd_cells system_ila_dma2]
 connect_bd_net [get_bd_ports ap_clk] [get_bd_pins system_ila_dma2/clk]
 connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins system_ila_dma2/resetn]
-connect_bd_intf_net [get_bd_intf_pins system_ila_dma2/SLOT_0_AXIS] -boundary_type upper [get_bd_intf_pins dma_1/dma_mm2s_cmd]
-connect_bd_intf_net [get_bd_intf_pins system_ila_dma2/SLOT_1_AXIS] -boundary_type upper [get_bd_intf_pins dma_1/dma_s2mm]
-connect_bd_intf_net [get_bd_intf_pins system_ila_dma2/SLOT_2_AXIS] -boundary_type upper [get_bd_intf_pins dma_1/dma_s2mm_cmd]
-connect_bd_intf_net [get_bd_intf_pins system_ila_dma2/SLOT_3_AXIS] -boundary_type upper [get_bd_intf_pins dma_1/dma_mm2s]
-connect_bd_intf_net [get_bd_intf_pins system_ila_dma2/SLOT_4_AXIS] -boundary_type upper [get_bd_intf_pins dma_1/dma_mm2s_sts]
-connect_bd_intf_net [get_bd_intf_pins system_ila_dma2/SLOT_5_AXIS] -boundary_type upper [get_bd_intf_pins dma_1/dma_s2mm_sts]
+connect_bd_intf_net [get_bd_intf_pins system_ila_dma2/SLOT_0_AXIS] -boundary_type upper [get_bd_intf_pins dma_2/dma_mm2s_cmd]
+connect_bd_intf_net [get_bd_intf_pins system_ila_dma2/SLOT_1_AXIS] -boundary_type upper [get_bd_intf_pins dma_2/dma_s2mm]
+connect_bd_intf_net [get_bd_intf_pins system_ila_dma2/SLOT_2_AXIS] -boundary_type upper [get_bd_intf_pins dma_2/dma_s2mm_cmd]
+connect_bd_intf_net [get_bd_intf_pins system_ila_dma2/SLOT_3_AXIS] -boundary_type upper [get_bd_intf_pins dma_2/dma_mm2s]
+connect_bd_intf_net [get_bd_intf_pins system_ila_dma2/SLOT_4_AXIS] -boundary_type upper [get_bd_intf_pins dma_2/dma_mm2s_sts]
+connect_bd_intf_net [get_bd_intf_pins system_ila_dma2/SLOT_5_AXIS] -boundary_type upper [get_bd_intf_pins dma_2/dma_s2mm_sts]
 
 # VNX Packetizer
 set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {vnx_packetizer_in}]
@@ -137,7 +137,57 @@ connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins system_ila_depacketizer/rese
 connect_bd_intf_net [get_bd_intf_pins system_ila_depacketizer/SLOT_0_AXIS] -boundary_type upper [get_bd_intf_pins udp_rx_subsystem/s_axis_data]
 connect_bd_intf_net [get_bd_intf_pins system_ila_depacketizer/SLOT_1_AXIS] -boundary_type upper [get_bd_intf_pins udp_rx_subsystem/m_axis_status]
 
-# TODO: add tcp packetizer/depacketizer
+# TCP Packetizer
+set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {s_axis_pktcmd_1}]
+set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {s_axis_tcp_open_status_1}]
+set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {axis_switch_0_M01_AXIS}]
+set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {s_axis_tcp_tx_status_1}]
+set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {s_axis_opencon_cmd_1}]
+set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {tcp_tx_subsystem_m_axis_tcp_tx_data}]
+set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {tcp_tx_subsystem_m_axis_tcp_tx_meta}]
+
+create_bd_cell -type ip -vlnv xilinx.com:ip:system_ila:1.1 system_ila_tcp_packetizer
+set_property -dict [list CONFIG.C_NUM_MONITOR_SLOTS {7} CONFIG.C_DATA_DEPTH {1024}] [get_bd_cells system_ila_tcp_packetizer]
+set_property -dict [list CONFIG.C_SLOT_0_INTF_TYPE {xilinx.com:interface:axis_rtl:1.0}] [get_bd_cells system_ila_tcp_packetizer]
+set_property -dict [list CONFIG.C_SLOT_1_INTF_TYPE {xilinx.com:interface:axis_rtl:1.0}] [get_bd_cells system_ila_tcp_packetizer]
+set_property -dict [list CONFIG.C_SLOT_2_INTF_TYPE {xilinx.com:interface:axis_rtl:1.0}] [get_bd_cells system_ila_tcp_packetizer]
+set_property -dict [list CONFIG.C_SLOT_3_INTF_TYPE {xilinx.com:interface:axis_rtl:1.0}] [get_bd_cells system_ila_tcp_packetizer]
+set_property -dict [list CONFIG.C_SLOT_4_INTF_TYPE {xilinx.com:interface:axis_rtl:1.0}] [get_bd_cells system_ila_tcp_packetizer]
+set_property -dict [list CONFIG.C_SLOT_5_INTF_TYPE {xilinx.com:interface:axis_rtl:1.0}] [get_bd_cells system_ila_tcp_packetizer]
+set_property -dict [list CONFIG.C_SLOT_6_INTF_TYPE {xilinx.com:interface:axis_rtl:1.0}] [get_bd_cells system_ila_tcp_packetizer]
+
+connect_bd_net [get_bd_ports ap_clk] [get_bd_pins system_ila_tcp_packetizer/clk]
+connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins system_ila_tcp_packetizer/resetn]
+connect_bd_intf_net [get_bd_intf_pins system_ila_tcp_packetizer/SLOT_0_AXIS] -boundary_type upper [get_bd_intf_pins tcp_tx_subsystem/s_axis_pktcmd]
+connect_bd_intf_net [get_bd_intf_pins system_ila_tcp_packetizer/SLOT_1_AXIS] -boundary_type upper [get_bd_intf_pins tcp_tx_subsystem/s_axis_tcp_open_status]
+connect_bd_intf_net [get_bd_intf_pins system_ila_tcp_packetizer/SLOT_2_AXIS] -boundary_type upper [get_bd_intf_pins tcp_tx_subsystem/s_axis_tcp_tx_data]
+connect_bd_intf_net [get_bd_intf_pins system_ila_tcp_packetizer/SLOT_3_AXIS] -boundary_type upper [get_bd_intf_pins tcp_tx_subsystem/s_axis_tcp_tx_status]
+connect_bd_intf_net [get_bd_intf_pins system_ila_tcp_packetizer/SLOT_4_AXIS] -boundary_type upper [get_bd_intf_pins tcp_tx_subsystem/s_axis_opencon_cmd]
+connect_bd_intf_net [get_bd_intf_pins system_ila_tcp_packetizer/SLOT_5_AXIS] -boundary_type upper [get_bd_intf_pins tcp_tx_subsystem/m_axis_tcp_tx_data]
+connect_bd_intf_net [get_bd_intf_pins system_ila_tcp_packetizer/SLOT_6_AXIS] -boundary_type upper [get_bd_intf_pins tcp_tx_subsystem/m_axis_tcp_tx_meta]
+
+# TCP Depacketizer
+set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {s_axis_tcp_port_status_1}]
+set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {s_axis_tcp_rx_data_1}]
+set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {s_axis_openport_cmd_1}]
+set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {s_axis_tcp_notification_1}]
+set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {s_axis_tcp_rx_meta_1}]
+
+create_bd_cell -type ip -vlnv xilinx.com:ip:system_ila:1.1 system_ila_tcp_depacketizer
+set_property -dict [list CONFIG.C_NUM_MONITOR_SLOTS {5} CONFIG.C_DATA_DEPTH {1024}] [get_bd_cells system_ila_tcp_depacketizer]
+set_property -dict [list CONFIG.C_SLOT_0_INTF_TYPE {xilinx.com:interface:axis_rtl:1.0}] [get_bd_cells system_ila_tcp_depacketizer]
+set_property -dict [list CONFIG.C_SLOT_1_INTF_TYPE {xilinx.com:interface:axis_rtl:1.0}] [get_bd_cells system_ila_tcp_depacketizer]
+set_property -dict [list CONFIG.C_SLOT_2_INTF_TYPE {xilinx.com:interface:axis_rtl:1.0}] [get_bd_cells system_ila_tcp_depacketizer]
+set_property -dict [list CONFIG.C_SLOT_3_INTF_TYPE {xilinx.com:interface:axis_rtl:1.0}] [get_bd_cells system_ila_tcp_depacketizer]
+set_property -dict [list CONFIG.C_SLOT_4_INTF_TYPE {xilinx.com:interface:axis_rtl:1.0}] [get_bd_cells system_ila_tcp_depacketizer]
+connect_bd_net [get_bd_ports ap_clk] [get_bd_pins system_ila_tcp_depacketizer/clk]
+connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins system_ila_tcp_depacketizer/resetn]
+connect_bd_intf_net [get_bd_intf_pins system_ila_tcp_depacketizer/SLOT_0_AXIS] -boundary_type upper [get_bd_intf_pins tcp_rx_subsystem/s_axis_tcp_port_status]
+connect_bd_intf_net [get_bd_intf_pins system_ila_tcp_depacketizer/SLOT_1_AXIS] -boundary_type upper [get_bd_intf_pins tcp_rx_subsystem/s_axis_tcp_rx_data]
+connect_bd_intf_net [get_bd_intf_pins system_ila_tcp_depacketizer/SLOT_2_AXIS] -boundary_type upper [get_bd_intf_pins tcp_rx_subsystem/s_axis_openport_cmd]
+connect_bd_intf_net [get_bd_intf_pins system_ila_tcp_depacketizer/SLOT_3_AXIS] -boundary_type upper [get_bd_intf_pins tcp_rx_subsystem/s_axis_tcp_notification]
+connect_bd_intf_net [get_bd_intf_pins system_ila_tcp_depacketizer/SLOT_4_AXIS] -boundary_type upper [get_bd_intf_pins tcp_rx_subsystem/s_axis_tcp_rx_meta]
+
 
 # Add aximm debug
 set_property HDL_ATTRIBUTE.DEBUG true [get_bd_intf_nets {switch_control}]
