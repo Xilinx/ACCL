@@ -151,26 +151,10 @@ extern "C" {
 #define CONTROL_READY_MASK      0x00000001 << 3
 #define CONTROL_REPEAT_MASK     0x00000001 << 7
 
-#define GPIO_DATA_REG      XPAR_GPIO_0_BASEADDR + 0x0000
+#define GPIO_DATA_REG      GPIO_BASEADDR + 0x0000
+#define GPIO2_DATA_REG     GPIO_BASEADDR + 0x0008
 #define GPIO_READY_MASK       0x00000001
 #define GPIO_SWRST_MASK       0x00000002
-
-#define GPIO_TRI_REG       XPAR_GPIO_0_BASEADDR + 0x0004
-
-#define GPIO2_DATA_REG     XPAR_GPIO_0_BASEADDR + 0x0008
-#define STREAM_INTR_MASK      0x00000001
-
-#define GPIO2_TRI_REG      XPAR_GPIO_0_BASEADDR + 0x000C
-
-#define GPIO_GIER_REG      XPAR_GPIO_0_BASEADDR + 0x011C
-#define GIE_MASK              0x80000000
-
-#define GPIO_IPISR_REG     XPAR_GPIO_0_BASEADDR + 0x0120
-#define C1IS_MASK             0x00000001
-#define C2IS_MASK             0x00000002
-#define GPIO_IPIER_REG     XPAR_GPIO_0_BASEADDR + 0x0128
-#define C1IE_MASK             0x00000001
-#define C2IE_MASK             0x00000002
 
 //from AXI interrupt controller v4.1 LogiCORE IP product guide
 //https://www.xilinx.com/support/documentation/ip_documentation/axi_intc/v4_1/pg099-axi-intc.pdf
