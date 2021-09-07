@@ -68,21 +68,36 @@ void tcp_packetizer(stream<ap_axiu<DATA_WIDTH,0,0,0> > & in,
 
 	unsigned int pktsize = 0;
 	int bytes_processed  = 0;
-	
-	while(bytes_processed < bytes_to_process){
-	#pragma HLS PIPELINE II=1
-		ap_axiu<DATA_WIDTH,0,0,0> outword;
-		//if this is the first word, put the count in a header
-		if(bytes_processed == 0){
+
+	ap_axiu<DATA_WIDTH,0,0,0> outword;
+
+	bool setHeader = false;
+
+	//if this is the first word and the message payload fifo is not empty, put the count in a header
+	while(setHeader == false)
+	{
+		if (!in.empty()) 
+		{
+		#pragma HLS PIPELINE II=1
 			outword.data(HEADER_COUNT_END, HEADER_COUNT_START) 	= message_bytes;
 			outword.data(HEADER_TAG_END	 , HEADER_TAG_START  )  = message_tag;
 			outword.data(HEADER_SRC_END	 , HEADER_SRC_START  )  = message_src;
 			outword.data(HEADER_SEQ_END	 , HEADER_SEQ_START  )  = message_seq;
-		} else {
-			outword.data = in.read().data;
+			outword.keep = -1;
+			outword.last = 0;
+			out.write(outword);
+			setHeader = true;
 		}
+	}
+	
+	// send the message
+	while(bytes_processed < message_bytes){
+	#pragma HLS PIPELINE II=1
+		
+		outword.data = in.read().data;
+	
 		//signal ragged tail
-		int bytes_left = (bytes_to_process - bytes_processed);
+		int bytes_left = (message_bytes - bytes_processed);
 		if(bytes_left < bytes_per_word){
 			outword.keep = (1 << bytes_left)-1;
 			bytes_processed += bytes_left;

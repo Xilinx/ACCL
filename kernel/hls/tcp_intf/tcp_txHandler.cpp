@@ -58,23 +58,23 @@ void tcp_txHandler(
 #pragma HLS PIPELINE II=1
 #pragma HLS INLINE off
 
-	enum txHandlerStateType {WAIT_CMD, CHECK_REQ, WRITE_PKG};
-    static txHandlerStateType txHandlerState = WAIT_CMD;
+	enum txHandlerStateType {WAIT_CMD, WAIT_FIRST_DATA, CHECK_REQ, WRITE_PKG};
+     static txHandlerStateType txHandlerState = WAIT_CMD;
 
-    static ap_uint<32> sessionID;
-    static ap_uint<32> expectedTxByteCnt;
-    static ap_uint<32> maxPkgWord;
+     static ap_uint<32> sessionID;
+     static ap_uint<32> expectedTxByteCnt;
+     static ap_uint<32> maxPkgWord;
 
-    static ap_uint<16> length;
-    static ap_uint<16> remaining_space;
-    static ap_uint<8> error;
-    static ap_uint<32> currentPkgWord = 0;
-    static ap_uint<32> wordCnt = 0;
+     static ap_uint<16> length;
+     static ap_uint<16> remaining_space;
+     static ap_uint<8> error;
+     static ap_uint<32> currentPkgWord = 0;
+     static ap_uint<32> wordCnt = 0;
 
-    static ap_uint<32> sentByteCnt = 0;
+     static ap_uint<32> sentByteCnt = 0;
 
 
-    pkt32 tx_meta_pkt;
+     pkt32 tx_meta_pkt;
 
 	switch(txHandlerState)
 	{
@@ -86,7 +86,13 @@ void tcp_txHandler(
 				expectedTxByteCnt = cmd(63,32);
 				maxPkgWord = cmd(95,64);
 
-				tx_meta_pkt.data(15,0) = sessionID;
+				txHandlerState = WAIT_FIRST_DATA;
+			}
+		break;
+          case WAIT_FIRST_DATA:
+               if(!s_data_in.empty())
+               {
+                    tx_meta_pkt.data(15,0) = sessionID;
 
 				if (maxPkgWord*(512/8) > expectedTxByteCnt)
 					tx_meta_pkt.data(31,16) = expectedTxByteCnt;
@@ -94,9 +100,10 @@ void tcp_txHandler(
 					tx_meta_pkt.data(31,16) = maxPkgWord*(512/8);
 
 				m_axis_tcp_tx_meta.write(tx_meta_pkt);
-				txHandlerState = CHECK_REQ;
-			}
-		break;
+
+                    txHandlerState = CHECK_REQ;
+               }
+          break;
 		case CHECK_REQ:
 			if (!s_axis_tcp_tx_status.empty())
                {
@@ -152,25 +159,24 @@ void tcp_txHandler(
 			wordCnt ++;
 			ap_axiu<DWIDTH512, 0, 0, 0> currWord = s_data_in.read();
 			ap_axiu<DWIDTH512, 0, 0, 0> currPkt;
-            currPkt.data = currWord.data;
-            currPkt.keep = currWord.keep;
-            currPkt.last = (wordCnt == currentPkgWord);
-            m_axis_tcp_tx_data.write(currPkt);
-            if (wordCnt == currentPkgWord)
-            {
-            	wordCnt = 0;
-            	if (sentByteCnt >= expectedTxByteCnt)
-            	{
-            		sentByteCnt = 0;
-            		currentPkgWord = 0;
-            		txHandlerState = WAIT_CMD;
-            	}
-            	else
-            	{
-            		txHandlerState = CHECK_REQ;
-            	}
+               currPkt.data = currWord.data;
+               currPkt.keep = currWord.keep;
+               currPkt.last = (wordCnt == currentPkgWord);
+               m_axis_tcp_tx_data.write(currPkt);
+               if (wordCnt == currentPkgWord)
+               {
+               wordCnt = 0;
+               if (sentByteCnt >= expectedTxByteCnt)
+               {
+                    sentByteCnt = 0;
+                    currentPkgWord = 0;
+                    txHandlerState = WAIT_CMD;
+               }
+               else
+               {
+                    txHandlerState = CHECK_REQ;
+               }
             }
-			             
 		break;
 	}
 
