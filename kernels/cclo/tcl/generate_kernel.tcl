@@ -20,10 +20,11 @@ set debug [lindex $::argv 2]
 set xsafile [lindex $::argv 3]
 
 # create project with correct target
-create_project -force ccl_offload_ex ./ccl_offload_ex -part $fpgapart
+create_project -force ccl_offload_ex ./ccl_offload_ex -part $fpgapart -rtl_kernel
 set_property board_part $boardpart [current_project]
-
-#open up kernel project and its BD
+set_property target_language verilog [current_project]
+set_property simulator_language MIXED [current_project]
+set_property coreContainer.enable false [current_project]
 update_compile_order -fileset sources_1
 create_bd_design ccl_offload_bd
 

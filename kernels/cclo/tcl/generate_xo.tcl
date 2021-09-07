@@ -215,6 +215,7 @@ set_property SCOPED_TO_CELLS { control/microblaze_0 } [get_files -all -of_object
 
 #run kernel packaging
 reset_run synth_1
+set_property -name {STEPS.SYNTH_DESIGN.ARGS.MORE OPTIONS} -value {-mode out_of_context} -objects [get_runs synth_1]
 launch_runs synth_1 -jobs 12
 wait_on_run [get_runs synth_1]
 open_run synth_1 -name synth_1
