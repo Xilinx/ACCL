@@ -31,3 +31,17 @@ The repository is organized as follows:
    - [host](demo/host/): host code which drives the demo
      - [debug](demo/host/debug/): host-side debug scripts for XSCT
 - [docs](docs/): documentation.
+
+## Build a demo with TCP stack. 
+
+0. Source Vitis 2020.2
+1. Source xrt
+1. Go in [kernel](kernel/)
+   1. modify [kernel/Makefile](kernel/Makefile) to target the right shell (e.g. xilinx_u280_xdma_201920_3)
+   1. run make to create a ``ccl_offload.xo``
+1. Go in [demo](demo/build)
+   1. Source Vitis 2020.1
+   1. Build tcp network stack
+   1. Modify [demo/build/Makefile](demo/build/Makefile) to target the right shell (e.g. xilinx_u280_xdma_201920_3) and the right mode (e.g. tcp_cmac)
+   1. Source Vitis 2020.2
+   1. run make to create a ``.xclbin``
