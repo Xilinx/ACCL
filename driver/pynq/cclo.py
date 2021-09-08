@@ -140,6 +140,8 @@ TAG_ANY = 0xFFFF_FFFF
 EXCHANGE_MEM_OFFSET_ADDRESS= 0x1000
 EXCHANGE_MEM_ADDRESS_RANGE = 0x1000
 HOST_CTRL_ADDRESS_RANGE    = 0x800
+RETCODE_OFFSET = 0x1FFC
+IDCODE_OFFSET = 0x1FF8
 
 class cclo(DefaultIP):
     """
@@ -157,7 +159,7 @@ class cclo(DefaultIP):
         #define an empty list of RX spare buffers
         self.rx_buffer_spares = []
         self.rx_buffer_size = 0
-        self.rx_buffers_adr = 0 
+        self.rx_buffers_adr = EXCHANGE_MEM_OFFSET_ADDRESS
         #define another spare for general use (e.g. as accumulator for reduce/allreduce)
         self.utility_spare = None
         #define an empty list of communicators, to which users will add
@@ -168,8 +170,6 @@ class cclo(DefaultIP):
         self.ignore_safety_checks = False
         #TODO: use description to gather info about where to allocate spare buffers
         self.segment_size = None
-        from pynq import MMIO
-        self.exchange_mem = MMIO(self.mmio.base_addr + EXCHANGE_MEM_OFFSET_ADDRESS, EXCHANGE_MEM_ADDRESS_RANGE)
 
     class dummy_address:
         def __init__(self, adr=0):
@@ -181,8 +181,8 @@ class cclo(DefaultIP):
         for i in range(0,EXCHANGE_MEM_ADDRESS_RANGE, 4*num_word_per_line):
             memory = []
             for j in range(num_word_per_line):
-                memory.append(hex(self.exchange_mem.read(i+(j*4))))
-            print(hex(self.exchange_mem.base_addr + i), memory)
+                memory.append(hex(self.mmio.read(EXCHANGE_MEM_OFFSET_ADDRESS+i+(j*4))))
+            print(hex(EXCHANGE_MEM_OFFSET_ADDRESS + i), memory)
 
     def dump_host_control_memory(self):
         print("host control:")
@@ -214,12 +214,12 @@ class cclo(DefaultIP):
         self.arith_config = configs
         for key in self.arith_config.keys():
             #write configuration into exchange memory
-            addr = self.arith_config[key].write(self.exchange_mem, addr)
+            addr = self.arith_config[key].write(self.mmio, addr)
 
     def setup_rx_buffers(self, nbufs, bufsize, devicemem):
         addr = self.rx_buffers_adr
         self.rx_buffer_size = bufsize
-        self.exchange_mem.write(addr,nbufs)
+        self.mmio.write(addr,nbufs)
         if not isinstance(devicemem, list):
             devicemem = [devicemem]
         for i in range(nbufs):
@@ -229,15 +229,15 @@ class cclo(DefaultIP):
             self.rx_buffer_spares.append(pynq.allocate((bufsize,), dtype=np.int8, target=devicemem_i))
             #program this buffer into the accelerator
             addr += 4
-            self.exchange_mem.write(addr, self.rx_buffer_spares[-1].physical_address & 0xffffffff)
+            self.mmio.write(addr, self.rx_buffer_spares[-1].physical_address & 0xffffffff)
             addr += 4
-            self.exchange_mem.write(addr, (self.rx_buffer_spares[-1].physical_address>>32) & 0xffffffff)
+            self.mmio.write(addr, (self.rx_buffer_spares[-1].physical_address>>32) & 0xffffffff)
             addr += 4
-            self.exchange_mem.write(addr, bufsize)
+            self.mmio.write(addr, bufsize)
             # clear remaining fields
             for _ in range(3,9):
                 addr += 4
-                self.exchange_mem.write(addr, 0)
+                self.mmio.write(addr, 0)
 
         self.communicators_addr = addr+4
         max_higher = 1
@@ -247,7 +247,7 @@ class cclo(DefaultIP):
         #self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.reset_periph)
         self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.enable_irq)
         self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.enable_pkt)
-        print("time taken to enqueue buffers", self.exchange_mem.read(0x0FF4))
+        print("time taken to enqueue buffers", self.mmio.read(0x1FF4))
         #set segmentation size equal to buffer size
         self.set_dma_transaction_size(bufsize)
         self.set_max_dma_transaction_flight(10)
@@ -255,30 +255,30 @@ class cclo(DefaultIP):
     def dump_rx_buffers_spares(self, nbufs=None):
         addr = self.rx_buffers_adr
         if nbufs is None:
-            assert self.exchange_mem.read(addr) == len(self.rx_buffer_spares)
+            assert self.mmio.read(addr) == len(self.rx_buffer_spares)
             nbufs = len(self.rx_buffer_spares)
         print(f"CCLO address:{hex(self.mmio.base_addr)}")
         nbufs = min(len(self.rx_buffer_spares), nbufs)
         for i in range(nbufs):
             addr   += 4
-            addrl   =self.exchange_mem.read(addr)
+            addrl   =self.mmio.read(addr)
             addr   += 4
-            addrh   = self.exchange_mem.read(addr)
+            addrh   = self.mmio.read(addr)
             addr   += 4
-            maxsize = self.exchange_mem.read(addr)
+            maxsize = self.mmio.read(addr)
             #assert self.read(addr) == self.rx_buffer_size
             addr   += 4
-            dmatag  = self.exchange_mem.read(addr)
+            dmatag  = self.mmio.read(addr)
             addr   += 4
-            rstatus  = self.exchange_mem.read(addr)
+            rstatus  = self.mmio.read(addr)
             addr   += 4
-            rxtag   = self.exchange_mem.read(addr)
+            rxtag   = self.mmio.read(addr)
             addr   += 4
-            rxlen   = self.exchange_mem.read(addr)
+            rxlen   = self.mmio.read(addr)
             addr   += 4
-            rxsrc   = self.exchange_mem.read(addr)
+            rxsrc   = self.mmio.read(addr)
             addr   += 4
-            seq     = self.exchange_mem.read(addr)
+            seq     = self.mmio.read(addr)
             
             if rstatus == 0 :
                 status =  "NOT USED"
@@ -327,7 +327,7 @@ class cclo(DefaultIP):
         return self.call(scenario, len, comm, root_src_dst, function, tag, arithcfg, src_type, dst_type, addr_0, addr_1, addr_2)        
 
     def get_retcode(self):
-        return self.exchange_mem.read(0xFFC) 
+        return self.mmio.read(RETCODE_OFFSET)
 
     def self_check_return_value(call):
         def wrapper(self, *args, **kwargs):
@@ -348,7 +348,7 @@ class cclo(DefaultIP):
 
     def get_hwid(self):
         #TODO: add check
-        return self.exchange_mem.read(0xFF8) 
+        return self.mmio.read(IDCODE_OFFSET) 
 
     def set_timeout(self, value, run_async=False, waitfor=[]):
         handle = self.call_async(scenario=CCLOp.config, len=value, function=CCLOCfgFunc.set_timeout, waitfor=waitfor)
@@ -399,7 +399,7 @@ class cclo(DefaultIP):
             return
         self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.set_dma_transaction_size, len=value)   
         self.segment_size = value
-        print("time taken to start and stop timer", self.exchange_mem.read(0x0FF4))
+        print("time taken to start and stop timer", self.read(0x1FF4))
 
     @self_check_return_value
     def set_max_dma_transaction_flight(self, value=0):
@@ -417,32 +417,32 @@ class cclo(DefaultIP):
             addr = self.communicators[-1]["addr"]
         comm_address = EXCHANGE_MEM_OFFSET_ADDRESS + addr
         communicator = {"local_rank": local_rank, "addr": comm_address, "ranks": ranks, "inbound_seq_number_addr":[0 for _ in ranks], "outbound_seq_number_addr":[0 for _ in ranks], "session_addr":[0 for _ in ranks]}
-        self.exchange_mem.write(addr,len(ranks))
+        self.mmio.write(addr,len(ranks))
         addr += 4
-        self.exchange_mem.write(addr,local_rank)
+        self.mmio.write(addr,local_rank)
         for i in range(len(ranks)):
             addr += 4
             #ip string to int conversion from here:
             #https://stackoverflow.com/questions/5619685/conversion-from-ip-string-to-integer-and-backward-in-python
-            self.exchange_mem.write(addr, int(ipaddress.IPv4Address(ranks[i]["ip"])))
+            self.mmio.write(addr, int(ipaddress.IPv4Address(ranks[i]["ip"])))
             addr += 4
             #when using the UDP stack, write the rank number into the port register
             #the actual port is programmed into the stack itself
             if vnx:
-                self.exchange_mem.write(addr,i)
+                self.mmio.write(addr,i)
             else:
-                self.exchange_mem.write(addr,ranks[i]["port"])
+                self.mmio.write(addr,ranks[i]["port"])
             #leave 2 32 bit space for inbound/outbound_seq_number
             addr += 4
-            self.exchange_mem.write(addr,0)
+            self.mmio.write(addr,0)
             communicator["inbound_seq_number_addr"][i]  = addr
             addr +=4
-            self.exchange_mem.write(addr,0)
+            self.mmio.write(addr,0)
             communicator["outbound_seq_number_addr"][i] = addr
             #a 32 bit number is reserved for session id
             # sessions are initialized to 0xFFFFFFFF
             addr += 4
-            self.exchange_mem.write(addr, 0xFFFFFFFF)
+            self.mmio.write(addr, 0xFFFFFFFF)
             communicator["session_addr"][i] = addr
         self.communicators.append(communicator)
         self.arithcfg_addr = addr + 4
@@ -452,27 +452,27 @@ class cclo(DefaultIP):
             addr    = self.communicators_addr
         else:
             addr    = self.communicators[-1]["addr"] - EXCHANGE_MEM_OFFSET_ADDRESS
-        nr_ranks    = self.exchange_mem.read(addr)
+        nr_ranks    = self.mmio.read(addr)
         addr +=4
-        local_rank  = self.exchange_mem.read(addr)
+        local_rank  = self.mmio.read(addr)
         print(f"Communicator. local_rank: {local_rank} \t number of ranks: {nr_ranks}.")
         for i in range(nr_ranks):
             addr +=4
             #ip string to int conversion from here:
             #https://stackoverflow.com/questions/5619685/conversion-from-ip-string-to-integer-and-backward-in-python
-            ip_addr_rank = str(ipaddress.IPv4Address(self.exchange_mem.read(addr)))
+            ip_addr_rank = str(ipaddress.IPv4Address(self.mmio.read(addr)))
             addr += 4
             #when using the UDP stack, write the rank number into the port register
             #the actual port is programmed into the stack itself
-            port                = self.exchange_mem.read(addr)
+            port                = self.mmio.read(addr)
             #leave 2 32 bit space for inbound/outbound_seq_number
             addr += 4
-            inbound_seq_number  = self.exchange_mem.read(addr)
+            inbound_seq_number  = self.mmio.read(addr)
             addr +=4
-            outbound_seq_number = self.exchange_mem.read(addr)
+            outbound_seq_number = self.mmio.read(addr)
             #a 32 bit integer is dedicated to session id 
             addr += 4
-            session = self.exchange_mem.read(addr)
+            session = self.mmio.read(addr)
             print(f"> rank {i} (ip {ip_addr_rank}:{port} ; session {session}) : <- inbound_seq_number {inbound_seq_number}, -> outbound_seq_number {outbound_seq_number}")
    
 
