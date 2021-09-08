@@ -21,7 +21,7 @@ PLATFORM ?= xilinx_u280_xdma_201920_3
 #xilinx_u280_xdma_201920_3
 XSA := $(strip $(patsubst %.xpfm, % , $(shell basename $(PLATFORM))))
 DEBUG ?= all
-MODE ?= vnx
+MODE ?= tcp_cmac
 FREQUENCY = 250
 XCCL_XO=../../kernel/ccl_offload_ex/exports/ccl_offload.xo
 VNX=xup_vitis_network_example
@@ -177,6 +177,13 @@ network_krnl: $(TCP_XO)
 $(TCP_XO):
 	git submodule update --init --recursive Vitis_with_100Gbps_TCP-IP
 	make -C Vitis_with_100Gbps_TCP-IP/ network_krnl DEVICE=$(PLATFORM) TEMP_DIR=_x.hw.$(XSA)/ XSA=$(XSA)
+
+tcp_stack_ips:
+	git submodule update --init --recursive Vitis_with_100Gbps_TCP-IP
+	rm -rf Vitis_with_100Gbps_TCP-IP/build
+	mkdir Vitis_with_100Gbps_TCP-IP/build
+	cmake -S Vitis_with_100Gbps_TCP-IP/ -BVitis_with_100Gbps_TCP-IP/build/ -DFDEV_NAME=$(BOARD) -DVIVADO_HLS_ROOT_DIR=/proj/xbuilds/2020.1_released/installs/lin64/Vivado/2020.1 -DVIVADO_ROOT_DIR=/proj/xbuilds/2020.1_released/installs/lin64/Vivado/2020.1 -DTCP_STACK_EN=1 -DTCP_STACK_RX_DDR_BYPASS_EN=1  -DTCP_STACK_WINDOW_SCALING=0 
+	make -C Vitis_with_100Gbps_TCP-IP/build installip
 
 $(XCLBIN): $(XCCL_XO) $(VNX_XO) $(CONFIGFILE)
 	v++ --link --platform $(PLATFORM) --kernel_frequency $(FREQUENCY) --save-temps --temp_dir $(BUILD_DIR) $(CONFIG) -o $@ $(XCCL_XO) $(VNX_XO)

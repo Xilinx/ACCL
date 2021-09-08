@@ -34,14 +34,12 @@ The repository is organized as follows:
 
 ## Build a demo with TCP stack. 
 
-0. Source Vitis 2020.2
+More info at [demo/build/readme.md](demo/build/readme.md)
+
 1. Source xrt
-1. Go in [kernel](kernel/)
-   1. modify [kernel/Makefile](kernel/Makefile) to target the right shell (e.g. xilinx_u280_xdma_201920_3)
-   1. run make to create a ``ccl_offload.xo``
-1. Go in [demo](demo/build)
-   1. Source Vitis 2020.1
-   1. Build tcp network stack
+1. Go in [demo/build](demo/build)
    1. Modify [demo/build/Makefile](demo/build/Makefile) to target the right shell (e.g. xilinx_u280_xdma_201920_3) and the right mode (e.g. tcp_cmac)
+   1. Source Vitis 2020.1
+   1. Build tcp network stack ips
    1. Source Vitis 2020.2
    1. run make to create a ``.xclbin``
