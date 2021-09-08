@@ -26,6 +26,7 @@ import numpy as np
 import ipaddress
 from enum import IntEnum, unique
 
+@unique
 class CCLOp(IntEnum):
     config                  = 0
     send                    = 1
@@ -38,18 +39,12 @@ class CCLOp(IntEnum):
     allreduce               = 8
     accumulate              = 9
     copy                    = 10
-    reduce_ring             = 11
-    allreduce_fused_ring    = 12
-    gather_ring             = 13
-    allgather_ring          = 14
     ext_stream_krnl         = 15
     ext_reduce              = 16
-    bcast_rr                = 17
-    scatter_rr              = 18
-    allreduce_share_ring    = 19
     reduce_scatter          = 20
     nop                     = 255
 
+@unique
 class CCLOCfgFunc(IntEnum):
     enable_irq               = 0
     disable_irq              = 1
@@ -65,6 +60,7 @@ class CCLOCfgFunc(IntEnum):
     end_profiling            = 11
     set_dma_transaction_size = 12
     set_max_dma_transactions = 13
+    set_delay                = 14
     
 class CCLOReduceFunc(IntEnum):
     fp          = 0
@@ -125,14 +121,12 @@ def compatible_size(nbytes,type):
         elif   (type == CCLOReduceFunc.dp or type == CCLOReduceFunc.i64 ):
             return True if (nbytes % 8) == 0 else False
 
-
-
 class cclo(DefaultIP):
     """
-    This class wrapps the common function of the collectives offload kernel
+    This class wraps the common function of the collectives offload kernel
     """
 
-    bindto = ["Xilinx:ACCL:ccl_offload:1.0"]
+    bindto = ["Xilinx:ACCL:ccl_offload:1.0", "Xilinx:XCCL:ccl_offload:1.0"]
 
     def __init__(self, description):
         super().__init__(description=description)
@@ -363,9 +357,13 @@ class cclo(DefaultIP):
     def set_max_dma_transaction_flight(self, value=0):
      
         if value > 20:
-            warnings.warn("ACCL: transaction size should be less or equal to configured buffer size!")
+            warnings.warn("ACCL: transaction size should be less or equal to 20!")
             return
         self.call(scenario=CCLOp.config, function=CCLOCfgFunc.set_max_dma_transactions, len=value)   
+
+    @self_check_return_value
+    def set_delay(self, value=0):
+        self.call(scenario=CCLOp.config, function=CCLOCfgFunc.set_delay, len=value)   
 
     def configure_communicator(self, ranks, local_rank, vnx=False):
         assert len(self.rx_buffer_spares) > 0, "RX buffers unconfigured, please call setup_rx_buffers() first"
@@ -563,23 +561,10 @@ class cclo(DefaultIP):
         if buf.nbytes == 0:
             warnings.warn("zero size buffer")
             return
-        # sync the transmit source in one go
-        if not from_fpga and is_root:
-                buf.sync_to_device()
-        if sw: #sw implementation of broadcast from send/recv
-            if is_root:
-                #send repeatedly if we're the source
-                prevcall    = waitfor
-                other_ranks = filter(lambda x: x != root,  range(len(comm["ranks"])))
-                for dst_rank in other_ranks:
-                    prevcall = [self.send(comm_id, buf, dst_rank, from_fpga=True, run_async=True, waitfor=prevcall)]
-            else:
-                #receive once if we're a destination
-                prevcall = [    self.recv(comm_id, buf, root    , to_fpga=True, run_async=True, waitfor=waitfor)]
-        else:#hw implementation
-            cclop = CCLOp.bcast_rr if rr else CCLOp.bcast
-            prevcall = [self.start(scenario=cclop, len=buf.nbytes, comm=self.communicators[comm_id]["addr"], root_src_dst=root, addr_0=buf, waitfor=waitfor)]
-        
+
+        cclop = CCLOp.bcast
+        prevcall = [self.start(scenario=cclop, len=buf.nbytes, comm=self.communicators[comm_id]["addr"], root_src_dst=root, addr_0=buf, waitfor=waitfor)]
+    
         if run_async:
             return prevcall[0]
         
@@ -602,21 +587,8 @@ class cclo(DefaultIP):
         if not from_fpga and local_rank == root:
                 sbuf[:count*p].sync_to_device()
 
-        if sw: #sw implementation: scatter from send/recv
-            if local_rank == root:
-                #send repeatedly (or copy) if we're the source
-                prevcall = waitfor
-                for i in range(p):
-                    if i != root:
-                        prevcall = [self.send(  comm_id, sbuf[count*i:count*(i+1)]  , dst=i     , from_fpga=True, run_async=True, waitfor=prevcall)]
-                    else:
-                        prevcall = [self.copy(sbuf[count*i:count*(i+1)], rbuf[0:count],             from_fpga=True,  to_fpga=True, run_async=True, waitfor=prevcall)]
-            else: #if we're not a root (i.e. we are a destination) receive once 
-                prevcall = [self.recv(          comm_id, rbuf[0:count]              , src=root  , to_fpga=True, run_async=True, waitfor=waitfor)]
-            
-        else:
-            cclop = CCLOp.scatter_rr if rr else CCLOp.scatter
-            prevcall = [self.start(scenario=cclop, len=rbuf[0:count].nbytes, comm=comm["addr"], root_src_dst=root, addr_0=sbuf, addr_1=rbuf[0:count], waitfor=waitfor)]
+        cclop = CCLOp.scatter
+        prevcall = [self.start(scenario=cclop, len=rbuf[0:count].nbytes, comm=comm["addr"], root_src_dst=root, addr_0=sbuf, addr_1=rbuf[0:count], waitfor=waitfor)]
 
         if run_async:
             return prevcall[0]
@@ -644,42 +616,9 @@ class cclo(DefaultIP):
         if not from_fpga:
             sbuf[0:count].sync_to_device()
 
-        if sw:#implement shift gather from send/recv
-            #pass from one rank into the next until root
-            #use rbuf[0:count] as intermediate storage
-            #root will assemble its rbuf from receives (does not send)
-            if shift:
-               
-                next_in_ring =  (local_rank+1)%p
-                prev_in_ring =  (local_rank+p-1)%p
-                if local_rank != root:
-                    nshifts = (p+local_rank-root)%p-1
-                    #send our own data
-                    prevcall     = [self.send(comm_id, sbuf[0:count], dst=next_in_ring   , from_fpga=True , run_async=True, waitfor=waitfor)]
-                    for i in range(nshifts):
-                        #recv and forward data at next rank it will do the same till the end of the rank
-                        prevcall = [self.recv(comm_id, rbuf[0:count], src=prev_in_ring   , to_fpga=True   , run_async=True, waitfor=prevcall)]
-                        prevcall = [self.send(comm_id, rbuf[0:count], dst=next_in_ring   , from_fpga=True , run_async=True, waitfor=prevcall)]
-                else:
-                    prevcall = [self.copy(sbuf[0:count], rbuf[count*local_rank:count*(local_rank+1)], from_fpga=True, to_fpga=True, run_async=True, waitfor=waitfor)]
-                    for i in range(p-1):
-                        target = (local_rank+p-i-1)%p
-                        prevcall = [self.recv(comm_id,   rbuf[count*target:count*(target+1)], src=prev_in_ring, to_fpga=True, run_async=True, waitfor=prevcall)]
-            else: #implement non-shift normal gather from send/recv
-                warnings.warn("Non-shift gather not handled at packetizer level at the moment.")
-                warnings.warn("Non-shift SW gather not implemented")
-                return
-        else: #hw implementation
-            
-            if shift:
-                cclop = CCLOp.gather_ring
-            else:
-                warnings.warn("Non-shift gather not handled at packetizer level at the moment.")
-                return
-                cclop = CCLOp.gather
-                
-            prevcall = [self.start(scenario=cclop, len=rbuf[0:count].nbytes, comm=comm["addr"], root_src_dst=root, addr_0=sbuf, addr_1=rbuf, waitfor=waitfor)]
-            
+        cclop = CCLOp.gather
+        prevcall = [self.start(scenario=cclop, len=rbuf[0:count].nbytes, comm=comm["addr"], root_src_dst=root, addr_0=sbuf, addr_1=rbuf, waitfor=waitfor)]
+        
         if run_async:
             return prevcall[0]
         
@@ -703,50 +642,9 @@ class cclo(DefaultIP):
         if not from_fpga:
             sbuf[0:count].sync_to_device()
 
-        if sw:
-            local_rank = comm["local_rank"]
-            if ring and fused:
-                next_in_ring = (local_rank+1)%p
-                prev_in_ring = (local_rank+p-1)%p
-                
-                buf = sbuf[0:count]
-                prevcall = waitfor
-                for i in range(p-1):
-                    prevcall = [self.send(comm_id, buf, dst=next_in_ring, from_fpga=True, run_async=True, waitfor=prevcall)]
-                    target = (local_rank+p-i-1)%p
-                    buf = rbuf[count*target:count*(target+1)]
-                    prevcall = [self.recv(comm_id, buf, src=prev_in_ring, to_fpga=True, run_async=True, waitfor=prevcall)]
-                #finally just copy over the local data from input into output
-                prevcall = [self.copy(sbuf[0:count], rbuf[count*local_rank:count*(local_rank+1)], from_fpga=True,  to_fpga=True, run_async=True, waitfor=prevcall)]
-                
-            elif not fused:
-                if not ring:
-                    warnings.warn("Non-ring gather not handled at packetizer level at the moment.")
-                    return
-                #implement allgather from gather+broadcast (root=0, intermediate results stay on FPGA)
-                prevcall = [self.gather(comm_id, sbuf, rbuf, count, 0, sw=False, shift=ring, from_fpga=from_fpga, to_fpga=True, run_async=True, waitfor=waitfor)]
-                prevcall = [self.bcast(comm_id, rbuf, 0, sw=False, from_fpga=True, to_fpga=True, run_async=True, waitfor=prevcall)]
-
-            else :
-                warnings.warn("sw", "ring" if ring else "non ring", "fused" if fused else "non fused" ,"allgather not implemented")
-                return
-
-        else: #hw implementation
-            
-            if fused and ring:
-                cclop = CCLOp.allgather_ring
-            elif not fused and not ring:
-                warnings.warn("Non-ring gather not handled at packetizer level at the moment.")
-                return
-            elif not fused and ring:
-                cclop = CCLOp.allgather
-            else:
-                warnings.warn("hw", "ring" if ring else "non ring", "fused" if fused else "non fused" ,"allgather not implemented")
-                return
-
-            prevcall = [self.start(scenario=cclop, len=rbuf[0:count].nbytes, comm=comm["addr"], addr_0=sbuf, addr_1=rbuf, waitfor=waitfor)]
-            
-            
+        cclop = CCLOp.allgather
+        prevcall = [self.start(scenario=cclop, len=rbuf[0:count].nbytes, comm=comm["addr"], addr_0=sbuf, addr_1=rbuf, waitfor=waitfor)]
+        
         if run_async:
             return prevcall[0]
 
@@ -774,57 +672,11 @@ class cclo(DefaultIP):
         local_rank  = comm["local_rank"]
 
         if not from_fpga:
+            print(f"synchronize {sbuf[0:count].nbytes}")
             sbuf[0:count].sync_to_device()
 
-        if sw:
-            
-            #implement shift gather from send/recv
-            #pass from one rank into the next until root
-            #use self.utility_spare as intermediate storage when needed
-            #root will receive and accumulate in its rbuf from receives (does not send)
-            if shift:
-                if(self.utility_spare.size < sbuf.size):
-                    warnings.warn("utility buffer can't accommodate intermediate data")
-                    return
-                if (count + self.segment_size-1)//self.segment_size * p > len(self.rx_buffer_spares):
-                    warnings.warn("ring reduce can't be executed safely with this number of spare buffers")
-                    return
-                prev_in_ring = (local_rank+p-1)%p
-                next_in_ring = (local_rank+1)%p
-                if local_rank != root:
-                    nshifts = (p+local_rank-root)%p-1
-                    #send our own data
-                    prevcall     = [self.send(comm_id, sbuf[0:count], dst=next_in_ring , from_fpga=from_fpga            , run_async=True, waitfor=waitfor)]
-                    #then relay data coming from prev element in the ring
-                    for i in range(nshifts):
-                        prevcall = [self.recv(comm_id, rbuf[0:count], src=prev_in_ring                 , to_fpga=True   , run_async=True, waitfor=prevcall)]
-                        prevcall = [self.send(comm_id, rbuf[0:count], dst=next_in_ring , from_fpga=True                 , run_async=True, waitfor=prevcall)]
-
-                else:#in case of the root
-                    
-                    spare_buf= self.utility_spare
-                    accum_buf= rbuf[0:count] 
-
-                    prevcall = [self.copy(sbuf[0:count], accum_buf[0:count], from_fpga=from_fpga,  to_fpga=True, run_async=True, waitfor=waitfor)]
-                    for i in range(p-1):
-                        prevcall =  [self.recv( comm_id, spare_buf[0:count], src=prev_in_ring,                                       to_fpga=True, run_async=True, waitfor=prevcall)]
-                        prevcall =  [self.accumulate(func, val=spare_buf, acc=accum_buf , val_from_fpga=True   , acc_from_fpga=True, to_fpga=True, run_async=True, waitfor=prevcall)]
-            
-            else: #implement non-shift reduce from send/recv
-                warnings.warn("non-shift SW reduce not implemented")
-                return
-        
-        else:#hw implementation
-            # performs acc = val + acc
-            cclop = None
-            if shift:
-                cclop = CCLOp.reduce_ring
-            else:
-                warnings.warn("Non-ring reduce are not handled at packetizer level at the moment.")
-                return
-                cclop = CCLOp.reduce
-            
-            prevcall = [self.start(scenario=cclop , len=count, comm=self.communicators[comm_id]["addr"], root_src_dst=root, function=func, addr_0=sbuf, addr_1=rbuf, waitfor=waitfor)]
+        cclop = CCLOp.reduce
+        prevcall = [self.start(scenario=cclop , len=count, comm=self.communicators[comm_id]["addr"], root_src_dst=root, function=func, addr_0=sbuf, addr_1=rbuf, waitfor=waitfor)]
 
         if run_async:
             return prevcall[0]
@@ -848,65 +700,11 @@ class cclo(DefaultIP):
         if not from_fpga:
             sbuf[0:count].sync_to_device()
 
-        if sw: #sw collectives implement all reduce on top of send/recv functionality exposed by mpi_offload
-                    
-            if       fused and ring:
-                comm        = self.communicators[comm_id]
-                p           = len(comm["ranks"])
-                local_rank  = comm["local_rank"]
-                
-                if p*(count + self.segment_size-1)//self.segment_size > len(self.rx_buffer_spares):
-                    warnings.warn("ring reduce can't be executed safely with this number of spare buffers")
-                    return
-                if(self.utility_spare.size < count):
-                    warnings.warn("utility buffer can't accommodate intermediate data")
-                    return
-
-                next_in_ring = (local_rank + 1     )%p
-                prev_in_ring = (local_rank - 1 + p )%p
-                
-                buf         = sbuf[0:count]
-                accum_buf   = rbuf[0:count]
-                spare_buf   = self.utility_spare[0:count] #TODO: this may be a limitation when you don't know how many segments the buffer will be made out of
-                #initalize dest_buff with your data
-                prevcall    = [self.copy(sbuf, accum_buf, from_fpga=True,  to_fpga=True, run_async=True, waitfor=waitfor)]
-                #send your data to the next in the queue
-                prevcall    = [self.send(comm_id, sbuf, dst=next_in_ring, from_fpga=True, run_async=True, waitfor=prevcall)]
-                #receive p-2 data, accumulate and relay to the next in the ring
-                for _ in range(p-2):
-                    prevcall = [self.recv(comm_id,        spare_buf, src=prev_in_ring,    to_fpga=True, run_async=True, waitfor=prevcall)]
-                    prevcall = [self.accumulate(func, val=spare_buf, acc=accum_buf, val_from_fpga=True, acc_from_fpga=True, to_fpga=True, run_async=True, waitfor=prevcall)]
-                    prevcall = [self.send(comm_id,        spare_buf, dst=next_in_ring,  from_fpga=True, run_async=True, waitfor=prevcall)]
-                #receive last and accumulate
-                prevcall = [self.recv    (comm_id,    spare_buf, src=prev_in_ring, to_fpga  =True, run_async=True, waitfor=prevcall)]
-                prevcall = [self.accumulate( func,val=spare_buf, acc=accum_buf, val_from_fpga=True, acc_from_fpga=True, to_fpga=True, run_async=True, waitfor=prevcall)]
-                   
-            elif     fused and not ring:
-                warnings.warn("Non-ring collectives are not handled at packetizer level at the moment.")
-                warnings.warn("sw non ring based fused allreduce not implemented")
-                return
-            elif not fused:
-                #implement allgather from gather+broadcast (root=0)
-                prevcall = [self.reduce(comm_id, sbuf, rbuf, count, root=0, func=func, sw=sw, shift=ring, from_fpga=from_fpga , to_fpga=True, run_async=True, waitfor=waitfor )]
-                prevcall = [self.bcast( comm_id, rbuf,              root=0,            sw=sw,             from_fpga=True      , to_fpga=True, run_async=True, waitfor=prevcall)]
-            
-            
-        else: #hw implementations
+         #hw implementations
             # performs acc = val + acc on each cclo
 
-            cclop = None
-            if   fused and ring and not share:
-                cclop = CCLOp.allreduce_fused_ring
-            elif fused and ring and share :
-                cclop = CCLOp.allreduce_share_ring
-            elif fused and not ring:
-                warnings.warn("Non-ring collectives are not handled at packetizer level at the moment.")
-                warnings.warn("sw non ring based fused allreduce not implemented")
-                return
-            else:
-                cclop = CCLOp.allreduce
-
-            prevcall = [self.start(scenario=cclop, len=count, comm=self.communicators[comm_id]["addr"], function=func, addr_0=sbuf, addr_1=rbuf, waitfor=waitfor)]
+        cclop = CCLOp.allreduce
+        prevcall = [self.start(scenario=cclop, len=count, comm=self.communicators[comm_id]["addr"], function=func, addr_0=sbuf, addr_1=rbuf, waitfor=waitfor)]
 
         if run_async:
             return prevcall[0]
@@ -942,5 +740,5 @@ class cclo(DefaultIP):
             return prevcall[0]
         
         prevcall[0].wait()
-        if not to_fpga and local_rank == root:
+        if not to_fpga :
             rbuf[0:count*p].sync_from_device()
