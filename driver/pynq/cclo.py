@@ -135,8 +135,6 @@ class cclo(DefaultIP):
         self.rx_buffer_spares = []
         self.rx_buffer_size = 0
         self.rx_buffers_adr = 0 
-        #define another spare for general use (e.g. as accumulator for reduce/allreduce)
-        self.utility_spare = None
         #define an empty list of communicators, to which users will add
         self.communicators = []
         self.communicators_addr = self.rx_buffers_adr
@@ -175,11 +173,6 @@ class cclo(DefaultIP):
         del self.rx_buffer_spares
         self.rx_buffer_spares = []
 
-        if self.utility_spare is not None:
-            self.utility_spare.freebuffer()
-        del self.utility_spare
-        self.utility_spare = None
-
     def setup_rx_buffers(self, nbufs, bufsize, devicemem):
         addr = self.rx_buffers_adr
         self.rx_buffer_size = bufsize
@@ -204,9 +197,6 @@ class cclo(DefaultIP):
                 self.exchange_mem.write(addr, 0)
 
         self.communicators_addr = addr+4
-        max_higher = 1
-        self.utility_spare = pynq.allocate((bufsize*max_higher,), dtype=np.int8, target=devicemem[0])
-
         #Start irq-driven RX buffer scheduler and (de)packetizer
         #self.call(scenario=CCLOp.config, function=CCLOCfgFunc.reset_periph)
         self.call(scenario=CCLOp.config, function=CCLOCfgFunc.enable_irq)
