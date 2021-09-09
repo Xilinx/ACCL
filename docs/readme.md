@@ -138,6 +138,7 @@ The CCLO build process is automated and organized via Makefiles that are distrib
 For more info on how the Makefile works take a look in [../kernel/readme.md# Building and package the ccl_offload.xo Kernel](../kernel/readme.md#Building-and-package-the-ccl_offload.xo-Kernel).
 2. Building the network stack and link against CCLO. The main Makefile is [../demo/build/Makefile](../demo/build/Makefile).
 
+You can find info on how to build under [../demo/build](../demo/build).
 
 Alveo shell currently supported:
 
