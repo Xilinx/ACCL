@@ -57,7 +57,21 @@ accl.allgather(txb, rxb, count=256, waitfor=[ch])
 accl.deinit() #releases FPGA memory, resets CCLO
 ````
 ### Example explanation
-> ACCL is initialized by functions (lines 9-11) which allocate and configure a set of buffers required for ACCL operation in the  FPGA  memory,  and  construct  the communicator according to rank information. In this example,we  utilize  the  python  package mpi4py to  determine  the  local rank ID when the application has been launched with mpirun. All configuration information is offloaded to the FPGA so that the CCLO can rapidly access them. Afterwards, the user can issue  commands  to  open  connections  between  each  ranks  in the communicator via the protocol offload engine. As  with  MPI,  most  ACCL  collectives  take  two  buffers  as arguments, one (source buffer) holds the to-be-communicated data (line 13), while the the other (destination buffer) specifies where  to  store  the  results  (line  14).  Lines  16-19  implement data movement from rank 1 to rank 0 utilizing the primitivesAPI.  Each  ACCL  function  allows  users  to  specify  whether each  of  the  buffers  reside  in  the  host  or  in  FPGA  off-chip memory  (tofpga/fromfpga).  If  required,  the  ACCL  driver handles  data  movement  between  host  and  FPGA  external memories. However, when ACCL is used in conjunction with user  FPGA  kernels,  the  additional  data  movement  is  not required, reducing latency. Lines 21-22 execute collectives on the entire communicator,with the collectives API. When multiple collective primitives are issued in a single application, additional latency reduction can  be  achieved  by  utilizing  asynchronous  calls  and  call chaining,  a  feature  of  XRT  which  the  ACCL  drivers  expose up  to  application  code.  When  an  ACCL  collective  is  called asynchronously,  it  returns  immediately  a  handle  to  the  XRT descriptor (ch on line 21) of the on-going collective. Chaining occurs  when  the  invocation  of  one  FPGA  kernel  depends on  the  completion  of  a  different  invocation  to  the  same  or other  FPGA  kernel.  ACCL  collectives  also  allow  for  these dependencies to be specified (see line 22) and passed down to the Xilinx Embedded Run-Time, a hardware scheduler which starts  the  collective  immediately  after  the  dependencies  have been  resolved,  with  typical  latency  in  the  nanosecond  range.Using these mechanisms, users can define execution chains of arbitrary  length  which  involve  any  ACCL  collective  and  any user FPGA kernels.
+1. Allocate and configure a set of buffers required for ACCL operation in the  FPGA  memory
+2. Construct  the communicator according to rank information from mpi. In this example,we  utilize  the  python  package mpi4py to  determine  the  local rank ID when the application has been launched with mpirun. All configuration information is stored in the FPGA so that the CCLO can rapidly access them. 
+3. Afterwards, the user can issue  commands  to  open  connections  between  each  ranks  in the communicator via the protocol offload engine.
+ 
+As  with  MPI,  most  ACCL  collectives  take  two  buffers  as arguments:
+-  one (source buffer) holds the to-be-communicated data (line 13), 
+- while the the other (destination buffer) specifies where  to  store  the  results  (line  14).  
+
+Lines  16-19  implement data movement from rank 1 to rank 0.  
+
+#### (to/from)fpga
+Each  ACCL  function  allows  users  to  specify  whether each  of  the  buffers  reside  in  the  host  or  in  FPGA  off-chip memory  (tofpga/fromfpga).  If  required,  the  ACCL  driver handles  data  movement  between  host  and  FPGA  external memories. However, when ACCL is used in conjunction with user  FPGA  kernels,  the  additional  data  movement  is  not required, reducing latency. 
+
+#### chaining 
+When multiple collective primitives are issued in a single application, additional latency reduction can  be  achieved  by  utilizing  asynchronous  calls  and  call chaining,  a  feature  of  XRT  which  the  ACCL  drivers  expose up  to  application  code.  When  an  ACCL  collective  is  called asynchronously,  it  returns  immediately  a  handle  to  the  XRT descriptor (ch on line 21) of the on-going collective. Chaining occurs  when  the  invocation  of  one  FPGA  kernel  depends on  the  completion  of  a  different  invocation  to  the  same  or other  FPGA  kernel.  ACCL  collectives  also  allow  for  these dependencies to be specified (see line 22) and passed down to the Xilinx Embedded Run-Time, a hardware scheduler which starts  the  collective  immediately  after  the  dependencies  have been  resolved,  with  typical  latency  in  the  nanosecond  range.Using these mechanisms, users can define execution chains of arbitrary  length  which  involve  any  ACCL  collective  and  any user FPGA kernels.
 
 # Overview
 ![schematic](images/ccl_kernels.svg)
@@ -69,7 +83,7 @@ More info on CCLO [here](#How-it-is-implemented)
 
 ## Hardware interface
 The host communicates with the CCLO through a 8kB IO space which starts at ``BASEADDR`` and is implemented by the ``s_axi_control`` port.
-Moreover, the CCLO modifies the FPGA off-chip memory in the DDR through two AXI4 MMAP master, namely ``m_axi_0`` and ``m_axi_1``.
+Moreover, the CCLO modifies the FPGA off-chip memory in the DDR through two AXI4 MMAP master, namely ``m_axi_0``, ``m_axi_1``, ```m_axi_2``.
 It then communicates with the network stack through ``net_rx``, ``net_tx`` AXI Stream ports to send and receive messages from other ACCL_Offload instances.
 The following table reports the ACCL_Offload interfaces and their main parameters.
 
@@ -82,7 +96,7 @@ m_axi_2       | addressable master  | 17,179,869,184 GB (16 EXAB) | 512
 net_rx        | stream              | n.a                | 512       
 net_tx        | stream              | n.a                | 512         
 
-[Source: kernel/ccl_offload_ex/imports/kernel.xml](kernel/ccl_offload_ex/imports/kernel.xml)
+[Source: kernel/ccl_offload_ex/imports/kernel.xml](../kernel/ccl_offload_ex/imports/kernel.xml)
 
 ## Software interface
 
@@ -95,7 +109,7 @@ The IO space is divided into 2 sections:
   - Communication configuration
   - Miscellaneous data.
 
-More info at [host/readme.md](host/readme.md).
+More info at [host.md](host.md).
 
 # How it is implemented
 
@@ -115,20 +129,20 @@ the  CCLO  consists  of
   
   The ACCL_Offload relies extensively on AXI protocols (both MMAP and STREAM) and on several Xilinx IPs to exchange data. If you need more info on the protocol go to [AXI MMAP spec](https://developer.arm.com/docs/ihi0022/e?_ga=2.67820049.1631882347.1556009271-151447318.1544783517), [AXI STREAM spec](https://developer.arm.com/docs/ihi0051/latest), [UG761](https://www.xilinx.com/support/documentation/ip_documentation/axi_ref_guide/latest/ug761_axi_reference_guide.pdf) and [UG1037](https://www.xilinx.com/support/documentation/ip_documentation/axi_ref_guide/latest/ug1037-vivado-axi-reference-guide.pdf).
 
-More info at [kernel/readme.md#Architecture](kernel/readme.md#Architecture).
+More info at [../kernel/readme.md#Architecture](../kernel/readme.md#Architecture).
 
 # How to build it
 The CCLO build process is automated and organized via Makefiles that are distributed across the repo. The build process is split into 2 steps:
 
-1. building the CCLO IP ( The main Makefile is [../kernel/Makefile](/kernel/Makefile). After this process an ``ccl_offload.xo`` file would be created under /ccl_offload_ex/exports. 
-For more info on how the Makefile works take a look in [kernel/readme.md#How to build a ACCL_Offload .xclbin](kernel/readme.md#How-to-build-a-ACCL_Offload-.xclbin)) )
-2. Building the network stack and link against CCLO. 
+1. building the CCLO IP. The main Makefile is [../kernel/Makefile](/kernel/Makefile). After this process an ``ccl_offload.xo`` file would be created under ``../kernel/ccl_offload_ex/exports``. 
+For more info on how the Makefile works take a look in [../kernel/readme.md# Building and package the ccl_offload.xo Kernel](../kernel/readme.md#Building-and-package-the-ccl_offload.xo-Kernel).
+2. Building the network stack and link against CCLO. The main Makefile is [../demo/build/Makefile](../demo/build/Makefile).
 
 
 Alveo shell currently supported:
 
-- xilinx_u250_gen3x16_xdma_3_1_202020_1
-- xilinx_u280_xdma_201920_3
+- ``xilinx_u250_gen3x16_xdma_3_1_202020_1``
+- ``xilinx_u280_xdma_201920_3``
 
 # How to integrate it
 
