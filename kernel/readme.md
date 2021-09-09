@@ -19,7 +19,7 @@ Orchestrating the required transfers and the interaction between various subsyst
 
 ### Data Plane structure
 
-![schematic](../docs\images\drawing_offload_data_plane_with_datapath_simplified.svg)
+![schematic](../docs/images/drawing_offload_data_plane_with_datapath_simplified.svg)
 Figures presents  a  high  level  overview  of  the  CCLO data  plane  structure  which  consists  of  multiple  functional units (FUs) - three AXI DataMover engines (``DMA0``, ``DMA1``,``DMA2``),  AXI  Stream  (``AXIS``)  interconnects  (e.g.  ``S0``,  ``S1``),  an internal arithmetic unit (``A0``) and network interface logic (``UD``,``UP``,``TP``,``TD``). Data flows through all those components via 512bit wide AXIS interfaces [15], that are connected together via the central AXIS Switch.
 
  Modules description:
@@ -59,7 +59,7 @@ The CTRL module is divided in 7 sub-components:
   As we can see from the CCLO_kernel schematic the depacketizer is directly connected to ``DMA0``. Since we plan to use 100Gbit interface timing is critical to ensure that depacketizer output does not saturate the ``AXIS FIFO``s and eventually result in a packet drop. In that sense if we have no cmd written we should activate the MicroBlaze to identify the location where to put incoming data. In the same way, if the ``DMA0`` completes an write operation we should reactivate the MicroBlaze to issue a new command to execute. 
 - reset for all ``FIFO``s is provided by a ``GPIO``, that strictly speaking is inside the ``exchange_memory`` module. But the point is that this pin can be triggered by the MicroBlaze via a AXI LITE register write. 
 -  the ``exchange_memory`` submodule give access to the ``MicroBlaze`` from the outside.   There is a memory that can be read/write both from the ``MicroBlaze`` and from the outside of ``CTRL block``. An AXI MMAP port give physical access to ``exchange_memory`` module.  Among the other things, it contains a constant (accessible via an ``AXI GPIO IP`` in [Exchange memory module](#exchange-memory-module)) that identifies the combination of CCLO and network stack in use. 
- ``MicroBlaze S5/M5`` are used to collect/send data from/to ``exchange_memory``. 
+ ``MicroBlaze S10/M10`` are used to collect/send data from/to ``exchange_memory``. 
 - The ``AXI interconnect`` empowers the communication from ``M_AXI DP`` to other AXI MMAP ìnterfaces (``AXI switch ctrl``, ``depacketizer ctrl``, ``packetizer ctrl`` and ``arithmetic ctrl``)
 - A memory for instruction and data that the MicroBlaze access via ``ILMB/DLMB`` which are Instruction/Data interface, Local Memory Bus [from MicroBlaze reference guide](https://www.xilinx.com/support/documentation/sw_manuals/mb_ref_guide.pdf).
 - The MicroBlaze. info about the ctrl sw in [/sw/sw_apps/ccl_offload_control](/sw/sw_apps/ccl_offload_control)
@@ -70,7 +70,7 @@ For more information on how the ``MicroBlaze`` works, take a look at [sw/sw_apps
 The exchange memory module is the user point of access to the CTRL module.
 
 ![schematic_exchange_mem](../docs/images/drawing_exchange_mem.svg)
-- hosts_sts comes from ``MicroBlaze M5``;
+- hosts_sts comes from ``MicroBlaze M10``;
 - [host_ctrl](hls/hostctrl/hostctrl.cpp) receives configuration data from python driver (via ``s_axi_control``, ``AXI crossbar0``) to request an operation to the CCLO kernel as specified  [earlier](#hw-kernel-parameters-(BASEADDR+0));
 - Moreover the user can write/read via ``s_axi_control`` -> ``AXI crossbar0``  the ``BRAM`` in this module;
 - Furthermore MicroBlaze can write/read the ``BRAM`` in this module, but it has to use ``S00_AXI`` interface passing through ``crossbar1`` and ``crossbar0``. As [previous section](#ctrl-module) showed, the Microblaze can access the ``exchange memory`` module via an AXI MMAP interface.There are mainly 4 reasons for the ``MicroBlaze`` to write/reading something from ``S00_AXI``:

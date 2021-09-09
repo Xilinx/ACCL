@@ -78,11 +78,15 @@ def configure_xccl(xclbin, board_idx, nbufs=16, bufsize=1024*1024):
     
     tx_buf_network.sync_to_device()
     rx_buf_network.sync_to_device()
-
-
-    print(f"CCLO {rank_id}: Launch network kernel, ip {hex(ip_network[rank_id])}, board number {rank_id}, arp {hex(arp_addr[rank_id])}")
-    ret = network_kernel.call(ip_network[rank_id], rank_id, arp_addr[rank_id], tx_buf_network, rx_buf_network)
     
+    start = time.perf_counter()
+    print(f"CCLO {rank_id}: Launch network kernel, ip {hex(ip_network[rank_id])}, board number {rank_id}, arp {hex(arp_addr[rank_id])}")
+    ret = network_kernel.start_sw(ip_network[rank_id], rank_id, arp_addr[rank_id], tx_buf_network, rx_buf_network)
+    end = time.perf_counter()
+    print(f"{end-start}: returned from network kernel {ret}")
+    ret.wait()
+    end = time.perf_counter()
+    print(f"{end-start}: wait complete from network kernel {ret}")
     #to synchronize the processes
     #comm.barrier()
  
@@ -91,7 +95,7 @@ def configure_xccl(xclbin, board_idx, nbufs=16, bufsize=1024*1024):
     cclo.open_port(0)
 
 
-    return ol, cclo, devicemem
+    return ol, cclo, devicemem, tx_buf_network, rx_buf_network
 
 
 def deinit_system():
@@ -165,7 +169,7 @@ if __name__ == "__main__":
     try:
         
         #configure FPGA and CCLO cores with the default 16 RX buffers of bsize KB each
-        ol, cclo_inst, devicemem = configure_xccl(args.xclbin, args.device_index, nbufs=args.nbufs, bufsize=max(1024, args.bsize))
+        ol, cclo_inst, devicemem, tx_buf_network, rx_buf_network = configure_xccl(args.xclbin, args.device_index, nbufs=args.nbufs, bufsize=max(1024, args.bsize))
 
         tx_buf, rx_buf = allocate_buffers(args.naccel, args.bsize, devicemem)
 
@@ -178,12 +182,16 @@ if __name__ == "__main__":
         np.random.seed(2021)
         global ranks
         print(ranks)
-        for a_dictionary in ranks:
-            import socket
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.connect((a_dictionary["ip"],a_dictionary["port"]))
-            print("connected, test passed.")
-            del s
+        start = time.perf_counter()
+        for i in range(30):
+            for a_dictionary in ranks:
+                import socket
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s.connect((a_dictionary["ip"],a_dictionary["port"]))
+                end = time.perf_counter()
+                print( end-start, "[s]"," connected, test passed.")
+                del s
+            time.sleep(5)
 
 
         

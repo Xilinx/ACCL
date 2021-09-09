@@ -109,7 +109,7 @@ The IO space is divided into 2 sections:
   - Communication configuration
   - Miscellaneous data.
 
-More info at [host.md](host.md).
+More info at [kernel_interfaces.md](kernel_interfaces.md).
 
 # How it is implemented
 
