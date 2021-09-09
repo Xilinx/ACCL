@@ -181,7 +181,7 @@ class cclo(DefaultIP):
         for i in range(0,EXCHANGE_MEM_ADDRESS_RANGE, 4*num_word_per_line):
             memory = []
             for j in range(num_word_per_line):
-                memory.append(hex(self.mmio.read(EXCHANGE_MEM_OFFSET_ADDRESS+i+(j*4))))
+                memory.append(hex(self.read(EXCHANGE_MEM_OFFSET_ADDRESS+i+(j*4))))
             print(hex(EXCHANGE_MEM_OFFSET_ADDRESS + i), memory)
 
     def dump_host_control_memory(self):
@@ -190,7 +190,7 @@ class cclo(DefaultIP):
         for i in range(0,HOST_CTRL_ADDRESS_RANGE, 4*num_word_per_line):
             memory = []
             for j in range(num_word_per_line):
-                memory.append(hex(self.mmio.read(i+(j*4))))
+                memory.append(hex(self.read(i+(j*4))))
             print(hex(self.mmio.base_addr + i), memory)
 
     def deinit(self):
@@ -219,7 +219,7 @@ class cclo(DefaultIP):
     def setup_rx_buffers(self, nbufs, bufsize, devicemem):
         addr = self.rx_buffers_adr
         self.rx_buffer_size = bufsize
-        self.mmio.write(addr,nbufs)
+        self.write(addr,nbufs)
         if not isinstance(devicemem, list):
             devicemem = [devicemem]
         for i in range(nbufs):
@@ -229,15 +229,15 @@ class cclo(DefaultIP):
             self.rx_buffer_spares.append(pynq.allocate((bufsize,), dtype=np.int8, target=devicemem_i))
             #program this buffer into the accelerator
             addr += 4
-            self.mmio.write(addr, self.rx_buffer_spares[-1].physical_address & 0xffffffff)
+            self.write(addr, self.rx_buffer_spares[-1].physical_address & 0xffffffff)
             addr += 4
-            self.mmio.write(addr, (self.rx_buffer_spares[-1].physical_address>>32) & 0xffffffff)
+            self.write(addr, (self.rx_buffer_spares[-1].physical_address>>32) & 0xffffffff)
             addr += 4
-            self.mmio.write(addr, bufsize)
+            self.write(addr, bufsize)
             # clear remaining fields
             for _ in range(3,9):
                 addr += 4
-                self.mmio.write(addr, 0)
+                self.write(addr, 0)
 
         self.communicators_addr = addr+4
         max_higher = 1
@@ -247,7 +247,7 @@ class cclo(DefaultIP):
         #self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.reset_periph)
         self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.enable_irq)
         self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.enable_pkt)
-        print("time taken to enqueue buffers", self.mmio.read(0x1FF4))
+        print("time taken to enqueue buffers", self.read(0x1FF4))
         #set segmentation size equal to buffer size
         self.set_dma_transaction_size(bufsize)
         self.set_max_dma_transaction_flight(10)
@@ -255,30 +255,30 @@ class cclo(DefaultIP):
     def dump_rx_buffers_spares(self, nbufs=None):
         addr = self.rx_buffers_adr
         if nbufs is None:
-            assert self.mmio.read(addr) == len(self.rx_buffer_spares)
+            assert self.read(addr) == len(self.rx_buffer_spares)
             nbufs = len(self.rx_buffer_spares)
         print(f"CCLO address:{hex(self.mmio.base_addr)}")
         nbufs = min(len(self.rx_buffer_spares), nbufs)
         for i in range(nbufs):
             addr   += 4
-            addrl   =self.mmio.read(addr)
+            addrl   =self.read(addr)
             addr   += 4
-            addrh   = self.mmio.read(addr)
+            addrh   = self.read(addr)
             addr   += 4
-            maxsize = self.mmio.read(addr)
+            maxsize = self.read(addr)
             #assert self.read(addr) == self.rx_buffer_size
             addr   += 4
-            dmatag  = self.mmio.read(addr)
+            dmatag  = self.read(addr)
             addr   += 4
-            rstatus  = self.mmio.read(addr)
+            rstatus  = self.read(addr)
             addr   += 4
-            rxtag   = self.mmio.read(addr)
+            rxtag   = self.read(addr)
             addr   += 4
-            rxlen   = self.mmio.read(addr)
+            rxlen   = self.read(addr)
             addr   += 4
-            rxsrc   = self.mmio.read(addr)
+            rxsrc   = self.read(addr)
             addr   += 4
-            seq     = self.mmio.read(addr)
+            seq     = self.read(addr)
             
             if rstatus == 0 :
                 status =  "NOT USED"
@@ -327,7 +327,7 @@ class cclo(DefaultIP):
         return self.call(scenario, len, comm, root_src_dst, function, tag, arithcfg, src_type, dst_type, addr_0, addr_1, addr_2)        
 
     def get_retcode(self):
-        return self.mmio.read(RETCODE_OFFSET)
+        return self.read(RETCODE_OFFSET)
 
     def self_check_return_value(call):
         def wrapper(self, *args, **kwargs):
@@ -348,7 +348,7 @@ class cclo(DefaultIP):
 
     def get_hwid(self):
         #TODO: add check
-        return self.mmio.read(IDCODE_OFFSET) 
+        return self.read(IDCODE_OFFSET) 
 
     def set_timeout(self, value, run_async=False, waitfor=[]):
         handle = self.call_async(scenario=CCLOp.config, len=value, function=CCLOCfgFunc.set_timeout, waitfor=waitfor)
@@ -417,32 +417,32 @@ class cclo(DefaultIP):
             addr = self.communicators[-1]["addr"]
         comm_address = EXCHANGE_MEM_OFFSET_ADDRESS + addr
         communicator = {"local_rank": local_rank, "addr": comm_address, "ranks": ranks, "inbound_seq_number_addr":[0 for _ in ranks], "outbound_seq_number_addr":[0 for _ in ranks], "session_addr":[0 for _ in ranks]}
-        self.mmio.write(addr,len(ranks))
+        self.write(addr,len(ranks))
         addr += 4
-        self.mmio.write(addr,local_rank)
+        self.write(addr,local_rank)
         for i in range(len(ranks)):
             addr += 4
             #ip string to int conversion from here:
             #https://stackoverflow.com/questions/5619685/conversion-from-ip-string-to-integer-and-backward-in-python
-            self.mmio.write(addr, int(ipaddress.IPv4Address(ranks[i]["ip"])))
+            self.write(addr, int(ipaddress.IPv4Address(ranks[i]["ip"])))
             addr += 4
             #when using the UDP stack, write the rank number into the port register
             #the actual port is programmed into the stack itself
             if vnx:
-                self.mmio.write(addr,i)
+                self.write(addr,i)
             else:
-                self.mmio.write(addr,ranks[i]["port"])
+                self.write(addr,ranks[i]["port"])
             #leave 2 32 bit space for inbound/outbound_seq_number
             addr += 4
-            self.mmio.write(addr,0)
+            self.write(addr,0)
             communicator["inbound_seq_number_addr"][i]  = addr
             addr +=4
-            self.mmio.write(addr,0)
+            self.write(addr,0)
             communicator["outbound_seq_number_addr"][i] = addr
             #a 32 bit number is reserved for session id
             # sessions are initialized to 0xFFFFFFFF
             addr += 4
-            self.mmio.write(addr, 0xFFFFFFFF)
+            self.write(addr, 0xFFFFFFFF)
             communicator["session_addr"][i] = addr
         self.communicators.append(communicator)
         self.arithcfg_addr = addr + 4
@@ -452,27 +452,27 @@ class cclo(DefaultIP):
             addr    = self.communicators_addr
         else:
             addr    = self.communicators[-1]["addr"] - EXCHANGE_MEM_OFFSET_ADDRESS
-        nr_ranks    = self.mmio.read(addr)
+        nr_ranks    = self.read(addr)
         addr +=4
-        local_rank  = self.mmio.read(addr)
+        local_rank  = self.read(addr)
         print(f"Communicator. local_rank: {local_rank} \t number of ranks: {nr_ranks}.")
         for i in range(nr_ranks):
             addr +=4
             #ip string to int conversion from here:
             #https://stackoverflow.com/questions/5619685/conversion-from-ip-string-to-integer-and-backward-in-python
-            ip_addr_rank = str(ipaddress.IPv4Address(self.mmio.read(addr)))
+            ip_addr_rank = str(ipaddress.IPv4Address(self.read(addr)))
             addr += 4
             #when using the UDP stack, write the rank number into the port register
             #the actual port is programmed into the stack itself
-            port                = self.mmio.read(addr)
+            port                = self.read(addr)
             #leave 2 32 bit space for inbound/outbound_seq_number
             addr += 4
-            inbound_seq_number  = self.mmio.read(addr)
+            inbound_seq_number  = self.read(addr)
             addr +=4
-            outbound_seq_number = self.mmio.read(addr)
+            outbound_seq_number = self.read(addr)
             #a 32 bit integer is dedicated to session id 
             addr += 4
-            session = self.mmio.read(addr)
+            session = self.read(addr)
             print(f"> rank {i} (ip {ip_addr_rank}:{port} ; session {session}) : <- inbound_seq_number {inbound_seq_number}, -> outbound_seq_number {outbound_seq_number}")
    
 
