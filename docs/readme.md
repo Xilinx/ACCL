@@ -100,7 +100,7 @@ net_tx        | stream              | n.a                | 512
 
 ## Software interface
 
-The MPI_Offload communicate with the host through a 4kB IO space which starts at ``BASEADDR`` and is implemented by the ``s_axi_control`` port.
+The MPI_Offload communicate with the host through a 8kB IO space which starts at ``BASEADDR`` and is implemented by the ``s_axi_control`` port.
 The IO space is divided into 2 sections:
 
 1. Control and arguments section, from address 0 to 0x7FF. The purpose of this region is to pass arguments and ACCL_Offload status back and forth from the user. 
