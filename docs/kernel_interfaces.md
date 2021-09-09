@@ -142,7 +142,7 @@ If the base address is 0x1820000, and we can parse the memory from 0x10 offset t
     unsigned int inbound_seq;
     unsigned int outbound_seq;
     unsigned int session;
-  } comm_rank;
+    } comm_rank;
     ````
 
    The CCL_Offload can support more than a communicator.
@@ -162,7 +162,7 @@ If the base address is 0x1820000, and we can parse the memory from 0x10 offset t
   ````
 
 # Drivers
-We have both Python and C++ bindings to abstract 
+We have both Python and C++ bindings to abstract and simplify the interaction with cclo. 
 
 ## Expected flow:
 
