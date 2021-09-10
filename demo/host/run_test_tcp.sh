@@ -21,4 +21,4 @@
 #alveo3c 10.1.212.127
 #alveo4b 10.1.212.129
 #alveo4c 10.1.212.130 
-mpiexec --host 10.1.212.130,10.1.212.129 -- bash mpiscript.sh
+mpiexec --host 10.1.212.126,10.1.212.127,10.1.212.129,10.1.212.130 -- bash mpiscript.sh

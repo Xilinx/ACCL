@@ -25,6 +25,7 @@ import random
 from mpi4py import MPI
 from queue import Queue
 import time 
+import ipaddress
 
 def configure_xccl(xclbin, board_idx, nbufs=16, bufsize=1024*1024):
     comm = MPI.COMM_WORLD
@@ -39,14 +40,10 @@ def configure_xccl(xclbin, board_idx, nbufs=16, bufsize=1024*1024):
         xclbin = "../../../ccl_offload.xclbin"
     ol=pynq.Overlay(xclbin, device=local_alveo)
 
-    for i in ol.ip_dict:
-        print(i)
-
-    # print(ol.ip_dict)
     global args
     args.board_instance = local_alveo.name
 
-    print("Allocating 1MB scratchpad memory")
+    print("Allocating scratchpad memory")
     if local_alveo.name == 'xilinx_u250_gen3x16_xdma_shell_3_1':
         devicemem   = ol.bank1
         rxbufmem    = ol.bank1
@@ -60,26 +57,19 @@ def configure_xccl(xclbin, board_idx, nbufs=16, bufsize=1024*1024):
             networkmem  = ol.HBM6
 
     cclo            = ol.ccl_offload_0
-    if args.use_tcp:
-        network_kernel  = ol.network_krnl_0
-    #else:
-    #    network_kernel  = ol.network_krnl_udp 
+
 
     print("CCLO {} HWID: {} at {}".format(rank_id, hex(cclo.get_hwid()), hex(cclo.mmio.base_addr)))
     
-    ip_network_str = []
-    ip_network = []
-    port = []
-    ranks = []
 
-    arp_addr = []
+    ranks       = []
+    ip_network  = []
     for i in range (size):
-        ip_network_str.append("10.1.212.{}".format(151+i))
-        port.append(5001+i)
-        ranks.append({"ip": ip_network_str[i], "port": port[i]})
-        ip_network.append(int(ipaddress.IPv4Address(ip_network_str[i])))
+        ip_network_str  = "10.1.212.{}".format(151+i)
+        port            = 5001+i
+        ranks.append({"ip": ip_network_str, "port": port})
+        ip_network.append(int(ipaddress.IPv4Address(ip_network_str)))
 
-        arp_addr.append(ip_network[i])
 
     print("set transport protocol")
     if args.use_tcp :
@@ -94,16 +84,17 @@ def configure_xccl(xclbin, board_idx, nbufs=16, bufsize=1024*1024):
     print(f"CCLO {rank_id}: Configuring network stack")
 
     if args.use_tcp:
+        network_kernel  = ol.network_krnl_0
         #assign 64 MB network tx and rx buffer
-        tx_buf_network = pynq.allocate((128*1024*1024,), dtype=np.int8, target=networkmem)
-        rx_buf_network = pynq.allocate((128*1024*1024,), dtype=np.int8, target=networkmem)
+        tx_buf_network = pynq.allocate((64*1024*1024,), dtype=np.int8, target=networkmem)
+        rx_buf_network = pynq.allocate((64*1024*1024,), dtype=np.int8, target=networkmem)
         
         tx_buf_network.sync_to_device()
         rx_buf_network.sync_to_device()
 
 
-        print(f"CCLO {rank_id}: Launch network kernel, ip {hex(ip_network[rank_id])}, board number {rank_id}, arp {hex(arp_addr[rank_id])}")
-        network_kernel.start_sw(ip_network[rank_id], rank_id, arp_addr[rank_id], tx_buf_network, rx_buf_network)
+        print(f"CCLO {rank_id}: Launch network kernel, ip {hex(ip_network[rank_id])}, board number {rank_id}")
+        network_kernel.start_sw(ip_network[rank_id], rank_id, ip_network[rank_id], tx_buf_network, rx_buf_network)
     else:
         import setup_vnx
         print(f"CCLO {rank_id}: about to configure network kernel")
@@ -487,7 +478,7 @@ if __name__ == "__main__":
         csv_writer.writerow(["experiment", "board_instance", "number of nodes", "rank id", "number of banks", "buffer size[KB]", "segment_size[KB]", "collective name", "execution_time[us]", "throughput[Gbps]","execution_time_fullpath[us]", "throughput_fullpath[Gbps]"])
 
         
-        cclo.set_max_dma_transaction_flight(10)
+        cclo.set_max_dma_transaction_flight(18)
         cclo.set_delay(0)
         for segment_size in args.segment_size:
             #change dma_transaction size
@@ -517,9 +508,10 @@ if __name__ == "__main__":
                         duration_us_fp, throughput_gbps_fp  = test_ring_reduce(bsize, args.naccel, False)
 
                         csv_writer.writerow([args.experiment, args.board_instance, args.naccel, rank, args.num_banks, bsize, segment_size, "Reduce", duration_us, throughput_gbps, duration_us_fp, throughput_gbps_fp])
-                        #from time import sleep
-                        #sleep(rank)
-                        #cclo.dump_rx_buffers_spares()
+                        #if i % 5 == 0:
+                        #    from time import sleep
+                        #    sleep(rank*0.1)
+                        #    cclo.dump_rx_buffers_spares()
                 if args.scatter:
                     for i in range(args.nruns):
                         duration_us, throughput_gbps        = test_scatter(bsize, args.naccel)
@@ -548,7 +540,7 @@ if __name__ == "__main__":
                         duration_us_fp, throughput_gbps_fp  = test_allgather(bsize, args.naccel, False)
 
                         csv_writer.writerow([args.experiment, args.board_instance, args.naccel, rank, args.num_banks, bsize, segment_size, "Allgather", duration_us, throughput_gbps, duration_us_fp, throughput_gbps_fp])
-
+                csv_file.flush()
     except KeyboardInterrupt:
         print("CTR^C")
         print("Rank", rank)
