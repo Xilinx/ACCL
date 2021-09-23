@@ -117,6 +117,5 @@ void tcp_packetizer(stream<ap_axiu<DATA_WIDTH,0,0,0> > & in,
 		out.write(outword);
 	}
 	//acknowledge that message_seq has been sent successfully
-	ap_uint<32> outsts;
 	sts.write(message_seq)
 }
