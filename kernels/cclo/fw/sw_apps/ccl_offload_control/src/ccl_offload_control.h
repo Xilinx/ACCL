@@ -141,7 +141,7 @@ extern "C" {
 #define TCP_TXPKT_BASEADDR    0x60000
 #define GPIO_BASEADDR         0x40000000
 #define GPIO_TDEST_BASEADDR   0x40010000
-#define SWITCH_BASEADDR  0x44A00000
+#define SWITCH_BASEADDR       0x44A00000
 #define IRQCTRL_BASEADDR      0x44A10000
 #define TIMER_BASEADDR        0x44A20000
 //https://www.xilinx.com/html_docs/xilinx2020_2/vitis_doc/managing_interface_synthesis.html#tzw1539734223235

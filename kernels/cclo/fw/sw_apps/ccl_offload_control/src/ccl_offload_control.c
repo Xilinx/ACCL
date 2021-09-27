@@ -619,7 +619,6 @@ static inline int start_dma(
     if( what_DMAS & USE_DMA0_RX){
         dma_tag_tmp = (dma_tag_tmp + 1) & 0xf;
         if(casting & USE_DMA0_RX){
-            setup_krnl_tdest(arcfg.s2t_tdest);
             true_len = len*arcfg.src_op_bits/arcfg.arith_op_bits;
         } else {
             true_len = len;
@@ -630,7 +629,6 @@ static inline int start_dma(
     if( what_DMAS & USE_DMA1_RX){
         dma_tag_tmp = (dma_tag_tmp + 1) & 0xf;
         if(casting & USE_DMA1_RX){
-            setup_krnl_tdest(arcfg.s2t_tdest);
             true_len = len*arcfg.src_op_bits/arcfg.arith_op_bits;
         } else {
             true_len = len;
@@ -641,7 +639,6 @@ static inline int start_dma(
     if( what_DMAS & USE_DMA1_TX){
         dma_tag_tmp = (dma_tag_tmp + 1) & 0xf;
         if(casting & USE_DMA1_TX){
-            setup_krnl_tdest(arcfg.t2d_tdest);
             true_len = len*arcfg.dst_op_bits/arcfg.arith_op_bits;
         } else {
             true_len = len;
@@ -652,7 +649,6 @@ static inline int start_dma(
     if( what_DMAS & USE_DMA1_TX_WITHOUT_TLAST){
         dma_tag_tmp = (dma_tag_tmp + 1) & 0xf;
         if(casting & USE_DMA1_TX_WITHOUT_TLAST){
-            setup_krnl_tdest(arcfg.t2d_tdest);
             true_len = len*arcfg.dst_op_bits/arcfg.arith_op_bits;
         } else {
             true_len = len;
@@ -880,26 +876,17 @@ int dma_movement(
     return COLLECTIVE_OP_SUCCESS;
 }
 
-
-
-//performs a copy using DMA1. DMA1 rx reads while DMA1 tx overwrites
-int dma_loopback(	unsigned int len,
-                    uint64_t src_addr,
-                    uint64_t dst_addr) {
-    
-    //configure switch
-    cfg_switch(DATAPATH_DMA_LOOPBACK);
-    //call function that will control the DMAs
-    return dma_movement(len, 0, src_addr, dst_addr, 0, USE_DMA1_RX | USE_DMA1_TX, USE_NONE, NULL, 0, 0);
-
-}
-
 //performs a copy using DMA1. DMA1 rx reads while DMA1 tx overwrites
 static inline int copy(	unsigned int len,
                         uint64_t src_addr,
                         uint64_t dst_addr) {
-    //synonym
-    return  dma_loopback(	  len, src_addr, dst_addr);
+    //configure switch
+    cfg_switch(DATAPATH_DMA_LOOPBACK);
+    //configure casting
+    setup_krnl_tdest(arcfg.t2d_tdest);
+    //call function that will control the DMAs
+    return dma_movement(len, 0, src_addr, dst_addr, 0, USE_DMA1_RX | USE_DMA1_TX, USE_DMA1_TX, NULL, 0, 0);
+
 }
 
 //performs an accumulate using DMA1 and DMA0. DMA0 rx reads op1 DMA1 rx reads op2 while DMA1 tx back to dst buffer
@@ -918,8 +905,7 @@ int reduce_loopback(	unsigned int len,
 }
 
 //performs an accumulate using DMA1 and DMA0. DMA0 rx reads op1 DMA1 rx reads op2 while DMA1 tx overwrites op2 buffer
-static inline int accumulate (	
-                        unsigned int len,
+static inline int sum(	unsigned int len,
                         uint64_t op1_addr,
                         uint64_t op2_addr,
                         uint64_t dst_addr) {
@@ -1810,8 +1796,8 @@ int main() {
     unsigned int retval;
     unsigned int scenario, len, comm, root_src_dst, function, msg_tag;
     unsigned int compression, src_type, dst_type;
-    unsigned int buf0_addrl, buf0_addrh, buf1_addrl, buf1_addrh, buf2_addrl, buf2_addrh;
-    uint64_t buf0_addr, buf1_addr, buf2_addr;
+    unsigned int op0_addrl, op0_addrh, op1_addrl, op1_addrh, res_addrl, res_addrh;
+    uint64_t op0_addr, op1_addr, res_addr;
 
     init();
     //register exception handler though setjmp. it will save stack status to unroll stack when the jmp is performed 
@@ -1836,16 +1822,16 @@ int main() {
         compression  = getd(CMD_HOST);
         src_type     = getd(CMD_HOST);
         dst_type     = getd(CMD_HOST);
-        buf0_addrl   = getd(CMD_HOST);
-        buf0_addrh   = getd(CMD_HOST);
-        buf1_addrl   = getd(CMD_HOST);
-        buf1_addrh   = getd(CMD_HOST);
-        buf2_addrl   = getd(CMD_HOST);
-        buf2_addrh   = getd(CMD_HOST);
+        op0_addrl   = getd(CMD_HOST);
+        op0_addrh   = getd(CMD_HOST);
+        op1_addrl   = getd(CMD_HOST);
+        op1_addrh   = getd(CMD_HOST);
+        res_addrl   = getd(CMD_HOST);
+        res_addrh   = getd(CMD_HOST);
 
-        buf0_addr =  ((uint64_t) buf0_addrh << 32) | buf0_addrl;
-        buf1_addr =  ((uint64_t) buf1_addrh << 32) | buf1_addrl;
-        buf2_addr =  ((uint64_t) buf2_addrh << 32) | buf2_addrl;
+        op0_addr =  ((uint64_t) op0_addrh << 32) | op0_addrl;
+        op1_addr =  ((uint64_t) op1_addrh << 32) | op1_addrl;
+        res_addr =  ((uint64_t) res_addrh << 32) | res_addrl;
 
         //gather pipeline arithmetic configuration
         if(scenario != XCCL_CONFIG){
@@ -1933,37 +1919,37 @@ int main() {
                 
                 break;
             case XCCL_SEND:
-                retval = send(                    len, msg_tag,  root_src_dst,     buf0_addr);
+                retval = send(len, msg_tag, root_src_dst, op0_addr);
                 break;
             case XCCL_RECV:
-                retval = recv(                    len, msg_tag,  root_src_dst,     buf0_addr);
+                retval = recv(len, msg_tag, root_src_dst, res_addr);
                 break;
             case XCCL_BCAST:
-                retval = broadcast(               len,           root_src_dst,     buf0_addr);
+                retval = broadcast(len, root_src_dst, op0_addr);
                 break;
             case XCCL_SCATTER:    
-                retval = scatter(                 len,           root_src_dst,     buf0_addr, buf1_addr);
+                retval = scatter(len, root_src_dst, op0_addr, res_addr);
                 break;
             case XCCL_GATHER:
-                retval = gather(                  len,           root_src_dst,     buf0_addr, buf1_addr);
+                retval = gather(len, root_src_dst, op0_addr, res_addr);
                 break;
             case XCCL_REDUCE:
-                retval = reduce(                  len,           root_src_dst,     buf0_addr, buf1_addr);
+                retval = reduce(len, root_src_dst, op0_addr, res_addr);
                 break;
             case XCCL_ALLGATHER:
-                retval = allgather(len, buf0_addr, buf1_addr);
+                retval = allgather(len, op0_addr, res_addr);
                 break;
             case XCCL_ALLREDUCE:
-                retval = allreduce(len,  buf0_addr, buf1_addr);
+                retval = allreduce(len, op0_addr, res_addr);
                 break;
             case XCCL_ACC:
-                retval = accumulate(              len,                           buf0_addr, buf1_addr, buf1_addr);
+                retval = sum(len, op0_addr, op1_addr, res_addr);
                 break;
             case XCCL_COPY:
-                retval = copy(                    len,                             buf0_addr, buf1_addr);
+                retval = copy(len, op0_addr, res_addr);
                 break;
             case XCCL_REDUCE_SCATTER:
-                retval = scatter_reduce(          len,                           buf0_addr, buf1_addr);
+                retval = scatter_reduce(len, op0_addr, res_addr);
                 break;
             default:
                 retval = COLLECTIVE_OP_SUCCESS;

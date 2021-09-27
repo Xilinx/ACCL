@@ -30,7 +30,7 @@ from enum import IntEnum, unique
 class CCLOp(IntEnum):
     config                  = 0
     copy                    = 1
-    accumulate              = 2
+    sum                     = 2
     send                    = 3
     recv                    = 4
     bcast                   = 5
@@ -101,10 +101,12 @@ class ACCLArithConfig():
         return addr
 
 ACCL_DEFAULT_ARITH_CONFIG = {
-    np.float32: ACCLArithConfig(0, 32, 0, 32, [0], 32),
-    np.float64: ACCLArithConfig(0, 64, 0, 64, [1], 64),
-    np.int32: ACCLArithConfig(0, 32, 0, 32, [2], 32),
-    np.int64: ACCLArithConfig(0, 64, 0, 64, [3], 64),
+    ('float16', 'float16', 'float16'): ACCLArithConfig(0, 16, 0, 16, [4], 16),
+    ('float32', 'float16', 'float32'): ACCLArithConfig(0, 32, 1, 16, [0], 32),
+    ('float32', 'float32', 'float32'): ACCLArithConfig(0, 32, 0, 32, [0], 32),
+    ('float64', 'float64', 'float64'): ACCLArithConfig(0, 64, 0, 64, [1], 64),
+    ('int32'  , 'int32'  , 'int32'  ): ACCLArithConfig(0, 32, 0, 32, [2], 32),
+    ('int64'  , 'int64'  , 'int64'  ): ACCLArithConfig(0, 64, 0, 64, [3], 64),
 }
 
 @unique
@@ -205,7 +207,7 @@ class cclo(DefaultIP):
         if self.utility_spare is not None:
             self.utility_spare.freebuffer()
         del self.utility_spare
-        self.utility_spare = None
+        self.utility_spare = None 
 
     #define CCLO arithmetic configurations
     def configure_arithmetic(self, configs=ACCL_DEFAULT_ARITH_CONFIG):
@@ -296,13 +298,19 @@ class cclo(DefaultIP):
                 content= "xxread failedxx"
             print(f"SPARE RX BUFFER{i}:\t ADDR: {hex(int(str(addrh)+str(addrl)))} \t STATUS: {status} \t OCCUPACY: {rxlen}/{maxsize} \t DMA TAG: {hex(dmatag)} \t  MPI TAG:{hex(rxtag)} \t SEQ: {seq} \t SRC:{rxsrc} \t content {content}")
 
-    def call_async(self, scenario=CCLOp.nop, len=1, comm=0, root_src_dst=0, function=0, tag=TAG_ANY, arithcfg=None, src_type=0, dst_type=0, addr_0=None, addr_1=None, addr_2=None, waitfor=[] ):
-        if arithcfg is None:
-            if addr_0 is None:
-                arithcfg = 0
-            else:
-                #no config specified, use default config for datatype
-                arithcfg = self.arith_config[addr_0.dtype].addr
+    def call_async(self, scenario=CCLOp.nop, len=1, comm=0, root_src_dst=0, function=0, tag=TAG_ANY, arith_dtype=None, src_type=0, dst_type=0, addr_0=None, addr_1=None, addr_2=None, waitfor=[]):
+        # no addresses, this is a config call
+        if addr_0 is None and addr_2 is None:
+            #no config needed
+            arithcfg = 0
+        # two- or three-address call, the common case
+        elif addr_0 is not None and addr_2 is None:
+            arithcfg = self.arith_config[(addr_0.dtype.name, addr_0.dtype.name, arith_dtype if arith_dtype is not None else addr_0.dtype.name)].addr
+        elif addr_0 is None and addr_2 is not None:
+            arithcfg = self.arith_config[(addr_2.dtype.name, addr_2.dtype.name, arith_dtype if arith_dtype is not None else addr_2.dtype.name)].addr
+        elif addr_0 is not None and addr_2 is not None:
+            arithcfg = self.arith_config[(addr_0.dtype.name, addr_2.dtype.name, arith_dtype if arith_dtype is not None else addr_0.dtype.name)].addr
+        # set dummy addresses where needed
         if addr_0 is None:
             addr_0 = self.dummy_address()
         if addr_1 is None:
@@ -311,13 +319,19 @@ class cclo(DefaultIP):
             addr_2 = self.dummy_address()
         return self.start(scenario, len, comm, root_src_dst, function, tag, arithcfg, src_type, dst_type, addr_0, addr_1, addr_2, waitfor=waitfor)        
 
-    def call_sync(self, scenario=CCLOp.nop, len=1, comm=0, root_src_dst=0, function=0, tag=TAG_ANY, arithcfg=None, src_type=0, dst_type=0, addr_0=None, addr_1=None, addr_2=None):
-        if arithcfg is None:
-            if addr_0 is None:
-                arithcfg = 0
-            else:
-                #no config specified, use default config for datatype
-                arithcfg = self.arith_config[addr_0.dtype].addr
+    def call_sync(self, scenario=CCLOp.nop, len=1, comm=0, root_src_dst=0, function=0, tag=TAG_ANY, arith_dtype=None, src_type=0, dst_type=0, addr_0=None, addr_1=None, addr_2=None):
+        # no addresses, this is a config call
+        if addr_0 is None and addr_2 is None:
+            #no config needed
+            arithcfg = 0
+        # two- or three-address call, the common case
+        elif addr_0 is not None and addr_2 is None:
+            arithcfg = self.arith_config[(addr_0.dtype.name, addr_0.dtype.name, arith_dtype if arith_dtype is not None else addr_0.dtype.name)].addr
+        elif addr_0 is None and addr_2 is not None:
+            arithcfg = self.arith_config[(addr_2.dtype.name, addr_2.dtype.name, arith_dtype if arith_dtype is not None else addr_2.dtype.name)].addr
+        elif addr_0 is not None and addr_2 is not None:
+            arithcfg = self.arith_config[(addr_0.dtype.name, addr_2.dtype.name, arith_dtype if arith_dtype is not None else addr_0.dtype.name)].addr
+        # set dummy addresses where needed
         if addr_0 is None:
             addr_0 = self.dummy_address()
         if addr_1 is None:
@@ -514,7 +528,7 @@ class cclo(DefaultIP):
             dstbuf.sync_from_device()
 
     @self_check_return_value
-    def copy(self, srcbuf, dstbuf,  from_fpga=False,  to_fpga=False, run_async=False, waitfor=[]):
+    def copy(self, srcbuf, dstbuf,  from_fpga=False,  to_fpga=False, run_async=False, waitfor=[], arith_dtype=None):
         if not to_fpga and run_async:
             warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
         if srcbuf.nbytes == 0:
@@ -523,7 +537,8 @@ class cclo(DefaultIP):
         # performs dstbuf = srcbuf
         if not from_fpga:
             srcbuf.sync_to_device()
-        handle = self.call_async(scenario=CCLOp.copy, len=srcbuf.nbytes,addr_0=srcbuf, addr_1=dstbuf, waitfor=waitfor)
+        import pdb; pdb.set_trace()
+        handle = self.call_async(scenario=CCLOp.copy, len=srcbuf.size, addr_0=srcbuf, addr_2=dstbuf, waitfor=waitfor, arith_dtype=arith_dtype)
         if run_async:
             return handle
         
@@ -532,19 +547,18 @@ class cclo(DefaultIP):
             dstbuf.sync_from_device()
 
     @self_check_return_value
-    def accumulate(self, func, val, acc, val_from_fpga=False, acc_from_fpga=False, to_fpga=False, run_async=False, waitfor=[]):
+    def sum(self, func, val1, val2, sum, val1_from_fpga=False, val2_from_fpga=False, to_fpga=False, run_async=False, waitfor=[]):
         if not to_fpga and run_async:
             warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
-        if val.nbytes == 0:
-            warnings.warn("zero size buffer")
-            return
-        assert type(val.flatten()[0]) in self.supported_functions[func], "Data type not supported for requested function"
+        assert val1.nbytes != 0 or val2.nbytes != 0, "Zero-size input buffer"
+        assert val1.nbytes == val2.nbytes, "Unequal sized operands"
+        # TODO: check datatype support
         # performs acc = val + acc
-        if not val_from_fpga:
-            val.sync_to_device()
-        if not acc_from_fpga:
-            acc.sync_to_device()
-        handle = self.call_async(scenario=CCLOp.accumulate, len=val.nbytes, function=func, addr_0=val, addr_1=acc, waitfor=waitfor)
+        if not val1_from_fpga:
+            val1.sync_to_device()
+        if not val2_from_fpga:
+            val2.sync_to_device()
+        handle = self.call_async(scenario=CCLOp.sum, len=val1.nbytes, function=func, addr_0=val1, addr_1=val2, addr_2=sum, waitfor=waitfor)
         if run_async:
             return handle
         
@@ -677,7 +691,7 @@ class cclo(DefaultIP):
         if count == 0:
             warnings.warn("zero size buffer")
             return
-        assert type(sbuf.flatten()[0]) in self.supported_functions[func], "Data type not supported for requested function"
+        # TODO: check datatype support
         assert count % sbuf.itemsize == 0, "Count not a multiple of input element size"
 
         comm        = self.communicators[comm_id]
@@ -702,7 +716,7 @@ class cclo(DefaultIP):
             warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
         if count == 0:
             return
-        assert type(sbuf.flatten()[0]) in self.supported_functions[func], "Data type not supported for requested function"
+        # TODO: check datatype support
         assert count % sbuf.itemsize == 0, "Count not a multiple of input element size"
 
         if not from_fpga:
@@ -725,7 +739,7 @@ class cclo(DefaultIP):
             warnings.warn("zero size buffer")
             return
 
-        assert type(sbuf.flatten()[0]) in self.supported_functions[func], "Data type not supported for requested function"
+        # TODO: check datatype support
         assert count % sbuf.itemsize == 0, "Count not a multiple of input element size"
 
         comm        = self.communicators[comm_id]

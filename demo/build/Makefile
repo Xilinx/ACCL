@@ -17,8 +17,8 @@
 
 PLATFORM ?= xilinx_u280_xdma_201920_3
 XSA := $(strip $(patsubst %.xpfm, % , $(shell basename $(PLATFORM))))
-DEBUG ?= all
-PROFILE ?= all
+DEBUG ?= none
+PROFILE ?= none
 MODE ?= tcp
 FREQUENCY = 250
 CCL_XO=../../kernels/cclo/ccl_offload.xo
@@ -88,24 +88,22 @@ ifeq (vnx,$(MODE))
 	endif
 	CONFIG += --connectivity.nk cmac_$(ETH_IF):1:cmac_inst
 	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/$(VNX)/post_sys_link.tcl
-	OTHER_XO = $(CMAC_UDP_XO) $(UDP_XO)
+	NET_XO = $(CMAC_UDP_XO) $(UDP_XO)
 	CONFIG += --user_ip_repo_paths $(CMAC_IP_FOLDER)
 	CONFIG += --user_ip_repo_paths $(HLS_IP_FOLDER)
 else ifeq (tri,$(MODE))
 	ETH_IF := none
-	OTHER_XO = $(TCP_DUMMY_XO)
-	ifeq (u250,$(findstring u250, $(PLATFORM)))
-		CONFIGFILE = config/link_config_u250_tri.ini
-	endif
-	ifeq (u280,$(findstring u280, $(PLATFORM)))
-		CONFIGFILE = config/link_config_u280_tri.ini
-	endif
+	NET_XO = $(TCP_DUMMY_XO)
 	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/tcl/post_sys_link_tri.tcl
+else ifeq (lb,$(MODE))
+	ETH_IF := none
+	NET_XO = $(TCP_DUMMY_XO)
+	OTHER_XO = $(LOOPBACK_XO)
+	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/tcl/post_sys_link_lb.tcl
 else ifeq (tcp, $(MODE))
 	CMAC_TCP_XO=Vitis_with_100Gbps_TCP-IP/_x.hw.$(XSA)/cmac_krnl.xo
-	OTHER_XO = $(TCP_XO) $(CMAC_TCP_XO) $(LOOPBACK_XO)
-	CONFIGFILE = config/link_config_$(BOARD)_tcp_cmac.ini
-	CONFIG := --config $(CONFIGFILE) 
+	NET_XO = $(TCP_XO) $(CMAC_TCP_XO)
+	OTHER_XO = $(LOOPBACK_XO)
 	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/Vitis_with_100Gbps_TCP-IP/scripts/post_sys_link.tcl
 	CONFIG += --user_ip_repo_paths Vitis_with_100Gbps_TCP-IP/build/fpga-network-stack/iprepo
 else
@@ -141,9 +139,9 @@ $(TCP_XO):
 	git submodule update --init --recursive Vitis_with_100Gbps_TCP-IP
 	$(MAKE) -C Vitis_with_100Gbps_TCP-IP/ network_krnl DEVICE=$(PLATFORM) TEMP_DIR=_x.hw.$(XSA)/ XSA=$(XSA)
 
-$(XCLBIN): $(OTHER_XO) $(CONFIGFILE)
+$(XCLBIN): $(NET_XO) $(CONFIGFILE)
 	$(MAKE) -C ../../kernels PLATFORM=$(PLATFORM) DEBUG=$(DEBUG)
-	v++ --link --platform $(PLATFORM) --kernel_frequency $(FREQUENCY) --save-temps --temp_dir $(BUILD_DIR) $(CONFIG) -o $@ $(CCL_XO) $(ARITHMETIC_XO) $(OTHER_XO)
+	v++ --link --platform $(PLATFORM) --kernel_frequency $(FREQUENCY) --save-temps --temp_dir $(BUILD_DIR) $(CONFIG) -o $@ $(CCL_XO) $(ARITHMETIC_XO) $(NET_XO) $(OTHER_XO)
 
 distclean:
 	git clean -xfd
