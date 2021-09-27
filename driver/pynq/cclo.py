@@ -60,7 +60,6 @@ class CCLOCfgFunc(IntEnum):
     end_profiling            = 11
     set_dma_transaction_size = 12
     set_max_dma_transactions = 13
-    set_delay                = 14
     
 class CCLOReduceFunc(IntEnum):
     fp          = 0

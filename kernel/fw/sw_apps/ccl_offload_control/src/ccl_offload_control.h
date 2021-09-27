@@ -142,7 +142,6 @@ extern "C" {
 #define END_PROFILING             11
 #define SET_DMA_TRANSACTION_SIZE  12
 #define SET_MAX_DMA_TRANSACTIONS  13
-#define SET_DELAY                 14
 
 //AXI MMAP address
 #define CONTROL_OFFSET          0x0000

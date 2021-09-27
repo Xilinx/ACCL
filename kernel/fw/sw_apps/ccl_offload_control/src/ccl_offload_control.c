@@ -22,13 +22,12 @@
 #include <setjmp.h>
 #define MAX_DMA_TAGS 16
 
-static volatile int 		 use_tcp = 1;
+static volatile int 		 use_tcp = 0;
 static jmp_buf 				 excp_handler;
 static volatile int 		 dma_tag;
 static volatile unsigned int next_rx_tag 	 = 0;
 static volatile unsigned int num_rx_enqueued = 0;
 static volatile unsigned int timeout 	 	 = 1 << 28;
-static volatile unsigned int delay	 	 	 = 100;
 static volatile unsigned int dma_tag_lookup [MAX_DMA_TAGS]; //index of the spare buffer that has been issued with that dma tag. -1 otherwise
 static volatile	unsigned int dma_transaction_size 	= DMA_MAX_BTT;
 static volatile unsigned int max_dma_in_flight 		= DMA_MAX_TRANSACTIONS;
@@ -886,8 +885,6 @@ static inline int dma_movement_and_packetizer(
 		}
 		//start DMAs
 		dma_tag_tmp 		 = start_dma(curr_len_move, DMA0_rx_addr, DMA1_rx_addr, DMA1_tx_addr, DMA2_rx_addr, what_DMAS, dma_tag_tmp);
-		start_timer1();
-		while( delay !=0 && read_timer1() < delay);
 		remaining_to_move 	-= curr_len_move;
 		DMA0_rx_addr 		+= curr_len_move;
 		DMA1_rx_addr 		+= curr_len_move;
@@ -911,8 +908,6 @@ static inline int dma_movement_and_packetizer(
 		start_packetizer_message(world, dst_rank, curr_len_move, mpi_tag, max_dma_in_flight - 1);
 		//start DMAs
 		dma_tag_tmp 		 = start_dma(curr_len_move, DMA0_rx_addr, DMA1_rx_addr, DMA1_tx_addr, DMA2_rx_addr, what_DMAS, dma_tag_tmp);
-		start_timer1();
-		while( delay !=0 && read_timer1() < delay);
 		remaining_to_move 	-= curr_len_move;
 		DMA0_rx_addr 		+= curr_len_move;
 		DMA1_rx_addr 		+= curr_len_move;
@@ -2004,9 +1999,6 @@ int main() {
 							max_dma_in_flight = len;
 							retval = COLLECTIVE_OP_SUCCESS;
 						}
-						break;
-					case SET_DELAY:
-						delay = len;
 						break;
 					default:
 						break;
