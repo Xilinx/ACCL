@@ -55,9 +55,9 @@ connect_bd_intf_net [get_bd_intf_pins tcp_axis_switch/M01_AXIS] [get_bd_intf_pin
 connect_bd_intf_net [get_bd_intf_pins network_krnl_2/net_tx] [get_bd_intf_pins tcp_axis_switch/S02_AXIS]
 connect_bd_intf_net [get_bd_intf_pins tcp_axis_switch/M02_AXIS] [get_bd_intf_pins network_krnl_2/net_rx]
 
-rewire_cast 0
-rewire_cast 1
-rewire_cast 2
-rewire_sum 0
-rewire_sum 1
-rewire_sum 2
+rewire_compression 0
+rewire_compression 1
+rewire_compression 2
+rewire_reduction 0
+rewire_reduction 1
+rewire_reduction 2

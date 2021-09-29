@@ -17,5 +17,5 @@
 
 source [file dirname [file normalize [info script]]]/rewire.tcl
 
-rewire_cast 0
-rewire_sum 0
+rewire_compression 0
+rewire_reduction 0

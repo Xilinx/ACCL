@@ -32,29 +32,33 @@ proc connect_clk_rst {clksig rstsig rstslr} {
 }
 
 # Break casting kernel connections and redo them through a switch for each of the CCLO instances
-proc rewire_cast {idx} {
-    create_bd_cell -type ip -vlnv xilinx.com:ip:axis_switch:1.1 cclo${idx}_krnl_axis_switch
-    set_property -dict [list CONFIG.HAS_TLAST.VALUE_SRC USER CONFIG.TDEST_WIDTH.VALUE_SRC USER] [get_bd_cells cclo${idx}_krnl_axis_switch]
-    set_property -dict [list CONFIG.NUM_SI {3} CONFIG.NUM_MI {3} CONFIG.HAS_TLAST {1} CONFIG.TDEST_WIDTH {4} CONFIG.ARB_ON_MAX_XFERS {0} CONFIG.ARB_ON_TLAST {1} CONFIG.DECODER_REG {1}] [get_bd_cells cclo${idx}_krnl_axis_switch]
-    set_property -dict [list CONFIG.HAS_TSTRB.VALUE_SRC USER CONFIG.HAS_TKEEP.VALUE_SRC USER] [get_bd_cells cclo${idx}_krnl_axis_switch]
-    set_property -dict [list CONFIG.HAS_TSTRB {0} CONFIG.HAS_TKEEP {1}] [get_bd_cells cclo${idx}_krnl_axis_switch]
-    set_property -dict [list CONFIG.ARB_ALGORITHM {3}] [get_bd_cells cclo${idx}_krnl_axis_switch]
-    set_property -dict [list CONFIG.M01_S01_CONNECTIVITY {0} CONFIG.M01_S02_CONNECTIVITY {0} CONFIG.M02_S01_CONNECTIVITY {0} CONFIG.M02_S02_CONNECTIVITY {0}] [get_bd_cells cclo${idx}_krnl_axis_switch]
-    connect_clk_rst cclo${idx}_krnl_axis_switch/aclk cclo${idx}_krnl_axis_switch/aresetn $idx
-
-    delete_bd_objs [get_bd_intf_nets upcast_${idx}_out_r]
-    delete_bd_objs [get_bd_intf_nets ccl_offload_${idx}_m_axis_krnl]
-    delete_bd_objs [get_bd_intf_nets downcast_${idx}_out_r]
-    connect_bd_intf_net [get_bd_intf_pins ccl_offload_${idx}/m_axis_krnl] [get_bd_intf_pins cclo${idx}_krnl_axis_switch/S00_AXIS]
-    connect_bd_intf_net [get_bd_intf_pins cclo${idx}_krnl_axis_switch/M00_AXIS] [get_bd_intf_pins ccl_offload_${idx}/s_axis_krnl]
-    connect_bd_intf_net [get_bd_intf_pins cclo${idx}_krnl_axis_switch/M01_AXIS] [get_bd_intf_pins downcast_${idx}/in_r]
-    connect_bd_intf_net [get_bd_intf_pins downcast_${idx}/out_r] [get_bd_intf_pins cclo${idx}_krnl_axis_switch/S01_AXIS]
-    connect_bd_intf_net [get_bd_intf_pins cclo${idx}_krnl_axis_switch/M02_AXIS] [get_bd_intf_pins upcast_${idx}/in_r]
-    connect_bd_intf_net [get_bd_intf_pins upcast_${idx}/out_r] [get_bd_intf_pins cclo${idx}_krnl_axis_switch/S02_AXIS]
+proc rewire_compression {idx} {
+    rewire_compression_lane $idx decompress 0 upcast_0
+    rewire_compression_lane $idx decompress 1 upcast_1
+    rewire_compression_lane $idx compress 0 downcast_0
 }
 
-# break sum kernel connections and redo them through switches
-proc rewire_sum {idx} {
+proc rewire_compression_lane {cclo_idx clane_type clane_idx ip_name} {
+    set swname cclo${cclo_idx}_${clane_type}${clane_idx}_sw
+    create_bd_cell -type ip -vlnv xilinx.com:ip:axis_switch:1.1 ${swname}
+    set_property -dict [list CONFIG.HAS_TLAST.VALUE_SRC USER CONFIG.TDEST_WIDTH.VALUE_SRC USER] [get_bd_cells ${swname}]
+    set_property -dict [list CONFIG.NUM_SI {2} CONFIG.NUM_MI {2} CONFIG.HAS_TLAST {1} CONFIG.TDEST_WIDTH {4} CONFIG.ARB_ON_MAX_XFERS {0} CONFIG.ARB_ON_TLAST {1} CONFIG.DECODER_REG {1}] [get_bd_cells ${swname}]
+    set_property -dict [list CONFIG.HAS_TSTRB.VALUE_SRC USER CONFIG.HAS_TKEEP.VALUE_SRC USER] [get_bd_cells ${swname}]
+    set_property -dict [list CONFIG.HAS_TSTRB {0} CONFIG.HAS_TKEEP {1}] [get_bd_cells ${swname}]
+    set_property -dict [list CONFIG.ARB_ALGORITHM {3}] [get_bd_cells ${swname}]
+    set_property -dict [list CONFIG.M01_S01_CONNECTIVITY {0}] [get_bd_cells ${swname}]
+    connect_clk_rst ${swname}/aclk ${swname}/aresetn $cclo_idx
+
+    delete_bd_objs [get_bd_intf_nets ${ip_name}_out_r]
+    delete_bd_objs [get_bd_intf_nets ccl_offload_${cclo_idx}_m_axis_${clane_type}${clane_idx}]
+    connect_bd_intf_net [get_bd_intf_pins ccl_offload_${cclo_idx}/m_axis_${clane_type}${clane_idx}] [get_bd_intf_pins ${swname}/S00_AXIS]
+    connect_bd_intf_net [get_bd_intf_pins ${swname}/M00_AXIS] [get_bd_intf_pins ccl_offload_${cclo_idx}/s_axis_${clane_type}${clane_idx}]
+    connect_bd_intf_net [get_bd_intf_pins ${swname}/M01_AXIS] [get_bd_intf_pins ${ip_name}/in_r]
+    connect_bd_intf_net [get_bd_intf_pins ${ip_name}/out_r] [get_bd_intf_pins ${swname}/S01_AXIS]
+}
+
+# break reduction kernel connections and redo them through switches
+proc rewire_reduction {idx} {
     # remove existing stream infrastructure
     delete_bd_objs [get_bd_intf_nets arith_hp_${idx}_out_r] [get_bd_intf_nets dwc_arith_hp_${idx}_out_r_M_AXIS] [get_bd_cells dwc_arith_hp_${idx}_out_r]
     delete_bd_objs [get_bd_intf_nets arith_fp_${idx}_out_r] [get_bd_intf_nets dwc_arith_fp_${idx}_out_r_M_AXIS] [get_bd_cells dwc_arith_fp_${idx}_out_r]
@@ -64,36 +68,36 @@ proc rewire_sum {idx} {
     delete_bd_objs [get_bd_intf_nets ccl_offload_${idx}_m_axis_arith_op]
 
     # create switch for operand
-    create_bd_cell -type ip -vlnv xilinx.com:ip:axis_switch:1.1 cclo${idx}_sum_op_axis_switch
-    set_property -dict [list CONFIG.HAS_TLAST.VALUE_SRC USER CONFIG.TDEST_WIDTH.VALUE_SRC USER] [get_bd_cells cclo${idx}_sum_op_axis_switch]
-    set_property -dict [list CONFIG.NUM_SI {1} CONFIG.NUM_MI {5} CONFIG.HAS_TLAST {1} CONFIG.TDEST_WIDTH {4} CONFIG.ARB_ON_MAX_XFERS {0} CONFIG.ARB_ON_TLAST {1} CONFIG.DECODER_REG {1}] [get_bd_cells cclo${idx}_sum_op_axis_switch]
-    set_property -dict [list CONFIG.HAS_TSTRB.VALUE_SRC USER CONFIG.HAS_TKEEP.VALUE_SRC USER] [get_bd_cells cclo${idx}_sum_op_axis_switch]
-    set_property -dict [list CONFIG.HAS_TSTRB {0} CONFIG.HAS_TKEEP {1}] [get_bd_cells cclo${idx}_sum_op_axis_switch]
-    set_property -dict [list CONFIG.ARB_ALGORITHM {3}] [get_bd_cells cclo${idx}_sum_op_axis_switch]
-    connect_clk_rst cclo${idx}_sum_op_axis_switch/aclk cclo${idx}_sum_op_axis_switch/aresetn $idx
+    create_bd_cell -type ip -vlnv xilinx.com:ip:axis_switch:1.1 cclo${idx}_reduce_op_sw
+    set_property -dict [list CONFIG.HAS_TLAST.VALUE_SRC USER CONFIG.TDEST_WIDTH.VALUE_SRC USER] [get_bd_cells cclo${idx}_reduce_op_sw]
+    set_property -dict [list CONFIG.NUM_SI {1} CONFIG.NUM_MI {5} CONFIG.HAS_TLAST {1} CONFIG.TDEST_WIDTH {4} CONFIG.ARB_ON_MAX_XFERS {0} CONFIG.ARB_ON_TLAST {1} CONFIG.DECODER_REG {1}] [get_bd_cells cclo${idx}_reduce_op_sw]
+    set_property -dict [list CONFIG.HAS_TSTRB.VALUE_SRC USER CONFIG.HAS_TKEEP.VALUE_SRC USER] [get_bd_cells cclo${idx}_reduce_op_sw]
+    set_property -dict [list CONFIG.HAS_TSTRB {0} CONFIG.HAS_TKEEP {1}] [get_bd_cells cclo${idx}_reduce_op_sw]
+    set_property -dict [list CONFIG.ARB_ALGORITHM {3}] [get_bd_cells cclo${idx}_reduce_op_sw]
+    connect_clk_rst cclo${idx}_reduce_op_sw/aclk cclo${idx}_reduce_op_sw/aresetn $idx
 
     # create switch for result
-    create_bd_cell -type ip -vlnv xilinx.com:ip:axis_switch:1.1 cclo${idx}_sum_res_axis_switch
-    set_property -dict [list CONFIG.HAS_TLAST.VALUE_SRC USER CONFIG.TDEST_WIDTH.VALUE_SRC USER] [get_bd_cells cclo${idx}_sum_res_axis_switch]
-    set_property -dict [list CONFIG.NUM_SI {5} CONFIG.NUM_MI {1} CONFIG.HAS_TLAST {1} CONFIG.TDEST_WIDTH {0} CONFIG.ARB_ON_MAX_XFERS {0} CONFIG.ARB_ON_TLAST {1} CONFIG.DECODER_REG {1}] [get_bd_cells cclo${idx}_sum_res_axis_switch]
-    set_property -dict [list CONFIG.HAS_TSTRB.VALUE_SRC USER CONFIG.HAS_TKEEP.VALUE_SRC USER] [get_bd_cells cclo${idx}_sum_res_axis_switch]
-    set_property -dict [list CONFIG.HAS_TSTRB {0} CONFIG.HAS_TKEEP {1}] [get_bd_cells cclo${idx}_sum_res_axis_switch]
-    set_property -dict [list CONFIG.ARB_ALGORITHM {3}] [get_bd_cells cclo${idx}_sum_res_axis_switch]
-    connect_clk_rst cclo${idx}_sum_res_axis_switch/aclk cclo${idx}_sum_res_axis_switch/aresetn $idx
+    create_bd_cell -type ip -vlnv xilinx.com:ip:axis_switch:1.1 cclo${idx}_reduce_res_sw
+    set_property -dict [list CONFIG.HAS_TLAST.VALUE_SRC USER CONFIG.TDEST_WIDTH.VALUE_SRC USER] [get_bd_cells cclo${idx}_reduce_res_sw]
+    set_property -dict [list CONFIG.NUM_SI {5} CONFIG.NUM_MI {1} CONFIG.HAS_TLAST {1} CONFIG.TDEST_WIDTH {0} CONFIG.ARB_ON_MAX_XFERS {0} CONFIG.ARB_ON_TLAST {1} CONFIG.DECODER_REG {1}] [get_bd_cells cclo${idx}_reduce_res_sw]
+    set_property -dict [list CONFIG.HAS_TSTRB.VALUE_SRC USER CONFIG.HAS_TKEEP.VALUE_SRC USER] [get_bd_cells cclo${idx}_reduce_res_sw]
+    set_property -dict [list CONFIG.HAS_TSTRB {0} CONFIG.HAS_TKEEP {1}] [get_bd_cells cclo${idx}_reduce_res_sw]
+    set_property -dict [list CONFIG.ARB_ALGORITHM {3}] [get_bd_cells cclo${idx}_reduce_res_sw]
+    connect_clk_rst cclo${idx}_reduce_res_sw/aclk cclo${idx}_reduce_res_sw/aresetn $idx
 
     # connect IPs to switches
-    connect_bd_intf_net [get_bd_intf_pins ccl_offload_${idx}/m_axis_arith_op] [get_bd_intf_pins cclo${idx}_sum_op_axis_switch/S00_AXIS]
-    connect_bd_intf_net [get_bd_intf_pins cclo${idx}_sum_op_axis_switch/M00_AXIS] [get_bd_intf_pins arith_fp_${idx}/in_r]
-    connect_bd_intf_net [get_bd_intf_pins cclo${idx}_sum_op_axis_switch/M01_AXIS] [get_bd_intf_pins arith_dp_${idx}/in_r]
-    connect_bd_intf_net [get_bd_intf_pins cclo${idx}_sum_op_axis_switch/M02_AXIS] [get_bd_intf_pins arith_i32_${idx}/in_r]
-    connect_bd_intf_net [get_bd_intf_pins cclo${idx}_sum_op_axis_switch/M03_AXIS] [get_bd_intf_pins arith_i64_${idx}/in_r]
-    connect_bd_intf_net [get_bd_intf_pins cclo${idx}_sum_op_axis_switch/M04_AXIS] [get_bd_intf_pins arith_hp_${idx}/in_r]
+    connect_bd_intf_net [get_bd_intf_pins ccl_offload_${idx}/m_axis_arith_op] [get_bd_intf_pins cclo${idx}_reduce_op_sw/S00_AXIS]
+    connect_bd_intf_net [get_bd_intf_pins cclo${idx}_reduce_op_sw/M00_AXIS] [get_bd_intf_pins arith_fp_${idx}/in_r]
+    connect_bd_intf_net [get_bd_intf_pins cclo${idx}_reduce_op_sw/M01_AXIS] [get_bd_intf_pins arith_dp_${idx}/in_r]
+    connect_bd_intf_net [get_bd_intf_pins cclo${idx}_reduce_op_sw/M02_AXIS] [get_bd_intf_pins arith_i32_${idx}/in_r]
+    connect_bd_intf_net [get_bd_intf_pins cclo${idx}_reduce_op_sw/M03_AXIS] [get_bd_intf_pins arith_i64_${idx}/in_r]
+    connect_bd_intf_net [get_bd_intf_pins cclo${idx}_reduce_op_sw/M04_AXIS] [get_bd_intf_pins arith_hp_${idx}/in_r]
 
-    connect_bd_intf_net [get_bd_intf_pins arith_fp_${idx}/out_r] [get_bd_intf_pins cclo${idx}_sum_res_axis_switch/S00_AXIS]
-    connect_bd_intf_net [get_bd_intf_pins arith_dp_${idx}/out_r] [get_bd_intf_pins cclo${idx}_sum_res_axis_switch/S01_AXIS]
-    connect_bd_intf_net [get_bd_intf_pins arith_i32_${idx}/out_r] [get_bd_intf_pins cclo${idx}_sum_res_axis_switch/S02_AXIS]
-    connect_bd_intf_net [get_bd_intf_pins arith_i64_${idx}/out_r] [get_bd_intf_pins cclo${idx}_sum_res_axis_switch/S03_AXIS]
-    connect_bd_intf_net [get_bd_intf_pins arith_hp_${idx}/out_r] [get_bd_intf_pins cclo${idx}_sum_res_axis_switch/S04_AXIS]
-    connect_bd_intf_net [get_bd_intf_pins cclo${idx}_sum_res_axis_switch/M00_AXIS] [get_bd_intf_pins ccl_offload_${idx}/s_axis_arith_res]
+    connect_bd_intf_net [get_bd_intf_pins arith_fp_${idx}/out_r] [get_bd_intf_pins cclo${idx}_reduce_res_sw/S00_AXIS]
+    connect_bd_intf_net [get_bd_intf_pins arith_dp_${idx}/out_r] [get_bd_intf_pins cclo${idx}_reduce_res_sw/S01_AXIS]
+    connect_bd_intf_net [get_bd_intf_pins arith_i32_${idx}/out_r] [get_bd_intf_pins cclo${idx}_reduce_res_sw/S02_AXIS]
+    connect_bd_intf_net [get_bd_intf_pins arith_i64_${idx}/out_r] [get_bd_intf_pins cclo${idx}_reduce_res_sw/S03_AXIS]
+    connect_bd_intf_net [get_bd_intf_pins arith_hp_${idx}/out_r] [get_bd_intf_pins cclo${idx}_reduce_res_sw/S04_AXIS]
+    connect_bd_intf_net [get_bd_intf_pins cclo${idx}_reduce_res_sw/M00_AXIS] [get_bd_intf_pins ccl_offload_${idx}/s_axis_arith_res]
 
 }

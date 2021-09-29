@@ -101,7 +101,14 @@ proc edit_core {core} {
 
     config_axis_if $core "s_axis_krnl" "ap_clk" 64 0 0 0 1 0 1 1
     config_axis_if $core "m_axis_krnl" "ap_clk" 64 0 0 4 1 0 1 1
-    
+
+    config_axis_if $core "s_axis_decompress0" "ap_clk" 64 0 0 0 1 0 1 1
+    config_axis_if $core "m_axis_decompress0" "ap_clk" 64 0 0 4 1 0 1 1
+    config_axis_if $core "s_axis_decompress1" "ap_clk" 64 0 0 0 1 0 1 1
+    config_axis_if $core "m_axis_decompress1" "ap_clk" 64 0 0 4 1 0 1 1
+    config_axis_if $core "s_axis_compress0" "ap_clk" 64 0 0 0 1 0 1 1
+    config_axis_if $core "m_axis_compress0" "ap_clk" 64 0 0 4 1 0 1 1
+
     config_axis_if $core "s_axis_arith_res" "ap_clk" 64 0 0 0 1 0 1 1
     config_axis_if $core "m_axis_arith_op" "ap_clk" 128 0 0 4 1 0 1 1
 
