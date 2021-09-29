@@ -20,14 +20,27 @@ source /opt/tools/Xilinx/Vitis/2020.2/.settings64-Vitis.sh
 source /opt/tools/external/anaconda/bin/activate pynq-dask
 
 #python test_mpi4py.py 
-cd ~/XCCL_Offload_tcp+udp/demo/host
-#python test_tcp_cmac_seq_mpi.py --xclbin ../build/single/ccl_offload.xclbin --device 0 --nruns 30 --bsize 1024  --send 
-#python test_tcp_cmac_seq_mpi.py --xclbin ../build/single/ccl_offload.xclbin --device 0 --nruns 30 --bsize 1024  --bcast 
-python test_tcp_cmac_seq_mpi.py --xclbin ../build/single/ccl_offload.xclbin --device 0 --nruns 10 --bsize 10  --send --bcast --scatter --gather --reduce --allgather --allreduce
-#--reduce
-#--scatter --gather 
-#python test_tcp_cmac_seq_mpi.py --xclbin ../build/single/ccl_offload.xclbin --device 0 --nruns 1 --bsize 1024  --scatter
-#python test_tcp_cmac_seq_mpi.py --xclbin ../build/single/ccl_offload.xclbin --device 0 --nruns 1 --bsize 1024  --gather
-#python test_tcp_cmac_seq_mpi.py --xclbin ../build/single/ccl_offload.xclbin --device 0 --nruns 1 --bsize 1024  --allgather
-#python test_tcp_cmac_seq_mpi.py --xclbin ../build/single/ccl_offload.xclbin --device 0 --nruns 1 --bsize 1024  --reduce
-#python test_tcp_cmac_seq_mpi.py --xclbin ../build/single/ccl_offload.xclbin --device 0 --nruns 1 --bsize 1024  --allreduce
+declare -a arr=("send" "bcast" "scatter" "gather" "allgather" "reduce" "allreduce")
+cd ~/ACCL/demo/host
+ele_consec="1 2 4 8 16 32 64 128 256 512"
+ele=(1024 2048 4096 8192 16384 32768)
+numrun=20
+
+
+for col in "${arr[@]}"
+do
+
+    python test_tcp.py --xclbin ../build/tcp_u280_debug/ccl_offload.xclbin --experiment measures --device 0 --nbufs 60 --nruns $numrun --segment_size 1024 --bsize $ele_consec --$col --use_tcp
+    xbutil program -p ../build/tri/ccl_offload.xclbin
+
+done
+
+
+for col in "${arr[@]}"
+do
+    for i in "${ele[@]}" 
+    do
+        python test_tcp.py --xclbin ../build/tcp_u280_debug/ccl_offload.xclbin --experiment measures --device 0 --nbufs 60 --nruns $numrun --segment_size 1024 --bsize $i --$col --use_tcp
+        xbutil program -p ../build/tri/ccl_offload.xclbin
+    done
+done

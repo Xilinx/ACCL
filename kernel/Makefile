@@ -16,8 +16,7 @@
 # *******************************************************************************/
 
 PLATFORM ?= xilinx_u280_xdma_201920_3
-DEBUG ?= none
-MODE ?= vnx
+DEBUG ?= all
 XCCL_ELF=vitis_ws/ccl_offload_control/Debug/ccl_offload_control.elf
 XCCL_XSA=ccl_offload_ex/ccl_offload.xsa
 XCCL_XO=ccl_offload_ex/exports/ccl_offload.xo
@@ -39,34 +38,6 @@ endif
 	GEN_KERNEL_TCL := tcl/generate_kernel.tcl
 	REBUILD_BD_TCL := tcl/rebuild_bd.tcl
 
-# ifeq (vnx,$(MODE))
-# 	GEN_KERNEL_TCL := tcl/generate_kernel.tcl
-# 	REBUILD_BD_TCL := tcl/rebuild_bd.tcl
-# 	GEN_KERNEL_TCL := tcl/generate_kernel.tcl
-# 	REBUILD_BD_TCL := tcl/rebuild_bd.tcl
-# else ifeq (loopback,$(MODE))
-# 	GEN_KERNEL_TCL := tcl/generate_kernel.tcl
-# 	REBUILD_BD_TCL := tcl/rebuild_bd.tcl
-# else ifeq (dual,$(MODE))
-# 	GEN_KERNEL_TCL := tcl/generate_kernel.tcl
-# 	REBUILD_BD_TCL := tcl/rebuild_bd.tcl
-
-# else ifeq (quad,$(MODE))
-# 	GEN_KERNEL_TCL := tcl/generate_kernel.tcl
-# 	REBUILD_BD_TCL := tcl/rebuild_bd.tcl
-# else ifeq (tcp_dual, $(MODE))
-# 	GEN_KERNEL_TCL := tcl/generate_kernel_tcp.tcl
-# 	REBUILD_BD_TCL := tcl/rebuild_bd_tcp.tcl
-# else ifeq (tcp_real_dual, $(MODE))
-# 	GEN_KERNEL_TCL := tcl/generate_kernel_tcp.tcl
-# 	REBUILD_BD_TCL := tcl/rebuild_bd_tcp.tcl
-# else ifeq (tcp_cmac, $(MODE))
-# 	GEN_KERNEL_TCL := tcl/generate_kernel_tcp.tcl
-# 	REBUILD_BD_TCL := tcl/rebuild_bd_tcp.tcl
-# else
-# 	$(error Unsupported MODE)
-# endif
-
 
 all: $(XCCL_XO)
 
@@ -81,7 +52,7 @@ $(XCCL_XSA): $(GEN_KERNEL_TCL) $(REBUILD_BD_TCL)  tcl/control_bd.tcl tcl/dma_bd.
 	make -C hls/tcp_intf DEVICE=$(FPGAPART)
 	vivado -mode batch -source $< -tclargs $(FPGAPART) $(BOARDPART) $(DEBUG) $(XCCL_XSA)
 
-OPTIMIZATION=0
+OPTIMIZATION=s
 #valid values 0,1,2,3,s,g
 ifeq ($(OPTIMIZATION),0)
    OPTIMIZATION_STRING = "None (-O0)"

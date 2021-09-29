@@ -22,7 +22,7 @@
 #include <setjmp.h>
 #define MAX_DMA_TAGS 16
 
-static volatile int 		 use_tcp = 1;
+static volatile int 		 use_tcp = 0;
 static jmp_buf 				 excp_handler;
 static volatile int 		 dma_tag;
 static volatile unsigned int next_rx_tag 	 = 0;
@@ -160,7 +160,7 @@ static inline void arith_disable_auto_repeat() {
 static inline void wait_arith(){
 	//wait for arithmetich unit to finish
 	for(unsigned int count=0; !arith_is_idle() ; count++){
-		if(count > timeout)
+		if(timeout != 0 && count >= timeout )
 			longjmp(excp_handler, ARITH_ERROR);
 	}
 }
@@ -370,7 +370,7 @@ void cfg_switch(unsigned int scenario, unsigned int arith) {
 			disable_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_M_EXT_KRNL);	
 			break;
 		case DATAPATH_DMA_EXT_LOOPBACK:
-			set_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_S_DMA0_RX, MAIN_SWITCH_M_EXT_KRNL);
+			set_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_S_DMA1_RX, MAIN_SWITCH_M_EXT_KRNL);
 			set_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_S_EXT_KRNL, MAIN_SWITCH_M_DMA1_TX);
 			disable_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_M_ARITH_OP0);
 			disable_switch_datapath(MAIN_SWITCH_BASEADDR, MAIN_SWITCH_M_ARITH_OP1);
@@ -434,13 +434,13 @@ static inline void start_depacketizer(uint64_t base_addr) {
 }
 
 //create the instructions for packetizer to send a message. Those infos include, among the others the message header.
-unsigned int start_packetizer_message(communicator* world, unsigned int dst_rank, unsigned int len, unsigned int tag){
+unsigned int start_packetizer_message(communicator* world, unsigned int dst_rank, unsigned int len, unsigned int tag, unsigned int sequence_number_offset){
 	unsigned int src_rank, sequence_number, dst, net_tx, curr_len, i;
 	unsigned int transmitted = 0; 
 	//prepare header arguments
 	
 	src_rank 		= world->local_rank;
-	sequence_number = world->ranks[dst_rank].outbound_seq;
+	sequence_number = world->ranks[dst_rank].outbound_seq + sequence_number_offset;
 	if (use_tcp){
 		dst 			= world->ranks[dst_rank].session; 
 		net_tx 			= CMD_TCP_TX; 
@@ -475,7 +475,7 @@ static inline void ack_packetizer(communicator * world, unsigned int dst_rank,un
 	while(num_msg > 0){
 
 		for(count=0; tngetd(packetizer_sts_stream); count++){
-			if(count > timeout){
+			if(timeout != 0 && count >= timeout ){
 				longjmp(excp_handler, PACK_TIMEOUT_STS_ERROR);
 			}
 		}
@@ -639,8 +639,8 @@ int dequeue_rx_buffers(void){
 	//test if rx channel is non-empty and if so, read it
 	unsigned int invalid, status, dma_tag, dma_tx_id, net_rx_id,count = 0;
 	int spare_buffer_idx;
-	unsigned int nbufs = Xil_In32(RX_BUFFER_COUNT_OFFSET);
-	rx_buffer *rx_buf_list = (rx_buffer*)(RX_BUFFER_COUNT_OFFSET+4);
+	unsigned int nbufs 		= Xil_In32(RX_BUFFER_COUNT_OFFSET);
+	rx_buffer *rx_buf_list 	= (rx_buffer*)(RX_BUFFER_COUNT_OFFSET+4);
 	if(use_tcp){
 		dma_tx_id = STS_DMA2_TX;
 		net_rx_id = STS_TCP_RX;
@@ -656,7 +656,7 @@ int dequeue_rx_buffers(void){
 		invalid = tngetd(dma_tx_id); 
 		if(invalid == 0){
 			count = 0;
-			status = getd(dma_tx_id);
+			status 	= getd(dma_tx_id);
 			dma_tag = status & 0xf;
 			spare_buffer_idx = dma_tag_lookup[dma_tag];
 			
@@ -673,10 +673,11 @@ int dequeue_rx_buffers(void){
 			rx_buf_list[spare_buffer_idx].rx_tag 		  	= getd(net_rx_id);
 			rx_buf_list[spare_buffer_idx].rx_src 		  	= getd(net_rx_id);
 			rx_buf_list[spare_buffer_idx].sequence_number 	= getd(net_rx_id);
-			rx_buf_list[spare_buffer_idx].status 			= STATUS_RESERVED;
-			check_DMA_status(status, rx_buf_list[spare_buffer_idx].rx_len, rx_buf_list[spare_buffer_idx].dma_tag, 1);
+			rx_buf_list[spare_buffer_idx].status 			= STATUS_ERROR;
 			num_rx_enqueued--;
 			dma_tag_lookup[dma_tag] = -1;
+			check_DMA_status(status, rx_buf_list[spare_buffer_idx].rx_len, rx_buf_list[spare_buffer_idx].dma_tag, 1);
+			rx_buf_list[spare_buffer_idx].status 			= STATUS_RESERVED;
 			
 		}
 	} while (invalid == 0);
@@ -877,7 +878,7 @@ static inline int dma_movement_and_packetizer(
 	curr_len_ack  = dma_transaction_size;
 	//1. issue at most max_dma_in_flight of dma_transaction_size
 	//start pack
-	start_packetizer_message(world, dst_rank, len, mpi_tag);
+	start_packetizer_message(world, dst_rank, len, mpi_tag, 0);
 	for (i = 0; remaining_to_move > 0 && i < max_dma_in_flight ; i++){
 		if (remaining_to_move < dma_transaction_size){
 			curr_len_move 	= remaining_to_move ;
@@ -904,7 +905,7 @@ static inline int dma_movement_and_packetizer(
 			curr_len_move 	= remaining_to_move ;
 		}
 		//start pack
-		start_packetizer_message(world, dst_rank, curr_len_move, mpi_tag);
+		start_packetizer_message(world, dst_rank, curr_len_move, mpi_tag, max_dma_in_flight - 1);
 		//start DMAs
 		dma_tag_tmp 		 = start_dma(curr_len_move, DMA0_rx_addr, DMA1_rx_addr, DMA1_tx_addr, DMA2_rx_addr, what_DMAS, dma_tag_tmp);
 		remaining_to_move 	-= curr_len_move;
@@ -1321,7 +1322,7 @@ int receive_and_reduce_offchip(
 	curr_len_ack  = dma_transaction_size;
 	//1. issue at most max_dma_in_flight of dma_transaction_size
 	//start pack
-	start_packetizer_message(world, dst_rank, len, mpi_tag);
+	start_packetizer_message(world, dst_rank, len, mpi_tag, 0);
 	for (i = 0; remaining_to_move > 0 && i < max_dma_in_flight ; i++){
 		if (remaining_to_move < dma_transaction_size){
 			curr_len_move 	= remaining_to_move ;
@@ -1364,7 +1365,7 @@ int receive_and_reduce_offchip(
 		spare_buffer_indexes[spare_buffer_indexes_end] = buf_idx;
 		spare_buffer_indexes_end = (spare_buffer_indexes_end + 1) % max_dma_in_flight;
 		//start pack
-		start_packetizer_message(world, dst_rank, curr_len_move, mpi_tag);
+		start_packetizer_message(world, dst_rank, curr_len_move, mpi_tag, max_dma_in_flight - 1);
 		//start DMAs
 		dma_tag_tmp 		 = start_dma(curr_len_move, op0_addr, rx_buff_addr, 0, 0, USE_DMA0_RX | USE_DMA1_RX , dma_tag_tmp);
 		remaining_to_move 	-= curr_len_move;
@@ -1417,7 +1418,7 @@ int relay_to_other_rank(
 	curr_len_ack  = dma_transaction_size;
 	//1. issue at most max_dma_in_flight of dma_transaction_size
 	//start pack
-	start_packetizer_message(world, dst_rank, len, mpi_tag);
+	start_packetizer_message(world, dst_rank, len, mpi_tag, 0);
 	for (i = 0; remaining_to_move > 0 && i < max_dma_in_flight ; i++){
 		if (remaining_to_move < dma_transaction_size){
 			curr_len_move 	= remaining_to_move ;
@@ -1459,7 +1460,7 @@ int relay_to_other_rank(
 		spare_buffer_indexes[spare_buffer_indexes_end] = buf_idx;
 		spare_buffer_indexes_end = (spare_buffer_indexes_end + 1) % max_dma_in_flight;
 		//start pack
-		start_packetizer_message(world, dst_rank, curr_len_move, mpi_tag);
+		start_packetizer_message(world, dst_rank, curr_len_move, mpi_tag, max_dma_in_flight - 1);
 		//start DMAs
 		dma_tag_tmp 		 = start_dma(curr_len_move, 0, rx_buff_addr, 0, 0,  USE_DMA1_RX , dma_tag_tmp);
 		remaining_to_move 	-= curr_len_move;
@@ -1507,30 +1508,6 @@ static inline int recv(
 	return receive_offchip_world(&world, src_rank, len, buf_addr,  tag);
 }
 
-//naive bcast: root sends to each rank
-int broadcast(	
-				unsigned int comm,
-				unsigned int len,
-				unsigned int src_rank,
-				uint64_t buf_addr){
-	int i;
-	int ret = COLLECTIVE_OP_SUCCESS;
-	//find communicator
-	communicator world = find_comm(comm);
-	//determine if we're sending or receiving
-	if(src_rank == world.local_rank){
-		//send to all other members of the communicator
-		for(i=0; i<world.size && ret == COLLECTIVE_OP_SUCCESS ; i++){
-			if(i != world.local_rank){
-				ret = transmit_offchip_world(&world, i		, len, buf_addr, TAG_ANY);
-			}
-		}
-	}else{
-		ret = 	receive_offchip_world(	&world, src_rank,	  len, buf_addr, TAG_ANY);
-	}
-	return ret;
-}
-
 //root read multiple times the same segment and send it to each rank before moving to the next part of the buffer to be transmitted. 
 int broadcast_round_robin(	
 				unsigned int comm,
@@ -1557,7 +1534,7 @@ int broadcast_round_robin(
 			for(i=0; i<world.size; i++){
 				if(i == world.local_rank) continue;
 				//start packetizer messages and issue a single dma command for eachrank
-				start_packetizer_message(&world, i, curr_len, TAG_ANY);
+				start_packetizer_message(&world, i, curr_len, TAG_ANY, 0);
 				dma_movement_single(curr_len, 0, buf_addr, 0, 0, USE_DMA1_RX);
 			}
 			//ack packetizer 
@@ -1575,36 +1552,6 @@ int broadcast_round_robin(
 		return receive_offchip_world(	&world, src_rank, len, buf_addr, TAG_ANY);
 	}
 	
-}
-
-//naive: root sends to each rank the buffer.
-int scatter(	
-				unsigned int comm,
-				unsigned int len,
-				unsigned int src_rank,
-				uint64_t src_buf_addr,
-				uint64_t dst_buf_addr){
-	int i;
-	int ret = COLLECTIVE_OP_SUCCESS;
-	//find communicator
-	communicator world = find_comm(comm);
-	//determine if we're sending or receiving
-	if(src_rank == world.local_rank){
-		//for root rank configure switch
-		for(i = 0; i < world.size && ret == COLLECTIVE_OP_SUCCESS; i++){
-			if (i == world.local_rank){
-				//for root copy
-				ret = copy(	len, src_buf_addr, dst_buf_addr);
-			}else{
-				ret = transmit_offchip_world(&world, i, len, src_buf_addr, TAG_ANY);
-			}
-			src_buf_addr += len;
-		}
-	}else{
-		return receive_offchip_world(			&world, src_rank, len, dst_buf_addr,  TAG_ANY);
-	}
-
-	return ret;
 }
 
 //scatter segment at a time. root sends each rank a segment in a round robin fashion 
@@ -1641,7 +1588,7 @@ int scatter_rr(
 			for(i=0; i<world.size; i++){
 				if(i != world.local_rank){
 					//start packetizer messages and issue a single dma command for eachrank
-					start_packetizer_message(&world, i, curr_len, TAG_ANY);
+					start_packetizer_message(&world, i, curr_len, TAG_ANY, 0);
 					dma_movement_single(curr_len, 0, tmp_src_buf_offset_addr, 0, 0, USE_DMA1_RX);
 				}
 				tmp_src_buf_offset_addr += offset_next_rank_buffer;
@@ -1666,37 +1613,6 @@ int scatter_rr(
 		return receive_offchip_world(			&world, src_rank, len, dst_buf_addr,  TAG_ANY);
 	}
 
-}
-//naive gather: every rank send to root. Root place them in the correct part of dst buffer.
-int gather(		
-				unsigned int comm,
-				unsigned int len,
-				unsigned int root_rank,
-				uint64_t src_buf_addr,
-				uint64_t dst_buf_addr){
-	int i;
-	int ret = COLLECTIVE_OP_SUCCESS;
-	return COLLECTIVE_NOT_IMPLEMENTED; //at this moment is not safe to run non ring based collectives. they are not handled at depacketizer level.
-	//find communicator
-	communicator world = find_comm(comm);
-	//determine if we're sending or receiving
-	if(root_rank == world.local_rank){
-		//receive from all members of the communicator
-		for(i=0; i<world.size && ret == COLLECTIVE_OP_SUCCESS; i++){
-			//TODO: optimize receives; what we want is to move any data which arrives into the correct segment of the buffer
-			//currently this will go sequentially through the segments, which is slower and also requires more spare RX buffers
-			if(i==world.local_rank)
-			{ // root copies
-				ret	= copy(				len, src_buf_addr, dst_buf_addr);
-			}else{
-				ret = receive_offchip_world(	&world, i		 , len, dst_buf_addr, TAG_ANY);
-			}
-			dst_buf_addr += len;
-		}
-	}else{
-		ret = 		transmit_offchip_world(		&world, root_rank, len, src_buf_addr, TAG_ANY);
-	}
-	return ret;
 }
 
 //naive gather: non root relay data to the root. root copy segments in dst buffer as they come.
@@ -1742,21 +1658,6 @@ int gather_ring(
 	return ret;
 }
 
-//naive: gather + bcast
-static inline int allgather(	
-				unsigned int comm,
-				unsigned int len,
-				unsigned int internal_root,
-				uint64_t src_addr,
-				uint64_t dst_addr){	
-	int ret = 0;
-	//find communicator
-	communicator world = find_comm(comm);
-	ret = gather_ring(	comm, len			, internal_root, src_addr, dst_addr);
-	if (ret != COLLECTIVE_OP_SUCCESS ) return ret;
-	return broadcast(	comm, len*world.size, internal_root, dst_addr);
-}
-
 //naive fused: 1) receive a segment 2) move in the dest buffer 3) relay to next rank 
 int allgather_ring(
 				unsigned int comm,
@@ -1793,39 +1694,6 @@ int allgather_ring(
 	return ret;
 }
 
-//naive. every rank forwards its buffer they are received and sum by the root
-int reduce(		
-				unsigned int comm,
-				unsigned int len,
-				unsigned int function,
-				unsigned int root_rank,
-				uint64_t src_addr,
-				uint64_t dst_addr
-			){
-	return COLLECTIVE_NOT_IMPLEMENTED; //at this moment is not safe to run non ring based collectives. they are not handled at depacketizer level.
-	int ret = COLLECTIVE_OP_SUCCESS;
-	//find communicator
-	communicator world = find_comm(comm);
-	//determine if we're sending or receiving
-	if(root_rank == world.local_rank){
-		//0. copy src_buffer of master in dst_buffer
-		// from now on dst_buffer will represent the accumulator
-		ret += copy(len, src_addr, dst_addr);
-		//receive and accumulate from all members of the communicator
-		for(int i=0; i<world.size && ret == COLLECTIVE_OP_SUCCESS; i++){
-			//0. skip if we are root rank
-			if(i == root_rank)
-				continue;
-			//1. receive part of data and retrieve spare buffer index and accumulate in buffer: user_buffer = user_buffer + spare_buffer 
-			ret = receive_and_accumulate(&world, i, len, function, dst_addr, dst_addr, TAG_ANY);
-			//2. move to next rank
-		}
-	}else{
-		ret += transmit_offchip_world(&world, root_rank, len, src_addr,  TAG_ANY);
-	}
-	return ret;
-}
-
 //every rank receives a buffer it sums its own buffer and forwards to next rank in the ring
 int reduce_ring_streaming(
 				unsigned int comm,
@@ -1849,82 +1717,6 @@ int reduce_ring_streaming(
 	}else{	
 		//root only receive from previous node tin the ring, add its local buffer and save in destination buffer 
 		ret = receive_and_accumulate(&world, prev_in_ring, len, function, src_addr, dst_addr, TAG_ANY);
-	}
-	return ret;
-}
-
-//naive non fused allreduce: reduce+broadcast
-int allreduce(	
-				unsigned int comm,
-				unsigned int len,
-				unsigned int function,
-				unsigned int internal_root,
-				uint64_t src_addr,
-				uint64_t dst_addr){
-
-	int ret = 0;
-	//let 0 be the root
-	ret = reduce_ring_streaming(comm, len, function, internal_root, src_addr, dst_addr);
-	if (ret != COLLECTIVE_OP_SUCCESS ) return ret;
-	return broadcast(			  comm, len,		   internal_root, dst_addr);
-}
-
-//naive: relay buffers along the ring and each rank accumulates them.
-int allreduce_fused_ring(	
-				unsigned int comm,
-				unsigned int len,
-				unsigned int function,
-				uint64_t src_addr,
-				uint64_t dst_addr){
-
-	int ret;
-	//find communicator
-	communicator world 		  	= find_comm(comm);
-	unsigned int next_in_ring 	= (world.local_rank+1			   )%world.size	;
-	unsigned int prev_in_ring 	= (world.local_rank+world.size-1 )%world.size	;
-	//get rx_buff_location
-	rx_buffer *rx_buf_list 	  	= (rx_buffer*)(RX_BUFFER_COUNT_OFFSET+4);
-	unsigned int buf_idx, tmp_len, curr_len;
-	uint64_t buf_addr, tmp_addr; 
-	//every member of the communicator 
-	// 0.  sends its data to the next rank
-	// 1. put their own data in their buffer
-	// then receive others data:
-	// 2.  receives data from previous rank
-	// 3.  relay data to the next in sequence
-	// 4.  accumulates data in the destination buffer
-	// 0.send our data
-	ret = copy(len, src_addr, dst_addr);
-	if (ret != COLLECTIVE_OP_SUCCESS) return ret;
-
-	//1. copy src_buffer of master in dst_buffer
-	// from now on dst_buffer will represent the accumulator
-	ret = transmit_offchip_world(&world, next_in_ring,			len, src_addr, TAG_ANY);
-	for(int i=0; i < world.size-1 && ret == COLLECTIVE_OP_SUCCESS; i++){
-		tmp_addr = dst_addr;
-		curr_len = dma_transaction_size;
-		for(tmp_len = len; tmp_len > 0 && ret == COLLECTIVE_OP_SUCCESS; tmp_len-=curr_len, tmp_addr+=curr_len){
-			if(tmp_len < dma_transaction_size)
-				curr_len = tmp_len;
-				//2.3.4 can be overlapped: dma0 rx read spare, dma1 rx read operand, dma2rx read operand, dma2rx is forwarded to next in the ring. dma0,1rx are used for sum
-			//2. receive part of data from previous rank and retrieve spare buffer index
-			buf_idx = wait_receive_world_i(&world, prev_in_ring, curr_len, TAG_ANY);
-			if  (buf_idx < 0 ) return RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID;
-			buf_addr = ((uint64_t) rx_buf_list[buf_idx].addrh << 32) | rx_buf_list[buf_idx].addrl; 
-			//3.4. can be done together
-			//3. relay others data only if it's not the last iteration.  
-			if ( i+1<world.size-1){
-				ret = transmit_offchip_world(&world, next_in_ring, curr_len, buf_addr, TAG_ANY);
-			}
-			//4. accumulate in buffer: user_buffer = user_buffer + spare_buffer 
-			if (ret != COLLECTIVE_OP_SUCCESS) return ret;
-			ret = accumulate(   curr_len, function, buf_addr, tmp_addr, tmp_addr);
-			//housekeeping: release spare buffer
-			microblaze_disable_interrupts();
-			rx_buf_list[buf_idx].status = STATUS_IDLE;
-			microblaze_enable_interrupts();
-			//TODO: use reduce_offchip when using tree based collectives
-		}
 	}
 	return ret;
 }
@@ -1961,7 +1753,7 @@ int scatter_reduce(
 		if(ret != COLLECTIVE_OP_SUCCESS) return ret;
 	}
 	//at last iteration (n-1) you can sum and save the result at the same location (which is the right place to be)
-	if (i > 0 ){
+	if (world.size > 1 ){
 		curr_recv_addr  = src_addr + len * curr_recv_chunk; 
 		curr_send_addr  = dst_addr + len * curr_recv_chunk;
 		ret = receive_and_accumulate(&world, prev_in_ring, len, function, curr_recv_addr, curr_send_addr, TAG_ANY); 
@@ -2119,7 +1911,7 @@ int main() {
 	uint64_t buf0_addr, buf1_addr, buf2_addr;
 
 	init();
-	//register exception handler though setjmp. it will save stack status to unroll stack when the jmp is performed 
+	//register exception handler though setjmp. it will save stack status to reset stack when the jmp is performed 
 	//	ref: https://www.gnu.org/software/libc/manual/html_node/Longjmp-in-Handler.html
 	// when first executed, setjmp returns 0. call to longjmp pass a value != 0 to indicate a jmp is occurred
 	retval = setjmp(excp_handler);
@@ -2191,15 +1983,10 @@ int main() {
 						break;
 					case USE_UDP_STACK:
 						use_tcp = 0;
-					case START_PROFILING:
-						retval = COLLECTIVE_OP_SUCCESS;
-						break;
-					case END_PROFILING:
-						retval = COLLECTIVE_OP_SUCCESS;
 						break;
 					case SET_DMA_TRANSACTION_SIZE:
 						retval = DMA_NOT_EXPECTED_BTT_ERROR;
-						if(len < DMA_MAX_BTT){
+						if(len <= DMA_MAX_BTT){
 							dma_transaction_size = len;
 							start_timer1();
 							Xil_Out32(TIME_TO_ACCESS_EXCH_MEM, read_timer1());
@@ -2208,7 +1995,7 @@ int main() {
 						break;
 					case SET_MAX_DMA_TRANSACTIONS:
 						retval = DMA_NOT_OKAY_ERROR;
-						if(len < DMA_MAX_TRANSACTIONS){
+						if(len <= DMA_MAX_TRANSACTIONS){
 							max_dma_in_flight = len;
 							retval = COLLECTIVE_OP_SUCCESS;
 						}
@@ -2225,49 +2012,28 @@ int main() {
 				retval = recv(					comm, len, msg_tag,  root_src_dst, 	buf0_addr);
 				break;
 			case XCCL_BCAST:
-				retval = broadcast(				comm, len, 			 root_src_dst, 	buf0_addr);
-				break;
-			case XCCL_BCAST_RR:
 				retval = broadcast_round_robin( comm, len, 			 root_src_dst, 	buf0_addr);
 				break;
 			case XCCL_SCATTER:	
-				retval = scatter(				comm, len, 			 root_src_dst, 	buf0_addr, buf1_addr);
-				break;
-			case XCCL_SCATTER_RR:	
 				retval = scatter_rr(			comm, len, 			 root_src_dst, 	buf0_addr, buf1_addr);
 				break;
 			case XCCL_GATHER:
-				retval = gather(				comm, len, 			 root_src_dst, 	buf0_addr, buf1_addr);
+				retval = gather_ring(			comm, len, 			 root_src_dst, 	buf0_addr, buf1_addr);
 				break;
 			case XCCL_REDUCE:
-				retval = reduce(				comm, len, function, root_src_dst, 	buf0_addr, buf1_addr);
+				retval = reduce_ring_streaming( comm, len, function, root_src_dst, 	buf0_addr, buf1_addr);
 				break;
 			case XCCL_ALLGATHER:
-				retval = allgather(				comm, len, 		     root_src_dst,	buf0_addr, buf1_addr);
+				retval = allgather_ring(		comm, len, 							buf0_addr, buf1_addr);
 				break;
 			case XCCL_ALLREDUCE:
-				retval = allreduce(				comm, len, function, root_src_dst,  buf0_addr, buf1_addr );
+				retval = all_reduce_share	(	comm, len, function, 				buf0_addr, buf1_addr);
 				break;
 			case XCCL_ACC:
 				retval = accumulate( 	  	  	  	  len, function, 				buf0_addr, buf1_addr, buf1_addr);
 				break;
 			case XCCL_COPY:
 				retval = copy(	  		  	  	  	  len, 							buf0_addr, buf1_addr);
-				break;
-			case XCCL_REDUCE_RING:
-				retval = reduce_ring_streaming( comm, len, function, root_src_dst, 	buf0_addr, buf1_addr);
-				break;
-			case XCCL_ALLREDUCE_FUSED_RING:
-				retval = allreduce_fused_ring(	comm, len, function, 				buf0_addr, buf1_addr);
-				break;
-			case XCCL_ALLREDUCE_SHARE_RING:
-				retval = all_reduce_share	(	comm, len, function, 				buf0_addr, buf1_addr);
-				break;
-			case XCCL_GATHER_RING:
-				retval = gather_ring(			comm, len, 			 root_src_dst, 	buf0_addr, buf1_addr);
-				break;
-			case XCCL_ALLGATHER_RING:
-				retval = allgather_ring(		comm, len, 							buf0_addr, buf1_addr);
 				break;
 			case XCCL_EXT_STREAM_KRNL:
 				retval = ext_kernel_stream( 		  len, 			 				buf0_addr, buf1_addr);
