@@ -123,15 +123,8 @@ extern "C" {
 #define XCCL_ALLREDUCE            8
 #define XCCL_ACC                  9
 #define XCCL_COPY                 10
-#define XCCL_REDUCE_RING          11
-#define XCCL_ALLREDUCE_FUSED_RING 12
-#define XCCL_GATHER_RING          13
-#define XCCL_ALLGATHER_RING       14
 #define XCCL_EXT_STREAM_KRNL      15
 #define XCCL_EXT_REDUCE           16
-#define XCCL_BCAST_RR             17
-#define XCCL_SCATTER_RR           18
-#define XCCL_ALLREDUCE_SHARE_RING 19
 #define XCCL_REDUCE_SCATTER       20
 
 //XCCL_CONFIG SUBFUNCTIONS
@@ -361,6 +354,7 @@ typedef struct {
 #define STATUS_IDLE     0x00
 #define STATUS_ENQUEUED 0x01
 #define STATUS_RESERVED 0x02
+#define STATUS_ERROR    0x04
 
 #define RX_BUFFER_COUNT_OFFSET 0x1000
 
