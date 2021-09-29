@@ -26,7 +26,7 @@ from queue import Queue
 import threading
 import time
 
-def configure_xccl(xclbin, board_idx, nbufs=16, bufsize=1024*1024):
+def configure_accl(xclbin, board_idx, nbufs=16, bufsize=1024*1024):
     rank_id = 0
     size = 1
 
@@ -37,6 +37,7 @@ def configure_xccl(xclbin, board_idx, nbufs=16, bufsize=1024*1024):
     print("Allocating 1MB scratchpad memory")
     if local_alveo.name == 'xilinx_u250_gen3x16_xdma_shell_3_1':
         devicemem = [ol.bank1]
+        rxbufmem = [ol.bank1]
         networkmem = ol.bank1
     elif local_alveo.name == 'xilinx_u250_xdma_201830_2':
         devicemem = [ol.bank0]
@@ -87,6 +88,7 @@ def configure_xccl(xclbin, board_idx, nbufs=16, bufsize=1024*1024):
     ret.wait()
     end = time.perf_counter()
     print(f"{end-start}: wait complete from network kernel {ret}")
+    
     #to synchronize the processes
     #comm.barrier()
  
@@ -105,7 +107,7 @@ def deinit_system():
 def reinit():
     global cclo_inst
     cclo_inst.deinit()
-    ol, cclo_inst, devicemem = configure_xccl(args.xclbin, args.device_index, nbufs=args.nbufs, bufsize=max(16*1024, args.bsize))
+    ol, cclo_inst, devicemem = configure_accl(args.xclbin, args.device_index, nbufs=args.nbufs, bufsize=max(16*1024, args.bsize))
 
 def allocate_buffers(n, bsize, devicemem):
     tx_buf = []
@@ -125,72 +127,37 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Tests for MPI collectives offload with UDP (VNx) backend')
     parser.add_argument('--xclbin',         type=str, default=None,             help='Accelerator image file (xclbin)', required=True)
     parser.add_argument('--device_index',   type=int, default=1,                help='Card index')
-    parser.add_argument('--nruns',          type=int, default=1,                help='How many times to run each test')
+    parser.add_argument('--nruns',          type=int, default=30,               help='How many times to run each test')
     parser.add_argument('--nbufs',          type=int, default=16,               help='number of spare buffers to configure each ccl_offload')
     parser.add_argument('--naccel',         type=int, default=4,                help='number of ccl_offload to test ')
-    parser.add_argument('--bsize',          type=int, default=1024,             help='How many KB per buffer')
-    parser.add_argument('--dump_rx_regs',   type=int, default=-1,               help='Print RX regs of specified ')
-    parser.add_argument('--debug',          action='store_true', default=False, help='enable debug mode')
-    parser.add_argument('--all',            action='store_true', default=False, help='Select all collectives')
-    parser.add_argument('--nop',            action='store_true', default=False, help='Run nop test')
-    parser.add_argument('--sendrecv',       action='store_true', default=False, help='Run send/recv test')
-    parser.add_argument('--bcast',          action='store_true', default=False, help='Run bcast test')
-    parser.add_argument('--scatter',        action='store_true', default=False, help='Run scatter test')
-    parser.add_argument('--gather',         action='store_true', default=False, help='Run gather test')
-    parser.add_argument('--allgather',      action='store_true', default=False, help='Run allgather test')
-    parser.add_argument('--reduce',         action='store_true', default=False, help='Run reduce test')
-    parser.add_argument('--allreduce',      action='store_true', default=False, help='Run allreduce test')
-    parser.add_argument('--accumulate',     action='store_true', default=False, help='Run fp/dp/i32/i64 test')
-    parser.add_argument('--copy',           action='store_true', default=False, help='Run copy test')
-    parser.add_argument('--external_stream',action='store_true', default=False, help='Run external_stream test')
-    parser.add_argument('--external_reduce',action='store_true', default=False, help='Run external_reduce test')
-    parser.add_argument('--timeout',        action='store_true', default=False, help='Run timeout test')
-    parser.add_argument('--spare',          action='store_true', default=False, help='Run tests that include running out of spare buffers')
-    parser.add_argument('--regression',     action='store_true', default=False, help='Run all tests with various message sizes')
-    parser.add_argument('--benchmark',      action='store_true', default=False, help='Measure performance')
-    parser.add_argument('--sw',        action='store_true', default=False, help='Run benchmarks only for sw collectives')
-
-    args = parser.parse_args()
-    if args.all:
-        args.nop        = True
-        args.sendrecv   = True
-        args.bcast      = True
-        args.scatter    = True
-        args.gather     = True
-        args.allgather  = True
-        args.reduce     = True
-        args.allreduce  = True
-        args.accumulate = True
-        args.copy       = True
-        args.external_stream = True
-        args.external_reduce = True
-    
+    parser.add_argument('--bsize',          type=int, default=1024,             nargs="+" ,    help='How many KB per buffer')
+    parser.add_argument('--segment_size',   type=int, default=1024,             nargs="+" ,    help='How many KB per spare_buffer')
+    args = parser.parse_args()  
 
     try:
         
         #configure FPGA and CCLO cores with the default 16 RX buffers of bsize KB each
-        ol, cclo_inst, devicemem, tx_buf_network, rx_buf_network = configure_xccl(args.xclbin, args.device_index, nbufs=args.nbufs, bufsize=max(1024, args.bsize))
+        ol, cclo_inst, devicemem, tx_buf_network, rx_buf_network = configure_accl(args.xclbin, args.device_index, nbufs=args.nbufs, bufsize=max(1024, args.bsize))
 
         tx_buf, rx_buf = allocate_buffers(args.naccel, args.bsize, devicemem)
 
-        if args.dump_rx_regs >= 0 :
-            cclo_inst.dump_rx_buffers_spares()
-
         cclo_inst.set_timeout(10000)
         cclo_inst.nop()
+        #input("press any key to start")
         #set a random seed to make it reproducible
         np.random.seed(2021)
         global ranks
         print(ranks)
         start = time.perf_counter()
-        for i in range(30):
+        for _ in range(args.nruns):
             for a_dictionary in ranks:
+                
                 import socket
-                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                s.connect((a_dictionary["ip"],a_dictionary["port"]))
+                a_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                a_sock.connect((a_dictionary["ip"],a_dictionary["port"]))
                 end = time.perf_counter()
-                print( end-start, "[s]"," connected, test passed.")
-                del s
+                print( end-start, "[s]"," connected from", a_sock.getsockname(),", test passed.")
+                del a_sock
             time.sleep(5)
 
 
