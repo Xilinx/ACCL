@@ -102,12 +102,12 @@ proc edit_core {core} {
     config_axis_if $core "s_axis_krnl" "ap_clk" 64 0 0 0 1 0 1 1
     config_axis_if $core "m_axis_krnl" "ap_clk" 64 0 0 4 1 0 1 1
 
-    config_axis_if $core "s_axis_decompress0" "ap_clk" 64 0 0 0 1 0 1 1
-    config_axis_if $core "m_axis_decompress0" "ap_clk" 64 0 0 4 1 0 1 1
-    config_axis_if $core "s_axis_decompress1" "ap_clk" 64 0 0 0 1 0 1 1
-    config_axis_if $core "m_axis_decompress1" "ap_clk" 64 0 0 4 1 0 1 1
-    config_axis_if $core "s_axis_compress0" "ap_clk" 64 0 0 0 1 0 1 1
-    config_axis_if $core "m_axis_compress0" "ap_clk" 64 0 0 4 1 0 1 1
+    config_axis_if $core "s_axis_compression0" "ap_clk" 64 0 0 0 1 0 1 1
+    config_axis_if $core "m_axis_compression0" "ap_clk" 64 0 0 4 1 0 1 1
+    config_axis_if $core "s_axis_compression1" "ap_clk" 64 0 0 0 1 0 1 1
+    config_axis_if $core "m_axis_compression1" "ap_clk" 64 0 0 4 1 0 1 1
+    config_axis_if $core "s_axis_compression2" "ap_clk" 64 0 0 0 1 0 1 1
+    config_axis_if $core "m_axis_compression2" "ap_clk" 64 0 0 4 1 0 1 1
 
     config_axis_if $core "s_axis_arith_res" "ap_clk" 64 0 0 0 1 0 1 1
     config_axis_if $core "m_axis_arith_op" "ap_clk" 128 0 0 4 1 0 1 1
@@ -173,18 +173,18 @@ proc edit_core {core} {
         set_property DESCRIPTION {Reserved.  0s on read.} $field
         set_property READ_ACTION {modify} $field
 
-    config_axilite_reg $addr_block "call_type"    0x10 32 ""
-    config_axilite_reg $addr_block "byte_count"   0x18 32 ""
-    config_axilite_reg $addr_block "comm"         0x20 32 ""
-    config_axilite_reg $addr_block "root_src_dst" 0x28 32 ""
-    config_axilite_reg $addr_block "reduce_op"    0x30 32 ""
-    config_axilite_reg $addr_block "tag"          0x38 32 ""
-    config_axilite_reg $addr_block "compression"  0x40 32 ""
-    config_axilite_reg $addr_block "src_type"     0x48 32 ""
-    config_axilite_reg $addr_block "dst_type"     0x50 32 ""
-    config_axilite_reg $addr_block "buf0_ptr"     0x58 64 "m_axi_0"
-    config_axilite_reg $addr_block "buf1_ptr"     0x64 64 "m_axi_1"
-    config_axilite_reg $addr_block "buf2_ptr"     0x70 64 "m_axi_2"
+    config_axilite_reg $addr_block "call_type"          0x10 32 ""
+    config_axilite_reg $addr_block "byte_count"         0x18 32 ""
+    config_axilite_reg $addr_block "comm"               0x20 32 ""
+    config_axilite_reg $addr_block "root_src_dst"       0x28 32 ""
+    config_axilite_reg $addr_block "reduce_op"          0x30 32 ""
+    config_axilite_reg $addr_block "tag"                0x38 32 ""
+    config_axilite_reg $addr_block "datapath_cfg"       0x40 32 ""
+    config_axilite_reg $addr_block "compression_flags"  0x48 32 ""
+    config_axilite_reg $addr_block "stream_flags"       0x50 32 ""
+    config_axilite_reg $addr_block "buf0_ptr"           0x58 64 "m_axi_0"
+    config_axilite_reg $addr_block "buf1_ptr"           0x64 64 "m_axi_1"
+    config_axilite_reg $addr_block "buf2_ptr"           0x70 64 "m_axi_2"
 
     set_property slave_memory_map_ref "s_axi_control" [::ipx::get_bus_interfaces -of $core "s_axi_control"]
 

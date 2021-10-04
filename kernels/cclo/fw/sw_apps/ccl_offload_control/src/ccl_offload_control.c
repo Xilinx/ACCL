@@ -32,11 +32,32 @@ static volatile unsigned int dma_tag_lookup [MAX_DMA_TAGS]; //index of the spare
 static volatile	unsigned int dma_transaction_size 	= DMA_MAX_BTT;
 static volatile unsigned int max_dma_in_flight 		= DMA_MAX_TRANSACTIONS;
 
-static arith_config arcfg;
-communicator world;
+static datapath_arith_config arcfg;
+static communicator world;
 
 unsigned int enqueue_rx_buffers(void);
 int  dequeue_rx_buffers(void);
+
+//circular buffer operation
+void cb_init(circular_buffer *cb, unsigned int capacity){
+    cb->write_idx=0;
+    cb->read_idx=0;
+    cb->occupancy=0;
+    cb->capacity= (capacity < MAX_CIRCULAR_BUFFER_SIZE) ? capacity : MAX_CIRCULAR_BUFFER_SIZE;
+}
+
+void cb_push(circular_buffer *cb, unsigned int item){
+    cb->buffer[cb->write_idx] = item;
+    cb->write_idx = (cb->write_idx + 1) % cb->capacity;
+    cb->occupancy++;
+}
+
+unsigned int cb_pop(circular_buffer *cb){
+    unsigned int item = cb->buffer[cb->read_idx];
+    cb->read_idx = (cb->read_idx + 1) % cb->capacity;
+    cb->occupancy--;
+    return item;
+}
 
 //IRQ CTRL
 
@@ -126,15 +147,6 @@ static inline void start_timer1(){
 
 static inline unsigned int read_timer1(){
     return Xil_In32(TIMER_BASEADDR + TIMER1_COUNTER_REGISTER_OFFSET);
-}
-
-//ARITH
-static inline void setup_arith_tdest(unsigned int val){
-    Xil_Out32(GPIO_TDEST_BASEADDR, val);
-}
-
-static inline void setup_krnl_tdest(unsigned int val){
-    Xil_Out32(GPIO_TDEST_BASEADDR+8, val);
 }
 
 void stream_isr(void) {
@@ -278,7 +290,7 @@ static inline void apply_switch_config(unsigned int base) {
 //   									DMA1 RX -> Arith Op1 
 //   							        Arith Res -> EXT_KRNL_TX
 //                                      EXT_KRNL_RX -> TCP TX 
-void cfg_switch(unsigned int scenario) {
+void configure_switch(unsigned int scenario) {
     switch (scenario)
     {
         case DATAPATH_DMA_LOOPBACK:
@@ -335,6 +347,53 @@ void cfg_switch(unsigned int scenario) {
     apply_switch_config(SWITCH_BASEADDR);
 }
 
+//Configure external parts of the datapath
+//by setting appropriate TDEST on streams
+static inline void configure_plugins(unsigned int acfg, unsigned int d0cfg, unsigned int d1cfg, unsigned int c0cfg){
+    unsigned int val = 0;
+    val = (c0cfg<<24) | (d1cfg<<16) | (d0cfg<<8) | acfg;
+    Xil_Out32(GPIO_TDEST_BASEADDR, val);
+}
+
+//Configure entire datapath (internal switch and plugins)
+//from operand and result types (compressed/uncompressed) and compression config
+void configure_datapath(unsigned int scenario,
+                        unsigned int function,
+                        unsigned int compression){
+    configure_switch(scenario);
+    int cfg_arith, cfg_clane_op0, cfg_clane_op1, cfg_clane_res;
+    //find and set arithmetic function config
+    if(function >= MAX_REDUCE_FUNCTIONS){
+        longjmp(excp_handler, COMPRESSION_ERROR);
+    }
+    cfg_arith = arcfg.arith_tdest[function];
+    //find and set configs for each compression lane
+    if( (scenario == DATAPATH_DMA_REDUCTION) || 
+            (scenario == DATAPATH_OFFCHIP_UDP_REDUCTION) || 
+                (scenario == DATAPATH_OFFCHIP_TCP_REDUCTION)    ){
+        //we're doing a reduction: op0, op1 -> res
+        if(arcfg.arith_is_compressed && (){
+            cfg_clane_op0 = (compression & OP0_COMPRESSED) ? NO_COMPRESSION : arcfg.compressor_tdest;
+            cfg_clane_op1 = (compression & OP1_COMPRESSED) ? NO_COMPRESSION : arcfg.compressor_tdest;
+            cfg_clane_res = (compression & RES_COMPRESSED) ? NO_COMPRESSION : arcfg.compressor_tdest;
+        } else {
+            cfg_clane_op0 = (compression & OP0_COMPRESSED) ? arcfg.decompressor_tdest : NO_COMPRESSION;
+            cfg_clane_op1 = (compression & OP1_COMPRESSED) ? arcfg.decompressor_tdest : NO_COMPRESSION;
+            cfg_clane_res = (compression & RES_COMPRESSED) ? arcfg.decompressor_tdest : NO_COMPRESSION;
+        }
+    } else {
+        //we're not doing a copy or send: op0 -> res
+        cfg_clane_op0 = NO_COMPRESSION;
+        cfg_clane_op1 = NO_COMPRESSION;
+        if(compression & OP0_COMPRESSED){
+            cfg_clane_res = (compression & RES_COMPRESSED) ? NO_COMPRESSION : arcfg.decompressor_tdest;
+        } else {
+            cfg_clane_res = (compression & RES_COMPRESSED) ? arcfg.compressor_tdest : NO_COMPRESSION;
+        } 
+    }
+    configure_plugins(cfg_arith, cfg_clane_op0, cfg_clane_op1, cfg_clane_res);
+}
+
 //retrieves the communicator
 static inline communicator find_comm(unsigned int adr){
     communicator ret;
@@ -354,27 +413,27 @@ static inline communicator find_comm(unsigned int adr){
 static inline void start_packetizer(unsigned int base_addr,unsigned int max_pktsize) {
     //get number of 512b/64B transfers corresponding to max_pktsize
     unsigned int max_pkt_transfers = (max_pktsize+63)/64;
-    Xil_Out32(	base_addr +0x10	, max_pkt_transfers);
-    SET(		base_addr, CONTROL_REPEAT_MASK | CONTROL_START_MASK);
+    Xil_Out32(base_addr+0x10, max_pkt_transfers);
+    SET(base_addr, CONTROL_REPEAT_MASK | CONTROL_START_MASK);
 }
 
 static inline void start_depacketizer(unsigned int base_addr) {
-    SET(		base_addr, CONTROL_REPEAT_MASK | CONTROL_START_MASK );
+    SET(base_addr, CONTROL_REPEAT_MASK | CONTROL_START_MASK );
 }
 
 //create the instructions for packetizer to send a message. Those infos include, among the others the message header.
-unsigned int start_packetizer_message(communicator* world, unsigned int dst_rank, unsigned int len, unsigned int tag){
+unsigned int start_packetizer_message(unsigned int dst_rank, unsigned int len, unsigned int tag){
     unsigned int src_rank, sequence_number, dst, net_tx, curr_len, i;
     unsigned int transmitted = 0; 
     //prepare header arguments
     
-    src_rank 		= world->local_rank;
-    sequence_number = world->ranks[dst_rank].outbound_seq;
+    src_rank 		= world.local_rank;
+    sequence_number = world.ranks[dst_rank].outbound_seq;
     if (use_tcp){
-        dst 			= world->ranks[dst_rank].session; 
+        dst 			= world.ranks[dst_rank].session; 
         net_tx 			= CMD_TCP_TX; 
     }else{
-        dst		 		= world->ranks[dst_rank].port; 
+        dst		 		= world.ranks[dst_rank].port; 
         net_tx		 	= CMD_UDP_TX; 
     }
     //enqueue message headers
@@ -398,7 +457,7 @@ unsigned int start_packetizer_message(communicator* world, unsigned int dst_rank
 }
 
 //check that packetizer has finished processing every packet it was supposed to.
-static inline void ack_packetizer(communicator * world, unsigned int dst_rank,unsigned int num_msg){
+static inline void ack_packetizer(unsigned int dst_rank,unsigned int num_msg){
     unsigned int count, ack_seq_num;
     unsigned int packetizer_sts_stream = use_tcp ? STS_TCP_PKT : STS_UDP_PKT;
     while(num_msg > 0){
@@ -409,8 +468,8 @@ static inline void ack_packetizer(communicator * world, unsigned int dst_rank,un
             }
         }
         ack_seq_num = getd(packetizer_sts_stream);
-        if(	world->ranks[dst_rank].outbound_seq+1 == ack_seq_num){
-            world->ranks[dst_rank].outbound_seq+=1;
+        if(	world.ranks[dst_rank].outbound_seq+1 == ack_seq_num){
+            world.ranks[dst_rank].outbound_seq+=1;
         } else{
             longjmp(excp_handler, PACK_SEQ_NUMBER_ERROR);
         }
@@ -597,84 +656,59 @@ int dequeue_rx_buffers(void){
 //basic functionalities: send/recv/copy/accumulate
 static inline int start_dma( 	
                     unsigned int len,
-                    uint64_t DMA0_rx_addr,
-                    uint64_t DMA1_rx_addr,
-                    uint64_t DMA1_tx_addr,
-                    uint64_t DMA2_rx_addr,
-                    unsigned int what_DMAS,
+                    uint64_t op0_addr,
+                    uint64_t op1_addr,
+                    uint64_t res_addr,
+                    unsigned int which_dma,
                     unsigned int casting,
                     unsigned int dma_tag_tmp) {
     //BE CAREFUL!: if(len > DMA_MAX_BTT) return DMA_TRANSACTION_SIZE;
+    //NOTE: len is the number of uncompressed elements to be transferred
 
     //set up len in the context of casting
-    //check that we don't try to up and down cast simultaneously
-    unsigned int cast_src = (casting & what_DMAS) & (USE_DMA0_RX | USE_DMA1_RX | USE_DMA2_RX);
-    unsigned int cast_dst = (casting & what_DMAS) & (USE_DMA1_TX | USE_DMA1_TX_WITHOUT_TLAST);
-    unsigned int true_len;
-    if((cast_src != 0) && (cast_dst != 0)){
-        longjmp(excp_handler, COMPRESSION_ERROR);
-    }
+    unsigned int byte_len;
+    unsigned int num_compressed_elems = (len+arcfg.elem_ratio-1)/arcfg.elem_ratio;
+    unsigned int compressed_byte_len = (num_compressed_elems*arcfg.compressed_elem_bits+7)/8;
+    unsigned int uncompressed_byte_len = (len*arcfg.uncompressed_elem_bits+7)/8;
 
     //start DMAs 
-    if( what_DMAS & USE_DMA0_RX){
+    if( which_dma & USE_OP0_DMA){
         dma_tag_tmp = (dma_tag_tmp + 1) & 0xf;
-        if(casting & USE_DMA0_RX){
-            true_len = len*arcfg.src_op_bits/arcfg.arith_op_bits;
-        } else {
-            true_len = len;
-        }
-        dma_cmd(CMD_DMA0_RX, true_len, DMA0_rx_addr, dma_tag_tmp);
-
+        byte_len = (casting & OP0_COMPRESSED) ? compressed_byte_len : uncompressed_byte_len;
+        dma_cmd(CMD_DMA0_RX, byte_len, op0_addr, dma_tag_tmp);
     }
-    if( what_DMAS & USE_DMA1_RX){
+    if( which_dma & USE_OP1_DMA){
         dma_tag_tmp = (dma_tag_tmp + 1) & 0xf;
-        if(casting & USE_DMA1_RX){
-            true_len = len*arcfg.src_op_bits/arcfg.arith_op_bits;
-        } else {
-            true_len = len;
-        }
-        dma_cmd(CMD_DMA1_RX, true_len, DMA1_rx_addr, dma_tag_tmp);
-
+        byte_len = (casting & OP1_COMPRESSED) ? compressed_byte_len : uncompressed_byte_len;
+        dma_cmd(CMD_DMA1_RX, byte_len, op1_addr, dma_tag_tmp);
     }
-    if( what_DMAS & USE_DMA1_TX){
+    if( which_dma & USE_RES_DMA){
         dma_tag_tmp = (dma_tag_tmp + 1) & 0xf;
-        if(casting & USE_DMA1_TX){
-            true_len = len*arcfg.dst_op_bits/arcfg.arith_op_bits;
-        } else {
-            true_len = len;
-        }
-        dma_cmd(CMD_DMA1_TX, true_len, DMA1_tx_addr, dma_tag_tmp);
-
+        byte_len = (casting & RES_COMPRESSED) ? compressed_byte_len : uncompressed_byte_len;
+        dma_cmd(CMD_DMA1_TX, byte_len, res_addr, dma_tag_tmp);
     }
-    if( what_DMAS & USE_DMA1_TX_WITHOUT_TLAST){
+    if( which_dma & USE_RES_DMA_WITHOUT_TLAST){
         dma_tag_tmp = (dma_tag_tmp + 1) & 0xf;
-        if(casting & USE_DMA1_TX_WITHOUT_TLAST){
-            true_len = len*arcfg.dst_op_bits/arcfg.arith_op_bits;
-        } else {
-            true_len = len;
-        }
-        dma_cmd_without_EOF(CMD_DMA1_TX, true_len, DMA1_tx_addr, dma_tag_tmp);
-
-    }
-    if( what_DMAS & USE_DMA2_RX){
-        dma_tag_tmp = (dma_tag_tmp + 1) & 0xf;
-        if(casting & USE_DMA2_RX){
-            setup_krnl_tdest(arcfg.s2t_tdest);
-            true_len = len*arcfg.src_op_bits/arcfg.arith_op_bits;
-        } else {
-            true_len = len;
-        }
-        dma_cmd(CMD_DMA2_RX, true_len, DMA2_rx_addr, dma_tag_tmp);
-
+        byte_len = (casting & RES_COMPRESSED) ? compressed_byte_len : uncompressed_byte_len;
+        dma_cmd_without_EOF(CMD_DMA1_TX, byte_len, res_addr, dma_tag_tmp);
     }
     return dma_tag_tmp;
 }
 
 static inline void ack_dma(
     unsigned int len,
-    unsigned int what_DMAS,
+    unsigned int which_dma,
     unsigned int casting) {
     unsigned int invalid, count, status;
+
+    //NOTE: len is the number of uncompressed elements to be transferred
+
+    //set up len in the context of casting
+    unsigned int byte_len;
+    unsigned int num_compressed_elems = (len+arcfg.elem_ratio-1)/arcfg.elem_ratio;
+    unsigned int compressed_byte_len = (num_compressed_elems*arcfg.compressed_elem_bits+7)/8;
+    unsigned int uncompressed_byte_len = (len*arcfg.uncompressed_elem_bits+7)/8;
+
     //wait for DMAs to complete
     count = 0;
     do {
@@ -682,94 +716,53 @@ static inline void ack_dma(
             longjmp(excp_handler, DMA_TIMEOUT_ERROR);
         count ++;
         invalid = 0;
-        if( what_DMAS & USE_DMA0_RX){
+        if( which_dma & USE_OP0_DMA){
             invalid += tngetd(STS_DMA0_RX);
         }
-        if( what_DMAS & USE_DMA1_RX){
+        if( which_dma & USE_OP1_DMA){
             invalid += tngetd(STS_DMA1_RX);
         }
-        if( what_DMAS & (USE_DMA1_TX | USE_DMA1_TX_WITHOUT_TLAST)){
+        if( which_dma & (USE_RES_DMA | USE_RES_DMA_WITHOUT_TLAST)){
             invalid += tngetd(STS_DMA1_TX);
-        }
-        if( what_DMAS & USE_DMA2_RX){
-            invalid += tngetd(STS_DMA2_RX);
         }
     } while (invalid);
 
-    //set up expected len in the context of casting
-    //check that we don't try to up and down cast simultaneously
-    unsigned int cast_src = (casting & what_DMAS) & (USE_DMA0_RX | USE_DMA1_RX | USE_DMA2_RX);
-    unsigned int cast_dst = (casting & what_DMAS) & (USE_DMA1_TX | USE_DMA1_TX_WITHOUT_TLAST);
-    unsigned int true_len;
-    if((cast_src != 0) && (cast_dst != 0)){
-        longjmp(excp_handler, COMPRESSION_ERROR);
-    }
-
-    if( what_DMAS & USE_DMA0_RX){
+    if( which_dma & USE_OP0_DMA){
         status = getd(STS_DMA0_RX);
         dma_tag = (dma_tag + 1) & 0xf;
-        if(casting & USE_DMA0_RX){
-            true_len = len*arcfg.src_op_bits/arcfg.arith_op_bits;
-        } else {
-            true_len = len;
-        }
-        check_DMA_status(status, true_len, dma_tag, 0);
+        byte_len = (casting & OP0_COMPRESSED) ? compressed_byte_len : uncompressed_byte_len;
+        check_DMA_status(status, byte_len, dma_tag, 0);
     }
-    if( what_DMAS & USE_DMA1_RX){
+    if( which_dma & USE_OP1_DMA){
         status = getd(STS_DMA1_RX);
         dma_tag = (dma_tag + 1) & 0xf;
-        if(casting & USE_DMA1_RX){
-            true_len = len*arcfg.src_op_bits/arcfg.arith_op_bits;
-        } else {
-            true_len = len;
-        }
-        check_DMA_status(status, true_len, dma_tag, 0);
+        byte_len = (casting & OP1_COMPRESSED) ? compressed_byte_len : uncompressed_byte_len;
+        check_DMA_status(status, byte_len, dma_tag, 0);
     }
-    if( what_DMAS & USE_DMA1_TX){
+    if( which_dma & USE_RES_DMA){
         status = getd(STS_DMA1_TX);
         dma_tag = (dma_tag + 1) & 0xf;
-        if(casting & USE_DMA1_TX){
-            true_len = len*arcfg.dst_op_bits/arcfg.arith_op_bits;
-        } else {
-            true_len = len;
-        }
-        check_DMA_status(status, true_len, dma_tag, 1);
+        byte_len = (casting & RES_COMPRESSED) ? compressed_byte_len : uncompressed_byte_len;
+        check_DMA_status(status, byte_len, dma_tag, 1);
     }
-    if( what_DMAS & USE_DMA1_TX_WITHOUT_TLAST){
+    if( which_dma & USE_RES_DMA_WITHOUT_TLAST){
         status = getd(STS_DMA1_TX);
         dma_tag = (dma_tag + 1) & 0xf;
-        if(casting & USE_DMA1_TX_WITHOUT_TLAST){
-            true_len = len*arcfg.dst_op_bits/arcfg.arith_op_bits;
-        } else {
-            true_len = len;
-        }
-        check_DMA_status(status, true_len, dma_tag, 0);
+        byte_len = (casting & RES_COMPRESSED) ? compressed_byte_len : uncompressed_byte_len;
+        check_DMA_status(status, byte_len, dma_tag, 0);
     }
-    if( what_DMAS & USE_DMA2_RX){
-        status = getd(STS_DMA2_RX);
-        dma_tag = (dma_tag + 1) & 0xf;
-        if(casting & USE_DMA2_RX){
-            true_len = len*arcfg.src_op_bits/arcfg.arith_op_bits;
-        } else {
-            true_len = len;
-        }
-        check_DMA_status(status, true_len, dma_tag, 0);
-    }
-
 }
 
-//before calling this method call cfg_switch
+//configure datapath before calling this method
 //segment a logical dma command in multiple dma commands.
 //if one of the DMA is not used fill the corresponding address with NULL
-int dma_movement(
+int move_data(
     unsigned int len,
-    uint64_t DMA0_rx_addr,
-    uint64_t DMA1_rx_addr,
-    uint64_t DMA1_tx_addr,
-    uint64_t DMA2_rx_addr,
+    uint64_t op0_addr,
+    uint64_t op1_addr,
+    uint64_t res_addr,
     unsigned int which_blocks,
     unsigned int casting,
-    communicator* world, 
     unsigned dst_rank,
     unsigned mpi_tag
 ) {
@@ -784,36 +777,31 @@ int dma_movement(
     //1. issue at most max_dma_in_flight of dma_transaction_size
     //start packetizer
     if(which_blocks & USE_PACKETIZER){
-        start_packetizer_message(world, dst_rank, len, mpi_tag);
+        start_packetizer_message(dst_rank, len, mpi_tag);
     }
     for (i = 0; remaining_to_move > 0 && i < max_dma_in_flight ; i++){
         if (remaining_to_move < dma_transaction_size){
             curr_len_move 	= remaining_to_move ;
         }
         //start DMAs
-        dma_tag_tmp 		 = start_dma(curr_len_move, DMA0_rx_addr, DMA1_rx_addr, DMA1_tx_addr, DMA2_rx_addr, which_blocks, casting, dma_tag_tmp);
+        dma_tag_tmp 		 = start_dma(curr_len_move, op0_addr, op1_addr, res_addr, which_blocks, casting, dma_tag_tmp);
         remaining_to_move 	-= curr_len_move;
 
         //increment addresses based on casting spec
-        if(casting & USE_DMA0_RX){
-            DMA0_rx_addr 		+= curr_len_move*arcfg.src_op_bits/arcfg.arith_op_bits;
+        if(casting & OP0_COMPRESSED){
+            op0_addr 		+= curr_len_move*arcfg.uncompressed_elem_bits/arcfg.compressed_elem_bits;
         } else {
-            DMA0_rx_addr 		+= curr_len_move;
+            op0_addr 		+= curr_len_move;
         }
-        if(casting & USE_DMA1_RX){
-            DMA1_rx_addr 		+= curr_len_move*arcfg.src_op_bits/arcfg.arith_op_bits;
+        if(casting & OP1_COMPRESSED){
+            op1_addr 		+= curr_len_move*arcfg.uncompressed_elem_bits/arcfg.compressed_elem_bits;
         } else {
-            DMA1_rx_addr 		+= curr_len_move;
+            op1_addr 		+= curr_len_move;
         }
-        if(casting & USE_DMA1_TX){
-            DMA1_tx_addr 		+= curr_len_move*arcfg.dst_op_bits/arcfg.arith_op_bits;
+        if(casting & RES_COMPRESSED){
+            res_addr 		+= curr_len_move*arcfg.compressed_elem_bits/arcfg.compressed_elem_bits;
         } else {
-            DMA1_tx_addr 		+= curr_len_move;
-        }
-        if(casting & USE_DMA2_RX){
-            DMA2_rx_addr 		+= curr_len_move*arcfg.src_op_bits/arcfg.arith_op_bits;
-        } else {
-            DMA2_rx_addr 		+= curr_len_move;
+            res_addr 		+= curr_len_move;
         }
     }
     //2.ack 1 and issue another dma transfer up until there's no more dma move to issue
@@ -824,7 +812,7 @@ int dma_movement(
         ack_dma(curr_len_ack, which_blocks, casting);
         //ack pack
         if(which_blocks & USE_PACKETIZER){
-            ack_packetizer(world, dst_rank, 1);
+            ack_packetizer(dst_rank, 1);
         }
         remaining_to_ack  -= curr_len_ack;
 
@@ -833,32 +821,27 @@ int dma_movement(
         }
         //start pack
         if(which_blocks & USE_PACKETIZER){
-            start_packetizer_message(world, dst_rank, curr_len_move, mpi_tag);
+            start_packetizer_message(dst_rank, curr_len_move, mpi_tag);
         }
         //start DMAs
-        dma_tag_tmp 		 = start_dma(curr_len_move, DMA0_rx_addr, DMA1_rx_addr, DMA1_tx_addr, DMA2_rx_addr, which_blocks, casting, dma_tag_tmp);
+        dma_tag_tmp 		 = start_dma(curr_len_move, op0_addr, op1_addr, res_addr, which_blocks, casting, dma_tag_tmp);
         remaining_to_move 	-= curr_len_move;
 
         //increment addresses based on casting spec
-        if(casting & USE_DMA0_RX){
-            DMA0_rx_addr 		+= curr_len_move*arcfg.src_op_bits/arcfg.arith_op_bits;
+        if(casting & USE_OP0_DMA){
+            op0_addr 		+= curr_len_move*arcfg.uncompressed_elem_bits/arcfg.compressed_elem_bits;
         } else {
-            DMA0_rx_addr 		+= curr_len_move;
+            op0_addr 		+= curr_len_move;
         }
-        if(casting & USE_DMA1_RX){
-            DMA1_rx_addr 		+= curr_len_move*arcfg.src_op_bits/arcfg.arith_op_bits;
+        if(casting & USE_OP1_DMA){
+            op1_addr 		+= curr_len_move*arcfg.uncompressed_elem_bits/arcfg.compressed_elem_bits;
         } else {
-            DMA1_rx_addr 		+= curr_len_move;
+            op1_addr 		+= curr_len_move;
         }
-        if(casting & USE_DMA1_TX){
-            DMA1_tx_addr 		+= curr_len_move*arcfg.dst_op_bits/arcfg.arith_op_bits;
+        if(casting & USE_RES_DMA){
+            res_addr 		+= curr_len_move*arcfg.compressed_elem_bits/arcfg.compressed_elem_bits;
         } else {
-            DMA1_tx_addr 		+= curr_len_move;
-        }
-        if(casting & USE_DMA2_RX){
-            DMA2_rx_addr 		+= curr_len_move*arcfg.src_op_bits/arcfg.arith_op_bits;
-        } else {
-            DMA2_rx_addr 		+= curr_len_move;
+            res_addr 		+= curr_len_move;
         }
     }
     //3. finish ack the remaining
@@ -869,7 +852,7 @@ int dma_movement(
         ack_dma(curr_len_ack, which_blocks, casting);
         //ack pack
         if(which_blocks & USE_PACKETIZER){
-            ack_packetizer(world, dst_rank, 1);
+            ack_packetizer(dst_rank, 1);
         }
         remaining_to_ack  -= curr_len_ack;
     }
@@ -877,97 +860,65 @@ int dma_movement(
 }
 
 //performs a copy using DMA1. DMA1 rx reads while DMA1 tx overwrites
+//No compression/decompression, don't care arithmetic
 static inline int copy(	unsigned int len,
                         uint64_t src_addr,
-                        uint64_t dst_addr) {
-    //configure switch
-    cfg_switch(DATAPATH_DMA_LOOPBACK);
-    //configure casting
-    setup_krnl_tdest(arcfg.t2d_tdest);
-    //call function that will control the DMAs
-    return dma_movement(len, 0, src_addr, dst_addr, 0, USE_DMA1_RX | USE_DMA1_TX, USE_DMA1_TX, NULL, 0, 0);
-
+                        uint64_t dst_addr,
+                        unsigned int compression) {
+    configure_datapath(DATAPATH_DMA_LOOPBACK, 0, compression);
+    return move_data(len, src_addr, NULL, dst_addr, USE_OP0_DMA | USE_RES_DMA, compression, 0, 0);
 }
 
 //performs an accumulate using DMA1 and DMA0. DMA0 rx reads op1 DMA1 rx reads op2 while DMA1 tx back to dst buffer
-int reduce_loopback(	unsigned int len,
-                        uint64_t op0_addr,
-                        uint64_t op1_addr,
-                        uint64_t dst_addr) {
-    
-    //configure switch
-    cfg_switch(DATAPATH_DMA_REDUCTION);
-
-    //start dma transfer
-    unsigned int ret = dma_movement(len, op0_addr, op1_addr, dst_addr, 0, USE_DMA0_RX | USE_DMA1_RX | USE_DMA1_TX, USE_NONE, NULL, 0, 0);
-
-    return ret;
-}
-
-//performs an accumulate using DMA1 and DMA0. DMA0 rx reads op1 DMA1 rx reads op2 while DMA1 tx overwrites op2 buffer
-static inline int sum(	unsigned int len,
-                        uint64_t op1_addr,
-                        uint64_t op2_addr,
-                        uint64_t dst_addr) {
-    return reduce_loopback(	 len, op1_addr, op2_addr, dst_addr);
+int reduce_loopback(unsigned int len,
+                    unsigned int function,
+                    uint64_t op0_addr,
+                    uint64_t op1_addr,
+                    uint64_t res_addr,
+                    unsigned int compression) {
+    configure_datapath( DATAPATH_DMA_REDUCTION, function, compression);
+    return move_data(len, op0_addr, op1_addr, res_addr, USE_OP0_DMA | USE_OP1_DMA | USE_RES_DMA, compression, 0, 0);
 }
 
 //transmits a buffer to a rank of the world communicator
 //right now we assume the transmit is always from a user source buffer
 //so we will apply whatever casting is appropriate for that
 //TODO: safer implementation.
-int transmit_offchip(
-    communicator *world,
+int send(
     unsigned int dst_rank,
     unsigned int len,
     uint64_t src_addr,
-    unsigned int dst_tag
+    unsigned int dst_tag,
+    unsigned int compression
 ){
-    cfg_switch(use_tcp ? DATAPATH_OFFCHIP_TX_TCP : DATAPATH_OFFCHIP_TX_UDP);
-    return dma_movement(len, 0, src_addr, 0, 0, USE_DMA1_RX, USE_DMA1_RX, world, dst_rank, dst_tag);
+    configure_datapath(use_tcp ? DATAPATH_OFFCHIP_TX_TCP : DATAPATH_OFFCHIP_TX_UDP, 0, compression);
+    return move_data(len, src_addr, NULL, NULL, USE_OP0_DMA | USE_PACKETIZER, compression, dst_rank, dst_tag);
 }
 
-//performs an accumulate using DMA0 and DMA1 and internal arith unit. Then it forwards the result 
+//performs a reduction using DMA0 and DMA1 and then sends the result 
 //through tx_subsystem to dst_rank
-int reduce_offchip_world(
-    communicator *world,
-    unsigned int dst_rank,
-    unsigned int len,
-    uint64_t op0_addr,
-    uint64_t op1_addr,
-    unsigned int dst_tag
-){
-    //configure switch
-    cfg_switch(use_tcp ? DATAPATH_OFFCHIP_TCP_REDUCTION : DATAPATH_OFFCHIP_UDP_REDUCTION);
-
-    return dma_movement(len, op0_addr, op1_addr, 0, 0, USE_DMA0_RX | USE_DMA1_RX, USE_NONE, world, dst_rank, dst_tag );
-}
-
-//performs an accumulate using DMA0 and DMA1 and then forwards the result 
-//through tx_subsystem to dst_rank
-static inline int reduce_offchip(
+static inline int fused_reduce_send(
                     unsigned int dst_rank,
                     unsigned int len,
                     uint64_t op0_addr,
                     uint64_t op1_addr,
-                    unsigned int dst_tag) {
-    //synonym function
-    return reduce_offchip_world(&world, dst_rank, len, op0_addr, op1_addr, dst_tag);
+                    unsigned int dst_tag,
+                    unsigned int compression) {
+    configure_datapath(use_tcp ? DATAPATH_OFFCHIP_TCP_REDUCTION : DATAPATH_OFFCHIP_UDP_REDUCTION, 0, compression);
+    return move_data(len, op0_addr, op1_addr, NULL, USE_OP0_DMA | USE_OP1_DMA | USE_PACKETIZER, compression, dst_rank, dst_tag);
 }
 
-//tentative version of wait_receive_world
 //iterates over rx buffers until match is found or a timeout expires
 //matches len, src and tag if tag is not ANY
 //returns the index of the spare_buffer or -1 if not found
-int t_wait_receive_world_i(	
-                        communicator *world,	
+int seek_rx_buffer(
                         unsigned int src_rank,
                         unsigned int len,
                         unsigned int src_tag
                     ){
     unsigned int seq_num; //src_port TODO: use this variable to choose depending on tcp/udp session id or port
     int i;
-    seq_num 	= world->ranks[src_rank].inbound_seq + 1;
+    seq_num = world.ranks[src_rank].inbound_seq + 1;
     //TODO: use a list to store recent message received to avoid scanning in the entire spare_buffer_struct.
     //parse rx buffers until match is found
     //matches len, src
@@ -984,7 +935,7 @@ int t_wait_receive_world_i(
                 if(((rx_buf_list[i].rx_tag == src_tag) || (src_tag == TAG_ANY)) && (rx_buf_list[i].sequence_number == seq_num) )
                 {
                     //only now advance sequence number
-                    world->ranks[src_rank].inbound_seq++;
+                    world.ranks[src_rank].inbound_seq++;
                     microblaze_enable_interrupts();
                     return i;
                 }
@@ -994,41 +945,38 @@ int t_wait_receive_world_i(
     }
     return -1;
 }
+
 //iterates over rx buffers until match is found or a timeout expires
 //matches len, src and tag if tag is not ANY
 //returns the index of the spare_buffer
 //timeout is jumps to exception handler
-int wait_receive_world_i(	
-                        communicator *world,	
-                        unsigned int src_rank,
-                        unsigned int len,
-                        unsigned int src_tag
-                    ){
+int wait_on_rx(	unsigned int src_rank,
+                    unsigned int len,
+                    unsigned int src_tag){
     unsigned int count;
     int i;
     for(count = 0; timeout == 0 || count < timeout; count ++){
-        i = t_wait_receive_world_i(world, src_rank, len, src_tag);
+        i = seek_rx_buffer(src_rank, len, src_tag);
         if(i >= 0) return i;
     }
     longjmp(excp_handler, RECEIVE_TIMEOUT_ERROR);
 }
 
 //waits for a messages to come and move their contents in a buffer
-int receive_offchip_world(
-                        communicator *world,	
-                        unsigned int src_rank,	
-                        unsigned int len,
-                        uint64_t dst_addr,
-                        unsigned int src_tag){
+int recv(	unsigned int src_rank,	
+            unsigned int len,
+            uint64_t dst_addr,
+            unsigned int src_tag,
+            unsigned int compression){
     uint64_t rx_buff_addr;
     unsigned int buf_idx;
     unsigned int remaining_to_move, remaining_to_ack, dma_tag_tmp, curr_len_move, curr_len_ack, i;
     rx_buffer *rx_buf_list = (rx_buffer*)(RX_BUFFER_COUNT_OFFSET+4);
 
-    uint8_t spare_buffer_indexes [max_dma_in_flight];
-    uint8_t spare_buffer_indexes_start = 0, spare_buffer_indexes_end = 0;
+    circular_buffer spare_buffer_queue;
+    cb_init(&spare_buffer_queue, max_dma_in_flight);
 
-    cfg_switch(DATAPATH_DMA_LOOPBACK);
+    configure_datapath(DATAPATH_DMA_LOOPBACK, 0, compression);
     
     remaining_to_move 	= len;
     remaining_to_ack 	= len;
@@ -1043,26 +991,24 @@ int receive_offchip_world(
             curr_len_move 	= remaining_to_move ;
         }
         //wait for segment to come
-        buf_idx = wait_receive_world_i(world, src_rank, curr_len_move, src_tag);
+        buf_idx = wait_on_rx(src_rank, curr_len_move, src_tag);
         if  (buf_idx < 0 ) return RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID;
         rx_buff_addr = ((uint64_t) rx_buf_list[buf_idx].addrh << 32) | rx_buf_list[buf_idx].addrl;
-        //save spare buffer id
-        spare_buffer_indexes[spare_buffer_indexes_end] = buf_idx;
-        spare_buffer_indexes_end = (spare_buffer_indexes_end + 1) % max_dma_in_flight;
         //start DMAs
-        dma_tag_tmp 		 = start_dma(curr_len_move, 0, rx_buff_addr, dst_addr, 0, USE_DMA1_RX | USE_DMA1_TX, USE_DMA1_TX, dma_tag_tmp);
+        dma_tag_tmp  = start_dma(curr_len_move, rx_buff_addr, 0, dst_addr, USE_OP0_DMA | USE_RES_DMA, USE_RES_DMA, dma_tag_tmp);
+        //save spare buffer id
+        cb_push(&spare_buffer_queue, buf_idx);
         remaining_to_move 	-= curr_len_move;
-        dst_addr 			+= curr_len_move*arcfg.dst_op_bits/arcfg.arith_op_bits;
+        dst_addr 			+= curr_len_move*arcfg.compressed_elem_bits/arcfg.compressed_elem_bits;
     }
     //2.ack 1 and issue another dma transfer up until there's no more dma move to issue
     while(remaining_to_move > 0){
         if (remaining_to_ack < dma_transaction_size)
             curr_len_ack = remaining_to_ack;
         //wait for DMAs to finish
-        ack_dma(curr_len_ack, USE_DMA1_RX | USE_DMA1_TX, USE_DMA1_TX);
+        ack_dma(curr_len_ack, USE_OP1_DMA | USE_RES_DMA, USE_RES_DMA);
         //set spare buffer as free
-        buf_idx = spare_buffer_indexes[spare_buffer_indexes_start];
-        spare_buffer_indexes_start = (spare_buffer_indexes_start + 1) % max_dma_in_flight;
+        buf_idx = cb_pop(&spare_buffer_queue);
         microblaze_disable_interrupts();
         rx_buf_list[buf_idx].status = STATUS_IDLE;
         microblaze_enable_interrupts();
@@ -1072,25 +1018,24 @@ int receive_offchip_world(
             curr_len_move 	= remaining_to_move ;
         }
         //wait for segment to come
-        buf_idx = wait_receive_world_i(world, src_rank, curr_len_move, src_tag);
+        buf_idx = wait_on_rx(src_rank, curr_len_move, src_tag);
         if  (buf_idx < 0 ) return RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID;
         rx_buff_addr = ((uint64_t) rx_buf_list[buf_idx].addrh << 32) | rx_buf_list[buf_idx].addrl;
-        spare_buffer_indexes[spare_buffer_indexes_end] = buf_idx;
-        spare_buffer_indexes_end = (spare_buffer_indexes_end + 1) % max_dma_in_flight;
         //start DMAs
-        dma_tag_tmp 		 = start_dma(curr_len_move, 0, rx_buff_addr, dst_addr, 0, USE_DMA1_RX | USE_DMA1_TX, USE_DMA1_TX, dma_tag_tmp);
+        dma_tag_tmp = start_dma(curr_len_move, rx_buff_addr, 0, dst_addr, USE_OP0_DMA | USE_RES_DMA, USE_RES_DMA, dma_tag_tmp);
+        //save spare buffer id
+        cb_push(&spare_buffer_queue, buf_idx);
         remaining_to_move 	-= curr_len_move;
-        dst_addr 			+= curr_len_move*arcfg.dst_op_bits/arcfg.arith_op_bits;
+        dst_addr 			+= curr_len_move*arcfg.compressed_elem_bits/arcfg.compressed_elem_bits;
     }
     //3. finish ack the remaining
     while(remaining_to_ack > 0){
         if (remaining_to_ack < dma_transaction_size)
             curr_len_ack = remaining_to_ack;
         //wait for DMAs to finish
-        ack_dma(curr_len_ack, USE_DMA1_RX | USE_DMA1_TX, USE_DMA1_TX);
+        ack_dma(curr_len_ack, USE_OP1_DMA | USE_RES_DMA, USE_RES_DMA);
         //set spare buffer as free
-        buf_idx = spare_buffer_indexes[spare_buffer_indexes_start];
-        spare_buffer_indexes_start = (spare_buffer_indexes_start + 1) % max_dma_in_flight;
+        buf_idx = cb_pop(&spare_buffer_queue);
         microblaze_disable_interrupts();
         rx_buf_list[buf_idx].status = STATUS_IDLE;
         microblaze_enable_interrupts();
@@ -1102,24 +1047,24 @@ int receive_offchip_world(
 //1) receives from a rank 
 //2) sums with a a buffer 
 //3) the result is saved in (possibly another) local buffer
-int receive_and_accumulate(
-        communicator *world,
+int fused_recv_reduce(
         unsigned int src_rank,
         unsigned int len,
+        unsigned int func,
         uint64_t op0_addr,
         uint64_t dst_addr,
         unsigned int src_tag,
-        unsigned int use_casting)
+        unsigned int compression)
     {
     uint64_t rx_buff_addr;
     unsigned int buf_idx;
     unsigned int remaining_to_move, remaining_to_ack, dma_tag_tmp, curr_len_move, curr_len_ack, i;
     rx_buffer *rx_buf_list = (rx_buffer*)(RX_BUFFER_COUNT_OFFSET+4);
 
-    uint8_t spare_buffer_indexes [max_dma_in_flight];
-    uint8_t spare_buffer_indexes_start = 0, spare_buffer_indexes_end = 0;
+    circular_buffer spare_buffer_queue;
+    cb_init(&spare_buffer_queue, max_dma_in_flight);
 
-    cfg_switch(DATAPATH_DMA_REDUCTION);
+    configure_datapath(DATAPATH_DMA_REDUCTION, func, compression);
 
     remaining_to_move 	= len;
     remaining_to_ack 	= len;
@@ -1134,18 +1079,17 @@ int receive_and_accumulate(
             curr_len_move 	= remaining_to_move ;
         }
         //wait for segment to come
-        buf_idx = wait_receive_world_i(world, src_rank, curr_len_move, src_tag);
+        buf_idx = wait_on_rx(src_rank, curr_len_move, src_tag);
         if  (buf_idx < 0 ) return RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID;
         rx_buff_addr = ((uint64_t) rx_buf_list[buf_idx].addrh << 32) | rx_buf_list[buf_idx].addrl;
-        //save spare buffer id
-        spare_buffer_indexes[spare_buffer_indexes_end] = buf_idx;
-        spare_buffer_indexes_end = (spare_buffer_indexes_end + 1) % max_dma_in_flight;
         //start DMAs
-        dma_tag_tmp 		 = start_dma(curr_len_move, op0_addr, rx_buff_addr, dst_addr, 0, USE_DMA0_RX | USE_DMA1_RX | USE_DMA1_TX, use_casting ? USE_DMA1_TX : USE_NONE, dma_tag_tmp);
+        dma_tag_tmp  = start_dma(curr_len_move, op0_addr, rx_buff_addr, dst_addr, USE_OP0_DMA | USE_OP1_DMA | USE_RES_DMA, compression, dma_tag_tmp);
+        //save spare buffer id
+        cb_push(&spare_buffer_queue, buf_idx);
         remaining_to_move 	-= curr_len_move;
         op0_addr 			+= curr_len_move;
-        if(use_casting)
-            dst_addr 			+= curr_len_move*arcfg.dst_op_bits/arcfg.arith_op_bits;
+        if(compression)
+            dst_addr 			+= curr_len_move*arcfg.compressed_elem_bits/arcfg.compressed_elem_bits;
         else
             dst_addr 			+= curr_len_move;
     }
@@ -1154,10 +1098,9 @@ int receive_and_accumulate(
         if (remaining_to_ack < dma_transaction_size)
             curr_len_ack = remaining_to_ack;
         //wait for DMAs to finish
-        ack_dma(curr_len_ack, USE_DMA0_RX | USE_DMA1_RX | USE_DMA1_TX, use_casting ? USE_DMA1_TX : USE_NONE);
+        ack_dma(curr_len_ack, USE_OP0_DMA | USE_OP1_DMA | USE_RES_DMA, compression);
         //set spare buffer as free
-        buf_idx = spare_buffer_indexes[spare_buffer_indexes_start];
-        spare_buffer_indexes_start = (spare_buffer_indexes_start + 1) % max_dma_in_flight;
+        buf_idx = cb_pop(&spare_buffer_queue);
         microblaze_disable_interrupts();
         rx_buf_list[buf_idx].status = STATUS_IDLE;
         microblaze_enable_interrupts();
@@ -1167,17 +1110,17 @@ int receive_and_accumulate(
             curr_len_move 	= remaining_to_move ;
         }
         //wait for segment to come
-        buf_idx = wait_receive_world_i(world, src_rank, curr_len_move, src_tag);
+        buf_idx = wait_on_rx(src_rank, curr_len_move, src_tag);
         if  (buf_idx < 0 ) return RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID;
         rx_buff_addr = ((uint64_t) rx_buf_list[buf_idx].addrh << 32) | rx_buf_list[buf_idx].addrl;
-        spare_buffer_indexes[spare_buffer_indexes_end] = buf_idx;
-        spare_buffer_indexes_end = (spare_buffer_indexes_end + 1) % max_dma_in_flight;
         //start DMAs
-        dma_tag_tmp 		 = start_dma(curr_len_move, op0_addr, rx_buff_addr, dst_addr, 0, USE_DMA0_RX | USE_DMA1_RX | USE_DMA1_TX, use_casting ? USE_DMA1_TX : USE_NONE, dma_tag_tmp);
+        dma_tag_tmp  = start_dma(curr_len_move, op0_addr, rx_buff_addr, dst_addr, USE_OP0_DMA | USE_OP1_DMA | USE_RES_DMA, compression, dma_tag_tmp);
+        //save spare buffer id
+        cb_push(&spare_buffer_queue, buf_idx);
         remaining_to_move 	-= curr_len_move;
         op0_addr 			+= curr_len_move;
-        if(use_casting)
-            dst_addr 			+= curr_len_move*arcfg.dst_op_bits/arcfg.arith_op_bits;
+        if(compression)
+            dst_addr 			+= curr_len_move*arcfg.compressed_elem_bits/arcfg.compressed_elem_bits;
         else
             dst_addr 			+= curr_len_move;
     }
@@ -1186,10 +1129,9 @@ int receive_and_accumulate(
         if (remaining_to_ack < dma_transaction_size)
             curr_len_ack = remaining_to_ack;
         //wait for DMAs to finish
-        ack_dma(curr_len_ack, USE_DMA0_RX | USE_DMA1_RX | USE_DMA1_TX, use_casting ? USE_DMA1_TX : USE_NONE);
+        ack_dma(curr_len_ack, USE_OP0_DMA | USE_OP1_DMA | USE_RES_DMA, compression);
         //set spare buffer as free
-        buf_idx = spare_buffer_indexes[spare_buffer_indexes_start];
-        spare_buffer_indexes_start = (spare_buffer_indexes_start + 1) % max_dma_in_flight;
+        buf_idx = cb_pop(&spare_buffer_queue);
         microblaze_disable_interrupts();
         rx_buf_list[buf_idx].status = STATUS_IDLE;
         microblaze_enable_interrupts();
@@ -1202,14 +1144,14 @@ int receive_and_accumulate(
 //1) receives from a rank 
 //2) sums with a a buffer
 //3) result is sent to another rank
-int receive_and_reduce_offchip(
-        communicator *world,
+int fused_recv_reduce_send(
         unsigned int src_rank,
         unsigned int dst_rank,
         unsigned int len,
+        unsigned int func,
         uint64_t op0_addr,
         unsigned int mpi_tag,
-        unsigned int use_casting)
+        unsigned int compression)
     {
     
     uint64_t rx_buff_addr;
@@ -1217,10 +1159,10 @@ int receive_and_reduce_offchip(
     unsigned int remaining_to_move, remaining_to_ack, dma_tag_tmp, curr_len_move, curr_len_ack, i;
     rx_buffer *rx_buf_list = (rx_buffer*)(RX_BUFFER_COUNT_OFFSET+4);
 
-    uint8_t spare_buffer_indexes [max_dma_in_flight];
-    uint8_t spare_buffer_indexes_start = 0, spare_buffer_indexes_end = 0;
+    circular_buffer spare_buffer_queue;
+    cb_init(&spare_buffer_queue, max_dma_in_flight);
 
-    cfg_switch( use_tcp ? DATAPATH_OFFCHIP_TCP_REDUCTION : DATAPATH_OFFCHIP_UDP_REDUCTION);
+    configure_datapath( use_tcp ? DATAPATH_OFFCHIP_TCP_REDUCTION : DATAPATH_OFFCHIP_UDP_REDUCTION, func, compression);
 
     remaining_to_move 	= len;
     remaining_to_ack 	= len;
@@ -1231,23 +1173,22 @@ int receive_and_reduce_offchip(
     curr_len_ack  = dma_transaction_size;
     //1. issue at most max_dma_in_flight of dma_transaction_size
     //start pack
-    start_packetizer_message(world, dst_rank, len, mpi_tag);
+    start_packetizer_message(dst_rank, len, mpi_tag);
     for (i = 0; remaining_to_move > 0 && i < max_dma_in_flight ; i++){
         if (remaining_to_move < dma_transaction_size){
             curr_len_move 	= remaining_to_move ;
         }
         //wait for segment to come
-        buf_idx = wait_receive_world_i(world, src_rank, curr_len_move, mpi_tag);
+        buf_idx = wait_on_rx(src_rank, curr_len_move, mpi_tag);
         if  (buf_idx < 0 ) return RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID;
         rx_buff_addr = ((uint64_t) rx_buf_list[buf_idx].addrh << 32) | rx_buf_list[buf_idx].addrl;
-        //save spare buffer id
-        spare_buffer_indexes[spare_buffer_indexes_end] = buf_idx;
-        spare_buffer_indexes_end = (spare_buffer_indexes_end + 1) % max_dma_in_flight;
         //start DMAs
-        dma_tag_tmp 		 = start_dma(curr_len_move, op0_addr, rx_buff_addr, 0, 0, USE_DMA0_RX | USE_DMA1_RX, use_casting ? USE_DMA0_RX : USE_NONE, dma_tag_tmp);
+        dma_tag_tmp 		 = start_dma(curr_len_move, op0_addr, rx_buff_addr, 0, USE_OP0_DMA | USE_OP1_DMA, compression, dma_tag_tmp);
+        //save spare buffer id
+        cb_push(&spare_buffer_queue, buf_idx);
         remaining_to_move 	-= curr_len_move;
-        if(use_casting)
-            op0_addr += curr_len_move*arcfg.src_op_bits/arcfg.arith_op_bits;   
+        if(compression)
+            op0_addr += curr_len_move*arcfg.uncompressed_elem_bits/arcfg.compressed_elem_bits;   
         else
             op0_addr += curr_len_move;
     }
@@ -1256,12 +1197,11 @@ int receive_and_reduce_offchip(
         if (remaining_to_ack < dma_transaction_size)
             curr_len_ack = remaining_to_ack;
         //wait for DMAs to finish
-        ack_dma(curr_len_ack, USE_DMA0_RX | USE_DMA1_RX, use_casting ? USE_DMA0_RX : USE_NONE);
+        ack_dma(curr_len_ack, USE_OP0_DMA | USE_OP1_DMA, compression);
         //ack pack
-        ack_packetizer(world, dst_rank, 1);
+        ack_packetizer(dst_rank, 1);
         //set spare buffer as free
-        buf_idx = spare_buffer_indexes[spare_buffer_indexes_start];
-        spare_buffer_indexes_start = (spare_buffer_indexes_start + 1) % max_dma_in_flight;
+        buf_idx = cb_pop(&spare_buffer_queue);
         microblaze_disable_interrupts();
         rx_buf_list[buf_idx].status = STATUS_IDLE;
         microblaze_enable_interrupts();
@@ -1270,19 +1210,19 @@ int receive_and_reduce_offchip(
         if (remaining_to_move < dma_transaction_size){
             curr_len_move 	= remaining_to_move ;
         }
+        //start pack
+        start_packetizer_message(dst_rank, curr_len_move, mpi_tag);
         //wait for segment to come
-        buf_idx = wait_receive_world_i(world, src_rank, curr_len_move, mpi_tag);
+        buf_idx = wait_on_rx(src_rank, curr_len_move, mpi_tag);
         if  (buf_idx < 0 ) return RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID;
         rx_buff_addr = ((uint64_t) rx_buf_list[buf_idx].addrh << 32) | rx_buf_list[buf_idx].addrl;
-        spare_buffer_indexes[spare_buffer_indexes_end] = buf_idx;
-        spare_buffer_indexes_end = (spare_buffer_indexes_end + 1) % max_dma_in_flight;
-        //start pack
-        start_packetizer_message(world, dst_rank, curr_len_move, mpi_tag);
         //start DMAs
-        dma_tag_tmp 		 = start_dma(curr_len_move, op0_addr, rx_buff_addr, 0, 0, USE_DMA0_RX | USE_DMA1_RX, use_casting ? USE_DMA0_RX : USE_NONE, dma_tag_tmp);
+        dma_tag_tmp 		 = start_dma(curr_len_move, op0_addr, rx_buff_addr, 0, USE_OP0_DMA | USE_OP1_DMA, compression, dma_tag_tmp);
+        //save spare buffer id
+        cb_push(&spare_buffer_queue, buf_idx);
         remaining_to_move 	-= curr_len_move;
-        if(use_casting)
-            op0_addr += curr_len_move*arcfg.src_op_bits/arcfg.arith_op_bits;   
+        if(compression)
+            op0_addr += curr_len_move*arcfg.uncompressed_elem_bits/arcfg.compressed_elem_bits;   
         else
             op0_addr += curr_len_move;
     }
@@ -1291,12 +1231,11 @@ int receive_and_reduce_offchip(
         if (remaining_to_ack < dma_transaction_size)
             curr_len_ack = remaining_to_ack;
         //wait for DMAs to finish
-        ack_dma(curr_len_ack, USE_DMA0_RX | USE_DMA1_RX, use_casting ? USE_DMA0_RX : USE_NONE);
+        ack_dma(curr_len_ack, USE_OP0_DMA | USE_OP1_DMA, compression);
         //ack pack
-        ack_packetizer(world, dst_rank, 1);
+        ack_packetizer(dst_rank, 1);
         //set spare buffer as free
-        buf_idx = spare_buffer_indexes[spare_buffer_indexes_start];
-        spare_buffer_indexes_start = (spare_buffer_indexes_start + 1) % max_dma_in_flight;
+        buf_idx = cb_pop(&spare_buffer_queue);
         microblaze_disable_interrupts();
         rx_buf_list[buf_idx].status = STATUS_IDLE;
         microblaze_enable_interrupts();
@@ -1307,8 +1246,7 @@ int receive_and_reduce_offchip(
 }
 
 //receives from a rank and forwards to another rank 
-int relay_to_other_rank(
-        communicator *world,
+int relay(
         unsigned int src_rank,
         unsigned int dst_rank,
         unsigned int len, 
@@ -1318,11 +1256,11 @@ int relay_to_other_rank(
     unsigned int remaining_to_move, remaining_to_ack, dma_tag_tmp, curr_len_move, curr_len_ack, i;
     rx_buffer *rx_buf_list = (rx_buffer*)(RX_BUFFER_COUNT_OFFSET+4);
 
-    uint8_t spare_buffer_indexes [max_dma_in_flight];
-    uint8_t spare_buffer_indexes_start = 0, spare_buffer_indexes_end = 0;
+    circular_buffer spare_buffer_queue;
+    cb_init(&spare_buffer_queue, max_dma_in_flight);
 
-    //configure switch
-    cfg_switch( use_tcp ? DATAPATH_OFFCHIP_TX_TCP: DATAPATH_OFFCHIP_TX_UDP);
+    //configure datapath
+    configure_datapath( use_tcp ? DATAPATH_OFFCHIP_TX_TCP: DATAPATH_OFFCHIP_TX_UDP, 0, NO_COMPRESSION);
 
     remaining_to_move 	= len;
     remaining_to_ack 	= len;
@@ -1333,20 +1271,19 @@ int relay_to_other_rank(
     curr_len_ack  = dma_transaction_size;
     //1. issue at most max_dma_in_flight of dma_transaction_size
     //start pack
-    start_packetizer_message(world, dst_rank, len, mpi_tag);
+    start_packetizer_message(dst_rank, len, mpi_tag);
     for (i = 0; remaining_to_move > 0 && i < max_dma_in_flight ; i++){
         if (remaining_to_move < dma_transaction_size){
             curr_len_move 	= remaining_to_move ;
         }
         //wait for segment to come
-        buf_idx = wait_receive_world_i(world, src_rank, curr_len_move, mpi_tag);
+        buf_idx = wait_on_rx(src_rank, curr_len_move, mpi_tag);
         if  (buf_idx < 0 ) return RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID;
         rx_buff_addr = ((uint64_t) rx_buf_list[buf_idx].addrh << 32) | rx_buf_list[buf_idx].addrl;
-        //save spare buffer id
-        spare_buffer_indexes[spare_buffer_indexes_end] = buf_idx;
-        spare_buffer_indexes_end = (spare_buffer_indexes_end + 1) % max_dma_in_flight;
         //start DMAs
-        dma_tag_tmp 		 = start_dma(curr_len_move, 0, rx_buff_addr, 0, 0,  USE_DMA1_RX, USE_NONE, dma_tag_tmp);
+        dma_tag_tmp 		 = start_dma(curr_len_move, rx_buff_addr, 0, 0, USE_OP0_DMA, USE_NONE, dma_tag_tmp);
+        //save spare buffer id
+        cb_push(&spare_buffer_queue, buf_idx);
         remaining_to_move 	-= curr_len_move;
     }
     //2.ack 1 and issue another dma transfer up until there's no more dma move to issue
@@ -1354,12 +1291,11 @@ int relay_to_other_rank(
         if (remaining_to_ack < dma_transaction_size)
             curr_len_ack = remaining_to_ack;
         //wait for DMAs to finish
-        ack_dma(curr_len_ack, USE_DMA1_RX, USE_NONE);
+        ack_dma(curr_len_ack, USE_OP1_DMA, USE_NONE);
         //ack pack
-        ack_packetizer(world, dst_rank, 1);
+        ack_packetizer(dst_rank, 1);
         //set spare buffer as free
-        buf_idx = spare_buffer_indexes[spare_buffer_indexes_start];
-        spare_buffer_indexes_start = (spare_buffer_indexes_start + 1) % max_dma_in_flight;
+        buf_idx = cb_pop(&spare_buffer_queue);
         microblaze_disable_interrupts();
         rx_buf_list[buf_idx].status = STATUS_IDLE;
         microblaze_enable_interrupts();
@@ -1368,16 +1304,16 @@ int relay_to_other_rank(
         if (remaining_to_move < dma_transaction_size){
             curr_len_move 	= remaining_to_move ;
         }
+        //start pack
+        start_packetizer_message(dst_rank, curr_len_move, mpi_tag);
         //wait for segment to come
-        buf_idx = wait_receive_world_i(world, src_rank, curr_len_move, mpi_tag);
+        buf_idx = wait_on_rx(src_rank, curr_len_move, mpi_tag);
         if  (buf_idx < 0 ) return RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID;
         rx_buff_addr = ((uint64_t) rx_buf_list[buf_idx].addrh << 32) | rx_buf_list[buf_idx].addrl;
-        spare_buffer_indexes[spare_buffer_indexes_end] = buf_idx;
-        spare_buffer_indexes_end = (spare_buffer_indexes_end + 1) % max_dma_in_flight;
-        //start pack
-        start_packetizer_message(world, dst_rank, curr_len_move, mpi_tag);
         //start DMAs
-        dma_tag_tmp 		 = start_dma(curr_len_move, 0, rx_buff_addr, 0, 0, USE_DMA1_RX, USE_NONE, dma_tag_tmp);
+        dma_tag_tmp 		 = start_dma(curr_len_move, rx_buff_addr, 0, 0, USE_OP0_DMA, USE_NONE, dma_tag_tmp);
+        //save spare buffer id
+        cb_push(&spare_buffer_queue, buf_idx);
         remaining_to_move 	-= curr_len_move;
     }
     //3. finish ack the remaining
@@ -1385,12 +1321,11 @@ int relay_to_other_rank(
         if (remaining_to_ack < dma_transaction_size)
             curr_len_ack = remaining_to_ack;
         //wait for DMAs to finish
-        ack_dma(curr_len_ack, USE_DMA1_RX, USE_NONE);
+        ack_dma(curr_len_ack, USE_OP1_DMA, USE_NONE);
         //ack pack
-        ack_packetizer(world, dst_rank, 1);
+        ack_packetizer(dst_rank, 1);
         //set spare buffer as free
-        buf_idx = spare_buffer_indexes[spare_buffer_indexes_start];
-        spare_buffer_indexes_start = (spare_buffer_indexes_start + 1) % max_dma_in_flight;
+        buf_idx = cb_pop(&spare_buffer_queue);
         microblaze_disable_interrupts();
         rx_buf_list[buf_idx].status = STATUS_IDLE;
         microblaze_enable_interrupts();
@@ -1402,36 +1337,18 @@ int relay_to_other_rank(
 
 //COLLECTIVES
 
-static inline int send(
-                unsigned int len,
-                unsigned int tag,
-                unsigned int dst_rank,
-                uint64_t buf_addr){
-    //send synonym
-    return transmit_offchip(&world, dst_rank, len, buf_addr, tag);
-}
-
-static inline int recv(
-                unsigned int len,
-                unsigned int tag,
-                unsigned int src_rank,
-                uint64_t buf_addr){
-    return receive_offchip_world(&world, src_rank, len, buf_addr, tag);
-}
-
 //root read multiple times the same segment and send it to each rank before moving to the next part of the buffer to be transmitted. 
 int broadcast(  unsigned int len,
                 unsigned int src_rank,
-                uint64_t buf_addr){
+                uint64_t buf_addr,
+                unsigned int compression){
     unsigned int curr_len, i;
     //determine if we're sending or receiving
     if(src_rank == world.local_rank){
         
-        if (use_tcp){
-            cfg_switch(DATAPATH_OFFCHIP_TX_TCP);
-        }else{
-            cfg_switch(DATAPATH_OFFCHIP_TX_UDP);
-        }
+        //configure datapath
+        configure_datapath( use_tcp ? DATAPATH_OFFCHIP_TX_TCP: DATAPATH_OFFCHIP_TX_UDP, 0, compression);
+
         //send to all members of the communicator 1 segment of the buffer at the time
         curr_len = dma_transaction_size;
         while (len > 0)
@@ -1441,15 +1358,15 @@ int broadcast(  unsigned int len,
             for(i=0; i<world.size; i++){
                 if(i == world.local_rank) continue;
                 //start packetizer messages
-                start_packetizer_message(&world, i, curr_len, TAG_ANY);
+                start_packetizer_message(i, curr_len, TAG_ANY);
                 //issue a DMA command for each rank, with casting since this is pulling from source
-                dma_movement(curr_len, 0, buf_addr, 0, 0, USE_DMA1_RX, USE_DMA1_RX, NULL, 0, 0);
+                move_data(curr_len, buf_addr, 0, 0, USE_OP0_DMA, compression, 0, 0);
             }
             //ack packetizer 
             for(i=0; i<world.size; i++){
                 if(i== world.local_rank) continue;
                 
-                ack_packetizer(&world, i, 1);
+                ack_packetizer(i, 1);
             } 
             //move on in the buffer
             buf_addr += curr_len;
@@ -1457,7 +1374,7 @@ int broadcast(  unsigned int len,
         }
         return COLLECTIVE_OP_SUCCESS;
     }else{
-        return receive_offchip_world(	&world, src_rank, len, buf_addr, TAG_ANY);
+        return recv(src_rank, len, buf_addr, TAG_ANY, compression);
     }
     
 }
@@ -1466,7 +1383,8 @@ int broadcast(  unsigned int len,
 int scatter(unsigned int len,
             unsigned int src_rank,
             uint64_t src_buf_addr,
-            uint64_t dst_buf_addr){
+            uint64_t dst_buf_addr,
+            unsigned int compression){
 
     unsigned int curr_len, i, offset_next_rank_buffer;
     uint64_t tmp_src_buf_base_addr, tmp_src_buf_offset_addr;
@@ -1475,11 +1393,9 @@ int scatter(unsigned int len,
     //determine if we're sending or receiving
     if(src_rank == world.local_rank){
         
-        if (use_tcp){
-            cfg_switch(DATAPATH_OFFCHIP_TX_TCP);
-        }else{
-            cfg_switch(DATAPATH_OFFCHIP_TX_UDP);
-        }
+        //configure datapath
+        configure_datapath( use_tcp ? DATAPATH_OFFCHIP_TX_TCP: DATAPATH_OFFCHIP_TX_UDP, 0, compression);
+
         tmp_src_buf_base_addr = src_buf_addr;
 
         //send to all members of the communicator 1 segment of the buffer at the time
@@ -1494,8 +1410,8 @@ int scatter(unsigned int len,
             for(i=0; i<world.size; i++){
                 if(i != world.local_rank){
                     //start packetizer messages and issue a single dma command for eachrank
-                    start_packetizer_message(&world, i, curr_len, TAG_ANY);
-                    dma_movement(curr_len, 0, tmp_src_buf_offset_addr, 0, 0, USE_DMA1_RX, USE_DMA1_RX, NULL, 0, 0);
+                    start_packetizer_message(i, curr_len, TAG_ANY);
+                    move_data(curr_len, tmp_src_buf_offset_addr, 0, 0, USE_OP0_DMA, compression, 0, 0);
                 }
                 tmp_src_buf_offset_addr += offset_next_rank_buffer;
             }
@@ -1503,7 +1419,7 @@ int scatter(unsigned int len,
             for(i=0; i<world.size; i++){
                 if(i== world.local_rank) continue;
                 
-                ack_packetizer(&world, i, 1);
+                ack_packetizer(i, 1);
             } 
             //move on in the buffer
             tmp_src_buf_base_addr += curr_len;
@@ -1512,11 +1428,11 @@ int scatter(unsigned int len,
 
         //for root copy
         src_buf_addr += world.local_rank*offset_next_rank_buffer;
-        copy(	offset_next_rank_buffer, src_buf_addr, dst_buf_addr);
+        copy(offset_next_rank_buffer, src_buf_addr, dst_buf_addr, compression);
 
         return COLLECTIVE_OP_SUCCESS;
     }else{
-        return receive_offchip_world(&world, src_rank, len, dst_buf_addr,  TAG_ANY);
+        return recv(src_rank, len, dst_buf_addr, TAG_ANY, compression);
     }
 
 }
@@ -1525,7 +1441,8 @@ int scatter(unsigned int len,
 int gather( unsigned int len,
             unsigned int root_rank,
             uint64_t src_buf_addr,
-            uint64_t dst_buf_addr){
+            uint64_t dst_buf_addr,
+            unsigned int compression){
     uint64_t tmp_buf_addr;
     unsigned int i,curr_pos, next_in_ring, prev_in_ring, number_of_shift;
     int ret = COLLECTIVE_OP_SUCCESS;
@@ -1542,20 +1459,20 @@ int gather( unsigned int len,
             tmp_buf_addr  = dst_buf_addr + len * curr_pos;
             if(curr_pos==world.local_rank)
             { // root copies
-                ret	= copy(	     len, src_buf_addr, tmp_buf_addr);
+                ret	= copy(len, src_buf_addr, tmp_buf_addr, compression);
             }else{
-                ret = receive_offchip_world(&world, prev_in_ring, len, tmp_buf_addr, TAG_ANY);
+                ret = recv(prev_in_ring, len, tmp_buf_addr, TAG_ANY,compression);
             }
         }
     }else{
         //non root ranks sends their data + relay others data to the next rank in sequence
         // as a daisy chain
         number_of_shift = ((world.size+world.local_rank-root_rank)%world.size) - 1 ; //distance to the root
-        ret += transmit_offchip(		&world, next_in_ring, len, src_buf_addr, TAG_ANY);
+        ret += send(next_in_ring, len, src_buf_addr, TAG_ANY, compression);
         for (int i = 0; i < number_of_shift; i++)
         {	
             //relay the others 
-            relay_to_other_rank(&world, prev_in_ring, next_in_ring, len, TAG_ANY);
+            relay(prev_in_ring, next_in_ring, len, TAG_ANY);
         }	
     }
     return ret;
@@ -1564,7 +1481,8 @@ int gather( unsigned int len,
 //naive fused: 1) receive a segment 2) move in the dest buffer 3) relay to next rank 
 int allgather(  unsigned int len,
                 uint64_t src_buf_addr,
-                uint64_t dst_buf_addr){
+                uint64_t dst_buf_addr,
+                unsigned int compression){
     uint64_t tmp_buf_addr;
     unsigned int i,curr_pos, next_in_ring, prev_in_ring;
     int ret = COLLECTIVE_OP_SUCCESS;
@@ -1574,19 +1492,19 @@ int allgather(  unsigned int len,
     //load buf_addr
 
     //send our data to next in ring
-    ret += transmit_offchip(				&world, next_in_ring,len, src_buf_addr, TAG_ANY);
+    ret += send(next_in_ring, len, src_buf_addr, TAG_ANY, compression);
     //receive from all members of the communicator
     for(i=0, curr_pos = world.local_rank; i<world.size && ret == COLLECTIVE_OP_SUCCESS; i++, curr_pos = (curr_pos + world.size - 1 ) % world.size){
         tmp_buf_addr  = dst_buf_addr + len * curr_pos;
 
         if(curr_pos==world.local_rank){
-            ret	= copy(len, src_buf_addr, tmp_buf_addr);
+            ret	= copy(len, src_buf_addr, tmp_buf_addr, compression);
         }else{
-            ret = receive_offchip_world(&world, prev_in_ring, len, tmp_buf_addr, TAG_ANY);
+            ret = recv(prev_in_ring, len, tmp_buf_addr, TAG_ANY, compression);
             //TODO: use the same stream to move data both to dst_buf_addr and tx_subsystem 
             //todo: use DMA1 RX to forward to next and DMA0/2 RX and DMA1 TX to copy ~ at the same time! 
             if(i+1 < world.size){ //if not the last data needed relay to the next in the sequence
-                ret = transmit_offchip(&world, next_in_ring, len, tmp_buf_addr, TAG_ANY);
+                ret = send(next_in_ring, len, tmp_buf_addr, TAG_ANY, compression);
             }
         }		
     }
@@ -1594,11 +1512,13 @@ int allgather(  unsigned int len,
     return ret;
 }
 
-//every rank receives a buffer it sums its own buffer and forwards to next rank in the ring
+//every rank receives a buffer it reduces its own buffer and forwards to next rank in the ring
 int reduce( unsigned int len,
+            unsigned int func,
             unsigned int root_rank,
             uint64_t src_addr,
-            uint64_t dst_addr){
+            uint64_t dst_addr,
+            unsigned int compression){
     int ret;
 
     unsigned int next_in_ring = (world.local_rank+1			   ) % world.size	;
@@ -1606,23 +1526,24 @@ int reduce( unsigned int len,
     //determine if we're sending or receiving
     if( prev_in_ring == root_rank){ 
         //non root ranks immediately after the root sends
-        ret = transmit_offchip(&world, next_in_ring, len, src_addr, TAG_ANY);
+        ret = send(next_in_ring, len, src_addr, TAG_ANY, compression);
     }else if (world.local_rank != root_rank){
         //non root ranks sends their data + data received from previous rank to the next rank in sequence as a daisy chain
-        ret = receive_and_reduce_offchip(&world, prev_in_ring, next_in_ring, len, src_addr,  TAG_ANY, arcfg.src_op_bits != arcfg.arith_op_bits);
+        ret = fused_recv_reduce_send(prev_in_ring, next_in_ring, len, func, src_addr,  TAG_ANY, compression);
     }else{	
         //root only receive from previous node in the ring, add its local buffer and save in destination buffer 
-        ret = receive_and_accumulate(&world, prev_in_ring, len, src_addr, dst_addr, TAG_ANY, arcfg.dst_op_bits != arcfg.arith_op_bits);
+        ret = fused_recv_reduce(prev_in_ring, len, func, src_addr, dst_addr, TAG_ANY, compression);
     }
     return ret;
 }
 
 //scatter_reduce: (a,b,c), (1,2,3), (X,Y,Z) -> (a+1+X,,) (,b+2+Y,) (,,c+3+Z)
 //len == size of chunks
-int scatter_reduce(
-                unsigned int len,
-                uint64_t src_addr,
-                uint64_t dst_addr){
+int scatter_reduce( unsigned int len,
+                    unsigned int func,
+                    uint64_t src_addr,
+                    uint64_t dst_addr,
+                    unsigned int compression){
     unsigned int ret,i;
     uint64_t curr_recv_addr, curr_send_addr;
 
@@ -1633,7 +1554,7 @@ int scatter_reduce(
 
     //1. each rank send its own chunk to the next rank in the ring
     curr_send_addr = src_addr + len * curr_send_chunk;
-    ret = transmit_offchip(&world, next_in_ring,	len, curr_send_addr, TAG_ANY);
+    ret = send(next_in_ring, len, curr_send_addr, TAG_ANY, compression);
     if(ret != COLLECTIVE_OP_SUCCESS) return ret;
     //2. for n-1 times sum the chunk that is coming from previous rank with your chunk at the same location. then forward the result to
     // the next rank in the ring
@@ -1642,37 +1563,38 @@ int scatter_reduce(
         curr_recv_addr = src_addr + len * curr_recv_chunk;
         //2. receive part of data from previous in rank and accumulate to the part you have at the same address
         //ad forwar dto the next rank in the ring
-        ret = receive_and_reduce_offchip(&world, prev_in_ring, next_in_ring, len, curr_recv_addr, TAG_ANY, arcfg.src_op_bits != arcfg.arith_op_bits); 
+        ret = fused_recv_reduce_send(prev_in_ring, next_in_ring, len, func, curr_recv_addr, TAG_ANY, compression); 
         if(ret != COLLECTIVE_OP_SUCCESS) return ret;
     }
     //at last iteration (n-1) you can sum and save the result at the same location (which is the right place to be)
     if (i > 0 ){
         curr_recv_addr  = src_addr + len * curr_recv_chunk; 
         curr_send_addr  = dst_addr + len * curr_recv_chunk;
-        ret = receive_and_accumulate(&world, prev_in_ring, len, curr_recv_addr, curr_send_addr, TAG_ANY, arcfg.dst_op_bits != arcfg.arith_op_bits); 
+        ret = fused_recv_reduce(prev_in_ring, len, func, curr_recv_addr, curr_send_addr, TAG_ANY, compression); 
         if(ret != COLLECTIVE_OP_SUCCESS) return ret;
     }
     return COLLECTIVE_OP_SUCCESS;
 }
 
 //2 stage allreduce: distribute sums across the ranks. smaller bandwidth between ranks and use multiple arith at the same time. scatter_reduce+all_gather
-int allreduce(
-                unsigned int len,
+int allreduce(  unsigned int len,
+                unsigned int func,
                 uint64_t src_addr,
-                uint64_t dst_addr){
+                uint64_t dst_addr,
+                unsigned int compression){
     unsigned int ret,i;
     uint64_t curr_recv_addr, curr_send_addr;
 
     int curr_send_chunk	, curr_recv_chunk			  = world.local_rank;			 
     //divide into chunks 
     unsigned int len_div_size 	 	= len/world.size; 
-    unsigned int min_operand_width  = arcfg.arith_op_bits/8;//TODO: what if the arith op is not a multiple of 1 byte?
+    unsigned int min_operand_width  = arcfg.compressed_elem_bits/8;//TODO: what if the arith op is not a multiple of 1 byte?
     unsigned int tail				= len_div_size % min_operand_width;
     len_div_size += - tail + (tail == 0 ? 0 : min_operand_width); //TODO: now when processing last chunk it will assume that buffers are same length and part of non buffer will be processed.
     unsigned int next_in_ring 	 = (world.local_rank+1			  )%world.size	;
     unsigned int prev_in_ring 	 = (world.local_rank+world.size-1 )%world.size	;
     //scatter reduce
-    scatter_reduce(len_div_size, src_addr, dst_addr);
+    scatter_reduce(len_div_size, func, src_addr, dst_addr, compression);
     //allgather in place on dst_buffer
     for (i = 0; i < world.size -1; ++i)
     {
@@ -1682,36 +1604,34 @@ int allreduce(
         curr_recv_addr  = dst_addr + len_div_size * curr_recv_chunk;
         //TODO: 5.6. can be done together since we have 3 dmas (1rx read from spare, 1tx write in the final dest, 2rx can read and transmit to next in the ring)
         //5. send the local reduced results to next rank
-        ret = transmit_offchip(&world, next_in_ring,	len_div_size, curr_send_addr, TAG_ANY);
+        ret = send(next_in_ring, len_div_size, curr_send_addr, TAG_ANY, compression);
         if(ret != COLLECTIVE_OP_SUCCESS) return ret;
         //6. receive the reduced results from previous rank and put into correct dst buffer position
-        ret = receive_offchip_world(&world, prev_in_ring,	len_div_size, curr_recv_addr, TAG_ANY);
+        ret = recv(prev_in_ring, len_div_size, curr_recv_addr, TAG_ANY, compression);
         if(ret != COLLECTIVE_OP_SUCCESS) return ret;
     }
 
     return COLLECTIVE_OP_SUCCESS;
 }
 
-int ext_kernel_push(
-                        unsigned int len,
-                        unsigned int krnl_id,
-                        uint64_t src_addr
+int ext_kernel_push(unsigned int len,
+                    unsigned int krnl_id,
+                    uint64_t src_addr,
+                    unsigned int compression
 ){
     //configure switch
-    cfg_switch(DATAPATH_DMA_LOOPBACK);
-    setup_krnl_tdest(krnl_id);
-    return dma_movement(len, 0, src_addr, 0, 0, USE_DMA1_RX, USE_NONE, NULL, 0, 0);
+    configure_datapath(DATAPATH_DMA_LOOPBACK, 0, compression);
+    return move_data(len, src_addr, 0, 0, USE_OP0_DMA, compression, 0, 0);
 }
 
-int ext_kernel_pull(
-                        unsigned int len,
-                        unsigned int krnl_id,
-                        uint64_t dst_addr
+int ext_kernel_pull(unsigned int len,
+                    unsigned int krnl_id,
+                    uint64_t dst_addr,
+                    unsigned int compression
 ){
     //configure switch
-    cfg_switch(DATAPATH_DMA_LOOPBACK);
-    setup_krnl_tdest(krnl_id);
-    return dma_movement(len, 0, 0, dst_addr, 0, USE_DMA1_TX, USE_NONE, NULL, 0, 0);
+    configure_datapath(DATAPATH_DMA_LOOPBACK, 0, compression);
+    return move_data(len, 0, 0, dst_addr, USE_RES_DMA, compression, 0, 0);
 }
 
 //startup and main
@@ -1795,7 +1715,7 @@ static inline void finalize_call(unsigned int retval) {
 int main() {
     unsigned int retval;
     unsigned int scenario, len, comm, root_src_dst, function, msg_tag;
-    unsigned int compression, src_type, dst_type;
+    unsigned int datapath_cfg, compression_flags, stream_flags;
     unsigned int op0_addrl, op0_addrh, op1_addrl, op1_addrh, res_addrl, res_addrh;
     uint64_t op0_addr, op1_addr, res_addr;
 
@@ -1813,43 +1733,30 @@ int main() {
         wait_for_call();
         
         //read parameters from host command queue
-        scenario     = getd(CMD_HOST);
-        len          = getd(CMD_HOST);
-        comm         = getd(CMD_HOST);
-        root_src_dst = getd(CMD_HOST);
-        function     = getd(CMD_HOST);
-        msg_tag      = getd(CMD_HOST);
-        compression  = getd(CMD_HOST);
-        src_type     = getd(CMD_HOST);
-        dst_type     = getd(CMD_HOST);
-        op0_addrl   = getd(CMD_HOST);
-        op0_addrh   = getd(CMD_HOST);
-        op1_addrl   = getd(CMD_HOST);
-        op1_addrh   = getd(CMD_HOST);
-        res_addrl   = getd(CMD_HOST);
-        res_addrh   = getd(CMD_HOST);
+        scenario            = getd(CMD_HOST);
+        len                 = getd(CMD_HOST);
+        comm                = getd(CMD_HOST);
+        root_src_dst        = getd(CMD_HOST);
+        function            = getd(CMD_HOST);
+        msg_tag             = getd(CMD_HOST);
+        datapath_cfg        = getd(CMD_HOST);
+        compression_flags   = getd(CMD_HOST);
+        stream_flags        = getd(CMD_HOST);
+        op0_addrl           = getd(CMD_HOST);
+        op0_addrh           = getd(CMD_HOST);
+        op1_addrl           = getd(CMD_HOST);
+        op1_addrh           = getd(CMD_HOST);
+        res_addrl           = getd(CMD_HOST);
+        res_addrh           = getd(CMD_HOST);
 
-        op0_addr =  ((uint64_t) op0_addrh << 32) | op0_addrl;
-        op1_addr =  ((uint64_t) op1_addrh << 32) | op1_addrl;
-        res_addr =  ((uint64_t) res_addrh << 32) | res_addrl;
+        op0_addr = ((uint64_t) op0_addrh << 32) | op0_addrl;
+        op1_addr = ((uint64_t) op1_addrh << 32) | op1_addrl;
+        res_addr = ((uint64_t) res_addrh << 32) | res_addrl;
 
-        //gather pipeline arithmetic configuration
-        if(scenario != XCCL_CONFIG){
-            arcfg = *((arith_config *)compression);
-            //remap function to the value gathered from the arith spec
-            if(function >= MAX_REDUCE_FUNCTIONS){
-                longjmp(excp_handler, COMPRESSION_ERROR);
-            }
-            setup_arith_tdest(arcfg.arith_op_tdest[function]);
-            //initialize external kernel interface to tdest=0 (loopback)
-            setup_krnl_tdest(0);
-            //calculate internal len based on compression parameters
-            //len is in number of elements, and the byte length
-            //depends on bitwidths
-            len = len*arcfg.arith_op_bits/8;
-        }
-
-        //initialize communicator
+        //initialize arithmetic/compression config and communicator
+        //NOTE: these are global because they're used in a lot of places but don't change during a call
+        //TODO: determine if they can remain global in hierarchical collectives
+        arcfg = *((datapath_arith_config *)datapath_cfg);
         world = find_comm(comm);
         
         switch (scenario)
@@ -1918,38 +1825,38 @@ int main() {
                 }
                 
                 break;
-            case XCCL_SEND:
-                retval = send(len, msg_tag, root_src_dst, op0_addr);
-                break;
-            case XCCL_RECV:
-                retval = recv(len, msg_tag, root_src_dst, res_addr);
-                break;
-            case XCCL_BCAST:
-                retval = broadcast(len, root_src_dst, op0_addr);
-                break;
-            case XCCL_SCATTER:    
-                retval = scatter(len, root_src_dst, op0_addr, res_addr);
-                break;
-            case XCCL_GATHER:
-                retval = gather(len, root_src_dst, op0_addr, res_addr);
-                break;
             case XCCL_REDUCE:
-                retval = reduce(len, root_src_dst, op0_addr, res_addr);
-                break;
-            case XCCL_ALLGATHER:
-                retval = allgather(len, op0_addr, res_addr);
-                break;
-            case XCCL_ALLREDUCE:
-                retval = allreduce(len, op0_addr, res_addr);
-                break;
-            case XCCL_ACC:
-                retval = sum(len, op0_addr, op1_addr, res_addr);
+                retval = reduce_loopback(len, function, op0_addr, op1_addr, res_addr, compression_flags);
                 break;
             case XCCL_COPY:
-                retval = copy(len, op0_addr, res_addr);
+                retval = copy(len, op0_addr, res_addr, compression_flags);
                 break;
-            case XCCL_REDUCE_SCATTER:
-                retval = scatter_reduce(len, op0_addr, res_addr);
+            case XCCL_SEND:
+                retval = send(root_src_dst, len, op0_addr, msg_tag, compression_flags);
+                break;
+            case XCCL_RECV:
+                retval = recv(root_src_dst, len, res_addr, msg_tag, compression_flags);
+                break;
+            case XCCL_COLL_BCAST:
+                retval = broadcast(len, root_src_dst, op0_addr, compression_flags);
+                break;
+            case XCCL_COLL_SCATTER:    
+                retval = scatter(len, root_src_dst, op0_addr, res_addr, compression_flags);
+                break;
+            case XCCL_COLL_GATHER:
+                retval = gather(len, root_src_dst, op0_addr, res_addr, compression_flags);
+                break;
+            case XCCL_COLL_REDUCE:
+                retval = reduce(len, function, root_src_dst, op0_addr, res_addr, compression_flags);
+                break;
+            case XCCL_COLL_ALLGATHER:
+                retval = allgather(len, op0_addr, res_addr, compression_flags);
+                break;
+            case XCCL_COLL_ALLREDUCE:
+                retval = allreduce(len, function, op0_addr, res_addr, compression_flags);
+                break;
+            case XCCL_COLL_REDUCE_SCATTER:
+                retval = scatter_reduce(len, function, op0_addr, res_addr, compression_flags);
                 break;
             default:
                 retval = COLLECTIVE_OP_SUCCESS;

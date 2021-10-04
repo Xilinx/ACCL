@@ -33,28 +33,46 @@ proc connect_clk_rst {clksig rstsig rstslr} {
 
 # Break casting kernel connections and redo them through a switch for each of the CCLO instances
 proc rewire_compression {idx} {
-    rewire_compression_lane $idx decompress 0 upcast_0
-    rewire_compression_lane $idx decompress 1 upcast_1
-    rewire_compression_lane $idx compress 0 downcast_0
+    for {set i 0} {$i < 3} {incr i} {
+        rewire_compression_lane $idx $i [list downcast_${idx}_$i upcast_${idx}_$i]
+    }
 }
 
-proc rewire_compression_lane {cclo_idx clane_type clane_idx ip_name} {
-    set swname cclo${cclo_idx}_${clane_type}${clane_idx}_sw
+proc rewire_compression_lane {cclo_idx clane_idx ip_names} {
+    set swname cclo${cclo_idx}_clane${clane_idx}_sw
+    set nip [llength $ip_names]
     create_bd_cell -type ip -vlnv xilinx.com:ip:axis_switch:1.1 ${swname}
     set_property -dict [list CONFIG.HAS_TLAST.VALUE_SRC USER CONFIG.TDEST_WIDTH.VALUE_SRC USER] [get_bd_cells ${swname}]
-    set_property -dict [list CONFIG.NUM_SI {2} CONFIG.NUM_MI {2} CONFIG.HAS_TLAST {1} CONFIG.TDEST_WIDTH {4} CONFIG.ARB_ON_MAX_XFERS {0} CONFIG.ARB_ON_TLAST {1} CONFIG.DECODER_REG {1}] [get_bd_cells ${swname}]
+    set_property -dict [list CONFIG.NUM_SI [expr {$nip + 1}] CONFIG.NUM_MI [expr {$nip + 1}] CONFIG.HAS_TLAST {1} CONFIG.TDEST_WIDTH {4} CONFIG.ARB_ON_MAX_XFERS {0} CONFIG.ARB_ON_TLAST {1} CONFIG.DECODER_REG {1}] [get_bd_cells ${swname}]
     set_property -dict [list CONFIG.HAS_TSTRB.VALUE_SRC USER CONFIG.HAS_TKEEP.VALUE_SRC USER] [get_bd_cells ${swname}]
     set_property -dict [list CONFIG.HAS_TSTRB {0} CONFIG.HAS_TKEEP {1}] [get_bd_cells ${swname}]
     set_property -dict [list CONFIG.ARB_ALGORITHM {3}] [get_bd_cells ${swname}]
-    set_property -dict [list CONFIG.M01_S01_CONNECTIVITY {0}] [get_bd_cells ${swname}]
+    for {set i 1} {$i <= ${nip}} {incr i} {
+        for {set j 1} {$j <= ${nip}} {incr j} {
+            set_property -dict [list CONFIG.M0${i}_S0${j}_CONNECTIVITY {0}] [get_bd_cells ${swname}]
+        }
+    }
+
     connect_clk_rst ${swname}/aclk ${swname}/aresetn $cclo_idx
 
-    delete_bd_objs [get_bd_intf_nets ${ip_name}_out_r]
-    delete_bd_objs [get_bd_intf_nets ccl_offload_${cclo_idx}_m_axis_${clane_type}${clane_idx}]
-    connect_bd_intf_net [get_bd_intf_pins ccl_offload_${cclo_idx}/m_axis_${clane_type}${clane_idx}] [get_bd_intf_pins ${swname}/S00_AXIS]
-    connect_bd_intf_net [get_bd_intf_pins ${swname}/M00_AXIS] [get_bd_intf_pins ccl_offload_${cclo_idx}/s_axis_${clane_type}${clane_idx}]
-    connect_bd_intf_net [get_bd_intf_pins ${swname}/M01_AXIS] [get_bd_intf_pins ${ip_name}/in_r]
-    connect_bd_intf_net [get_bd_intf_pins ${ip_name}/out_r] [get_bd_intf_pins ${swname}/S01_AXIS]
+    delete_bd_objs [get_bd_intf_nets ccl_offload_${cclo_idx}_m_axis_compression${clane_idx}]
+    connect_bd_intf_net [get_bd_intf_pins ccl_offload_${cclo_idx}/m_axis_compression${clane_idx}] [get_bd_intf_pins ${swname}/S00_AXIS]
+
+    set canonical_input_names {"in" "in_r" "S_AXIS" "s_axis"}
+    set canonical_output_names {"out" "out_r" "M_AXIS" "m_axis"}
+    set ip_idx 1
+    foreach ip_name $ip_names {
+        foreach oname $canonical_output_names {
+            [catch { delete_bd_objs [get_bd_intf_nets ${ip_name}_${oname}] }]
+            [catch { connect_bd_intf_net [get_bd_intf_pins ${ip_name}/${oname}] [get_bd_intf_pins ${swname}/S0${ip_idx}_AXIS] }]
+        }
+        foreach iname $canonical_input_names {
+            [catch { connect_bd_intf_net [get_bd_intf_pins ${swname}/M0${ip_idx}_AXIS] [get_bd_intf_pins ${ip_name}/${iname}] }]
+        }
+        incr ip_idx
+    }
+
+    connect_bd_intf_net [get_bd_intf_pins ${swname}/M00_AXIS] [get_bd_intf_pins ccl_offload_${cclo_idx}/s_axis_compression${clane_idx}]
 }
 
 # break reduction kernel connections and redo them through switches

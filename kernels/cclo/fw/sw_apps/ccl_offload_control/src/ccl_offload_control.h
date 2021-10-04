@@ -94,17 +94,17 @@ extern "C" {
 #define XCCL_CONFIG               0
 //Primitives
 #define XCCL_COPY                 1
-#define XCCL_ACC                  2
+#define XCCL_REDUCE               2
 #define XCCL_SEND                 3 
 #define XCCL_RECV                 4
 //Collectives
-#define XCCL_BCAST                5
-#define XCCL_SCATTER              6
-#define XCCL_GATHER               7
-#define XCCL_REDUCE               8
-#define XCCL_ALLGATHER            9
-#define XCCL_ALLREDUCE            10
-#define XCCL_REDUCE_SCATTER       11
+#define XCCL_COLL_BCAST           5
+#define XCCL_COLL_SCATTER         6
+#define XCCL_COLL_GATHER          7
+#define XCCL_COLL_REDUCE          8
+#define XCCL_COLL_ALLGATHER       9
+#define XCCL_COLL_ALLREDUCE       10
+#define XCCL_COLL_REDUCE_SCATTER  11
 
 //XCCL_CONFIG SUBFUNCTIONS
 #define HOUSEKEEP_IRQEN           0
@@ -232,11 +232,11 @@ extern "C" {
 
 //blocks used for data movement
 #define USE_NONE    0
-#define USE_DMA0_RX 1
-#define USE_DMA1_RX 2
-#define USE_DMA1_TX 4
-#define USE_DMA2_RX 8
-#define USE_DMA1_TX_WITHOUT_TLAST 16
+#define USE_OP0_DMA 1
+#define USE_OP1_DMA 2
+#define USE_RES_DMA 4
+#define USE_OP2_DMA 8
+#define USE_RES_DMA_WITHOUT_TLAST 16
 #define USE_PACKETIZER 32
 
 #define S_AXI_CONTROL -1
@@ -256,38 +256,38 @@ extern "C" {
 #define getd(channel) ({unsigned int value; asm volatile ("getd\t%0,%1" : "=d" (value) : "d" (channel)); value; })
 
 typedef enum {
-  type_control,
-  type_int,
-  type_bool,
-  type_char,
-  type_uchar,
-  type_short,
-  type_ushort,
-  type_uint,
-  type_long,
-  type_ulong, 
-  type_float,
-  type_double,
-  type_half,
-  type_intptr,
+    type_control,
+    type_int,
+    type_bool,
+    type_char,
+    type_uchar,
+    type_short,
+    type_ushort,
+    type_uint,
+    type_long,
+    type_ulong, 
+    type_float,
+    type_double,
+    type_half,
+    type_intptr,
 } type_t;
 
 typedef struct {
-  char   *name;
-  type_t type;
-  int    interface;
+    char   *name;
+    type_t type;
+    int    interface;
 } arg_t;
 
 typedef struct {
-	unsigned int addrl;
-	unsigned int addrh;
-	unsigned int max_len;
-	unsigned int dma_tag;
-	unsigned int status;
-	unsigned int rx_tag;
-	unsigned int rx_len;
-	unsigned int rx_src;
-	unsigned int sequence_number;
+    unsigned int addrl;
+    unsigned int addrh;
+    unsigned int max_len;
+    unsigned int dma_tag;
+    unsigned int status;
+    unsigned int rx_tag;
+    unsigned int rx_len;
+    unsigned int rx_src;
+    unsigned int sequence_number;
 } rx_buffer;
 #define STATUS_IDLE     0x00
 #define STATUS_ENQUEUED 0x01
@@ -298,17 +298,17 @@ typedef struct {
 #define COMM_OFFSET (RX_BUFFER_COUNT_OFFSET+4*(1 + Xil_In32(RX_BUFFER_COUNT_OFFSET)*9))
 
 typedef struct {
-	unsigned int ip;
-	unsigned int port;
-  unsigned int inbound_seq;
-  unsigned int outbound_seq;
-  unsigned int session;
+    unsigned int ip;
+    unsigned int port;
+    unsigned int inbound_seq;
+    unsigned int outbound_seq;
+    unsigned int session;
 } comm_rank;
 
 typedef struct {
-	unsigned int size;
-	unsigned int local_rank;
-	comm_rank* ranks;
+    unsigned int size;
+    unsigned int local_rank;
+    comm_rank* ranks;
 } communicator;
 
 //structure defining arithmetic config parameters
@@ -316,17 +316,36 @@ typedef struct {
 #define MAX_REDUCE_FUNCTIONS 10
 
 typedef struct {
-  unsigned int s2t_tdest;
-  unsigned int src_op_bits;
-  unsigned int t2d_tdest;
-  unsigned int dst_op_bits;
-  unsigned int arith_op_bits;
-  unsigned int arith_nfunctions;
-  unsigned int arith_op_tdest[MAX_REDUCE_FUNCTIONS];
+    unsigned int uncompressed_elem_bits;//bitwidth of one element of uncompressed data
+    unsigned int compressed_elem_bits;  //bitwidth of one element of compressed data
+    unsigned int elem_ratio;            //how many uncompressed elements per compressed element
+    unsigned int compressor_tdest;      //clane TDEST for targeting the compressor
+    unsigned int decompressor_tdest;    //clane TDEST for targeting the compressor
+    unsigned int arith_nfunctions;      //number of supported functions (<= MAX_REDUCE_FUNCTIONS)
+    unsigned int arith_is_compressed;   //perform arithmetic on compressed (1) or uncompressed (0) values
+    unsigned int arith_tdest[MAX_REDUCE_FUNCTIONS]; //arithmetic TDEST
+} datapath_arith_config;
 
-} arith_config;
+//define compression flags
+#define NO_COMPRESSION 0
+#define OP0_COMPRESSED 1
+#define OP1_COMPRESSED 2
+#define RES_COMPRESSED 4
+#define ETH_COMPRESSED 8
 
+//Tag definitions
 #define TAG_ANY 0xFFFFFFFF
+
+//circular buffer
+#define MAX_CIRCULAR_BUFFER_SIZE 20
+typedef struct circular_buffer
+{
+    unsigned int buffer[MAX_CIRCULAR_BUFFER_SIZE];     // data buffer
+    unsigned int capacity;      //real desired capacity of buffer
+    unsigned int occupancy;     //current occupancy
+    unsigned int write_idx;          // where we put data
+    unsigned int read_idx;          // where we get data from
+} circular_buffer;
 
 #ifdef __cplusplus
 }
