@@ -267,79 +267,105 @@ static inline void apply_switch_config(unsigned int base) {
 }
 
 //configure the switches for various scenarios:
-//1 == DATAPATH_DMA_LOOPBACK:   DMA1 RX -> EXT_KRNL_TX
- //                             EXT_KRNL_RX -> DMA1 TX
+//1 == DATAPATH_DMA_LOOPBACK:
+//  DMA0 RX -> COMPRESS0 -> DMA1 TX
 //
-//2 == DATAPATH_DMA_REDUCTION:  DMA0 RX -> Arith Op0
-//   							DMA1 RX -> Arith Op1 
-//   							Arith Res -> EXT_KRNL_TX
-//                              EXT_KRNL_RX -> DMA1 TX 
+//2 == DATAPATH_DMA_REDUCTION:  
+//  DMA0 RX -> COMPRESS0 -> Arith Op0
+//  DMA1 RX -> COMPRESS1 -> Arith Op1 
+//  Arith Res -> COMPRESS2 -> DMA1 TX 
 //
-//3 == DATAPATH_OFFCHIP_TX_UDP: DMA1 RX -> EXT_KRNL_TX
-//                              EXT_KRNL_RX -> UDP TX
+//3/4 == DATAPATH_OFFCHIP_TX_UDP/TCP: 
+//  DMA0 RX -> COMPRESS0 -> UDP/TCP TX
 //
-//4 == DATAPATH_OFFCHIP_TX_TCP: DMA1 RX -> EXT_KRNL_TX
-//                              EXT_KRNL_RX -> TCP TX
+//5/6 == DATAPATH_OFFCHIP_UDP/TCP_REDUCTION: 	
+//  DMA0 RX -> COMPRESS0 -> Arith Op0
+//  DMA1 RX -> COMPRESS1 -> Arith Op1 
+//  Arith Res -> COMPRESS2 -> UDP/TCP TX 
 //
-//5 == DATAPATH_OFFCHIP_UDP_REDUCTION: 	DMA0 RX -> Arith Op0
-//   									DMA1 RX -> Arith Op1 
-//   							        Arith Res -> EXT_KRNL_TX
-//                                      EXT_KRNL_RX -> UDP TX 
+//7 == DATAPATH_DMA_EXT_LOOPBACK:
+//  DMA0 RX -> COMPRESS0 -> EXT_KRNL_TX
+//  EXT_KRNL_RX -> COMPRESS1 -> DMA1 TX
 //
-//6 == DATAPATH_OFFCHIP_TCP_REDUCTION: 	DMA0 RX -> Arith Op0
-//   									DMA1 RX -> Arith Op1 
-//   							        Arith Res -> EXT_KRNL_TX
-//                                      EXT_KRNL_RX -> TCP TX 
 void configure_switch(unsigned int scenario) {
     switch (scenario)
     {
         case DATAPATH_DMA_LOOPBACK:
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_DMA1_RX, SWITCH_M_EXT_KRNL);
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_EXT_KRNL, SWITCH_M_DMA1_TX);
+            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_DMA0_RX, SWITCH_M_COMPRESS0);
+            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_COMPRESS0, SWITCH_M_DMA1_TX);
             disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_ARITH_OP0);
             disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_ARITH_OP1);
             disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_UDP_TX);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_TCP_TX);			
+            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_TCP_TX);
+            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_EXT_KRNL);
+            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_COMPRESS1);
+            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_COMPRESS2);		
             break;
         case DATAPATH_DMA_REDUCTION:
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_DMA0_RX, SWITCH_M_ARITH_OP0);
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_DMA1_RX, SWITCH_M_ARITH_OP1);
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_ARITH_RES, SWITCH_M_DMA1_TX);
+            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_DMA0_RX, SWITCH_M_COMPRESS0);
+            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_COMPRESS0, SWITCH_M_ARITH_OP0);
+            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_DMA1_RX, SWITCH_M_COMPRESS1);
+            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_COMPRESS1, SWITCH_M_ARITH_OP1);
+            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_ARITH_RES, SWITCH_M_COMPRESS2);
+            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_COMPRESS2, SWITCH_M_DMA1_TX);
             disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_UDP_TX);
             disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_TCP_TX);
             disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_EXT_KRNL);	
             break;
         case DATAPATH_OFFCHIP_TX_UDP:
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_DMA1_RX, SWITCH_M_EXT_KRNL);
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_EXT_KRNL, SWITCH_M_UDP_TX);
+            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_DMA0_RX, SWITCH_M_COMPRESS0);
+            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_COMPRESS0, SWITCH_M_UDP_TX);
             disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_ARITH_OP0);
             disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_ARITH_OP1);
             disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_DMA1_TX);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_TCP_TX);	
+            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_TCP_TX);
+            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_EXT_KRNL);
+            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_COMPRESS1);
+            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_COMPRESS2);	
             break;
         case DATAPATH_OFFCHIP_TX_TCP:
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_DMA1_RX, SWITCH_M_EXT_KRNL);
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_EXT_KRNL, SWITCH_M_TCP_TX);
+            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_DMA1_RX, SWITCH_M_COMPRESS0);
+            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_COMPRESS0, SWITCH_M_TCP_TX);
             disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_ARITH_OP0);
             disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_ARITH_OP1);
             disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_DMA1_TX);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_UDP_TX);	
+            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_UDP_TX);
+            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_EXT_KRNL);
+            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_COMPRESS1);
+            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_COMPRESS2);	
             break;
         case DATAPATH_OFFCHIP_UDP_REDUCTION:
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_DMA0_RX, SWITCH_M_ARITH_OP0);
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_DMA1_RX, SWITCH_M_ARITH_OP1);
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_ARITH_RES, SWITCH_M_EXT_KRNL);
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_EXT_KRNL, SWITCH_M_UDP_TX);
+            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_DMA0_RX, SWITCH_M_COMPRESS0);
+            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_COMPRESS0, SWITCH_M_ARITH_OP0);
+            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_DMA1_RX, SWITCH_M_COMPRESS1);
+            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_COMPRESS1, SWITCH_M_ARITH_OP1);
+            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_ARITH_RES, SWITCH_M_COMPRESS2);
+            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_COMPRESS2, SWITCH_M_UDP_TX);
             disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_DMA1_TX);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_TCP_TX);	
+            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_TCP_TX);
+            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_EXT_KRNL);	
             break;
         case DATAPATH_OFFCHIP_TCP_REDUCTION:
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_DMA0_RX, SWITCH_M_ARITH_OP0);
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_DMA1_RX, SWITCH_M_ARITH_OP1);
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_ARITH_RES, SWITCH_M_EXT_KRNL);
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_EXT_KRNL, SWITCH_M_TCP_TX);
+            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_DMA0_RX, SWITCH_M_COMPRESS0);
+            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_COMPRESS0, SWITCH_M_ARITH_OP0);
+            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_DMA1_RX, SWITCH_M_COMPRESS1);
+            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_COMPRESS1, SWITCH_M_ARITH_OP1);
+            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_ARITH_RES, SWITCH_M_COMPRESS2);
+            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_COMPRESS2, SWITCH_M_TCP_TX);
             disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_DMA1_TX);
             disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_UDP_TX);
+            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_EXT_KRNL);
+            break;
+        case DATAPATH_DMA_EXT_LOOPBACK:
+            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_DMA0_RX, SWITCH_M_EXT_KRNL);
+            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_EXT_KRNL, SWITCH_M_DMA1_TX);
+            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_ARITH_OP0);
+            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_ARITH_OP1);
+            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_UDP_TX);
+            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_TCP_TX);
+            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_COMPRESS0);
+            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_COMPRESS1);
+            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_COMPRESS2);
             break;
         default:
             return;
@@ -372,7 +398,7 @@ void configure_datapath(unsigned int scenario,
             (scenario == DATAPATH_OFFCHIP_UDP_REDUCTION) || 
                 (scenario == DATAPATH_OFFCHIP_TCP_REDUCTION)    ){
         //we're doing a reduction: op0, op1 -> res
-        if(arcfg.arith_is_compressed && (){
+        if(arcfg.arith_is_compressed){
             cfg_clane_op0 = (compression & OP0_COMPRESSED) ? NO_COMPRESSION : arcfg.compressor_tdest;
             cfg_clane_op1 = (compression & OP1_COMPRESSED) ? NO_COMPRESSION : arcfg.compressor_tdest;
             cfg_clane_res = (compression & RES_COMPRESSED) ? NO_COMPRESSION : arcfg.compressor_tdest;
@@ -663,7 +689,7 @@ static inline int start_dma(
                     unsigned int casting,
                     unsigned int dma_tag_tmp) {
     //BE CAREFUL!: if(len > DMA_MAX_BTT) return DMA_TRANSACTION_SIZE;
-    //NOTE: len is the number of uncompressed elements to be transferred
+    //NOTE: len is the number of uncompressed elements to be transferred, which we convert to bytes
 
     //set up len in the context of casting
     unsigned int byte_len;
@@ -757,99 +783,87 @@ static inline void ack_dma(
 //segment a logical dma command in multiple dma commands.
 //if one of the DMA is not used fill the corresponding address with NULL
 int move_data(
-    unsigned int len,
+    unsigned int len,//number of uncompressed elements to transfer
     uint64_t op0_addr,
     uint64_t op1_addr,
     uint64_t res_addr,
     unsigned int which_blocks,
-    unsigned int casting,
+    unsigned int compression,
     unsigned dst_rank,
     unsigned mpi_tag
 ) {
     unsigned int remaining_to_move, remaining_to_ack, dma_tag_tmp, curr_len_move, curr_len_ack, i;
+    unsigned int pkt_byte_len, compressed_byte_len, uncompressed_byte_len;
+    unsigned int max_dma_transaction_elems = dma_transaction_size/(arcfg.uncompressed_elem_bits/8);
     remaining_to_move 	= len;
     remaining_to_ack 	= len;
     dma_tag_tmp 		= dma_tag;
 
     //default size of transaction is full size
-    curr_len_move = dma_transaction_size;
-    curr_len_ack  = dma_transaction_size;
+
+    curr_len_move = max_dma_transaction_elems;
+    curr_len_ack  = max_dma_transaction_elems;
     //1. issue at most max_dma_in_flight of dma_transaction_size
     //start packetizer
     if(which_blocks & USE_PACKETIZER){
-        start_packetizer_message(dst_rank, len, mpi_tag);
+        if(compression & ETH_COMPRESSED){
+            pkt_byte_len = (len/arcfg.elem_ratio)*arcfg.compressed_elem_bits/8;
+        } else {
+            pkt_byte_len = len*arcfg.uncompressed_elem_bits/8;
+        }
+        start_packetizer_message(dst_rank, pkt_byte_len, mpi_tag);
     }
     for (i = 0; remaining_to_move > 0 && i < max_dma_in_flight ; i++){
-        if (remaining_to_move < dma_transaction_size){
-            curr_len_move 	= remaining_to_move ;
+        if (remaining_to_move < max_dma_transaction_elems){
+            curr_len_move 	= remaining_to_move;
         }
         //start DMAs
-        dma_tag_tmp 		 = start_dma(curr_len_move, op0_addr, op1_addr, res_addr, which_blocks, casting, dma_tag_tmp);
+        dma_tag_tmp 		 = start_dma(curr_len_move, op0_addr, op1_addr, res_addr, which_blocks, compression, dma_tag_tmp);
         remaining_to_move 	-= curr_len_move;
 
-        //increment addresses based on casting spec
-        if(casting & OP0_COMPRESSED){
-            op0_addr 		+= curr_len_move*arcfg.uncompressed_elem_bits/arcfg.compressed_elem_bits;
-        } else {
-            op0_addr 		+= curr_len_move;
-        }
-        if(casting & OP1_COMPRESSED){
-            op1_addr 		+= curr_len_move*arcfg.uncompressed_elem_bits/arcfg.compressed_elem_bits;
-        } else {
-            op1_addr 		+= curr_len_move;
-        }
-        if(casting & RES_COMPRESSED){
-            res_addr 		+= curr_len_move*arcfg.compressed_elem_bits/arcfg.compressed_elem_bits;
-        } else {
-            res_addr 		+= curr_len_move;
-        }
+        //increment addresses based on compression spec
+        compressed_byte_len = (curr_len_move/arcfg.elem_ratio)*arcfg.compressed_elem_bits/8;
+        uncompressed_byte_len = curr_len_move*arcfg.uncompressed_elem_bits/8;
+        op0_addr += (compression & OP0_COMPRESSED) ? compressed_byte_len : uncompressed_byte_len;
+        op1_addr += (compression & OP1_COMPRESSED) ? compressed_byte_len : uncompressed_byte_len;
+        res_addr += (compression & RES_COMPRESSED) ? compressed_byte_len : uncompressed_byte_len;
     }
     //2.ack 1 and issue another dma transfer up until there's no more dma move to issue
     while(remaining_to_move > 0){
-        if (remaining_to_ack < dma_transaction_size)
+        if (remaining_to_ack < max_dma_transaction_elems)
             curr_len_ack = remaining_to_ack;
         //wait for DMAs to finish
-        ack_dma(curr_len_ack, which_blocks, casting);
+        ack_dma(curr_len_ack, which_blocks, compression);
         //ack pack
         if(which_blocks & USE_PACKETIZER){
             ack_packetizer(dst_rank, 1);
         }
         remaining_to_ack  -= curr_len_ack;
 
-        if (remaining_to_move < dma_transaction_size){
-            curr_len_move 	= remaining_to_move ;
+        if (remaining_to_move < max_dma_transaction_elems){
+            curr_len_move 	= remaining_to_move;
         }
         //start pack
         if(which_blocks & USE_PACKETIZER){
             start_packetizer_message(dst_rank, curr_len_move, mpi_tag);
         }
         //start DMAs
-        dma_tag_tmp 		 = start_dma(curr_len_move, op0_addr, op1_addr, res_addr, which_blocks, casting, dma_tag_tmp);
+        dma_tag_tmp 		 = start_dma(curr_len_move, op0_addr, op1_addr, res_addr, which_blocks, compression, dma_tag_tmp);
         remaining_to_move 	-= curr_len_move;
 
-        //increment addresses based on casting spec
-        if(casting & USE_OP0_DMA){
-            op0_addr 		+= curr_len_move*arcfg.uncompressed_elem_bits/arcfg.compressed_elem_bits;
-        } else {
-            op0_addr 		+= curr_len_move;
-        }
-        if(casting & USE_OP1_DMA){
-            op1_addr 		+= curr_len_move*arcfg.uncompressed_elem_bits/arcfg.compressed_elem_bits;
-        } else {
-            op1_addr 		+= curr_len_move;
-        }
-        if(casting & USE_RES_DMA){
-            res_addr 		+= curr_len_move*arcfg.compressed_elem_bits/arcfg.compressed_elem_bits;
-        } else {
-            res_addr 		+= curr_len_move;
-        }
+        //increment addresses based on compression spec
+        compressed_byte_len = (curr_len_move/arcfg.elem_ratio)*arcfg.compressed_elem_bits/8;
+        uncompressed_byte_len = curr_len_move*arcfg.uncompressed_elem_bits/8;
+        op0_addr += (compression & OP0_COMPRESSED) ? compressed_byte_len : uncompressed_byte_len;
+        op1_addr += (compression & OP1_COMPRESSED) ? compressed_byte_len : uncompressed_byte_len;
+        res_addr += (compression & RES_COMPRESSED) ? compressed_byte_len : uncompressed_byte_len;
     }
     //3. finish ack the remaining
     while(remaining_to_ack > 0){
         if (remaining_to_ack < dma_transaction_size)
             curr_len_ack = remaining_to_ack;
         //wait for DMAs to finish
-        ack_dma(curr_len_ack, which_blocks, casting);
+        ack_dma(curr_len_ack, which_blocks, compression);
         //ack pack
         if(which_blocks & USE_PACKETIZER){
             ack_packetizer(dst_rank, 1);
