@@ -89,9 +89,66 @@ If the base address is 0x1820000, and we can parse the memory from 0x10 offset t
  
  You can find more or less the same infos using `xclbinutil -i ccl_offload.xclbin --info`
 
- ```
- Instance:        ccl_offload_1                                                                                                                                                                                                                  Base Address: 0x1810000                                                                                                                                                                                                                                                                                                                                                                                                                                                                   Argument:          call_type                                                                                                                                                                                                                 Register Offset:   0x010                                                                                                                                                                                                                     Port:              s_axi_control                                                                                                                                                                                                             Memory:            <not applicable>                                                                                                                                                                                                                                                                                                                                                                                                                                                       Argument:          byte_count                                                                                                                                                                                                                Register Offset:   0x018                                                                                                                                                                                                                     Port:              s_axi_control                                                                                                                                                                                                             Memory:            <not applicable>                                                                                                                                                                                                                                                                                                                                                                                                                                                       Argument:          comm                                                                                                                                                                                                                      Register Offset:   0x020                                                                                                                                                                                                                     Port:              s_axi_control                                                                                                                                                                                                             Memory:            <not applicable>                                                                                                                                                                                                                                                                                                                                                                                                                                                       Argument:          root_src_dst                                                                                                                                                                                                              Register Offset:   0x028                                                                                                                                                                                                                     Port:              s_axi_control                                                                                                                                                                                                             Memory:            <not applicable>                                                                                                                                                                                                                                                                                                                                                                                                                                                       Argument:          reduce_op                                                                                                                                                                                                                 Register Offset:   0x030                                                                                                                                                                                                                     Port:              s_axi_control                                                                                                                                                                                                             Memory:            <not applicable>                                                                                                                                                                                                                                                                                                                                                                                                                                                       Argument:          tag                                                                                                                                                                                                                       Register Offset:   0x038                                                                                                                                                                                                                     Port:              s_axi_control                                                                                                                                                                                                             Memory:            <not applicable>                                                                                                                                                                                                                                                                                                                                                                                                                                                       Argument:          buf0_type                                                                                                                                                                                                                 Register Offset:   0x040                                                                                                                                                                                                                     Port:              s_axi_control                                                                                                                                                                                                             Memory:            <not applicable>                                                                                                                                                                                                                                                                                                                                                                                                                                                       Argument:          buf2_type                                                                                                                                                                                                                 Register Offset:   0x048                                                                                                                                                                                                                     Port:              s_axi_control                                                                                                                                                                                                             Memory:            <not applicable>                                                                                                                                                                                                                                                                                                                                                                                                                                                       Argument:          scalar08                                                                                                                                                                                                                  Register Offset:   0x050                                                                                                                                                                                                                     Port:              s_axi_control                                                                                                                                                                                                             Memory:            <not applicable>                                                                                                                                                                                                                                                                                                                                                                                                                                                       Argument:          buf0_ptr                                                                                                                                                                                                                  Register Offset:   0x058                                                                                                                                                                                                                     Port:              m_axi_0                                                                                                                                                                                                                   Memory:            HBM[6] (MEM_DRAM)                                                                                                                                                                                                         Memory:            HBM[7] (MEM_DRAM)                                                                                                                                                                                                         Memory:            HBM[8] (MEM_DRAM)                                                                                                                                                                                                         Memory:            HBM[9] (MEM_DRAM)                                                                                                                                                                                                         Memory:            HBM[10] (MEM_DRAM)
+```
+------------------------                                                                   
+Instance:        ccl_offload_1
+Base Address: 0x1810000 
+
+Argument:          call_type
+Register Offset:   0x010
+Port:              s_axi_control
+Memory:            <not applicable>
+
+Argument:          byte_count
+Register Offset:   0x018
+Port:              s_axi_control
+Memory:            <not applicable>
+
+Argument:          comm
+Register Offset:   0x020
+Port:              s_axi_control
+Memory:            <not applicable>
+
+Argument:          root_src_dst
+Register Offset:   0x028
+Port:              s_axi_control
+Memory:            <not applicable>
+
+Argument:          reduce_op
+Register Offset:   0x030
+Port:              s_axi_control
+Memory:            <not applicable>
+
+Argument:          tag
+Register Offset:   0x038
+Port:              s_axi_control
+Memory:            <not applicable>
+
+Argument:          buf0_type
+Register Offset:   0x040
+Port:              s_axi_control
+Memory:            <not applicable>
+
+Argument:          buf1_type
+Register Offset:   0x048
+Port:              s_axi_control
+Memory:            <not applicable>
+
+Argument:          buf2_type
+Register Offset:   0x050
+Port:              s_axi_control
+Memory:            <not applicable>
+
+Argument:          buf0_ptr
+Register Offset:   0x058
+Port:              m_axi_0
+Memory:            HBM[6] (MEM_DRAM)
+Memory:            HBM[7] (MEM_DRAM)
+Memory:            HBM[8] (MEM_DRAM)
+Memory:            HBM[9] (MEM_DRAM)
+Memory:            HBM[10] (MEM_DRAM)
 Memory:            HBM[11] (MEM_DRAM)
+  
 
 Argument:          buf1_ptr
 Register Offset:   0x064
@@ -110,7 +167,8 @@ Memory:            HBM[6] (MEM_DRAM)
 Memory:            HBM[7] (MEM_DRAM)
 Memory:            HBM[8] (MEM_DRAM)
 Memory:            HBM[9] (MEM_DRAM)
-Memory:            HBM[10] (MEM_DRAM)                                                                                                                                                                                                        Memory:            HBM[11] (MEM_DRAM) 
+Memory:            HBM[10] (MEM_DRAM)
+Memory:            HBM[11] (MEM_DRAM) 
 
 Argument:          s_axis_udp_rx_data
 Register Offset:   0x078
