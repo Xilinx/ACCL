@@ -63,8 +63,6 @@ extern "C" {
 #define DATAPATH_OFFCHIP_UDP_REDUCTION 5
 #define DATAPATH_OFFCHIP_TCP_REDUCTION 6
 #define DATAPATH_DMA_EXT_LOOPBACK      7
-//#define DATAPATH_OFFCHIP_RX_UDP      8 not used up to now since DMA are physically linked to depacketizer
-//#define DATAPATH_OFFCHIP_RX_TCP      9 not used up to now since DMA are physically linked to depacketizer
 
 #define SWITCH_M_UDP_TX    0
 #define SWITCH_M_TCP_TX    1
@@ -72,12 +70,18 @@ extern "C" {
 #define SWITCH_M_ARITH_OP0 3
 #define SWITCH_M_ARITH_OP1 4
 #define SWITCH_M_EXT_KRNL  5
+#define SWITCH_M_COMPRESS0 6
+#define SWITCH_M_COMPRESS1 7
+#define SWITCH_M_COMPRESS2 8
 
 #define SWITCH_S_DMA0_RX   0
 #define SWITCH_S_DMA1_RX   1
 #define SWITCH_S_DMA2_RX   2
 #define SWITCH_S_ARITH_RES 3
 #define SWITCH_S_EXT_KRNL  4
+#define SWITCH_S_COMPRESS0 5
+#define SWITCH_S_COMPRESS1 6
+#define SWITCH_S_COMPRESS2 7
 
 //PACKT CONST
 #define MAX_PACKETSIZE 1536
@@ -230,7 +234,7 @@ extern "C" {
 #define PACK_SEQ_NUMBER_ERROR                         22
 #define COMPRESSION_ERROR                             23
 
-//blocks used for data movement
+//data movement structures and defines
 #define USE_NONE    0
 #define USE_OP0_DMA 1
 #define USE_OP1_DMA 2
@@ -239,8 +243,26 @@ extern "C" {
 #define USE_RES_DMA_WITHOUT_TLAST 16
 #define USE_PACKETIZER 32
 
-#define S_AXI_CONTROL -1
+typedef struct{
+    uint64_t ptr; //actual byte pointer to the data
+    unsigned int elem_ratio; //scaling factor
+    unsigned int elem_bytes; //bytes per element
+} dm_addr;
 
+typedef struct{
+    unsigned int compression; //compression options
+    unsigned int which_dm; //indicate which datamover hardware to utilize
+    unsigned int elems_remaining; //number of uncompressed elements remaining to transfer
+    unsigned int elems_per_transfer; //number of uncompressed elements to transfer in each chunk
+    unsigned int op0_len; //elems_per_transfer * elem_width (which depends on compression)
+    unsigned int op1_len; //elems_per_transfer * elem_width (which depends on compression)
+    unsigned int res_len; //elems_per_transfer * elem_width (which depends on compression)
+    dm_addr op0_addr;
+    dm_addr op1_addr;
+    dm_addr res_addr;
+} dm_config;
+
+//utility functions for register mapped accesses
 #define Xil_Out32(offset, value) (*((volatile unsigned int *)(offset))) = (value)
 #define Xil_In32(offset) ({unsigned int value = *((volatile unsigned int *)(offset)); value; })
 #define SET(offset, mask) Xil_Out32(offset, Xil_In32(offset) | (mask))
@@ -255,28 +277,6 @@ extern "C" {
 //blocking get from stream channel
 #define getd(channel) ({unsigned int value; asm volatile ("getd\t%0,%1" : "=d" (value) : "d" (channel)); value; })
 
-typedef enum {
-    type_control,
-    type_int,
-    type_bool,
-    type_char,
-    type_uchar,
-    type_short,
-    type_ushort,
-    type_uint,
-    type_long,
-    type_ulong, 
-    type_float,
-    type_double,
-    type_half,
-    type_intptr,
-} type_t;
-
-typedef struct {
-    char   *name;
-    type_t type;
-    int    interface;
-} arg_t;
 
 typedef struct {
     unsigned int addrl;
