@@ -95,20 +95,20 @@ extern "C" {
 //**  XCC Operations          **
 //******************************
 //Housekeeping
-#define XCCL_CONFIG               0
+#define XCCL_CONFIG         0
 //Primitives
-#define XCCL_COPY                 1
-#define XCCL_REDUCE               2
-#define XCCL_SEND                 3 
-#define XCCL_RECV                 4
+#define XCCL_COPY           1
+#define XCCL_COMBINE        2
+#define XCCL_SEND           3 
+#define XCCL_RECV           4
 //Collectives
-#define XCCL_COLL_BCAST           5
-#define XCCL_COLL_SCATTER         6
-#define XCCL_COLL_GATHER          7
-#define XCCL_COLL_REDUCE          8
-#define XCCL_COLL_ALLGATHER       9
-#define XCCL_COLL_ALLREDUCE       10
-#define XCCL_COLL_REDUCE_SCATTER  11
+#define XCCL_BCAST          5
+#define XCCL_SCATTER        6
+#define XCCL_GATHER         7
+#define XCCL_REDUCE         8
+#define XCCL_ALLGATHER      9
+#define XCCL_ALLREDUCE      10
+#define XCCL_REDUCE_SCATTER 11
 
 //XCCL_CONFIG SUBFUNCTIONS
 #define HOUSEKEEP_IRQEN           0

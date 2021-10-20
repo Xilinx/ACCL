@@ -94,6 +94,7 @@ ifeq (vnx,$(MODE))
 else ifeq (tri,$(MODE))
 	ETH_IF := none
 	NET_XO = $(TCP_DUMMY_XO)
+	OTHER_XO = $(LOOPBACK_XO)
 	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/tcl/post_sys_link_tri.tcl
 else ifeq (lb,$(MODE))
 	ETH_IF := none

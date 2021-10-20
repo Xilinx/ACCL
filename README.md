@@ -11,6 +11,7 @@ ACCL currently supports Send/Recv and the following collectives:
 * All-gather
 * Reduce
 * All-reduce
+* Reduce-Scatter
 
 ## Repository Structure
 

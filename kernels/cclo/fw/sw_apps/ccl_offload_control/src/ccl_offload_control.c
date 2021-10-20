@@ -914,7 +914,7 @@ static inline int copy(	unsigned int count,
 }
 
 //performs an accumulate using DMA1 and DMA0. DMA0 rx reads op1 DMA1 rx reads op2 while DMA1 tx back to dst buffer
-int reduce_loopback(unsigned int count,
+int combine(unsigned int count,
                     unsigned int function,
                     uint64_t op0_addr,
                     uint64_t op1_addr,
@@ -1852,8 +1852,8 @@ int main() {
                 }
                 
                 break;
-            case XCCL_REDUCE:
-                retval = reduce_loopback(count, function, op0_addr, op1_addr, res_addr, compression_flags);
+            case XCCL_COMBINE:
+                retval = combine(count, function, op0_addr, op1_addr, res_addr, compression_flags);
                 break;
             case XCCL_COPY:
                 retval = copy(count, op0_addr, res_addr, compression_flags);
@@ -1864,25 +1864,25 @@ int main() {
             case XCCL_RECV:
                 retval = recv(root_src_dst, count, res_addr, msg_tag, compression_flags);
                 break;
-            case XCCL_COLL_BCAST:
+            case XCCL_BCAST:
                 retval = broadcast(count, root_src_dst, op0_addr, compression_flags);
                 break;
-            case XCCL_COLL_SCATTER:    
+            case XCCL_SCATTER:
                 retval = scatter(count, root_src_dst, op0_addr, res_addr, compression_flags);
                 break;
-            case XCCL_COLL_GATHER:
+            case XCCL_GATHER:
                 retval = gather(count, root_src_dst, op0_addr, res_addr, compression_flags);
                 break;
-            case XCCL_COLL_REDUCE:
+            case XCCL_REDUCE:
                 retval = reduce(count, function, root_src_dst, op0_addr, res_addr, compression_flags);
                 break;
-            case XCCL_COLL_ALLGATHER:
+            case XCCL_ALLGATHER:
                 retval = allgather(count, op0_addr, res_addr, compression_flags);
                 break;
-            case XCCL_COLL_ALLREDUCE:
+            case XCCL_ALLREDUCE:
                 retval = allreduce(count, function, op0_addr, res_addr, compression_flags);
                 break;
-            case XCCL_COLL_REDUCE_SCATTER:
+            case XCCL_REDUCE_SCATTER:
                 retval = scatter_reduce(count, function, op0_addr, res_addr, compression_flags);
                 break;
             default:
