@@ -30,7 +30,6 @@ The repository is organized as follows:
      - submodules for supported network stacks
    - [host](demo/host/): host code which drives the demo
      - [debug](demo/host/debug/): host-side debug scripts for XSCT
-- [docs](docs/): documentation.
 
 ## Build a demo with TCP stack. 
 
