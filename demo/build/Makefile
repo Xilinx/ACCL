@@ -140,6 +140,13 @@ $(TCP_XO):
 	git submodule update --init --recursive Vitis_with_100Gbps_TCP-IP
 	$(MAKE) -C Vitis_with_100Gbps_TCP-IP/ network_krnl DEVICE=$(PLATFORM) TEMP_DIR=_x.hw.$(XSA)/ XSA=$(XSA)
 
+tcp_stack_ips:
+	git submodule update --init --recursive Vitis_with_100Gbps_TCP-IP
+	rm -rf Vitis_with_100Gbps_TCP-IP/build
+	mkdir Vitis_with_100Gbps_TCP-IP/build
+	cmake -S Vitis_with_100Gbps_TCP-IP/ -BVitis_with_100Gbps_TCP-IP/build/ -DFDEV_NAME=$(BOARD) -DVIVADO_HLS_ROOT_DIR=/proj/xbuilds/2020.1_released/installs/lin64/Vivado/2020.1 -DVIVADO_ROOT_DIR=/proj/xbuilds/2020.1_released/installs/lin64/Vivado/2020.1 -DTCP_STACK_EN=1 -DTCP_STACK_RX_DDR_BYPASS_EN=1  -DTCP_STACK_WINDOW_SCALING=0 
+	make -C Vitis_with_100Gbps_TCP-IP/build installip
+
 $(XCLBIN): $(NET_XO) $(CONFIGFILE)
 	$(MAKE) -C ../../kernels PLATFORM=$(PLATFORM) DEBUG=$(DEBUG)
 	v++ --link --platform $(PLATFORM) --kernel_frequency $(FREQUENCY) --save-temps --temp_dir $(BUILD_DIR) $(CONFIG) -o $@ $(CCL_XO) $(ARITHMETIC_XO) $(NET_XO) $(OTHER_XO)
