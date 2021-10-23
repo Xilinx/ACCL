@@ -15,6 +15,7 @@
 #
 # *******************************************************************************/
 
+from argparse import ArgumentError
 import pynq
 from pynq import DefaultIP
 import os
@@ -158,16 +159,12 @@ HOST_CTRL_ADDRESS_RANGE    = 0x800
 RETCODE_OFFSET = 0x1FFC
 IDCODE_OFFSET = 0x1FF8
 
-class cclo(DefaultIP):
+class accl(DefaultIP):
     """
-    This class wrapps the common function of the collectives offload kernel
+    ACCL Python Driver
     """
-
-    bindto = ["Xilinx:ACCL:ccl_offload:1.0"]
-
-    def __init__(self, description):
-        super().__init__(description=description)
-        self._fullpath = description['fullpath']
+    def __init__(self, xclbin, ranks, local_rank, protocol="TCP", board_idx=0, nbufs=16, bufsize=1024, mem=None, arith_config=ACCL_DEFAULT_ARITH_CONFIG):
+        self.cclo = None
         #define supported types and corresponding arithmetic config
         self.arith_config = {}
         self.arithcfg_addr = 0
@@ -175,6 +172,9 @@ class cclo(DefaultIP):
         self.rx_buffer_spares = []
         self.rx_buffer_size = 0
         self.rx_buffers_adr = EXCHANGE_MEM_OFFSET_ADDRESS
+        #define buffers for POE
+        self.tx_buf_network = None
+        self.rx_buf_network = None
         #define another spare for general use (e.g. as accumulator for reduce/allreduce)
         self.utility_spare = None
         #define an empty list of communicators, to which users will add
@@ -185,6 +185,59 @@ class cclo(DefaultIP):
         self.ignore_safety_checks = False
         #TODO: use description to gather info about where to allocate spare buffers
         self.segment_size = None
+
+        # do initial config
+        local_alveo = pynq.Device.devices[board_idx]
+        self.ol=pynq.Overlay(xclbin, device=local_alveo)
+
+        if mem is None:
+            print("Best-effort attempt at identifying memories to use for RX buffers")
+            if local_alveo.name == 'xilinx_u250_gen3x16_xdma_shell_3_1':
+                print("Detected U250 (xilinx_u250_gen3x16_xdma_shell_3_1)")
+                self.devicemem   = self.ol.bank1
+                self.rxbufmem    = [self.ol.bank0, self.ol.bank1, self.ol.bank2]
+                self.networkmem  = self.ol.bank3
+            elif local_alveo.name == 'xilinx_u250_xdma_201830_2':
+                print("Detected U250 (xilinx_u250_xdma_201830_2)")
+                self.devicemem   = self.ol.bank0
+                self.rxbufmem    = self.ol.bank0
+                self.networkmem  = self.ol.bank0
+            elif local_alveo.name == 'xilinx_u280_xdma_201920_3':
+                print("Detected U280 (xilinx_u280_xdma_201920_3)")
+                self.devicemem   = self.ol.HBM0
+                self.rxbufmem    = [self.ol.HBM0, self.ol.HBM1, self.ol.HBM2, self.ol.HBM3, self.ol.HBM4, self.ol.HBM5] 
+                self.networkmem  = self.ol.HBM6
+        else:
+            self.devicemem, self.rxbufmem, self.networkmem = mem
+
+        self.cclo = self.ol.__getattr__(f"ccl_offload_0")
+        print("CCLO HWID: {} at {}".format(hex(self.get_hwid()), hex(self.cclo.mmio.base_addr)))
+        
+        if protocol == "UDP":
+            self.use_udp()
+        elif protocol == "TCP":
+            self.tx_buf_network = pynq.allocate((64*1024*1024,), dtype=np.int8, target=networkmem)
+            self.rx_buf_network = pynq.allocate((64*1024*1024,), dtype=np.int8, target=networkmem)
+            self.tx_buf_network.sync_to_device()
+            self.rx_buf_network.sync_to_device()
+            self.use_tcp()
+        elif protocol == "RDMA":
+            raise ArgumentError("RDMA not supported yet")
+        else:
+            raise ArgumentError("Unrecognized Protocol")
+
+        print("Configuring RX Buffers")
+        self.setup_rx_buffers(nbufs, bufsize, self.rxbufmem)
+        print("Configuring a communicator")
+        self.configure_communicator(ranks, local_rank)
+        print("Configuring arithmetic")
+        self.configure_arithmetic(configs=arith_config)
+
+        # set error timeout
+        self.set_timeout(1_000_000)
+
+        print("Accelerator ready!")
+
 
     class dummy_address:
         def __init__(self, adr=0):
@@ -198,7 +251,7 @@ class cclo(DefaultIP):
         for i in range(0,EXCHANGE_MEM_ADDRESS_RANGE, 4*num_word_per_line):
             memory = []
             for j in range(num_word_per_line):
-                memory.append(hex(self.read(EXCHANGE_MEM_OFFSET_ADDRESS+i+(j*4))))
+                memory.append(hex(self.cclo.read(EXCHANGE_MEM_OFFSET_ADDRESS+i+(j*4))))
             print(hex(EXCHANGE_MEM_OFFSET_ADDRESS + i), memory)
 
     def dump_host_control_memory(self):
@@ -207,11 +260,11 @@ class cclo(DefaultIP):
         for i in range(0,HOST_CTRL_ADDRESS_RANGE, 4*num_word_per_line):
             memory = []
             for j in range(num_word_per_line):
-                memory.append(hex(self.read(i+(j*4))))
-            print(hex(self.mmio.base_addr + i), memory)
+                memory.append(hex(self.cclo.read(i+(j*4))))
+            print(hex(self.cclo.mmio.base_addr + i), memory)
 
     def deinit(self):
-        print("Removing CCLO object at ",hex(self.mmio.base_addr))
+        print("Removing CCLO object at ",hex(self.cclo.mmio.base_addr))
         self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.reset_periph)
 
         for buf in self.rx_buffer_spares:
@@ -231,30 +284,35 @@ class cclo(DefaultIP):
         self.arith_config = configs
         for key in self.arith_config.keys():
             #write configuration into exchange memory
-            addr = self.arith_config[key].write(self.mmio, addr)
+            addr = self.arith_config[key].write(self.cclo.mmio, addr)
 
     def setup_rx_buffers(self, nbufs, bufsize, devicemem):
         addr = self.rx_buffers_adr
         self.rx_buffer_size = bufsize
-        self.write(addr,nbufs)
+        self.cclo.write(addr,nbufs)
         if not isinstance(devicemem, list):
             devicemem = [devicemem]
         for i in range(nbufs):
             #try to take a different bank where to put rank 
             devicemem_i = devicemem[ i % len(devicemem)]
-           
-            self.rx_buffer_spares.append(pynq.allocate((bufsize,), dtype=np.int8, target=devicemem_i))
+
+            # create, clear and sync buffers to device
+            buf = pynq.allocate((bufsize,), dtype=np.int8, target=devicemem_i)
+            buf[:] = np.zeros((bufsize,), dtype=np.int8)
+            buf.sync_to_device()
+
+            self.rx_buffer_spares.append(buf)
             #program this buffer into the accelerator
             addr += 4
-            self.write(addr, self.rx_buffer_spares[-1].physical_address & 0xffffffff)
+            self.cclo.write(addr, self.rx_buffer_spares[-1].physical_address & 0xffffffff)
             addr += 4
-            self.write(addr, (self.rx_buffer_spares[-1].physical_address>>32) & 0xffffffff)
+            self.cclo.write(addr, (self.rx_buffer_spares[-1].physical_address>>32) & 0xffffffff)
             addr += 4
-            self.write(addr, bufsize)
+            self.cclo.write(addr, bufsize)
             # clear remaining fields
             for _ in range(3,9):
                 addr += 4
-                self.write(addr, 0)
+                self.cclo.write(addr, 0)
 
         self.communicators_addr = addr+4
         max_higher = 1
@@ -264,7 +322,7 @@ class cclo(DefaultIP):
         #self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.reset_periph)
         self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.enable_irq)
         self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.enable_pkt)
-        print("time taken to enqueue buffers", self.read(0x1FF4))
+        print("time taken to enqueue buffers", self.cclo.read(0x1FF4))
         #set segmentation size equal to buffer size
         self.set_dma_transaction_size(bufsize)
         self.set_max_dma_transaction_flight(10)
@@ -272,30 +330,30 @@ class cclo(DefaultIP):
     def dump_rx_buffers_spares(self, nbufs=None):
         addr = self.rx_buffers_adr
         if nbufs is None:
-            assert self.read(addr) == len(self.rx_buffer_spares)
+            assert self.cclo.read(addr) == len(self.rx_buffer_spares)
             nbufs = len(self.rx_buffer_spares)
-        print(f"CCLO address:{hex(self.mmio.base_addr)}")
+        print(f"CCLO address:{hex(self.cclo.mmio.base_addr)}")
         nbufs = min(len(self.rx_buffer_spares), nbufs)
         for i in range(nbufs):
             addr   += 4
-            addrl   =self.read(addr)
+            addrl   =self.cclo.read(addr)
             addr   += 4
-            addrh   = self.read(addr)
+            addrh   = self.cclo.read(addr)
             addr   += 4
-            maxsize = self.read(addr)
-            #assert self.read(addr) == self.rx_buffer_size
+            maxsize = self.cclo.read(addr)
+            #assert self.cclo.read(addr) == self.rx_buffer_size
             addr   += 4
-            dmatag  = self.read(addr)
+            dmatag  = self.cclo.read(addr)
             addr   += 4
-            rstatus  = self.read(addr)
+            rstatus  = self.cclo.read(addr)
             addr   += 4
-            rxtag   = self.read(addr)
+            rxtag   = self.cclo.read(addr)
             addr   += 4
-            rxlen   = self.read(addr)
+            rxlen   = self.cclo.read(addr)
             addr   += 4
-            rxsrc   = self.read(addr)
+            rxsrc   = self.cclo.read(addr)
             addr   += 4
-            seq     = self.read(addr)
+            seq     = self.cclo.read(addr)
             
             if rstatus == 0 :
                 status =  "NOT USED"
@@ -311,7 +369,8 @@ class cclo(DefaultIP):
                 content = str(self.rx_buffer_spares[i].view(np.uint8))
             except Exception :
                 content= "xxread failedxx"
-            print(f"SPARE RX BUFFER{i}:\t ADDR: {hex(int(str(addrh)+str(addrl)))} \t STATUS: {status} \t OCCUPACY: {rxlen}/{maxsize} \t DMA TAG: {hex(dmatag)} \t  MPI TAG:{hex(rxtag)} \t SEQ: {seq} \t SRC:{rxsrc} \t content {content}")
+            buf_phys_addr = addrh*(2**32)+addrl
+            print(f"SPARE RX BUFFER{i}:\t ADDR: {hex(buf_phys_addr)} \t STATUS: {status} \t OCCUPACY: {rxlen}/{maxsize} \t DMA TAG: {hex(dmatag)} \t  MPI TAG:{hex(rxtag)} \t SEQ: {seq} \t SRC:{rxsrc} \t content {content}")
 
     def prepare_call(self, addr_0, addr_1, addr_2, compress_dtype=None):
         # no addresses, this is a config call
@@ -381,14 +440,14 @@ class cclo(DefaultIP):
 
     def call_async(self, scenario=CCLOp.nop, count=1, comm=0, root_src_dst=0, function=0, tag=TAG_ANY, compress_dtype=None, stream_flags=0, addr_0=None, addr_1=None, addr_2=None, waitfor=[]):
         arithcfg, compression_flags, addr_0, addr_1, addr_2 = self.prepare_call(addr_0, addr_1, addr_2, compress_dtype)
-        return self.start(scenario, count, comm, root_src_dst, function, tag, arithcfg, compression_flags, stream_flags, addr_0, addr_1, addr_2, waitfor=waitfor)        
+        return self.cclo.start(scenario, count, comm, root_src_dst, function, tag, arithcfg, compression_flags, stream_flags, addr_0, addr_1, addr_2, waitfor=waitfor)        
 
     def call_sync(self, scenario=CCLOp.nop, count=1, comm=0, root_src_dst=0, function=0, tag=TAG_ANY, compress_dtype=None, stream_flags=0, addr_0=None, addr_1=None, addr_2=None):
         arithcfg, compression_flags, addr_0, addr_1, addr_2 = self.prepare_call(addr_0, addr_1, addr_2, compress_dtype)
-        return self.call(scenario, count, comm, root_src_dst, function, tag, arithcfg, compression_flags, stream_flags, addr_0, addr_1, addr_2)        
+        return self.cclo.call(scenario, count, comm, root_src_dst, function, tag, arithcfg, compression_flags, stream_flags, addr_0, addr_1, addr_2)        
 
     def get_retcode(self):
-        return self.read(RETCODE_OFFSET)
+        return self.cclo.read(RETCODE_OFFSET)
 
     def self_check_return_value(call):
         def wrapper(self, *args, **kwargs):
@@ -404,12 +463,11 @@ class cclo(DefaultIP):
         retcode = self.get_retcode()
         if retcode != 0:
             error_msg = ErrorCode(retcode).name if retcode not in ErrorCode else f"UNKNOWN ERROR ({retcode})"
-            raise Exception(f"CCLO @{hex(self.mmio.base_addr)}: during {label} {error_msg} you should consider resetting mpi_offload")
-                
+            raise Exception(f"CCLO @{hex(self.cclo.mmio.base_addr)}: during {label} {error_msg} you should consider resetting mpi_offload")
 
     def get_hwid(self):
         #TODO: add check
-        return self.read(IDCODE_OFFSET) 
+        return self.cclo.read(IDCODE_OFFSET) 
 
     def set_timeout(self, value, run_async=False, waitfor=[]):
         handle = self.call_async(scenario=CCLOp.config, count=value, function=CCLOCfgFunc.set_timeout, waitfor=waitfor)
@@ -460,7 +518,7 @@ class cclo(DefaultIP):
             return
         self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.set_dma_transaction_size, count=value)   
         self.segment_size = value
-        print("time taken to start and stop timer", self.read(0x1FF4))
+        print("time taken to start and stop timer", self.cclo.read(0x1FF4))
 
     @self_check_return_value
     def set_max_dma_transaction_flight(self, value=0):
@@ -470,36 +528,39 @@ class cclo(DefaultIP):
             return
         self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.set_max_dma_transactions, count=value)   
 
-    def configure_communicator(self, ranks, local_rank, vnx=False):
+    def configure_communicator(self, ranks, local_rank, sess_ids=None):
         assert len(self.rx_buffer_spares) > 0, "RX buffers unconfigured, please call setup_rx_buffers() first"
+        # check for session IDs
+        # these must be provided explictly for UDP, but TCP auto-generates them
+        if sess_ids is not None:
+            assert len(sess_ids) == len(ranks), "Number of session IDs must match number of ranks"
+        else:
+            sess_ids = [0xFFFFFFFF for i in range(len(ranks))]
         if len(self.communicators) == 0:
             addr = self.communicators_addr
         else:
             addr = self.communicators[-1]["addr"]
         comm_address = EXCHANGE_MEM_OFFSET_ADDRESS + addr
         communicator = {"local_rank": local_rank, "addr": comm_address, "ranks": ranks, "inbound_seq_number_addr":[0 for _ in ranks], "outbound_seq_number_addr":[0 for _ in ranks], "session_addr":[0 for _ in ranks]}
-        self.write(addr,len(ranks))
+        self.cclo.write(addr,len(ranks))
         addr += 4
-        self.write(addr,local_rank)
+        self.cclo.write(addr,local_rank)
         for i in range(len(ranks)):
             addr += 4
             #ip string to int conversion from here:
             #https://stackoverflow.com/questions/5619685/conversion-from-ip-string-to-integer-and-backward-in-python
-            self.write(addr, int(ipaddress.IPv4Address(ranks[i]["ip"])))
+            self.cclo.write(addr, int(ipaddress.IPv4Address(ranks[i]["ip"])))
             addr += 4
-            self.write(addr,ranks[i]["port"])
+            self.cclo.write(addr,ranks[i]["port"])
             #leave 2 32 bit space for inbound/outbound_seq_number
             addr += 4
-            self.write(addr,0)
+            self.cclo.write(addr,0)
             communicator["inbound_seq_number_addr"][i]  = addr
             addr +=4
-            self.write(addr,0)
+            self.cclo.write(addr,0)
             communicator["outbound_seq_number_addr"][i] = addr
-            #a 32 bit number is reserved for session id
-            #when using the UDP stack, write the rank number into the session register
-            # sessions are initialized to 0xFFFFFFFF
             addr += 4
-            self.write(addr, i if vnx else 0xFFFFFFFF)
+            self.cclo.write(addr, sess_ids[i])
             communicator["session_addr"][i] = addr
         self.communicators.append(communicator)
         self.arithcfg_addr = addr + 4
@@ -509,27 +570,27 @@ class cclo(DefaultIP):
             addr    = self.communicators_addr
         else:
             addr    = self.communicators[-1]["addr"] - EXCHANGE_MEM_OFFSET_ADDRESS
-        nr_ranks    = self.read(addr)
+        nr_ranks    = self.cclo.read(addr)
         addr +=4
-        local_rank  = self.read(addr)
+        local_rank  = self.cclo.read(addr)
         print(f"Communicator. local_rank: {local_rank} \t number of ranks: {nr_ranks}.")
         for i in range(nr_ranks):
             addr +=4
             #ip string to int conversion from here:
             #https://stackoverflow.com/questions/5619685/conversion-from-ip-string-to-integer-and-backward-in-python
-            ip_addr_rank = str(ipaddress.IPv4Address(self.read(addr)))
+            ip_addr_rank = str(ipaddress.IPv4Address(self.cclo.read(addr)))
             addr += 4
             #when using the UDP stack, write the rank number into the port register
             #the actual port is programmed into the stack itself
-            port                = self.read(addr)
+            port                = self.cclo.read(addr)
             #leave 2 32 bit space for inbound/outbound_seq_number
             addr += 4
-            inbound_seq_number  = self.read(addr)
+            inbound_seq_number  = self.cclo.read(addr)
             addr +=4
-            outbound_seq_number = self.read(addr)
+            outbound_seq_number = self.cclo.read(addr)
             #a 32 bit integer is dedicated to session id 
             addr += 4
-            session = self.read(addr)
+            session = self.cclo.read(addr)
             print(f"> rank {i} (ip {ip_addr_rank}:{port} ; session {session}) : <- inbound_seq_number {inbound_seq_number}, -> outbound_seq_number {outbound_seq_number}")
    
 
