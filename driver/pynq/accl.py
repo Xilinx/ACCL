@@ -689,19 +689,19 @@ class accl(DefaultIP):
             dst_buf.sync_from_device()
 
     @self_check_return_value
-    def bcast(self, comm_id, buf, root, from_fpga=False, to_fpga=False, run_async=False, waitfor=[]):
+    def bcast(self, comm_id, buf, count, root, from_fpga=False, to_fpga=False, run_async=False, waitfor=[]):
         comm = self.communicators[comm_id]
         is_root = comm["local_rank"] == root
         if not to_fpga and not(is_root) and run_async:
             warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
-        if buf.size == 0:
+        if count == 0:
             warnings.warn("zero size buffer")
             return
         # sync the transmit source in one go
         if not from_fpga and is_root:
             buf.sync_to_device()
 
-        prevcall = [self.call_async(scenario=CCLOp.bcast, count=buf.size, comm=self.communicators[comm_id]["addr"], root_src_dst=root, addr_0=buf, waitfor=waitfor)]
+        prevcall = [self.call_async(scenario=CCLOp.bcast, count=count, comm=self.communicators[comm_id]["addr"], root_src_dst=root, addr_0=buf, waitfor=waitfor)]
         
         if run_async:
             return prevcall[0]

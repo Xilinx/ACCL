@@ -16,44 +16,11 @@
 # *******************************************************************************/
 
 import sys
-import warnings
 import numpy as np
 sys.path.append('../../driver/pynq/')
-from cclo import *
-import json 
+from accl import accl
 import argparse
-import random
-import time
 import itertools
-
-def configure_xccl(xclbin, board_idx, nbufs=16, bufsize=1024):  
-    local_alveo = pynq.Device.devices[board_idx]
-    ol=pynq.Overlay(xclbin, device=local_alveo)
-
-    print("Allocating 1MB scratchpad memory")
-    if local_alveo.name == 'xilinx_u250_xdma_201830_2':
-        devicemem = ol.__getattr__(f"bank0")
-
-    cclo = ol.__getattr__(f"ccl_offload_0")
-    print("CCLO HWID: {} at {}".format(hex(cclo.get_hwid()), hex(cclo.mmio.base_addr)))
-
-    ranks = [{"ip": "127.0.0.1", "port": i} for i in range(2)]
-    print(devicemem)
-    
-    cclo.use_udp()
-    print("Configuring RX Buffers")
-    cclo.setup_rx_buffers(nbufs, bufsize, devicemem)
-    print("Configuring a communicator")
-    cclo.configure_communicator(ranks, 0)
-    print("Configuring arithmetic")
-    cclo.configure_arithmetic()
-
-    # set error timeout
-    cclo.set_timeout(1_000_000)
-
-    print("Accelerator ready!")
-
-    return ol, cclo, devicemem
 
 def get_buffers(count, op0_dt, op1_dt, res_dt, devicemem):
     op0_buf = pynq.allocate((count,), dtype=op0_dt, target=devicemem)
@@ -63,26 +30,28 @@ def get_buffers(count, op0_dt, op1_dt, res_dt, devicemem):
     op1_buf[:] = np.random.randn(count).astype(op1_dt)
     return op0_buf, op1_buf, res_buf
 
-def test_copy(cclo_inst, devicemem):
+def test_copy(cclo_inst, remote=False):
     err_count = 0
     dt = [np.float32, np.half, np.float64]
     for op_dt, res_dt in itertools.product(dt, repeat=2):
-        op_buf, _, res_buf = get_buffers(1024, op_dt, op_dt, res_dt, devicemem)
-        cclo_inst.copy(op_buf, res_buf)
-        if not np.isclose(op_buf, res_buf).all():
-            err_count += 1
-            print("Copy failed on pair ",dt_pair)
+        op_buf, _, res_buf = get_buffers(1024, op_dt, op_dt, res_dt, cclo_inst.devicemem)
+        cclo_inst.copy(op_buf, res_buf, from_fpga=remote, to_fpga=remote)
+        if not remote:
+            if not np.isclose(op_buf, res_buf).all():
+                err_count += 1
+                print("Copy failed on pair ", op_dt, res_dt)
     if err_count == 0:
         print("Copy succeeded")
 
-def test_combine(cclo_inst, devicemem):
+def test_combine(cclo_inst, remote=False):
     for op0_dt, op1_dt, res_dt in itertools.product([np.float32, np.half], repeat=3):
-        op0_buf, op1_buf, res_buf = get_buffers(1024, op0_dt, op1_dt, res_dt, devicemem)
+        op0_buf, op1_buf, res_buf = get_buffers(1024, op0_dt, op1_dt, res_dt, cclo_inst.devicemem)
         sum_fp = op0_buf.astype(np.float32) + op1_buf.astype(np.float32)
 
-        cclo_inst.combine(ACCLReduceFunctions.SUM, op0_buf, op1_buf, res_buf)
+        cclo_inst.combine(ACCLReduceFunctions.SUM, op0_buf, op1_buf, res_buf, val1_from_fpga=remote, val2_from_fpga=remote, to_fpga=remote)
 
-        assert np.allclose(res_buf.astype(np.float32), sum_fp)
+        if not remote:
+            assert np.allclose(res_buf.astype(np.float32), sum_fp)
 
 if __name__ == "__main__":    
     parser = argparse.ArgumentParser(description='Tests for MPI collectives offload with UDP (VNx) backend')
@@ -96,30 +65,37 @@ if __name__ == "__main__":
     parser.add_argument('--debug',          action='store_true', default=False, help='enable debug mode')
     parser.add_argument('--all',            action='store_true', default=False, help='Select all collectives')
     parser.add_argument('--nop',            action='store_true', default=False, help='Run nop test')
-    parser.add_argument('--accumulate',     action='store_true', default=False, help='Run fp/dp/i32/i64 test')
+    parser.add_argument('--combine',        action='store_true', default=False, help='Run fp/dp/i32/i64 test')
     parser.add_argument('--copy',           action='store_true', default=False, help='Run copy test')
+    parser.add_argument('--nosync',         action='store_true', default=False, help='Run tests without syncing buffers')
 
     args = parser.parse_args()
     if args.all:
-        args.nop        = True
-        args.accumulate = True
-        args.copy       = True
-        
+        args.nop     = True
+        args.combine = True
+        args.copy    = True
+
+    #set a random seed to make it reproducible
+    np.random.seed(2021)
+
+    ranks = []
+    for i in range(2):
+        ranks.append({"ip": "127.0.0.1", "port": 17000})
+
     #configure FPGA and CCLO cores with the default 16 RX buffers of bsize KB each
-    ol, cclo_inst, devicemem = configure_xccl(args.xclbin, args.device_index, nbufs=args.nbufs, bufsize=args.segment_size)
-    cclo_inst.dump_rx_buffers_spares()
+    cclo_inst = accl(args.xclbin, ranks, 0, protocol="UDP", board_idx=args.device_index)
 
     try:
-        #set a random seed to make it reproducible
-        np.random.seed(2021)
+        if not args.nosync:
+            cclo_inst.dump_rx_buffers_spares()
 
-        if args.accumulate:
+        if args.combine:
             for i in range(args.nruns):
-                test_acc(cclo_inst, devicemem)
+                test_combine(cclo_inst, remote=args.nosync)
 
         if args.copy:
             for i in range(args.nruns):
-                test_copy(cclo_inst, devicemem)   
+                test_copy(cclo_inst, remote=args.nosync)
 
     except KeyboardInterrupt:
         print("CTR^C")
@@ -128,6 +104,7 @@ if __name__ == "__main__":
         import traceback
         traceback.print_tb(e.__traceback__)
         cclo_inst.dump_communicator()
-        cclo_inst.dump_rx_buffers_spares()
+        if not args.nosync:
+            cclo_inst.dump_rx_buffers_spares()
 
     cclo_inst.deinit()
