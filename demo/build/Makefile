@@ -22,7 +22,6 @@ PROFILE ?= none
 MODE ?= tcp
 FREQUENCY = 250
 CCL_XO=../../kernels/cclo/ccl_offload.xo
-
 VNX=xup_vitis_network_example
 NETLAYERDIR = $(VNX)/NetLayers
 CMACDIR     = $(VNX)/Ethernet
@@ -73,7 +72,7 @@ endif
 CONFIGFILE := config/link_config_$(BOARD)_$(MODE).ini
 CONFIG := --config $(CONFIGFILE)
 ifeq (vnx,$(MODE))
-	CMAC_IP_FOLDER = $(shell readlink -f ./$(CMACDIR)/cmac)
+	CMAC_IP_FOLDER = $(shell readlink -f ./$(CMACDIR)/packaged_kernel_cmac_0_$(PLATFORM))
 	ifeq (u50,$(findstring u50, $(PLATFORM)))
 		HLS_IP_FOLDER  = $(shell readlink -f ./$(NETLAYERHLS)/synthesis_results_HMB)
 	endif
@@ -86,7 +85,6 @@ ifeq (vnx,$(MODE))
 	ifeq (u280,$(findstring u280, $(PLATFORM)))
 		HLS_IP_FOLDER  = $(shell readlink -f ./$(NETLAYERHLS)/synthesis_results_HMB)
 	endif
-	CONFIG += --connectivity.nk cmac_$(ETH_IF):1:cmac_inst
 	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/$(VNX)/post_sys_link.tcl
 	NET_XO = $(CMAC_UDP_XO) $(UDP_XO)
 	CONFIG += --user_ip_repo_paths $(CMAC_IP_FOLDER)
@@ -118,8 +116,8 @@ all: $(XCLBIN)
 .PHONY: vnx
 vnx: $(CMAC_UDP_XO) $(UDP_XO)
 
-$(CMAC_UDP_XO) &:	
-	git submodule update --init --recursive xup_vitis_network_example	
+$(CMAC_UDP_XO) &:
+	git submodule update --init --recursive xup_vitis_network_example
 	$(MAKE) -C xup_vitis_network_example/Ethernet DEVICE=$(PLATFORM) INTERFACE=$(ETH_IF) all
 
 $(UDP_XO):
