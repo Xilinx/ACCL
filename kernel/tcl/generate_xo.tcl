@@ -22,12 +22,12 @@ open_project ./ccl_offload_ex/ccl_offload_ex.xpr
 
 # replace the default top with the modified wrapper
 remove_files ./ccl_offload_ex/imports/ccl_offload.v
-add_files -norecurse ./hdl/ccl_offload.v
+add_files -norecurse ./hdl/ccl_offload.v -force
 update_compile_order -fileset sources_1
 
 # add elf file and associate it
 remove_files  ./ccl_offload_ex/ccl_offload_ex.sdk/ccl_offload_control/Debug/ccl_offload_control.elf
-add_files -norecurse $elf
+add_files -norecurse $elf -force
 set_property SCOPED_TO_REF ccl_offload_bd [get_files -all -of_objects [get_fileset sources_1] $elf]
 set_property SCOPED_TO_CELLS { control/microblaze_0 } [get_files -all -of_objects [get_fileset sources_1] $elf]
 
@@ -42,7 +42,7 @@ write_checkpoint ./ccl_offload_ex/ccl_offload_ex.runs/synth_1/packaged.dcp
 write_xdc ./ccl_offload_ex/ccl_offload_ex.runs/synth_1/packaged.xdc
 close_design
 package_project_dcp_and_xdc ./ccl_offload_ex/ccl_offload_ex.runs/synth_1/packaged.dcp ./ccl_offload_ex/ccl_offload_ex.runs/synth_1/packaged.xdc ./ccl_offload_ex/ccl_offload Xilinx ACCL ccl_offload
-package_xo  -xo_path ./ccl_offload_ex/exports/ccl_offload.xo -kernel_name ccl_offload -ip_directory ./ccl_offload_ex/ccl_offload -kernel_xml ./ccl_offload_ex/imports/kernel.xml
+package_xo  -xo_path ./ccl_offload_ex/exports/ccl_offload.xo -kernel_name ccl_offload -ip_directory ./ccl_offload_ex/ccl_offload -kernel_xml ./xml/kernel.xml
 
 # close and exit
 close_project
