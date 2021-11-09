@@ -22,20 +22,11 @@
 using namespace hls;
 using namespace std;
 
-void hostctrl(	ap_uint<32> scenario,
-				ap_uint<32> len,
-				ap_uint<32> comm,
-				ap_uint<32> root_src_dst,
-				ap_uint<32> function,
-				ap_uint<32> msg_tag,
-				ap_uint<32> buf0_type,
-				ap_uint<32> buf1_type,
-				ap_uint<32> buf2_type,
-				ap_uint<64> addra,
-				ap_uint<64> addrb,
-				ap_uint<64> addrc,
-				stream<ap_uint<32>> &cmd,
-				stream<ap_uint<32>> &sts
+#define DATA_WIDTH 512
+
+void hostctrl_in(	
+                stream<ap_uint<DATA_WIDTH> > & in,
+				stream<ap_uint<32> > & out
 );
 
 int main(){
@@ -43,25 +34,38 @@ int main(){
 	ap_uint<64> addrb;
 	addrb(31,0) = 5;
 	addrb(63,32) = 7;
-	stream<ap_uint<32>> cmd;
-	stream<ap_uint<32>> sts;
-	sts.write(1);
-	hostctrl(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, addrb, 10, cmd, sts);
-	nerrors += (cmd.read() != 0);
-	nerrors += (cmd.read() != 1);
-	nerrors += (cmd.read() != 2);
-	nerrors += (cmd.read() != 3);
-	nerrors += (cmd.read() != 4);
-	nerrors += (cmd.read() != 5);
-	nerrors += (cmd.read() != 6);
-	nerrors += (cmd.read() != 7);
-	nerrors += (cmd.read() != 8);
-	nerrors += (cmd.read() != 9);
-	nerrors += (cmd.read() != 0);
-	nerrors += (cmd.read() != addrb(31,0));
-	nerrors += (cmd.read() != addrb(63,32));
-	nerrors += (cmd.read() != 10);
-	nerrors += (cmd.read() != 0);
+	ap_uint<DATA_WIDTH> in_data;
+	stream<ap_uint<DATA_WIDTH>> testin;
+	stream<ap_uint<32>> testout;
+	in_data.range(31,0)  = 0;
+	in_data.range(63,32) = 1;
+	in_data.range(95,64) = 2;
+ 	in_data.range(127,96) = 3;
+    in_data.range(159,128) = 4;
+    in_data.range(191,160) = 5;
+    in_data.range(223,192) = 6;
+    in_data.range(255,224) = 7;
+    in_data.range(287,256) = 8;
+    in_data.range(319,288) = 9;
+	in_data.range(383,320) = 10;
+	in_data.range(447,384) = 11;
+	testin.write(in_data);
+	testout.write(1);
+	hostctrl_in(testin, testout);
+	in_data = testin.read();
+	nerrors += (in_data.range(31,0)   != 0);
+	nerrors += (in_data.range(63,32)  != 1);
+	nerrors += (in_data.range(95,64)  != 2);
+	nerrors += (in_data.range(127,96) != 3);
+	nerrors += (in_data.range(159,128) != 4);
+	nerrors += (in_data.range(191,160) != 5);
+	nerrors += (in_data.range(223,192) != 6);
+	nerrors += (in_data.range(255,224) != 7);
+	nerrors += (in_data.range(287,256) != 8);
+	nerrors += (in_data.range(319,288) != 9);
+	nerrors += (in_data.range(383,320) != 10);
+	nerrors += (in_data.range(447,384) != 11);
+
 	std::cout << std::endl;
 	std::cout << std::endl;
 	std::cout << "******************************"<< std::endl;
@@ -69,5 +73,6 @@ int main(){
 	std::cout << "******************************"<< std::endl;
 	std::cout << std::endl;
 	std::cout << std::endl;
+	
 	return 0;
 }

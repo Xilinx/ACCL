@@ -47,6 +47,7 @@ xsa: $(XCCL_XSA)
 
 $(XCCL_XSA): $(GEN_KERNEL_TCL) $(REBUILD_BD_TCL)  tcl/control_bd.tcl tcl/dma_bd.tcl tcl/rx_bd.tcl tcl/tx_bd.tcl
 	make -C hls/hostctrl DEVICE=$(FPGAPART)
+	make -C hls/hostctrl_in DEVICE=$(FPGAPART)
 	make -C hls/arith DEVICE=$(FPGAPART)
 	make -C hls/vnx_intf DEVICE=$(FPGAPART)
 	make -C hls/tcp_intf DEVICE=$(FPGAPART)

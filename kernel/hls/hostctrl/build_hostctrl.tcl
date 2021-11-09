@@ -50,7 +50,6 @@ switch $command {
     }
 }
 
-
 open_project build_hostctrl
 
 add_files hostctrl.cpp -cflags "-std=c++14"
