@@ -62,6 +62,26 @@ def test_combine(cclo_inst, count):
             print("Combine failed on pair ", op0_dt, op1_dt, res_dt)
         else:
             print("Combine succeeded on pair ", op0_dt, op1_dt, res_dt)
+    if err_count == 0:
+        print("Combine succeeded")
+
+def test_sendrecv(cclo_inst, count):
+    err_count = 0
+    dt = [np.float32]#[np.float32, np.half]
+    for op_dt, res_dt in itertools.product(dt, repeat=2):
+        op_buf, _, res_buf = get_buffers(count, op_dt, op_dt, res_dt, cclo_inst)
+        op_buf.sync_to_device()
+        res_buf.sync_to_device()
+        # send to self (effectively copy via external udp streams)
+        cclo_inst.send(0, op_buf, count, 0, tag=5)
+        cclo_inst.recv(0, res_buf, count, 0, tag=5)
+        if not np.isclose(op_buf.buf, res_buf.buf).all():
+            err_count += 1
+            print("Send/recv failed on pair ", op_dt, res_dt)
+        else:
+            print("Send/recv succeeded on pair ", op_dt, res_dt)
+    if err_count == 0:
+        print("Send/recv succeeded")
 
 if __name__ == "__main__":    
     parser = argparse.ArgumentParser(description='Tests for MPI collectives offload with UDP (VNx) backend')
@@ -73,6 +93,7 @@ if __name__ == "__main__":
     parser.add_argument('--nop',     action='store_true', default=False, help='Run nop test')
     parser.add_argument('--combine', action='store_true', default=False, help='Run fp/dp/i32/i64 test')
     parser.add_argument('--copy',    action='store_true', default=False, help='Run copy test')
+    parser.add_argument('--sndrcv',  action='store_true', default=False, help='Run send/receive test')
     parser.add_argument('--nosync',  action='store_true', default=False, help='Run tests without syncing buffers')
 
     args = parser.parse_args()
@@ -100,6 +121,10 @@ if __name__ == "__main__":
         if args.copy:
             for i in range(args.nruns):
                 test_copy(cclo_inst, args.count)
+        
+        if args.sndrcv:
+            for i in range(args.nruns):
+                test_sendrecv(cclo_inst, args.count)
 
     except KeyboardInterrupt:
         print("CTR^C")
