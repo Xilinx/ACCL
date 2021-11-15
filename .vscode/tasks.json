@@ -1,0 +1,43 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "type": "shell",
+            "label": "g++ build active file",
+            "command": "/usr/bin/g++",
+            "args": [
+                "-fdiagnostics-color=always",
+                "-g",
+                "-DACCL_BD_SIM",
+                "-I../../../../hlslib/include/hlslib/xilinx/",
+                "-I/home/lpetrica/Xilinx/Vivado/2020.2/include/",
+                "-I../../../reduce_sum",
+                "-I../../../cclo/hls/vnx_intf",
+                "-I../../../hp_fp_stream_conv",
+                "-I../../../fp_hp_stream_conv",
+                "-I../sw_apps/ccl_offload_control/src",
+                "${file}",
+                "../sw_apps/ccl_offload_control/src/ccl_offload_control.c",
+                "../../../reduce_sum/reduce_sum.cpp",
+                "../../hls/vnx_intf/vnx_depacketizer.cpp",
+                "../../hls/vnx_intf/vnx_packetizer.cpp",
+                "-o",
+                "${fileDirname}/${fileBasenameNoExtension}",
+                "-lpthread",
+                "-lzmqpp",
+                "-lzmq",
+                "-ljsoncpp"
+            ],
+            "options": {
+                "cwd": "${fileDirname}"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        }
+    ]
+}

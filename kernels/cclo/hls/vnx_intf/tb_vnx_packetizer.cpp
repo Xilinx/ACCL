@@ -15,19 +15,10 @@
 #
 # *******************************************************************************/
 
-#include "ap_axi_sdata.h"
-#include "hls_stream.h"
-#include "ap_int.h"
+#include "vnx.h"
 
 using namespace hls;
 using namespace std;
-
-#define DATA_WIDTH 512
-
-void vnx_packetizer(	stream<ap_axiu<DATA_WIDTH,0,0,0> > & in,
-			stream<ap_axiu<DATA_WIDTH,0,0,16> > & out,
-			stream<ap_uint<32> > & cmd,
-			unsigned int max_pktsize);
 
 int ntransfers(int nbytes){
 	int bytes_per_transfer = DATA_WIDTH/8;
@@ -83,7 +74,7 @@ int main(){
 		if(outword.data != goldenword.data) return 1;
 		if(outword.last != goldenword.last) return 1;
 	}
-	if(sts.data(31,90) != message_seq)	return 1;
+	if(sts.read() != seq)	return 1;
 	
 	//1536B transfer
 	seq++;
@@ -101,7 +92,7 @@ int main(){
 		golden.write(inword);
 	}
 	
-	vnx_packetizer(in, out, cmd, 1536/64);
+	vnx_packetizer(in, out, cmd, sts, 1536/64);
 	
 	//parse header
 	outword = out.read();
@@ -118,7 +109,7 @@ int main(){
 		if(outword.data != goldenword.data) return 1;
 		if(outword.last != goldenword.last) return 1;
 	}
-	if(sts.data(31,90) != message_seq)	return 1;
+	if(sts.read() != seq)	return 1;
 	
 	//10KB transfer	
 	seq++;
@@ -136,7 +127,7 @@ int main(){
 		golden.write(inword);
 	}
 	
-	vnx_packetizer(in, out, cmd, 1536/64);
+	vnx_packetizer(in, out, cmd, sts, 1536/64);
 	
 	//parse header
 	outword = out.read();
@@ -159,7 +150,7 @@ int main(){
 			if(outword.last != goldenword.last) return 1;
 		}
 	}
-	if(sts.data(31,90) != message_seq)	return 1;
+	if(sts.read() != seq)	return 1;
 
 	return 0;
 }

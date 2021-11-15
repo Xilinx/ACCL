@@ -15,18 +15,10 @@
 #
 # *******************************************************************************/
 
-#include "ap_axi_sdata.h"
-#include "hls_stream.h"
-#include "ap_int.h"
+#include "vnx.h"
 
 using namespace hls;
 using namespace std;
-
-#define DATA_WIDTH 512
-
-void vnx_depacketizer(	stream<ap_axiu<DATA_WIDTH,0,0,16> > & in,
-			stream<ap_axiu<DATA_WIDTH,0,0,0> > & out,
-			stream<ap_uint<32> > & sts);
 
 int main(){
 

@@ -19,20 +19,10 @@
 #include "hls_stream.h"
 #include "ap_int.h"
 #include <stdint.h>
+#include "reduce_sum.h"
 
 using namespace hls;
 using namespace std;
-
-#ifndef DATA_WIDTH
-#define DATA_WIDTH 512
-#endif
-
-#ifndef DATA_TYPE
-#define DATA_TYPE float
-#endif
-
-#define specialization(dt, dw) reduce_sum_ ## dt ## _ ## dw
-#define top(dt, dw) specialization(dt, dw)
 
 template<unsigned int data_width, typename T>
 void stream_add(stream<ap_axiu<2*data_width,0,0,0> > & in,
@@ -67,14 +57,46 @@ void stream_add(stream<ap_axiu<2*data_width,0,0,0> > & in,
 
 		done = (op_block.last == 1);
 	}
-
-
 }
 
-void top(DATA_TYPE, DATA_WIDTH)(stream<ap_axiu<2*DATA_WIDTH,0,0,0> > & in,
+void reduce_sum_float(stream<ap_axiu<2*DATA_WIDTH,0,0,0> > & in,
 				stream<ap_axiu<DATA_WIDTH,0,0,0> > & out) {
 #pragma HLS INTERFACE axis register both port=in
 #pragma HLS INTERFACE axis register both port=out
 #pragma HLS INTERFACE ap_ctrl_none port=return
-stream_add<DATA_WIDTH, DATA_TYPE>(in, out);
+stream_add<DATA_WIDTH, float>(in, out);
 }
+
+void reduce_sum_double(stream<ap_axiu<2*DATA_WIDTH,0,0,0> > & in,
+				stream<ap_axiu<DATA_WIDTH,0,0,0> > & out) {
+#pragma HLS INTERFACE axis register both port=in
+#pragma HLS INTERFACE axis register both port=out
+#pragma HLS INTERFACE ap_ctrl_none port=return
+stream_add<DATA_WIDTH, double>(in, out);
+}
+
+void reduce_sum_int32_t(stream<ap_axiu<2*DATA_WIDTH,0,0,0> > & in,
+				stream<ap_axiu<DATA_WIDTH,0,0,0> > & out) {
+#pragma HLS INTERFACE axis register both port=in
+#pragma HLS INTERFACE axis register both port=out
+#pragma HLS INTERFACE ap_ctrl_none port=return
+stream_add<DATA_WIDTH, int32_t>(in, out);
+}
+
+void reduce_sum_int64_t(stream<ap_axiu<2*DATA_WIDTH,0,0,0> > & in,
+				stream<ap_axiu<DATA_WIDTH,0,0,0> > & out) {
+#pragma HLS INTERFACE axis register both port=in
+#pragma HLS INTERFACE axis register both port=out
+#pragma HLS INTERFACE ap_ctrl_none port=return
+stream_add<DATA_WIDTH, int64_t>(in, out);
+}
+
+#ifdef REDUCE_HALF_PRECISION
+void reduce_sum_half(stream<ap_axiu<2*DATA_WIDTH,0,0,0> > & in,
+				stream<ap_axiu<DATA_WIDTH,0,0,0> > & out) {
+#pragma HLS INTERFACE axis register both port=in
+#pragma HLS INTERFACE axis register both port=out
+#pragma HLS INTERFACE ap_ctrl_none port=return
+stream_add<DATA_WIDTH, half>(in, out);
+}
+#endif

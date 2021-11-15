@@ -21,3 +21,6 @@
 [submodule "demo/build/Vitis_with_100Gbps_TCP-IP"]
 	path = demo/build/Vitis_with_100Gbps_TCP-IP
 	url = https://github.com/fpgasystems/Vitis_with_100Gbps_TCP-IP.git
+[submodule "hlslib"]
+	path = hlslib
+	url = https://github.com/quetric/hlslib.git

@@ -53,8 +53,8 @@ switch $command {
 
 open_project build_vnx_depacketizer
 
-add_files vnx_depacketizer.cpp -cflags "-std=c++14"
-add_files -tb tb_vnx_depacketizer.cpp -cflags "-std=c++14"
+add_files vnx_depacketizer.cpp -cflags "-std=c++14 -I[pwd]/"
+add_files -tb tb_vnx_depacketizer.cpp -cflags "-std=c++14 -I[pwd]/"
 
 set_top vnx_depacketizer
 

@@ -26,6 +26,117 @@ import warnings
 import numpy as np
 import ipaddress
 from enum import IntEnum, unique
+import zmq
+from pynq.buffer import PynqBuffer
+
+class SimMMIO():
+    def __init__(self, zmqsocket):
+        self.base_addr = 0
+        self.socket = zmqsocket
+
+    # MMIO read request  {"type": 0, "addr": <uint>}
+    # MMIO read response {"status": OK|ERR, "rdata": <uint>}
+    def read(self, offset):
+        self.socket.send_json({"type": 0, "addr": offset})
+        ack = self.socket.recv_json()
+        assert ack["status"] == 0, "ZMQ MMIO read error"
+        return ack["rdata"]
+
+    # MMIO write request  {"type": 1, "addr": <uint>, "wdata": <uint>}
+    # MMIO write response {"status": OK|ERR}
+    def write(self, offset, val):
+        self.socket.send_json({"type": 1, "addr": offset, "wdata": val})
+        ack = self.socket.recv_json()
+        assert ack["status"] == 0, "ZMQ MMIO write error"
+
+class SimBuffer():
+    next_free_address = 0
+    def __init__(self, buf, zmqsocket):
+        self.socket = zmqsocket
+        self.buf = buf
+        self.physical_address = SimBuffer.next_free_address
+        SimBuffer.next_free_address += buf.nbytes
+    
+    # Devicemem read request  {"type": 2, "addr": <uint>, "len": <uint>}
+    # Devicemem read response {"status": OK|ERR, "rdata": <array of uint>}
+    def sync_from_device(self):
+        self.socket.send_json({"type": 2, "addr": self.physical_address, "len": self.buf.nbytes})
+        ack = self.socket.recv_json()
+        assert ack["status"] == 0, "ZMQ mem buffer read error"
+        self.buf.view(np.uint8)[:] = ack["rdata"]
+
+    # Devicemem write request  {"type": 3, "addr": <uint>, "wdata": <array of uint>}
+    # Devicemem write response {"status": OK|ERR}
+    def sync_to_device(self):
+        self.socket.send_json({"type": 3, "addr": self.physical_address, "wdata": self.buf.view(np.uint8).tolist()})
+        ack = self.socket.recv_json()
+        assert ack["status"] == 0, "ZMQ mem buffer write error"
+
+    def freebuffer(self):
+        pass
+
+    @property
+    def size(self):
+        return self.buf.size
+
+    @property
+    def dtype(self):
+        return self.buf.dtype
+
+class SimDevice():
+    def __init__(self, zmqadr="tcp://localhost:5555"):
+        print("SimDevice connecting to ZMQ")
+        self.socket = zmq.Context().socket(zmq.REQ)
+        self.socket.connect(zmqadr)
+        self.mmio = SimMMIO(self.socket)
+
+    # Call request  {"type": 4, arg names and values}
+    # Call response {"status": OK|ERR}
+    def call(self, scenario, count, comm, root_src_dst, function, tag, arithcfg, compression_flags, stream_flags, addr_0, addr_1, addr_2, waitfor=[]):
+        assert len(waitfor) == 0, "SimDevice does not support chaining"
+        self.socket.send_json({ "type": 4,
+                                "scenario": scenario,
+                                "count": count,
+                                "comm": comm,
+                                "root_src_dst": root_src_dst,
+                                "function": function,
+                                "tag": tag,
+                                "arithcfg": arithcfg,
+                                "compression_flags": compression_flags,
+                                "stream_flags": stream_flags,
+                                "addr_0": addr_0.physical_address,
+                                "addr_1": addr_1.physical_address,
+                                "addr_2": addr_2.physical_address})
+        ack = self.socket.recv_json()
+        assert ack["status"] == 0, "ZMQ call error"
+
+    def start(self, scenario, count, comm, root_src_dst, function, tag, arithcfg, compression_flags, stream_flags, addr_0, addr_1, addr_2, waitfor=[]):
+        assert len(waitfor) == 0, "SimDevice does not support chaining"
+        self.socket.send_json({ "type": 4,
+                                "scenario": scenario,
+                                "count": count,
+                                "comm": comm,
+                                "root_src_dst": root_src_dst,
+                                "function": function,
+                                "tag": tag,
+                                "arithcfg": arithcfg,
+                                "compression_flags": compression_flags,
+                                "stream_flags": stream_flags,
+                                "addr_0": addr_0.physical_address,
+                                "addr_1": addr_1.physical_address,
+                                "addr_2": addr_2.physical_address})
+        return self
+
+    def read(self, offset):
+        return self.mmio.read(offset)
+
+    def write(self, offset, val):
+        return self.mmio.write(offset, val)
+
+    def wait(self):
+        ack = self.socket.recv_json()
+        assert ack["status"] == 0, "ZMQ call error"
+
 
 @unique
 class CCLOp(IntEnum):
@@ -138,7 +249,7 @@ class ErrorCode(IntEnum):
     DEQUEUE_BUFFER_TIMEOUT_ERROR      = 10
     RECEIVE_TIMEOUT_ERROR             = 12
     DEQUEUE_BUFFER_SPARE_BUFFER_STATUS_ERROR = 11
-    DEQUEUE_BUFFER_SPARE_BUFFER_DMATAG_MISMATCH =             13
+    DEQUEUE_BUFFER_SPARE_BUFFER_DMATAG_MISMATCH = 13
     DEQUEUE_BUFFER_SPARE_BUFFER_INDEX_ERROR = 14
     COLLECTIVE_NOT_IMPLEMENTED        = 15
     RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID = 16
@@ -149,8 +260,6 @@ class ErrorCode(IntEnum):
     PACK_TIMEOUT_STS_ERROR            = 21
     PACK_SEQ_NUMBER_ERROR             = 22
     ARITHCFG_ERROR                    = 23
-    def __contains__(cls, item): 
-        return item in [v.value for v in cls.__members__.values()] 
 
 TAG_ANY = 0xFFFF_FFFF
 EXCHANGE_MEM_OFFSET_ADDRESS= 0x1000
@@ -159,11 +268,12 @@ HOST_CTRL_ADDRESS_RANGE    = 0x800
 RETCODE_OFFSET = 0x1FFC
 IDCODE_OFFSET = 0x1FF8
 
-class accl(DefaultIP):
+class accl():
     """
     ACCL Python Driver
     """
-    def __init__(self, xclbin, ranks, local_rank, protocol="TCP", board_idx=0, nbufs=16, bufsize=1024, mem=None, arith_config=ACCL_DEFAULT_ARITH_CONFIG):
+    def __init__(self, ranks, local_rank, xclbin=None, protocol="TCP", board_idx=0, nbufs=16, bufsize=1024, mem=None, arith_config=ACCL_DEFAULT_ARITH_CONFIG, sim_sock=None):
+        assert xclbin is not None or sim_sock is not None, "Either simulation socket or xclbin must be provided"
         self.cclo = None
         #define supported types and corresponding arithmetic config
         self.arith_config = {}
@@ -186,40 +296,48 @@ class accl(DefaultIP):
         #TODO: use description to gather info about where to allocate spare buffers
         self.segment_size = None
 
-        # do initial config
-        local_alveo = pynq.Device.devices[board_idx]
-        self.ol=pynq.Overlay(xclbin, device=local_alveo)
-
-        if mem is None:
-            print("Best-effort attempt at identifying memories to use for RX buffers")
-            if local_alveo.name == 'xilinx_u250_gen3x16_xdma_shell_3_1':
-                print("Detected U250 (xilinx_u250_gen3x16_xdma_shell_3_1)")
-                self.devicemem   = self.ol.bank1
-                self.rxbufmem    = [self.ol.bank0, self.ol.bank1, self.ol.bank2]
-                self.networkmem  = self.ol.bank3
-            elif local_alveo.name == 'xilinx_u250_xdma_201830_2':
-                print("Detected U250 (xilinx_u250_xdma_201830_2)")
-                self.devicemem   = self.ol.bank0
-                self.rxbufmem    = self.ol.bank0
-                self.networkmem  = self.ol.bank0
-            elif local_alveo.name == 'xilinx_u280_xdma_201920_3':
-                print("Detected U280 (xilinx_u280_xdma_201920_3)")
-                self.devicemem   = self.ol.HBM0
-                self.rxbufmem    = [self.ol.HBM0, self.ol.HBM1, self.ol.HBM2, self.ol.HBM3, self.ol.HBM4, self.ol.HBM5] 
-                self.networkmem  = self.ol.HBM6
+        # do initial config of alveo or connect to pipes if in sim mode
+        self.sim_mode = False if sim_sock is None else True
+        self.sim_sock = sim_sock
+        if self.sim_mode:
+            self.cclo = SimDevice(sim_sock)
+            self.devicemem = None
+            self.rxbufmem = None
+            self.networkmem = None
         else:
-            self.devicemem, self.rxbufmem, self.networkmem = mem
+            local_alveo = pynq.Device.devices[board_idx]
+            self.ol=pynq.Overlay(xclbin, device=local_alveo)
+            self.cclo = self.ol.__getattr__(f"ccl_offload_0")
+            if mem is None:
+                print("Best-effort attempt at identifying memories to use for RX buffers")
+                if local_alveo.name == 'xilinx_u250_gen3x16_xdma_shell_3_1':
+                    print("Detected U250 (xilinx_u250_gen3x16_xdma_shell_3_1)")
+                    self.devicemem   = self.ol.bank1
+                    self.rxbufmem    = [self.ol.bank0, self.ol.bank1, self.ol.bank2]
+                    self.networkmem  = self.ol.bank3
+                elif local_alveo.name == 'xilinx_u250_xdma_201830_2':
+                    print("Detected U250 (xilinx_u250_xdma_201830_2)")
+                    self.devicemem   = self.ol.bank0
+                    self.rxbufmem    = self.ol.bank0
+                    self.networkmem  = self.ol.bank0
+                elif local_alveo.name == 'xilinx_u280_xdma_201920_3':
+                    print("Detected U280 (xilinx_u280_xdma_201920_3)")
+                    self.devicemem   = self.ol.HBM0
+                    self.rxbufmem    = [self.ol.HBM0, self.ol.HBM1, self.ol.HBM2, self.ol.HBM3, self.ol.HBM4, self.ol.HBM5] 
+                    self.networkmem  = self.ol.HBM6
+            else:
+                self.devicemem, self.rxbufmem, self.networkmem = mem
 
-        self.cclo = self.ol.__getattr__(f"ccl_offload_0")
         print("CCLO HWID: {} at {}".format(hex(self.get_hwid()), hex(self.cclo.mmio.base_addr)))
         
         if protocol == "UDP":
             self.use_udp()
         elif protocol == "TCP":
-            self.tx_buf_network = pynq.allocate((64*1024*1024,), dtype=np.int8, target=networkmem)
-            self.rx_buf_network = pynq.allocate((64*1024*1024,), dtype=np.int8, target=networkmem)
-            self.tx_buf_network.sync_to_device()
-            self.rx_buf_network.sync_to_device()
+            if not self.sim_mode:
+                self.tx_buf_network = pynq.allocate((64*1024*1024,), dtype=np.int8, target=self.networkmem)
+                self.rx_buf_network = pynq.allocate((64*1024*1024,), dtype=np.int8, target=self.networkmem)
+                self.tx_buf_network.sync_to_device()
+                self.rx_buf_network.sync_to_device()
             self.use_tcp()
         elif protocol == "RDMA":
             raise ArgumentError("RDMA not supported yet")
@@ -242,6 +360,7 @@ class accl(DefaultIP):
     class dummy_address:
         def __init__(self, adr=0):
             self.device_address = adr
+            self.physical_address = adr
             self.dtype = None
             self.size = 0
 
@@ -289,16 +408,17 @@ class accl(DefaultIP):
     def setup_rx_buffers(self, nbufs, bufsize, devicemem):
         addr = self.rx_buffers_adr
         self.rx_buffer_size = bufsize
-        self.cclo.write(addr,nbufs)
+        self.cclo.write(addr, nbufs)
         if not isinstance(devicemem, list):
             devicemem = [devicemem]
         for i in range(nbufs):
-            #try to take a different bank where to put rank 
-            devicemem_i = devicemem[ i % len(devicemem)]
-
             # create, clear and sync buffers to device
-            buf = pynq.allocate((bufsize,), dtype=np.int8, target=devicemem_i)
-            buf[:] = np.zeros((bufsize,), dtype=np.int8)
+            if not self.sim_mode:
+                #try to cycle through different banks 
+                buf = pynq.allocate((bufsize,), dtype=np.int8, target=devicemem[i % len(devicemem)])
+                buf[:] = np.zeros((bufsize,), dtype=np.int8)
+            else:
+                buf = SimBuffer(np.zeros((bufsize,), dtype=np.int8), self.cclo.socket)
             buf.sync_to_device()
 
             self.rx_buffer_spares.append(buf)
@@ -316,7 +436,10 @@ class accl(DefaultIP):
 
         self.communicators_addr = addr+4
         max_higher = 1
-        self.utility_spare = pynq.allocate((bufsize*max_higher,), dtype=np.int8, target=devicemem[0])
+        if not self.sim_mode:
+            self.utility_spare = pynq.allocate((bufsize*max_higher,), dtype=np.int8, target=devicemem[0])
+        else:
+            self.utility_spare = SimBuffer(np.zeros((bufsize*max_higher,), dtype=np.int8), self.cclo.socket)
 
         #Start irq-driven RX buffer scheduler and (de)packetizer
         #self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.reset_periph)
@@ -325,7 +448,7 @@ class accl(DefaultIP):
         print("time taken to enqueue buffers", self.cclo.read(0x1FF4))
         #set segmentation size equal to buffer size
         self.set_dma_transaction_size(bufsize)
-        self.set_max_dma_transaction_flight(10)
+        self.set_max_dma_in_flight(10)
     
     def dump_rx_buffers_spares(self, nbufs=None):
         addr = self.rx_buffers_adr
@@ -366,7 +489,10 @@ class accl(DefaultIP):
 
             try:
                 self.rx_buffer_spares[i].sync_from_device()
-                content = str(self.rx_buffer_spares[i].view(np.uint8))
+                if self.sim_mode:
+                    content = str(self.rx_buffer_spares[i].buf.view(np.uint8))
+                else:
+                    content = str(self.rx_buffer_spares[i].view(np.uint8))
             except Exception :
                 content= "xxread failedxx"
             buf_phys_addr = addrh*(2**32)+addrl
@@ -462,7 +588,10 @@ class accl(DefaultIP):
     def check_return_value(self, label=""):
         retcode = self.get_retcode()
         if retcode != 0:
-            error_msg = ErrorCode(retcode).name if retcode not in ErrorCode else f"UNKNOWN ERROR ({retcode})"
+            try:
+                error_msg = ErrorCode(retcode).name
+            except:
+                error_msg = f"UNKNOWN ERROR ({retcode})"
             raise Exception(f"CCLO @{hex(self.cclo.mmio.base_addr)}: during {label} {error_msg} you should consider resetting mpi_offload")
 
     def get_hwid(self):
@@ -521,7 +650,7 @@ class accl(DefaultIP):
         print("time taken to start and stop timer", self.cclo.read(0x1FF4))
 
     @self_check_return_value
-    def set_max_dma_transaction_flight(self, value=0):
+    def set_max_dma_in_flight(self, value=0):
      
         if value > 20:
             warnings.warn("ACCL: transaction size should be less or equal to configured buffer size!")
@@ -604,26 +733,20 @@ class accl(DefaultIP):
             handle.wait()
 
     @self_check_return_value
-    def send(self, comm_id, srcbuf, dst, tag=TAG_ANY, from_fpga=False, run_async=False, waitfor=[]):
-        if srcbuf.size == 0:
-            warnings.warn("zero size buffer")
-            return
+    def send(self, comm_id, srcbuf, count, dst, tag=TAG_ANY, from_fpga=False, run_async=False, waitfor=[]):
         if not from_fpga:
             srcbuf.sync_to_device()
-        handle = self.call_async(scenario=CCLOp.send, count=srcbuf.size, comm=self.communicators[comm_id]["addr"], root_src_dst=dst, tag=tag, addr_0=srcbuf, waitfor=waitfor)
+        handle = self.call_async(scenario=CCLOp.send, count=count, comm=self.communicators[comm_id]["addr"], root_src_dst=dst, tag=tag, addr_0=srcbuf, waitfor=waitfor)
         if run_async:
             return handle 
         else:
             handle.wait()
     
     @self_check_return_value
-    def recv(self, comm_id, dstbuf, src, tag=TAG_ANY, to_fpga=False, run_async=False, waitfor=[]):
+    def recv(self, comm_id, dstbuf, count, src, tag=TAG_ANY, to_fpga=False, run_async=False, waitfor=[]):
         if not to_fpga and run_async:
             warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
-        if dstbuf.size == 0:
-            warnings.warn("zero size buffer")
-            return
-        handle = self.call_async(scenario=CCLOp.recv, count=dstbuf.size, comm=self.communicators[comm_id]["addr"], root_src_dst=src, tag=tag, addr_0=dstbuf, waitfor=waitfor)
+        handle = self.call_async(scenario=CCLOp.recv, count=count, comm=self.communicators[comm_id]["addr"], root_src_dst=src, tag=tag, addr_0=dstbuf, waitfor=waitfor)
         if run_async:
             return handle
         else:
@@ -632,16 +755,13 @@ class accl(DefaultIP):
             dstbuf.sync_from_device()
 
     @self_check_return_value
-    def copy(self, srcbuf, dstbuf,  from_fpga=False,  to_fpga=False, run_async=False, waitfor=[]):
+    def copy(self, srcbuf, dstbuf, count, from_fpga=False, to_fpga=False, run_async=False, waitfor=[]):
         if not to_fpga and run_async:
             warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
-        if srcbuf.size == 0:
-            warnings.warn("zero size buffer")
-            return
         # performs dstbuf = srcbuf
         if not from_fpga:
             srcbuf.sync_to_device()
-        handle = self.call_async(scenario=CCLOp.copy, count=srcbuf.size, addr_0=srcbuf, addr_2=dstbuf, waitfor=waitfor)
+        handle = self.call_async(scenario=CCLOp.copy, count=count, addr_0=srcbuf, addr_2=dstbuf, waitfor=waitfor)
         if run_async:
             return handle
         
@@ -650,18 +770,16 @@ class accl(DefaultIP):
             dstbuf.sync_from_device()
 
     @self_check_return_value
-    def combine(self, func, val1, val2, result, val1_from_fpga=False, val2_from_fpga=False, to_fpga=False, run_async=False, waitfor=[]):
+    def combine(self, count, func, val1, val2, result, val1_from_fpga=False, val2_from_fpga=False, to_fpga=False, run_async=False, waitfor=[]):
         if not to_fpga and run_async:
             warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
-        assert val1.size != 0 or val2.size != 0, "Zero-size input buffer"
-        assert val1.size == val2.size, "Unequal sized operands"
         # TODO: check datatype support
         # performs acc = val + acc
         if not val1_from_fpga:
             val1.sync_to_device()
         if not val2_from_fpga:
             val2.sync_to_device()
-        handle = self.call_async(scenario=CCLOp.combine, count=val1.size, function=func, addr_0=val1, addr_1=val2, addr_2=result, waitfor=waitfor)
+        handle = self.call_async(scenario=CCLOp.combine, count=count, function=func, addr_0=val1, addr_1=val2, addr_2=result, waitfor=waitfor)
         if run_async:
             return handle
         
@@ -858,5 +976,5 @@ class accl(DefaultIP):
             return prevcall[0]
         
         prevcall[0].wait()
-        if not to_fpga and local_rank == root:
-            rbuf[0:count*p].sync_from_device()
+        if not to_fpga:
+            rbuf[0:count].sync_from_device()

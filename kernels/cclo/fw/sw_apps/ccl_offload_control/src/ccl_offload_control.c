@@ -15,17 +15,24 @@
 #
 # *******************************************************************************/
 
+#include <stdbool.h>
+#include "ccl_offload_control.h"
+
+#ifndef ACCL_BD_SIM
 #include "xparameters.h"
 #include "mb_interface.h"
 #include "microblaze_interrupts_i.h"
 #include <setjmp.h>
-//#include <cstdint>
-#include <stdbool.h>
-#include "ccl_offload_control.h"
-#define MAX_DMA_TAGS 16
+static jmp_buf excp_handler;
+#else
+
+sem_t mb_irq_mutex;
+void microblaze_disable_interrupts(){sem_wait(&mb_irq_mutex);};
+void microblaze_enable_interrupts(){sem_post(&mb_irq_mutex);};
+
+#endif
 
 static volatile int 		 use_tcp = 1;
-static jmp_buf 				 excp_handler;
 static volatile int 		 dma_tag;
 static volatile unsigned int next_rx_tag 	 = 0;
 static volatile unsigned int num_rx_enqueued = 0;
@@ -36,6 +43,15 @@ static volatile unsigned int max_dma_in_flight 		= DMA_MAX_TRANSACTIONS;
 
 static datapath_arith_config arcfg;
 static communicator world;
+
+#ifdef ACCL_BD_SIM
+uint32_t sim_cfgmem[16*1024];
+uint32_t *cfgmem = sim_cfgmem;
+hlslib::Stream<hlslib::axi::Stream<ap_uint<32> >, 512> cmd_fifos[11];
+hlslib::Stream<hlslib::axi::Stream<ap_uint<32> >, 512> sts_fifos[13];
+#else
+uint32_t *cfgmem = (uint32_t *)(0);
+#endif
 
 unsigned int enqueue_rx_buffers(void);
 int  dequeue_rx_buffers(void);
@@ -133,12 +149,15 @@ void dm_config_update(dm_config * cfg){
     }
     //update remaining and lengths, in preparation for next transfer
     if(cfg->elems_remaining < cfg->elems_per_transfer){
-        //we need to reinitialize the length attributes of the config
-        //because we need to do a transfer of smaller size (less than max)
-        dm_config_setlen(cfg, cfg->elems_remaining);
+        //just update elems_remaining to zero, lengths become irrelevant 
+        cfg->elems_remaining = 0;
     } else {
-        //lengths should still be okay, just update elems remaining
+        //update elems remaining
         cfg->elems_remaining -= cfg->elems_per_transfer;
+        //if updated elems remaining is not zero but less than a full transfer, update lengths
+        if(cfg->elems_remaining > 0 && cfg->elems_remaining < cfg->elems_per_transfer){
+            dm_config_setlen(cfg, cfg->elems_remaining);
+        }
     }
 }
 
@@ -179,51 +198,43 @@ dm_config dm_config_init(   unsigned int count,
 //enable interrupts from interrupt controller
 static inline void enable_irq(){
     //set master enable register  MER
-    Xil_Out32(IRQCTRL_BASEADDR + IRQCTRL_MASTER_ENABLE_REGISTER_OFFSET, IRQCTRL_MASTER_ENABLE_REGISTER_HARDWARE_INTERRUPT_ENABLE|IRQCTRL_MASTER_ENABLE_REGISTER_MASTER_ENABLE);
+    Xil_Out32(IRQCTRL_BASEADDR + IRQCTRL_MER_OFFSET, IRQCTRL_MER_HARDWARE_INTERRUPT_ENABLE|IRQCTRL_MER_MASTER_ENABLE);
 }
 //disable interrupts from interrupt controller
 static inline void disable_irq(){
     //set interrupt enable register IER with correct mask
     //unset master enable register  MER
-    Xil_Out32(IRQCTRL_BASEADDR + IRQCTRL_MASTER_ENABLE_REGISTER_OFFSET, 0);
+    Xil_Out32(IRQCTRL_BASEADDR + IRQCTRL_MER_OFFSET, 0);
 }
 
 // set interrupt controller
-// mask:
-// IRQCTRL_TIMER_ENABLE              0x0001
-// IRQCTRL_DMA0_CMD_QUEUE_EMPTY      0x0002
-// IRQCTRL_DMA0_STS_QUEUE_NON_EMPTY  0x0004
 static inline void set_irq(int mask){
     //set interrupt enable register IER with correct mask
-    Xil_Out32(IRQCTRL_BASEADDR + IRQCTRL_INTERRUPT_ENABLE_REGISTER_OFFSET, mask);
+    Xil_Out32(IRQCTRL_BASEADDR + IRQCTRL_IER_OFFSET, mask);
 }
 
 // set interrupt controller
-// mask:
-// IRQCTRL_TIMER_ENABLE              0x0001
-// IRQCTRL_DMA0_CMD_QUEUE_EMPTY      0x0002
-// IRQCTRL_DMA0_STS_QUEUE_NON_EMPTY  0x0004
 static inline void setup_irq(int mask){
     disable_irq();
-    //set INTERRUPT_ENABLE_REGISTER IER with correct mask
+    //set INTERRUPT_ENABLE_REGISTER with correct mask
     set_irq(mask);
     enable_irq();
 }
 
 // acknowledge irq complete
-// mask:
-// IRQCTRL_TIMER_ENABLE              0x0001
-// IRQCTRL_DMA0_CMD_QUEUE_EMPTY      0x0002
-// IRQCTRL_DMA0_STS_QUEUE_NON_EMPTY  0x0004
 static inline void ack_irq(int mask){
     //set INTERRUPT_ACKNOWLEDGE_REGISTER IER with the mask
-    Xil_Out32(IRQCTRL_BASEADDR + IRQCTRL_INTERRUPT_ACKNOWLEDGE_REGISTER_OFFSET, mask);
+    Xil_Out32(IRQCTRL_BASEADDR + IRQCTRL_IAR_OFFSET, mask);
 }
 
 //gets INTERRUPT_PENDING_REGISTER 
 // that holds a 1 in bit i-esim means a that interrupt i-esim occurred  
 static inline int get_irq(void){
-    return Xil_In32(IRQCTRL_BASEADDR + IRQCTRL_INTERRUPT_PENDING_REGISTER_OFFSET);
+#ifdef ACCL_BD_SIM
+    //in simulation, poll for a pending interrupt
+    while(Xil_In32(IRQCTRL_BASEADDR + IRQCTRL_IPR_OFFSET) == 0);
+#endif
+    return Xil_In32(IRQCTRL_BASEADDR + IRQCTRL_IPR_OFFSET);
 }
 
 //AXI Timer
@@ -233,38 +244,26 @@ static inline void start_timeout(unsigned int time){
     //1. set timer load register x(TLRx) with time so that TIMING_INTERVAL = (TLRx + 2) * AXI_CLOCK_PERIOD
     //2. load timer register
     //3. set counter enable/down/non-autoreload/interrupt enable/clear load /generate mode
-    Xil_Out32(TIMER_BASEADDR + TIMER0_LOAD_REGISTER_OFFSET, time);
-    Xil_Out32(TIMER_BASEADDR + TIMER0_CONTROL_AND_STATUS_REGISTER_OFFSET, CONTROL_AND_STATUS_REGISTER_LOAD_TIMER_MASK);
-    Xil_Out32(TIMER_BASEADDR + TIMER0_CONTROL_AND_STATUS_REGISTER_OFFSET, CONTROL_AND_STATUS_REGISTER_ENABLE_MASK | CONTROL_AND_STATUS_REGISTER_INTERRUPT_ENABLE_MASK | CONTROL_AND_STATUS_REGISTER_UP_DOWN_MASK);
+    Xil_Out32(TIMER_BASEADDR + TIMER_LR0_OFFSET, time);
+    Xil_Out32(TIMER_BASEADDR + TIMER_CSR0_OFFSET, TIMER_CSR_LOAD_TIMER_MASK);
+    Xil_Out32(TIMER_BASEADDR + TIMER_CSR0_OFFSET, TIMER_CSR_ENABLE_MASK | TIMER_CSR_INTERRUPT_ENABLE_MASK | TIMER_CSR_UP_DOWN_MASK);
 }
 
 //cancel the timeout
 static inline void cancel_timeout(){
     //1. set counter disable/interrupt disable
-    Xil_Out32(TIMER_BASEADDR + TIMER0_CONTROL_AND_STATUS_REGISTER_OFFSET, CONTROL_AND_STATUS_REGISTER_INTERRUPT_MASK);
+    Xil_Out32(TIMER_BASEADDR + TIMER_CSR0_OFFSET, TIMER_CSR_INTERRUPT_MASK);
 }
 
 //clear timer interrupt
 static inline void clear_timer_interrupt(){
-    Xil_Out32(TIMER_BASEADDR + TIMER0_CONTROL_AND_STATUS_REGISTER_OFFSET, CONTROL_AND_STATUS_REGISTER_INTERRUPT_MASK);
-}
-
-//creates a timeout that will interrupt the MB code execution 
-static inline void start_timer1(){
-    unsigned int init_time = 0;
-    //1. set timer load register x(TLRx) with 0 
-    //2. load timer register
-    //3. set counter enable/down/non-autoreload/interrupt enable/clear load /generate mode
-    Xil_Out32(TIMER_BASEADDR + TIMER1_LOAD_REGISTER_OFFSET, init_time);
-    Xil_Out32(TIMER_BASEADDR + TIMER1_CONTROL_AND_STATUS_REGISTER_OFFSET, CONTROL_AND_STATUS_REGISTER_LOAD_TIMER_MASK);
-    Xil_Out32(TIMER_BASEADDR + TIMER1_CONTROL_AND_STATUS_REGISTER_OFFSET, CONTROL_AND_STATUS_REGISTER_ENABLE_MASK );
-}
-
-static inline unsigned int read_timer1(){
-    return Xil_In32(TIMER_BASEADDR + TIMER1_COUNTER_REGISTER_OFFSET);
+    Xil_Out32(TIMER_BASEADDR + TIMER_CSR0_OFFSET, TIMER_CSR_INTERRUPT_MASK);
 }
 
 void stream_isr(void) {
+#ifdef ACCL_BD_SIM
+    sem_wait(&mb_irq_mutex);
+#endif
     int n_enqueued;
     int irq_mask;
     int irq = get_irq();
@@ -288,6 +287,9 @@ void stream_isr(void) {
         cancel_timeout();
     }
     ack_irq(irq);
+#ifdef ACCL_BD_SIM
+    sem_post(&mb_irq_mutex);
+#endif
 }
 //DMA functions
 
@@ -490,9 +492,9 @@ void configure_switch(unsigned int scenario) {
 
 //Configure external parts of the datapath
 //by setting appropriate TDEST on streams
-static inline void configure_plugins(unsigned int acfg, unsigned int d0cfg, unsigned int d1cfg, unsigned int c0cfg){
+static inline void configure_plugins(unsigned int acfg, unsigned int c0cfg, unsigned int c1cfg, unsigned int c2cfg){
     unsigned int val = 0;
-    val = (c0cfg<<24) | (d1cfg<<16) | (d0cfg<<8) | acfg;
+    val = (c2cfg<<24) | (c1cfg<<16) | (c0cfg<<8) | acfg;
     Xil_Out32(GPIO_TDEST_BASEADDR, val);
 }
 
@@ -543,7 +545,7 @@ static inline communicator find_comm(unsigned int adr){
     ret.size 		= Xil_In32(adr);
     ret.local_rank 	= Xil_In32(adr+4);
     if(ret.size != 0 && ret.local_rank < ret.size){
-        ret.ranks = (comm_rank*)(adr+8);
+        ret.ranks = (comm_rank*)(cfgmem+(adr+8)/4);
     } else {
         ret.size = 0;
         ret.local_rank = 0;
@@ -694,7 +696,7 @@ static inline unsigned int segment(unsigned int number_of_bytes,unsigned int seg
 //queue those buffers for receives
 unsigned int enqueue_rx_buffers(void){
     unsigned int nbufs = Xil_In32(RX_BUFFER_COUNT_OFFSET);
-    rx_buffer *rx_buf_list = (rx_buffer*)(RX_BUFFER_COUNT_OFFSET+4);
+    rx_buffer *rx_buf_list = (rx_buffer*)(cfgmem+RX_BUFFER_COUNT_OFFSET/4+1);
     unsigned int ret = 0, cmd_queue;
     int i,new_dma_tag;
     cmd_queue = use_tcp ? CMD_DMA2_TX : CMD_DMA0_TX;
@@ -727,7 +729,7 @@ int dequeue_rx_buffers(void){
     unsigned int invalid, status, dma_tag, dma_tx_id, net_rx_id,count = 0;
     int spare_buffer_idx;
     unsigned int nbufs = Xil_In32(RX_BUFFER_COUNT_OFFSET);
-    rx_buffer *rx_buf_list = (rx_buffer*)(RX_BUFFER_COUNT_OFFSET+4);
+    rx_buffer *rx_buf_list = (rx_buffer*)(cfgmem+RX_BUFFER_COUNT_OFFSET/4+1);
     if(use_tcp){
         dma_tx_id = STS_DMA2_TX;
         net_rx_id = STS_TCP_RX;
@@ -839,7 +841,7 @@ static inline void ack_move(
     if( cfg->which_dm & USE_RES_DMA){
         status = getd(STS_DMA1_TX);
         dma_tag = (dma_tag + 1) & 0xf;
-        check_DMA_status(status, cfg->res_len, dma_tag, 1);
+        check_DMA_status(status, cfg->res_len, dma_tag, 0);
     } else if( cfg->which_dm & USE_RES_DMA_WITHOUT_TLAST){
         status = getd(STS_DMA1_TX);
         dma_tag = (dma_tag + 1) & 0xf;
@@ -972,7 +974,7 @@ int seek_rx_buffer(
     //matches tag or tag is ANY
     //return buffer index 
     unsigned int nbufs = Xil_In32(RX_BUFFER_COUNT_OFFSET);
-    rx_buffer *rx_buf_list = (rx_buffer*)(RX_BUFFER_COUNT_OFFSET+4);
+    rx_buffer *rx_buf_list = (rx_buffer*)(cfgmem+RX_BUFFER_COUNT_OFFSET/4+1);
     for(i=0; i<nbufs; i++){	
         microblaze_disable_interrupts();
         if(rx_buf_list[i].status == STATUS_RESERVED)
@@ -1016,7 +1018,7 @@ int recv(	unsigned int src_rank,
             unsigned int compression){
     unsigned int buf_idx;
     unsigned int dma_tag_tmp, i;
-    rx_buffer *rx_buf_list = (rx_buffer*)(RX_BUFFER_COUNT_OFFSET+4);
+    rx_buffer *rx_buf_list = (rx_buffer*)(cfgmem+RX_BUFFER_COUNT_OFFSET/4+1);
 
     circular_buffer spare_buffer_queue;
     cb_init(&spare_buffer_queue, max_dma_in_flight);
@@ -1097,7 +1099,7 @@ int fused_recv_reduce(
     {
     unsigned int buf_idx;
     unsigned int dma_tag_tmp = dma_tag, i;
-    rx_buffer *rx_buf_list = (rx_buffer*)(RX_BUFFER_COUNT_OFFSET+4);
+    rx_buffer *rx_buf_list = (rx_buffer*)(cfgmem+RX_BUFFER_COUNT_OFFSET/4+1);
 
     circular_buffer spare_buffer_queue;
     cb_init(&spare_buffer_queue, max_dma_in_flight);
@@ -1171,7 +1173,7 @@ int fused_recv_reduce_send(
     {
     unsigned int buf_idx;
     unsigned int dma_tag_tmp = dma_tag, i;
-    rx_buffer *rx_buf_list = (rx_buffer*)(RX_BUFFER_COUNT_OFFSET+4);
+    rx_buffer *rx_buf_list = (rx_buffer*)(cfgmem+RX_BUFFER_COUNT_OFFSET/4+1);
 
     circular_buffer spare_buffer_queue;
     cb_init(&spare_buffer_queue, max_dma_in_flight);
@@ -1240,7 +1242,7 @@ int relay(
         unsigned int compression){
     unsigned int buf_idx;
     unsigned int dma_tag_tmp = dma_tag, i;
-    rx_buffer *rx_buf_list = (rx_buffer*)(RX_BUFFER_COUNT_OFFSET+4);
+    rx_buffer *rx_buf_list = (rx_buffer*)(cfgmem+RX_BUFFER_COUNT_OFFSET/4+1);
 
     circular_buffer spare_buffer_queue;
     cb_init(&spare_buffer_queue, max_dma_in_flight);
@@ -1674,7 +1676,9 @@ void check_hwid(void){
 void init(void) {
     int myoffset;
     // Register irq handler
+#ifndef ACCL_BD_SIM
     microblaze_register_handler((XInterruptHandler)stream_isr,(void*)0);
+#endif
     microblaze_enable_interrupts();
 
     // initialize exchange memory to zero.
@@ -1733,13 +1737,13 @@ static inline void wait_for_call(void) {
 }
 
 //signal finish to the host and write ret value in exchange mem
-static inline void finalize_call(unsigned int retval) {
+void finalize_call(unsigned int retval) {
     Xil_Out32(RETVAL_OFFSET, retval);
     // Done: Set done and idle
     putd(STS_HOST, retval);
 }
 
-int main() {
+int run_accl() {
     unsigned int retval;
     unsigned int scenario, count, comm, root_src_dst, function, msg_tag;
     unsigned int datapath_cfg, compression_flags, stream_flags;
@@ -1783,7 +1787,7 @@ int main() {
         //initialize arithmetic/compression config and communicator
         //NOTE: these are global because they're used in a lot of places but don't change during a call
         //TODO: determine if they can remain global in hierarchical collectives
-        arcfg = *((datapath_arith_config *)datapath_cfg);
+        arcfg = *((datapath_arith_config *)(cfgmem+datapath_cfg/4));
         world = find_comm(comm);
         
         switch (scenario)
@@ -1894,3 +1898,9 @@ int main() {
     }
     return 0;
 }
+
+#ifndef ACCL_BD_SIM
+int main(int argc, char **argv){
+    return run_accl();
+}
+#endif

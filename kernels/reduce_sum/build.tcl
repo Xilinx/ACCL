@@ -20,7 +20,7 @@ set device [lindex $argv 1]
 set dtype [lindex $argv 2]
 set dwidth [lindex $argv 3]
 
-set ipname reduce_sum_${dtype}_${dwidth}
+set ipname reduce_sum_${dtype}
 
 set do_sim 0
 set do_syn 0
@@ -57,8 +57,8 @@ switch $command {
 
 open_project build_${ipname}
 
-add_files reduce_sum.cpp -cflags "-std=c++14 -DDATA_WIDTH=${dwidth} -DDATA_TYPE=${dtype}"
-add_files -tb tb.cpp -cflags "-std=c++14 -DDATA_WIDTH=${dwidth} -DDATA_TYPE=${dtype}"
+add_files reduce_sum.cpp -cflags "-std=c++14 -DDATA_WIDTH=${dwidth} -DREDUCE_HALF_PRECISION -I[pwd]/"
+add_files -tb tb.cpp -cflags "-std=c++14 -DDATA_WIDTH=${dwidth} -DREDUCE_HALF_PRECISION -I[pwd]/"
 
 set_top ${ipname}
 

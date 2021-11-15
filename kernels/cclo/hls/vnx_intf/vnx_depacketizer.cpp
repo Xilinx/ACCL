@@ -15,22 +15,10 @@
 #
 # *******************************************************************************/
 
-#include "ap_axi_sdata.h"
-#include "hls_stream.h"
-#include "ap_int.h"
+#include "vnx.h"
 
 using namespace hls;
 using namespace std;
-
-#define DATA_WIDTH 512
-#define HEADER_COUNT_START 0
-#define HEADER_COUNT_END   31
-#define HEADER_TAG_START   HEADER_COUNT_END+1
-#define HEADER_TAG_END	   HEADER_TAG_START+31
-#define HEADER_SRC_START   HEADER_TAG_END+1
-#define HEADER_SRC_END	   HEADER_SRC_START+31
-#define HEADER_SEQ_START   HEADER_SRC_END+1
-#define HEADER_SEQ_END	   HEADER_SEQ_START+31
 
 void vnx_depacketizer(	stream<ap_axiu<DATA_WIDTH,0,0,16> > & in,
 			stream<ap_axiu<DATA_WIDTH,0,0,0> > & out,

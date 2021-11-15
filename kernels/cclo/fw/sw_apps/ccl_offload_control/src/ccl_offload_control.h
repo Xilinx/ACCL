@@ -15,12 +15,14 @@
 #
 # *******************************************************************************/
 
+#include <stdint.h>
+#ifdef ACCL_BD_SIM
+#include <stdio.h>
+#include <semaphore.h>
+#endif
+
 #ifndef _CCL_OFFLOAD_CONTROL_H_
 #define _CCL_OFFLOAD_CONTROL_H_
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 #define KERNEL_NAME    "ccl_offload"
 #define KERNEL_VENDOR  "Xilinx"
@@ -90,6 +92,7 @@ extern "C" {
 #define DMA_MAX_BTT              0x7FFFFF
 #define DMA_MAX_TRANSACTIONS     20
 #define DMA_TRANSACTION_SIZE     4194304 //info: can correspond to MAX_BTT
+#define MAX_DMA_TAGS 16
 
 //******************************
 //**  XCC Operations          **
@@ -137,6 +140,7 @@ extern "C" {
 #define RETVAL_OFFSET     0x1FFC
 #define END_OF_EXCHMEM    0x2000
 
+#ifndef ACCL_BD_SIM
 #define HOSTCTRL_BASEADDR     0x0        
 #define EXCHMEM_BASEADDR      0x1000
 #define UDP_RXPKT_BASEADDR    0x30000
@@ -148,6 +152,20 @@ extern "C" {
 #define SWITCH_BASEADDR       0x44A00000
 #define IRQCTRL_BASEADDR      0x44A10000
 #define TIMER_BASEADDR        0x44A20000
+#else
+#define HOSTCTRL_BASEADDR     0x0        
+#define EXCHMEM_BASEADDR      0x1000
+#define UDP_RXPKT_BASEADDR    0x3000
+#define UDP_TXPKT_BASEADDR    0x4000
+#define TCP_RXPKT_BASEADDR    0x5000
+#define TCP_TXPKT_BASEADDR    0x6000
+#define GPIO_BASEADDR         0x7000
+#define GPIO_TDEST_BASEADDR   0x8000
+#define SWITCH_BASEADDR       0x9000
+#define IRQCTRL_BASEADDR      0xA000
+#define TIMER_BASEADDR        0xB000
+#endif
+
 //https://www.xilinx.com/html_docs/xilinx2020_2/vitis_doc/managing_interface_synthesis.html#tzw1539734223235
 #define CONTROL_START_MASK      0x00000001
 #define CONTROL_DONE_MASK       0x00000001 << 1
@@ -162,51 +180,51 @@ extern "C" {
 
 //from AXI interrupt controller v4.1 LogiCORE IP product guide
 //https://www.xilinx.com/support/documentation/ip_documentation/axi_intc/v4_1/pg099-axi-intc.pdf
-#define IRQCTRL_INTERRUPT_STATUS_REGISTER_OFFSET                  0x00
-#define IRQCTRL_INTERRUPT_PENDING_REGISTER_OFFSET                 0x04
-#define IRQCTRL_INTERRUPT_ENABLE_REGISTER_OFFSET                  0x08
-#define IRQCTRL_INTERRUPT_ACKNOWLEDGE_REGISTER_OFFSET             0x0C
-#define IRQCTRL_SET_INTERRUPT_ENABLES_OFFSET                      0x10
-#define IRQCTRL_CLEAR_INTERRUPT_ENABLES_OFFSET                    0x14
-#define IRQCTRL_INTERRUPT_VECTOR_REGISTER_OFFSET                  0x18
-#define IRQCTRL_MASTER_ENABLE_REGISTER_OFFSET                     0x1C
-#define IRQCTRL_INTERRUPT_MODE_REGISTER_OFFSET                    0x20
-#define IRQCTRL_INTERRUPT_LEVEL_REGISTER_OFFSET                   0x24
-#define IRQCTRL_INTERRUPT_VECTOR_ADDRESS_REGISTER_OFFSET          0x100
-#define IRQCTRL_INTERRUPT_VECTOR_EXTENDED_ADDRESS_REGISTER_OFFSET 0x200
-#define IRQCTRL_SIZE                                              0x300
+#define IRQCTRL_ISR_OFFSET   0x000
+#define IRQCTRL_IPR_OFFSET   0x004
+#define IRQCTRL_IER_OFFSET   0x008
+#define IRQCTRL_IAR_OFFSET   0x00C
+#define IRQCTRL_SIE_OFFSET   0x010
+#define IRQCTRL_CIE_OFFSET   0x014
+#define IRQCTRL_IVR_OFFSET   0x018
+#define IRQCTRL_MER_OFFSET   0x01C
+#define IRQCTRL_IMR_OFFSET   0x020
+#define IRQCTRL_ILR_OFFSET   0x024
+#define IRQCTRL_IVAR_OFFSET  0x100
+#define IRQCTRL_IVEAR_OFFSET 0x200
+#define IRQCTRL_SIZE         0x300
 
-#define IRQCTRL_TIMER_ENABLE                   0x0001
-#define IRQCTRL_DMA0_CMD_QUEUE_EMPTY           0x0002
-#define IRQCTRL_DMA0_STS_QUEUE_NON_EMPTY       0x0004
-#define IRQCTRL_DMA2_CMD_QUEUE_EMPTY           0x0008
-#define IRQCTRL_DMA2_STS_QUEUE_NON_EMPTY       0x0010
+#define IRQCTRL_TIMER_ENABLE             0x01
+#define IRQCTRL_DMA0_CMD_QUEUE_EMPTY     0x02
+#define IRQCTRL_DMA0_STS_QUEUE_NON_EMPTY 0x04
+#define IRQCTRL_DMA2_CMD_QUEUE_EMPTY     0x08
+#define IRQCTRL_DMA2_STS_QUEUE_NON_EMPTY 0x10
 
-#define IRQCTRL_MASTER_ENABLE_REGISTER_HARDWARE_INTERRUPT_ENABLE 0x0002
-#define IRQCTRL_MASTER_ENABLE_REGISTER_MASTER_ENABLE             0x0001
+#define IRQCTRL_MER_HARDWARE_INTERRUPT_ENABLE 0x2
+#define IRQCTRL_MER_MASTER_ENABLE             0x1
 
 //from AXI Timer v2.0 LogiCORE IP Product Guide
 //https://www.xilinx.com/support/documentation/ip_documentation/axi_timer/v2_0/pg079-axi-timer.pdf
-#define TIMER0_CONTROL_AND_STATUS_REGISTER_OFFSET                 0x00
-#define TIMER0_LOAD_REGISTER_OFFSET                               0x04
-#define TIMER0_COUNTER_REGISTER_OFFSET                            0x08
-#define TIMER1_CONTROL_AND_STATUS_REGISTER_OFFSET                 0x10
-#define TIMER1_LOAD_REGISTER_OFFSET                               0x14
-#define TIMER1_COUNTER_REGISTER_OFFSET                            0x18
-#define TIMER_SIZE                                                0x20
+#define TIMER_CSR0_OFFSET 0x00
+#define TIMER_LR0_OFFSET  0x04
+#define TIMER_CR0_OFFSET  0x08
+#define TIMER_CSR1_OFFSET 0x10
+#define TIMER_LR1_OFFSET  0x14
+#define TIMER_CR1_OFFSET  0x18
+#define TIMER_SIZE        0x20
 //TIMERX_CONTROL_AND_STATUS_REGISTER
-#define CONTROL_AND_STATUS_REGISTER_CASC_MASK                     0x0001 <<11
-#define CONTROL_AND_STATUS_REGISTER_ENABLE_ALL_MASK               0x0001 <<10 
-#define CONTROL_AND_STATUS_REGISTER_PWMX_ENABLE_MASK              0x0001 << 9 
-#define CONTROL_AND_STATUS_REGISTER_INTERRUPT_MASK                0x0001 << 8 
-#define CONTROL_AND_STATUS_REGISTER_ENABLE_MASK                   0x0001 << 7 
-#define CONTROL_AND_STATUS_REGISTER_INTERRUPT_ENABLE_MASK         0x0001 << 6
-#define CONTROL_AND_STATUS_REGISTER_LOAD_TIMER_MASK               0x0001 << 5
-#define CONTROL_AND_STATUS_REGISTER_AUTO_RELOAD_TIMER_MASK        0x0001 << 4
-#define CONTROL_AND_STATUS_REGISTER_CAPTURE_MASK                  0x0001 << 3
-#define CONTROL_AND_STATUS_REGISTER_GENERATE_MASK                 0x0001 << 2
-#define CONTROL_AND_STATUS_REGISTER_UP_DOWN_MASK                  0x0001 << 1
-#define CONTROL_AND_STATUS_REGISTER_MODE_TIMER_MASK               0x0001 << 0
+#define TIMER_CSR_CASC_MASK              1 << 11
+#define TIMER_CSR_ENABLE_ALL_MASK        1 << 10 
+#define TIMER_CSR_PWMX_ENABLE_MASK       1 << 9 
+#define TIMER_CSR_INTERRUPT_MASK         1 << 8 
+#define TIMER_CSR_ENABLE_MASK            1 << 7 
+#define TIMER_CSR_INTERRUPT_ENABLE_MASK  1 << 6
+#define TIMER_CSR_LOAD_TIMER_MASK        1 << 5
+#define TIMER_CSR_AUTO_RELOAD_TIMER_MASK 1 << 4
+#define TIMER_CSR_CAPTURE_MASK           1 << 3
+#define TIMER_CSR_GENERATE_MASK          1 << 2
+#define TIMER_CSR_UP_DOWN_MASK           1 << 1
+#define TIMER_CSR_MODE_TIMER_MASK        1 << 0
 
 //EXCEPTIONS
 #define COLLECTIVE_OP_SUCCESS                         0    
@@ -263,11 +281,15 @@ typedef struct{
 } dm_config;
 
 //utility functions for register mapped accesses
-#define Xil_Out32(offset, value) (*((volatile unsigned int *)(offset))) = (value)
-#define Xil_In32(offset) ({unsigned int value = *((volatile unsigned int *)(offset)); value; })
+extern uint32_t *cfgmem;
+#define Xil_Out32(offset, value) {cfgmem[(offset)/4] = (value);}
+#define Xil_In32(offset) ({uint32_t value = cfgmem[(offset)/4]; value; })
+
 #define SET(offset, mask) Xil_Out32(offset, Xil_In32(offset) | (mask))
 #define CLR(offset, mask) Xil_Out32(offset, Xil_In32(offset) & ~(mask))
 
+//stream handling
+#ifndef ACCL_BD_SIM
 //push data to stream
 #define putd(channel, value) asm volatile ("putd\t%0,%1" :: "d" (value), "d" (channel))
 //push data to stream and set control bit
@@ -277,6 +299,24 @@ typedef struct{
 //blocking get from stream channel
 #define getd(channel) ({unsigned int value; asm volatile ("getd\t%0,%1" : "=d" (value) : "d" (channel)); value; })
 
+#else
+
+#include "Stream.h"
+#include "Axi.h"
+extern hlslib::Stream<hlslib::axi::Stream<ap_uint<32> >, 512> cmd_fifos[11];
+extern hlslib::Stream<hlslib::axi::Stream<ap_uint<32> >, 512> sts_fifos[13];
+extern sem_t mb_irq_mutex;
+
+//push data to stream
+#define putd(channel, value) cmd_fifos[channel].Push(hlslib::axi::Stream<ap_uint<32> >(value, 0))
+//push data to stream and set control bit
+#define cputd(channel, value) cmd_fifos[channel].Push(hlslib::axi::Stream<ap_uint<32> >(value, 1))
+//test-only non-blocking get from stream channel
+#define tngetd(channel) sts_fifos[channel].IsEmpty()
+//blocking get from stream channel
+#define getd(channel) sts_fifos[channel].Pop().data
+
+#endif
 
 typedef struct {
     unsigned int addrl;
@@ -347,7 +387,16 @@ typedef struct circular_buffer
     unsigned int read_idx;          // where we get data from
 } circular_buffer;
 
-#ifdef __cplusplus
-}
+//define exception handling for simulation
+#ifdef ACCL_BD_SIM
+#define setjmp(x) 0
+void finalize_call(unsigned int);
+#define longjmp(x, y) finalize_call(y)
 #endif
+
+#ifdef __cplusplus
+extern "C" int run_accl();
+extern "C" void stream_isr();
+#endif
+
 #endif // _CCL_OFFLOAD_CONTROL_H_
