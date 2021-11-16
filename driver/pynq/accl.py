@@ -657,20 +657,13 @@ class accl():
             return
         self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.set_max_dma_transactions, count=value)   
 
-    def configure_communicator(self, ranks, local_rank, sess_ids=None):
+    def configure_communicator(self, ranks, local_rank):
         assert len(self.rx_buffer_spares) > 0, "RX buffers unconfigured, please call setup_rx_buffers() first"
-        # check for session IDs
-        # these must be provided explictly for UDP, but TCP auto-generates them
-        if sess_ids is not None:
-            assert len(sess_ids) == len(ranks), "Number of session IDs must match number of ranks"
-        else:
-            sess_ids = [0xFFFFFFFF for i in range(len(ranks))]
         if len(self.communicators) == 0:
             addr = self.communicators_addr
         else:
             addr = self.communicators[-1]["addr"]
-        comm_address = EXCHANGE_MEM_OFFSET_ADDRESS + addr
-        communicator = {"local_rank": local_rank, "addr": comm_address, "ranks": ranks, "inbound_seq_number_addr":[0 for _ in ranks], "outbound_seq_number_addr":[0 for _ in ranks], "session_addr":[0 for _ in ranks]}
+        communicator = {"local_rank": local_rank, "addr": addr, "ranks": ranks, "in_seqn":[0 for _ in ranks], "out_seqn":[0 for _ in ranks], "session_id":[0 for _ in ranks]}
         self.cclo.write(addr,len(ranks))
         addr += 4
         self.cclo.write(addr,local_rank)
@@ -684,21 +677,22 @@ class accl():
             #leave 2 32 bit space for inbound/outbound_seq_number
             addr += 4
             self.cclo.write(addr,0)
-            communicator["inbound_seq_number_addr"][i]  = addr
+            communicator["in_seqn"][i]  = 0
             addr +=4
             self.cclo.write(addr,0)
-            communicator["outbound_seq_number_addr"][i] = addr
+            communicator["out_seqn"][i] = 0
             addr += 4
-            self.cclo.write(addr, sess_ids[i])
-            communicator["session_addr"][i] = addr
+            if "session_id" in ranks[i]:
+                sess_id = ranks[i]["session_id"]
+            else:
+                sess_id = 0xFFFFFFFF
+            self.cclo.write(addr, sess_id)
+            communicator["session_id"][i] = sess_id
         self.communicators.append(communicator)
         self.arithcfg_addr = addr + 4
         
     def dump_communicator(self):
-        if len(self.communicators) == 0:
-            addr    = self.communicators_addr
-        else:
-            addr    = self.communicators[-1]["addr"] - EXCHANGE_MEM_OFFSET_ADDRESS
+        addr    = self.communicators_addr
         nr_ranks    = self.cclo.read(addr)
         addr +=4
         local_rank  = self.cclo.read(addr)
@@ -746,7 +740,7 @@ class accl():
     def recv(self, comm_id, dstbuf, count, src, tag=TAG_ANY, to_fpga=False, run_async=False, waitfor=[]):
         if not to_fpga and run_async:
             warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
-        handle = self.call_async(scenario=CCLOp.recv, count=count, comm=self.communicators[comm_id]["addr"], root_src_dst=src, tag=tag, addr_0=dstbuf, waitfor=waitfor)
+        handle = self.call_async(scenario=CCLOp.recv, count=count, comm=self.communicators[comm_id]["addr"], root_src_dst=src, tag=tag, addr_2=dstbuf, waitfor=waitfor)
         if run_async:
             return handle
         else:

@@ -230,6 +230,7 @@ void udp_packetizer(Stream<axi::Stream<ap_uint<512> > > &in, Stream<axi::Stream<
     do {
         tmp_in = in.Pop();
         tmp_in_elem.data = tmp_in.data;
+        tmp_in_elem.keep = tmp_in.keep;
         tmp_in_elem.last = tmp_in.last;
         in_int.write(tmp_in_elem);
         transaction_count++;
@@ -240,10 +241,12 @@ void udp_packetizer(Stream<axi::Stream<ap_uint<512> > > &in, Stream<axi::Stream<
     //call packetizer
     vnx_packetizer(in_int, out_int, cmd_int, sts_int, 1024);
     //load result stream
+    transaction_count++;//inc transaction count because of the 64B header
     do {
         tmp_out_elem = out_int.read();
         tmp_out.last = tmp_out_elem.last;
         tmp_out.data = tmp_out_elem.data;
+        tmp_out.keep = tmp_out_elem.keep;
         tmp_out.dest = tmp_out_elem.dest;
         out.Push(tmp_out);
         transaction_count--;
@@ -265,15 +268,22 @@ void udp_depacketizer(Stream<axi::Stream<ap_uint<512>, 16> > &in, Stream<axi::St
     ap_axiu<512,0,0,0> tmp_out_elem;
     axi::Stream<ap_uint<32> > tmp_sts;
     ap_uint<32> tmp_sts_elem;
-    int transaction_count;
+    unsigned int transaction_count;
 
     //load op stream
     transaction_count = 0;
     do {
         tmp_in = in.Pop();
-        if(transaction_count == 0) transaction_count = (tmp_in.data + 63) / 64;
+        if(transaction_count == 0) {
+            transaction_count = (tmp_in.data(31,0) + 63) / 64;
+            transaction_count++; //increment to account for the header
+        }
+        stringstream ss;
+        ss << "UDP RX transaction count " << transaction_count << "\n";
+        cout << ss.str();
         tmp_in_elem.data = tmp_in.data;
         tmp_in_elem.last = tmp_in.last;
+        tmp_in_elem.keep = tmp_in.keep;
         tmp_in_elem.dest = tmp_in.dest;
         in_int.write(tmp_in_elem);
         transaction_count--;
@@ -285,9 +295,9 @@ void udp_depacketizer(Stream<axi::Stream<ap_uint<512>, 16> > &in, Stream<axi::St
     do {
         tmp_out_elem = out_int.read();
         tmp_out.last = tmp_out_elem.last;
+        tmp_out.keep = tmp_out_elem.keep;
         tmp_out.data = tmp_out_elem.data;
         out.Push(tmp_out);
-        transaction_count--;
     } while(tmp_out_elem.last == 0);
     cout << "UDP RX message sent" << endl;
     tmp_sts.data = sts_int.read();
@@ -596,10 +606,10 @@ void sim_bd(zmqpp::socket &socket, vector<char> &devicemem, uint32_t *cfgmem) {
     HLSLIB_FREERUNNING_FUNCTION(compression, cfgmem+GPIO_TDEST_BASEADDR/4, 2, switch_m[8], switch_s[7]);
     //UDP PACK/DEPACK
     HLSLIB_FREERUNNING_FUNCTION(udp_packetizer, switch_m[0], udp_tx_data, cmd_fifos[CMD_UDP_TX], sts_fifos[STS_UDP_PKT]);
-    HLSLIB_FREERUNNING_FUNCTION(udp_depacketizer, udp_rx_data, dma_write_data[0], sts_fifos[STS_UDP_RX]);
+    HLSLIB_FREERUNNING_FUNCTION(udp_depacketizer, udp_tx_data, dma_write_data[0], sts_fifos[STS_UDP_RX]);//loopback of tx to rx
     //TCP PACK/DEPACK (for now use UDP packetizer here too)
     HLSLIB_FREERUNNING_FUNCTION(udp_packetizer, switch_m[1], tcp_tx_data, cmd_fifos[CMD_TCP_TX], sts_fifos[STS_TCP_PKT]);
-    HLSLIB_FREERUNNING_FUNCTION(udp_depacketizer, tcp_rx_data, dma_write_data[2], sts_fifos[STS_TCP_RX]);
+    HLSLIB_FREERUNNING_FUNCTION(udp_depacketizer, tcp_tx_data, dma_write_data[2], sts_fifos[STS_TCP_RX]);//loopback of tx to rx
     //AXI Timer
     HLSLIB_FREERUNNING_FUNCTION(timer, cfgmem+TIMER_BASEADDR/4);
     //AXI IRQ Controller

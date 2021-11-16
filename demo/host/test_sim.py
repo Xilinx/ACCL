@@ -107,11 +107,12 @@ if __name__ == "__main__":
 
     ranks = []
     for i in range(2):
-        ranks.append({"ip": "127.0.0.1", "port": 17000})
+        ranks.append({"ip": "127.0.0.1", "port": 17000, "session_id":i})
 
     #configure FPGA and CCLO cores with the default 16 RX buffers of bsize KB each
     cclo_inst = accl(ranks, 0, protocol="UDP", sim_sock="tcp://localhost:5555")
     cclo_inst.dump_rx_buffers_spares()
+    cclo_inst.dump_communicator()
 
     try:
         if args.combine:
@@ -125,6 +126,7 @@ if __name__ == "__main__":
         if args.sndrcv:
             for i in range(args.nruns):
                 test_sendrecv(cclo_inst, args.count)
+            cclo_inst.dump_rx_buffers_spares()
 
     except KeyboardInterrupt:
         print("CTR^C")

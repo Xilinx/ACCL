@@ -1050,6 +1050,7 @@ int recv(	unsigned int src_rank,
         emit_dm_config.op0_addr.ptr = ((uint64_t) rx_buf_list[buf_idx].addrh << 32) | rx_buf_list[buf_idx].addrl;
         //start DMAs
         dma_tag_tmp  = start_move(&emit_dm_config, dma_tag_tmp, 0, 0);
+        dm_config_update(&emit_dm_config);
         //save spare buffer id
         cb_push(&spare_buffer_queue, buf_idx);
     }
@@ -1057,6 +1058,7 @@ int recv(	unsigned int src_rank,
     while(emit_dm_config.elems_remaining > 0){
         //wait for DMAs to finish
         ack_move(&ack_dm_config, 0);
+        dm_config_update(&ack_dm_config);
         //set spare buffer as free
         buf_idx = cb_pop(&spare_buffer_queue);
         microblaze_disable_interrupts();
@@ -1069,6 +1071,7 @@ int recv(	unsigned int src_rank,
         emit_dm_config.op0_addr.ptr = ((uint64_t) rx_buf_list[buf_idx].addrh << 32) | rx_buf_list[buf_idx].addrl;
         //start DMAs
         dma_tag_tmp = start_move(&emit_dm_config, dma_tag_tmp, 0, 0);
+        dm_config_update(&emit_dm_config);
         //save spare buffer id
         cb_push(&spare_buffer_queue, buf_idx);
     }
@@ -1076,6 +1079,7 @@ int recv(	unsigned int src_rank,
     while(ack_dm_config.elems_remaining > 0){
         //wait for DMAs to finish
         ack_move(&ack_dm_config, 0);
+        dm_config_update(&ack_dm_config);
         //set spare buffer as free
         buf_idx = cb_pop(&spare_buffer_queue);
         microblaze_disable_interrupts();
