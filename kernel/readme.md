@@ -4,7 +4,7 @@
   - [CCL_Offload_kernel](#CCL_Offload_kernel);
   - [CTRL module](#CTRL-module);
   - [Exchange memory module](#Exchange-memory-module);
-- [Building and package the ccl_offload.xo Kernel](#Building-and-package-the-ccl_offload.xo-Kernel)
+- [Building and package the ccl_offload.xo Kernel](#building-and-package-the-ccl_offloadxo-kernel)
 
 # Architecture
 
