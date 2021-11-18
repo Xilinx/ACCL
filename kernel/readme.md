@@ -9,7 +9,8 @@
 # Architecture
 
 ## CCL_Offload_kernel
-![schematic](../docs/images/drawing_offload.svg)
+![schematic](https://xilinx.github.io/ACCL/images/drawing_offload.svg)
+
 The  CCL  Offload  (CCLO)  kernel  implements  the  ACCL primitives  by  orchestrating  data  movement  between  the  network  fabric,  FPGA  external  memory,  and  FPGA  compute kernels, with no host CPU involvement. 
 
 Data movement to and from  the  network  is  accomplished  through  custom  interface blocks  to  the  TCP/UDP  network  protocol  offload  engines,while  FPGA  external  memory  (DDR  or  HBM)  is  read  and written through DataMover engines (DMA).
@@ -19,8 +20,9 @@ Orchestrating the required transfers and the interaction between various subsyst
 
 ### Data Plane structure
 
-![schematic](../docs/images/drawing_offload_data_plane_with_datapath_simplified.svg)
-Figures presents  a  high  level  overview  of  the  CCLO data  plane  structure  which  consists  of  multiple  functional units (FUs) - three AXI DataMover engines (``DMA0``, ``DMA1``,``DMA2``),  AXI  Stream  (``AXIS``)  interconnects  (e.g.  ``S0``,  ``S1``),  an internal arithmetic unit (``A0``) and network interface logic (``UD``,``UP``,``TP``,``TD``). Data flows through all those components via 512bit wide AXIS interfaces [15], that are connected together via the central AXIS Switch.
+![schematic](https://xilinx.github.io/ACCL/images/drawing_offload_data_plane_with_datapath_simplified.svg)
+
+The Figure presents a  high  level  overview  of  the  CCLO data  plane  structure  which  consists  of  multiple  functional units (FUs) - three AXI DataMover engines (``DMA0``, ``DMA1``,``DMA2``),  AXI  Stream  (``AXIS``)  interconnects  (e.g.  ``S0``,  ``S1``),  an internal arithmetic unit (``A0``) and network interface logic (``UD``,``UP``,``TP``,``TD``). Data flows through all those components via 512bit wide AXIS interfaces [15], that are connected together via the central AXIS Switch.
 
  Modules description:
   - ``Arithmetic`` unit : CCLO uses either external or internal arithmetic units to performs sums in different way. This module would be used to optimize certain kind of operations like a gather that fuses all the data in an integer, which can be useful in certain cases (e.g. distributed training to perform stochastic gradient descent)
@@ -33,7 +35,7 @@ Figures presents  a  high  level  overview  of  the  CCLO data  plane  structure
 The CCL_Offload relies extensively on AXI protocols (both MMAP and STREAM) and IP to exchange data. For more info on the protocol go to [AXI MMAP spec](https://developer.arm.com/docs/ihi0022/e?_ga=2.67820049.1631882347.1556009271-151447318.1544783517), [AXI STREAM spec](https://developer.arm.com/docs/ihi0051/latest), [UG761](https://www.xilinx.com/support/documentation/ip_documentation/axi_ref_guide/latest/ug761_axi_reference_guide.pdf) and [UG1037](https://www.xilinx.com/support/documentation/ip_documentation/axi_ref_guide/latest/ug1037-vivado-axi-reference-guide.pdf).
 
 ### Control Plane
-![schematic](../docs/images/drawing_ctrl_plane_simplified.svg)
+![schematic](https://xilinx.github.io/ACCL/images/drawing_ctrl_plane_simplified.svg)
 
 The Figure illustrates  the  detailed  structure  of  the  control plane.  Central  to  the  control  plane  is  a  MicroBlaze  single-core,  FPGA-optimized  microprocessor.  The  role  of  the Microblaze  CPU  in  the  CCLO  design  is  to  provide  the  re-quired flexibility to execute many different collectives utilizing a  multitude  of  FUs  in  combination,  which  is  difficult  to achieve  utilizing  logic  described  in  HLS  or  RTL.  
 
@@ -45,7 +47,8 @@ However, the latency of firmware-directed control is higher when compared to RTL
 
 To be more specific, the control plane is divided in CTRL module and the exchange memory
 ### CTRL module
-![schematic_ctrl](../docs/images/drawing_ctrl.svg)
+![schematic_ctrl](https://xilinx.github.io/ACCL/images/drawing_ctrl.svg)
+
 The ``CTRL`` module takes the responsibility of orchestrating the data transfer between components inside the the CCLO kernel. As you can see from the Figure, a  ``MicroBlaze`` is currently employed to implement those functionalities.
 The following Figure shows the main connections to and from the ``MicroBlaze`` to other components in the design.
 
@@ -69,7 +72,7 @@ For more information on how the ``MicroBlaze`` works, take a look at [sw/sw_apps
 ### Exchange memory module
 The exchange memory module is the user point of access to the CTRL module.
 
-![schematic_exchange_mem](../docs/images/drawing_exchange_mem.svg)
+![schematic_exchange_mem](https://xilinx.github.io/ACCL/images/drawing_exchange_mem.svg)
 - hosts_sts comes from ``MicroBlaze M10``;
 - [host_ctrl](hls/hostctrl/hostctrl.cpp) receives configuration data from python driver (via ``s_axi_control``, ``AXI crossbar0``) to request an operation to the CCLO kernel as specified  [earlier](#hw-kernel-parameters-(BASEADDR+0));
 - Moreover the user can write/read via ``s_axi_control`` -> ``AXI crossbar0``  the ``BRAM`` in this module;
