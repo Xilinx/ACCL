@@ -51,11 +51,14 @@ class SimMMIO():
 
 class SimBuffer():
     next_free_address = 0
-    def __init__(self, buf, zmqsocket):
+    def __init__(self, buf, zmqsocket, physical_address=None):
         self.socket = zmqsocket
         self.buf = buf
-        self.physical_address = SimBuffer.next_free_address
-        SimBuffer.next_free_address += buf.nbytes
+        if physical_address is None:
+            self.physical_address = SimBuffer.next_free_address
+            SimBuffer.next_free_address += buf.nbytes
+        else:
+            self.physical_address = physical_address
     
     # Devicemem read request  {"type": 2, "addr": <uint>, "len": <uint>}
     # Devicemem read response {"status": OK|ERR, "rdata": <array of uint>}
@@ -82,6 +85,19 @@ class SimBuffer():
     @property
     def dtype(self):
         return self.buf.dtype
+
+    def __getitem__(self, key):
+        if isinstance(key, slice):
+            if key.start is not None:
+                offset = self.buf[:key.start].nbytes
+            else:
+                offset = 0
+            return SimBuffer(self.buf[key], self.socket, physical_address=self.physical_address+offset)
+        else:
+            return self.buf[key]
+    
+    def __setitem__(self, key, value):
+        self.buf[key] = value
 
 class SimDevice():
     def __init__(self, zmqadr="tcp://localhost:5555"):
@@ -496,7 +512,7 @@ class accl():
             except Exception :
                 content= "xxread failedxx"
             buf_phys_addr = addrh*(2**32)+addrl
-            print(f"SPARE RX BUFFER{i}:\t ADDR: {hex(buf_phys_addr)} \t STATUS: {status} \t OCCUPACY: {rxlen}/{maxsize} \t DMA TAG: {hex(dmatag)} \t  MPI TAG:{hex(rxtag)} \t SEQ: {seq} \t SRC:{rxsrc} \t content {content}")
+            print(f"SPARE RX BUFFER{i}:\t ADDR: {hex(buf_phys_addr)} \t STATUS: {status} \t OCCUPANCY: {rxlen}/{maxsize} \t DMA TAG: {hex(dmatag)} \t  MPI TAG:{hex(rxtag)} \t SEQ: {seq} \t SRC:{rxsrc} \t DATA: {content}")
 
     def prepare_call(self, addr_0, addr_1, addr_2, compress_dtype=None):
         # no addresses, this is a config call
@@ -836,7 +852,7 @@ class accl():
         if not from_fpga and local_rank == root:
             sbuf[:count*p].sync_to_device()
 
-        prevcall = [self.call_async(scenario=CCLOp.scatter, count=count, comm=comm["addr"], root_src_dst=root, addr_0=sbuf, addr_1=rbuf[0:count], waitfor=waitfor)]
+        prevcall = [self.call_async(scenario=CCLOp.scatter, count=count, comm=comm["addr"], root_src_dst=root, addr_0=sbuf, addr_2=rbuf[0:count], waitfor=waitfor)]
 
         if run_async:
             return prevcall[0]
@@ -863,7 +879,7 @@ class accl():
         if not from_fpga:
             sbuf[0:count].sync_to_device()
             
-        prevcall = [self.call_async(scenario=CCLOp.gather, count=count, comm=comm["addr"], root_src_dst=root, addr_0=sbuf, addr_1=rbuf, waitfor=waitfor)]
+        prevcall = [self.call_async(scenario=CCLOp.gather, count=count, comm=comm["addr"], root_src_dst=root, addr_0=sbuf, addr_2=rbuf, waitfor=waitfor)]
             
         if run_async:
             return prevcall[0]
@@ -888,7 +904,7 @@ class accl():
         if not from_fpga:
             sbuf[0:count].sync_to_device()
 
-        prevcall = [self.call_async(scenario=CCLOp.allgather, count=count, comm=comm["addr"], addr_0=sbuf, addr_1=rbuf, waitfor=waitfor)]
+        prevcall = [self.call_async(scenario=CCLOp.allgather, count=count, comm=comm["addr"], addr_0=sbuf, addr_2=rbuf, waitfor=waitfor)]
 
         if run_async:
             return prevcall[0]
@@ -916,7 +932,7 @@ class accl():
         if not from_fpga:
             sbuf[0:count].sync_to_device()
 
-        prevcall = [self.call_async(scenario=CCLOp.reduce, count=count, comm=self.communicators[comm_id]["addr"], root_src_dst=root, function=func, addr_0=sbuf, addr_1=rbuf, waitfor=waitfor)]
+        prevcall = [self.call_async(scenario=CCLOp.reduce, count=count, comm=self.communicators[comm_id]["addr"], root_src_dst=root, function=func, addr_0=sbuf, addr_2=rbuf, waitfor=waitfor)]
 
         if run_async:
             return prevcall[0]
@@ -937,7 +953,7 @@ class accl():
         if not from_fpga:
             sbuf[0:count].sync_to_device()
 
-        prevcall = [self.call_async(scenario=CCLOp.allreduce, count=count, comm=self.communicators[comm_id]["addr"], function=func, addr_0=sbuf, addr_1=rbuf, waitfor=waitfor)]
+        prevcall = [self.call_async(scenario=CCLOp.allreduce, count=count, comm=self.communicators[comm_id]["addr"], function=func, addr_0=sbuf, addr_2=rbuf, waitfor=waitfor)]
 
         if run_async:
             return prevcall[0]
@@ -964,7 +980,7 @@ class accl():
         if not from_fpga:
             sbuf[0:count*p].sync_to_device()
 
-        prevcall = [self.call_async(scenario=CCLOp.reduce_scatter, count=count, comm=self.communicators[comm_id]["addr"], function=func, addr_0=sbuf, addr_1=rbuf, waitfor=waitfor)]
+        prevcall = [self.call_async(scenario=CCLOp.reduce_scatter, count=count, comm=self.communicators[comm_id]["addr"], function=func, addr_0=sbuf, addr_2=rbuf, waitfor=waitfor)]
 
         if run_async:
             return prevcall[0]

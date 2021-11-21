@@ -1,9 +1,28 @@
+/*******************************************************************************
+#  Copyright (C) 2021 Xilinx, Inc
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+# *******************************************************************************/
+
+
 #include "Stream.h"
 #include "Simulation.h"
 #include "Axi.h"
 #include <pthread.h>
 #include <iostream>
 #include <sstream>
+#include <fstream>
 #include "ap_axi_sdata.h"
 #include "hls_stream.h"
 #include "ap_int.h"
@@ -14,6 +33,7 @@
 #include <zmqpp/zmqpp.hpp>
 #include <string>
 #include <jsoncpp/json/json.h>
+#include <chrono>
 
 // #include "fp_hp_stream_conv.h"
 // #include "hp_fp_stream_conv.h"
@@ -386,6 +406,7 @@ void interrupt_controller(uint32_t *cfgmem, uint32_t *timermem,
     bool dma2_cmd_irq_active = d2_cmd.IsEmpty();
     bool dma2_sts_irq_active = !d2_sts.IsEmpty();
     uint32_t interrupt_pending = 0;
+    uint32_t prev_interrupt_pending = 0;
     //while master enable and hw interrupt enable
     //cycle through interrupt sources and set interrupt pending if mask enables
     if(*mer == (IRQCTRL_MER_HARDWARE_INTERRUPT_ENABLE|IRQCTRL_MER_MASTER_ENABLE)){
@@ -394,34 +415,20 @@ void interrupt_controller(uint32_t *cfgmem, uint32_t *timermem,
         interrupt_pending |= dma0_sts_irq_active ? IRQCTRL_DMA0_STS_QUEUE_NON_EMPTY : 0;
         interrupt_pending |= dma2_cmd_irq_active ? IRQCTRL_DMA2_CMD_QUEUE_EMPTY : 0;
         interrupt_pending |= dma2_sts_irq_active ? IRQCTRL_DMA2_STS_QUEUE_NON_EMPTY : 0;
+
         if(interrupt_pending & *ier){
-            cout << "Interrupt controller pending interrupt " << interrupt_pending << endl;
+            if(prev_interrupt_pending != interrupt_pending){
+                cout << "Interrupt controller pending interrupt " << interrupt_pending << endl;
+            }
         }
         *ipr = (interrupt_pending & *ier);
+        prev_interrupt_pending = interrupt_pending;
     }
     //clear interrupts when acknowledged
     if(*iar != 0){
-        cout << "Interrupt controller clear interrupt" << endl;
+        cout << "Interrupt controller clear interrupt " << *iar << endl;
         *ipr = *ipr & ~(*iar);
         *iar = 0;
-    }
-}
-
-template <unsigned int nports>
-void udp_switch(Stream<axi::Stream<ap_uint<512>, 16> > s[nports],
-            Stream<axi::Stream<ap_uint<512>, 16> > m[nports]){
-
-    axi::Stream<ap_uint<512>, 16> tmp;
-    for(int s_idx=0; s_idx<nports; s_idx++){
-        if(!s[s_idx].IsEmpty()){
-            do{
-                tmp = s[s_idx].Pop();
-                m[tmp.dest].Push(tmp);
-            } while(tmp.last == 0);
-            stringstream ss;
-            ss << "Routed UDP s" << s_idx << " to m" << tmp.dest << "\n";
-            cout << ss.str();
-        }
     }
 }
 
@@ -551,7 +558,79 @@ void serve_zmq(zmqpp::socket &socket, uint32_t *cfgmem, vector<char> &devicemem,
     socket.send(str);
 }
 
-void sim_bd(zmqpp::socket &socket, vector<char> &devicemem, uint32_t *cfgmem) {
+void eth_endpoint_egress_port(zmqpp::socket &socket, Stream<axi::Stream<ap_uint<512>, 16> > &in){
+
+    zmqpp::message message;
+    Json::Value packet;
+    Json::StreamWriterBuilder builder;
+
+    //pop first word in packet
+    stringstream ss;
+    unsigned int dest;
+    axi::Stream<ap_uint<512>, 16> tmp;
+    //get the data (bytes valid from tkeep)
+    unsigned int idx=0;
+    do{
+        tmp = in.Pop();
+        for(int i=0; i<64; i++){ 
+            if(tmp.keep(i,i) == 1){
+                packet["data"][idx++] = (unsigned int)tmp.data(8*(i+1)-1,8*i);
+            }
+        }
+    }while(tmp.last == 0);
+    dest = tmp.dest;
+    //first part of the message is the destination port ID
+    message << to_string(dest);
+    //finally package the data
+    string str = Json::writeString(builder, packet);
+    message << str;
+    cout << "ETH Send to " << dest << " " << str;
+    socket.send(message);
+}
+
+void eth_endpoint_ingress_port(zmqpp::socket &socket, Stream<axi::Stream<ap_uint<512>, 16> > &out){
+    
+    Json::Reader reader;
+
+    // receive the message
+    zmqpp::message message;
+    // decompose the message 
+    socket.receive(message);
+    string msg_text, dst_text, src_text;
+
+    //get and check destination ID
+    message >> dst_text;
+    message >> msg_text;
+    cout << "ETH Receive " << msg_text;
+
+    //parse msg_text as json
+    Json::Value packet, data;
+    reader.parse(msg_text, packet);
+
+    data = packet["data"];
+    unsigned int len = data.size();
+
+    axi::Stream<ap_uint<512>, 16> tmp;
+    int idx = 0;
+    while(idx<len){
+        for(int i=0; i<64; i++){
+            if(idx<len){
+                tmp.data(8*(i+1)-1,8*i) = data[idx++].asUInt();
+                tmp.keep(i,i) = 1;
+            } else{
+                tmp.keep(i,i) = 0;
+            }
+        }
+        tmp.last = (idx == len);
+        out.Push(tmp);
+    }
+}
+
+void sim_bd(zmqpp::socket &cmd_socket, 
+            zmqpp::socket &eth_tx_socket, 
+            zmqpp::socket &eth_rx_socket, 
+            vector<char> &devicemem, 
+            uint32_t *cfgmem) {
 
     Stream<axi::Stream<ap_uint<32> >, 32> host_cmd("host_cmd");
     Stream<axi::Stream<ap_uint<32> >, 32> host_sts("host_sts");
@@ -606,7 +685,7 @@ void sim_bd(zmqpp::socket &socket, vector<char> &devicemem, uint32_t *cfgmem) {
     HLSLIB_FREERUNNING_FUNCTION(compression, cfgmem+GPIO_TDEST_BASEADDR/4, 2, switch_m[8], switch_s[7]);
     //UDP PACK/DEPACK
     HLSLIB_FREERUNNING_FUNCTION(udp_packetizer, switch_m[0], udp_tx_data, cmd_fifos[CMD_UDP_TX], sts_fifos[STS_UDP_PKT]);
-    HLSLIB_FREERUNNING_FUNCTION(udp_depacketizer, udp_tx_data, dma_write_data[0], sts_fifos[STS_UDP_RX]);//loopback of tx to rx
+    HLSLIB_FREERUNNING_FUNCTION(udp_depacketizer, udp_rx_data, dma_write_data[0], sts_fifos[STS_UDP_RX]);
     //TCP PACK/DEPACK (for now use UDP packetizer here too)
     HLSLIB_FREERUNNING_FUNCTION(udp_packetizer, switch_m[1], tcp_tx_data, cmd_fifos[CMD_TCP_TX], sts_fifos[STS_TCP_PKT]);
     HLSLIB_FREERUNNING_FUNCTION(udp_depacketizer, tcp_tx_data, dma_write_data[2], sts_fifos[STS_TCP_RX]);//loopback of tx to rx
@@ -615,26 +694,58 @@ void sim_bd(zmqpp::socket &socket, vector<char> &devicemem, uint32_t *cfgmem) {
     //AXI IRQ Controller
     HLSLIB_FREERUNNING_FUNCTION(interrupt_controller, cfgmem+IRQCTRL_BASEADDR/4, cfgmem+TIMER_BASEADDR/4, sts_fifos[STS_DMA0_TX], cmd_fifos[CMD_DMA0_TX], sts_fifos[STS_DMA2_TX], cmd_fifos[CMD_DMA2_TX]);
     //ZMQ to host process
-    HLSLIB_FREERUNNING_FUNCTION(serve_zmq, socket, cfgmem, devicemem, sts_fifos[CMD_HOST], cmd_fifos[STS_HOST]);
+    HLSLIB_FREERUNNING_FUNCTION(serve_zmq, cmd_socket, cfgmem, devicemem, sts_fifos[CMD_HOST], cmd_fifos[STS_HOST]);
+    //ZMQ to other nodes process(es)
+    HLSLIB_FREERUNNING_FUNCTION(eth_endpoint_egress_port, eth_tx_socket, udp_tx_data);
+    HLSLIB_FREERUNNING_FUNCTION(eth_endpoint_ingress_port, eth_rx_socket, udp_rx_data);
     //MICROBLAZE
     HLSLIB_FREERUNNING_FUNCTION(stream_isr);
     HLSLIB_DATAFLOW_FUNCTION(run_accl);
     HLSLIB_DATAFLOW_FINALIZE();
 }
 
-int main(){
+int main(int argc, char** argv){
     vector<char> devicemem;
     sem_init(&mb_irq_mutex, 0, 0);
 
+    unsigned int world_size = atoi(argv[1]);
+    unsigned int local_rank = atoi(argv[2]);
+    const string endpoint_base = "tcp://127.0.0.1:";
+    unsigned int starting_port = atoi(argv[3]);
+    string cmd_endpoint = endpoint_base + to_string(starting_port + local_rank);
+    cout << cmd_endpoint << endl;
+    vector<string> eth_endpoints;
+
+    for(int i=0; i<world_size; i++){
+        eth_endpoints.emplace_back(endpoint_base + to_string(starting_port+world_size+i));
+        cout << eth_endpoints.at(i) << endl;
+    }
+    
     //ZMQ for commands
-    const string endpoint = "tcp://*:5555";
     // initialize the 0MQ context
     zmqpp::context context;
-    // generate a pull socket
-    zmqpp::socket_type type = zmqpp::socket_type::reply;
-    zmqpp::socket socket(context, type);
-    // bind to the socket
-    socket.bind(endpoint);
+    zmqpp::socket cmd_socket(context, zmqpp::socket_type::reply);
+    zmqpp::socket eth_tx_socket(context, zmqpp::socket_type::pub);
+    zmqpp::socket eth_rx_socket(context, zmqpp::socket_type::sub);
+    // bind to the socket(s)
+    cout << "Rank " << local_rank << " binding to " << cmd_endpoint << " and " << eth_endpoints.at(local_rank) << endl;
+    cmd_socket.bind(cmd_endpoint);
+    eth_tx_socket.bind(eth_endpoints.at(local_rank));
 
-    sim_bd(socket, devicemem, cfgmem);
+    this_thread::sleep_for(chrono::milliseconds(1000));
+
+    // connect to the sockets
+    for(int i=0; i<world_size; i++){
+        cout << "Rank " << local_rank << " connecting to " << eth_endpoints.at(i) << endl;
+        eth_rx_socket.connect(eth_endpoints.at(i));
+    }
+
+    this_thread::sleep_for(chrono::milliseconds(1000));
+
+    cout << "Rank " << local_rank << " subscribing to " << local_rank << endl;
+    eth_rx_socket.subscribe(to_string(local_rank));
+
+    this_thread::sleep_for(chrono::milliseconds(1000));
+
+    sim_bd(cmd_socket, eth_tx_socket, eth_rx_socket, devicemem, cfgmem);
 }

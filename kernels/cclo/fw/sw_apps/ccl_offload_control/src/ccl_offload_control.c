@@ -1394,34 +1394,37 @@ int scatter(unsigned int count,
 
         int emit_dst_rank, ack_dst_rank;
         while(cfg.elems_remaining > 0){
-            dm_config stride_cfg = cfg;
+            dm_config stride_emit_cfg = cfg;
+            dm_config stride_ack_cfg = cfg;
             //1. issue at most max_dma_in_flight transfers to consecutive ranks
             for (i = 0, emit_dst_rank=0; emit_dst_rank < world.size && i < max_dma_in_flight ; i++, emit_dst_rank++){
                 if(emit_dst_rank != src_rank){
                     //start DMAs
-                    dma_tag_tmp = start_move(&cfg, dma_tag_tmp, emit_dst_rank, TAG_ANY);
+                    dma_tag_tmp = start_move(&stride_emit_cfg, dma_tag_tmp, emit_dst_rank, TAG_ANY);
                 }
-                dm_config_stride(&stride_cfg, count);
+                dm_config_stride(&stride_emit_cfg, count);
             }
             //2.ack 1 and issue another dma transfer up until there's no more dma move to issue
             for(ack_dst_rank = 0; emit_dst_rank < world.size; ack_dst_rank++, emit_dst_rank++){
                 if(ack_dst_rank != src_rank){
                     //wait for DMAs to finish
-                    ack_move(&cfg, ack_dst_rank);
+                    ack_move(&stride_ack_cfg, ack_dst_rank);
                 }
+                dm_config_stride(&stride_ack_cfg, count);
                 //enqueue other DMA movement
                 if(emit_dst_rank != src_rank){
                     //start DMAs
-                    dma_tag_tmp = start_move(&cfg, dma_tag_tmp, emit_dst_rank, TAG_ANY);
+                    dma_tag_tmp = start_move(&stride_emit_cfg, dma_tag_tmp, emit_dst_rank, TAG_ANY);
                 }
-                dm_config_stride(&stride_cfg, count);
+                dm_config_stride(&stride_emit_cfg, count);
             }
             //3. finish ack the remaining
             for(; ack_dst_rank < world.size; ack_dst_rank++){
                 if(ack_dst_rank != src_rank){
                     //wait for DMAs to finish
-                    ack_move(&cfg, ack_dst_rank);
+                    ack_move(&stride_ack_cfg, ack_dst_rank);
                 }
+                dm_config_stride(&stride_ack_cfg, count);
             }
             //advance config
             //TODO: this can be interleaved with command issuing to avoid pausing

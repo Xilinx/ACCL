@@ -17,17 +17,21 @@
 
 import sys
 import numpy as np
-
+import time
 sys.path.append('../../driver/pynq/')
 from accl import accl, ACCLReduceFunctions
 from accl import SimBuffer
 import argparse
 import itertools
+from mpi4py import MPI
 
 def get_buffers(count, op0_dt, op1_dt, res_dt, accl_inst):
-    op0_buf = SimBuffer(np.zeros((count,), dtype=op0_dt), cclo_inst.cclo.socket)
-    op1_buf = SimBuffer(np.zeros((count,), dtype=op1_dt), cclo_inst.cclo.socket)
-    res_buf = SimBuffer(np.zeros((count,), dtype=res_dt), cclo_inst.cclo.socket)
+    op0_buf = SimBuffer(np.zeros((count,), dtype=op0_dt), accl_inst.cclo.socket)
+    op1_buf = SimBuffer(np.zeros((count,), dtype=op1_dt), accl_inst.cclo.socket)
+    res_buf = SimBuffer(np.zeros((count,), dtype=res_dt), accl_inst.cclo.socket)
+    op0_buf.sync_to_device()
+    op1_buf.sync_to_device()
+    res_buf.sync_to_device()
     op0_buf.buf[:] = np.random.randn(count).astype(op0_dt)
     op1_buf.buf[:] = np.random.randn(count).astype(op1_dt)
     return op0_buf, op1_buf, res_buf
@@ -37,8 +41,6 @@ def test_copy(cclo_inst, count):
     dt = [np.float32]#[np.float32, np.half, np.float64]
     for op_dt, res_dt in itertools.product(dt, repeat=2):
         op_buf, _, res_buf = get_buffers(count, op_dt, op_dt, res_dt, cclo_inst)
-        op_buf.sync_to_device()
-        res_buf.sync_to_device()
         cclo_inst.copy(op_buf, res_buf, count)
         if not np.isclose(op_buf.buf, res_buf.buf).all():
             err_count += 1
@@ -53,9 +55,6 @@ def test_combine(cclo_inst, count):
     dt = [np.float32]#[np.float32, np.half]
     for op0_dt, op1_dt, res_dt in itertools.product(dt, repeat=3):
         op0_buf, op1_buf, res_buf = get_buffers(count, op0_dt, op1_dt, res_dt, cclo_inst)
-        op0_buf.sync_to_device()
-        op1_buf.sync_to_device()
-        res_buf.sync_to_device()
         cclo_inst.combine(count, ACCLReduceFunctions.SUM, op0_buf, op1_buf, res_buf)
         if not np.isclose(op0_buf.buf+op1_buf.buf, res_buf.buf).all():
             err_count += 1
@@ -65,16 +64,22 @@ def test_combine(cclo_inst, count):
     if err_count == 0:
         print("Combine succeeded")
 
-def test_sendrecv(cclo_inst, count):
+def test_sendrecv(cclo_inst, world_size, local_rank, count):
     err_count = 0
     dt = [np.float32]#[np.float32, np.half]
     for op_dt, res_dt in itertools.product(dt, repeat=2):
         op_buf, _, res_buf = get_buffers(count, op_dt, op_dt, res_dt, cclo_inst)
-        op_buf.sync_to_device()
-        res_buf.sync_to_device()
-        # send to self (effectively copy via external udp streams)
-        cclo_inst.send(0, op_buf, count, 0, tag=5)
-        cclo_inst.recv(0, res_buf, count, 0, tag=5)
+        # send to next rank; receive from previous rank; send back data to previous rank; receive from next rank; compare
+        next_rank = (local_rank+1)%world_size
+        prev_rank = (local_rank+world_size-1)%world_size
+        print("Sending on ",local_rank," to ",next_rank)
+        cclo_inst.send(0, op_buf, count, next_rank, tag=0)
+        print("Receiving on ",local_rank," from ",prev_rank)
+        cclo_inst.recv(0, res_buf, count, prev_rank, tag=0)
+        print("Sending on ",local_rank," to ",prev_rank)
+        cclo_inst.send(0, res_buf, count, prev_rank, tag=1)
+        print("Receiving on ",local_rank," from ",next_rank)
+        cclo_inst.recv(0, res_buf, count, next_rank, tag=1)
         if not np.isclose(op_buf.buf, res_buf.buf).all():
             err_count += 1
             print("Send/recv failed on pair ", op_dt, res_dt)
@@ -83,36 +88,75 @@ def test_sendrecv(cclo_inst, count):
     if err_count == 0:
         print("Send/recv succeeded")
 
-if __name__ == "__main__":    
+def test_bcast(cclo_inst, local_rank, root, count):
+    err_count = 0
+    dt = [np.float32]#[np.float32, np.half]
+    for op_dt, res_dt in itertools.product(dt, repeat=2):
+        op_buf, _, res_buf = get_buffers(count, op_dt, op_dt, res_dt, cclo_inst)
+        op_buf.buf[:] = [42+i for i in range(len(op_buf.buf))]
+        cclo_inst.bcast(0, op_buf if root == local_rank else res_buf, count, root=root)
+
+        if local_rank == root:
+            print("Bcast succeeded on pair ", op_dt, res_dt)
+        else:
+            if not np.isclose(op_buf.buf, res_buf.buf).all():
+                err_count += 1
+                print("Bcast failed on pair ", op_dt, res_dt)
+    if err_count == 0:
+        print("Bcast succeeded")
+
+def test_scatter(cclo_inst, world_size, local_rank, root, count):
+    err_count = 0
+    dt = [np.float32]#[np.float32, np.half]
+    for op_dt, res_dt in itertools.product(dt, repeat=2):
+        op_buf, _, res_buf = get_buffers(count*world_size, op_dt, op_dt, res_dt, cclo_inst)
+        op_buf[:] = [1.0*i for i in range(op_buf.size)]
+        cclo_inst.scatter(0, op_buf, res_buf, count, root=root)
+
+        if not np.isclose(op_buf.buf[local_rank*count:(local_rank+1)*count], res_buf.buf[0:count]).all():
+            err_count += 1
+            print("Scatter failed on pair ", op_dt, res_dt)
+    if err_count == 0:
+        print("Scatter succeeded")
+
+if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Tests for MPI collectives offload with UDP (VNx) backend')
-    parser.add_argument('--nruns',   type=int, default=1,                help='How many times to run each test')
-    parser.add_argument('--nbufs',   type=int, default=16,               help='number of spare buffers to configure each ccl_offload')
-    parser.add_argument('--count',   type=int, default=1024,             help='How many B per buffer')
-    parser.add_argument('--debug',   action='store_true', default=False, help='enable debug mode')
-    parser.add_argument('--all',     action='store_true', default=False, help='Select all collectives')
-    parser.add_argument('--nop',     action='store_true', default=False, help='Run nop test')
-    parser.add_argument('--combine', action='store_true', default=False, help='Run fp/dp/i32/i64 test')
-    parser.add_argument('--copy',    action='store_true', default=False, help='Run copy test')
-    parser.add_argument('--sndrcv',  action='store_true', default=False, help='Run send/receive test')
-    parser.add_argument('--nosync',  action='store_true', default=False, help='Run tests without syncing buffers')
+    parser.add_argument('--nruns',      type=int,            default=1,     help='How many times to run each test')
+    parser.add_argument('--start_port', type=int,            default=5500,  help='Start of range of ports usable for sim')
+    parser.add_argument('--count',      type=int,            default=16,    help='How many B per buffer')
+    parser.add_argument('--debug',      action='store_true', default=False, help='enable debug mode')
+    parser.add_argument('--all',        action='store_true', default=False, help='Select all collectives')
+    parser.add_argument('--nop',        action='store_true', default=False, help='Run nop test')
+    parser.add_argument('--combine',    action='store_true', default=False, help='Run fp/dp/i32/i64 test')
+    parser.add_argument('--copy',       action='store_true', default=False, help='Run copy test')
+    parser.add_argument('--sndrcv',     action='store_true', default=False, help='Run send/receive test')
+    parser.add_argument('--bcast',      action='store_true', default=False, help='Run bcast test')
+    parser.add_argument('--scatter',    action='store_true', default=False, help='Run scatter test')
 
     args = parser.parse_args()
     if args.all:
-        args.nop     = True
+        args.sndrcv  = True
         args.combine = True
         args.copy    = True
+        args.bcast   = True
+
+    # get communicator size and our local rank in it
+    comm = MPI.COMM_WORLD
+    world_size = comm.Get_size()
+    local_rank = comm.Get_rank()
 
     #set a random seed to make it reproducible
-    np.random.seed(2021)
+    np.random.seed(2021+local_rank)
 
     ranks = []
-    for i in range(2):
-        ranks.append({"ip": "127.0.0.1", "port": 17000, "session_id":i})
+    for i in range(world_size):
+        ranks.append({"ip": "127.0.0.1", "port": args.start_port+world_size+i, "session_id":i})
 
     #configure FPGA and CCLO cores with the default 16 RX buffers of bsize KB each
-    cclo_inst = accl(ranks, 0, protocol="UDP", sim_sock="tcp://localhost:5555")
-    cclo_inst.dump_rx_buffers_spares()
-    cclo_inst.dump_communicator()
+    cclo_inst = accl(ranks, local_rank, protocol="UDP", sim_sock="tcp://localhost:"+str(args.start_port+local_rank))
+    cclo_inst.set_timeout(10**8)
+    #barrier here to make sure all the devices are configured before testing
+    comm.barrier()
 
     try:
         if args.combine:
@@ -125,8 +169,15 @@ if __name__ == "__main__":
         
         if args.sndrcv:
             for i in range(args.nruns):
-                test_sendrecv(cclo_inst, args.count)
-            cclo_inst.dump_rx_buffers_spares()
+                test_sendrecv(cclo_inst, world_size, local_rank, args.count)
+
+        if args.bcast:
+            for i in range(args.nruns):
+                test_bcast(cclo_inst, local_rank, i, args.count)
+
+        if args.scatter:
+            for i in range(args.nruns):
+                test_scatter(cclo_inst, world_size, local_rank, i, args.count)
 
     except KeyboardInterrupt:
         print("CTR^C")
@@ -134,8 +185,6 @@ if __name__ == "__main__":
         print(e)
         import traceback
         traceback.print_tb(e.__traceback__)
-        cclo_inst.dump_communicator()
-        if not args.nosync:
-            cclo_inst.dump_rx_buffers_spares()
+        cclo_inst.dump_rx_buffers_spares()
 
     cclo_inst.deinit()
