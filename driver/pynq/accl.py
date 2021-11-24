@@ -178,15 +178,13 @@ class CCLOCfgFunc(IntEnum):
     reset_periph             = 2
     enable_pkt               = 3
     set_timeout              = 4
-    init_connection          = 5
-    open_port                = 6
-    open_con                 = 7
-    use_tcp_stack            = 8
-    use_udp_stack            = 9
-    start_profiling          = 10
-    end_profiling            = 11
-    set_dma_transaction_size = 12
-    set_max_dma_transactions = 13
+    open_port                = 5
+    open_con                 = 6
+    set_stack_type           = 7
+    start_profiling          = 8
+    end_profiling            = 9
+    set_dma_transaction_size = 10
+    set_max_dma_transactions = 11
 
 @unique
 class ACCLReduceFunctions(IntEnum):
@@ -276,6 +274,8 @@ class ErrorCode(IntEnum):
     PACK_TIMEOUT_STS_ERROR            = 21
     PACK_SEQ_NUMBER_ERROR             = 22
     ARITHCFG_ERROR                    = 23
+    KRNL_TIMEOUT_STS_ERROR            = 24
+    KRNL_STS_COUNT_ERROR              = 25
 
 TAG_ANY = 0xFFFF_FFFF
 EXCHANGE_MEM_OFFSET_ADDRESS= 0x1000
@@ -311,6 +311,8 @@ class accl():
         self.ignore_safety_checks = False
         #TODO: use description to gather info about where to allocate spare buffers
         self.segment_size = None
+        #protocol being used
+        self.protocol = protocol
 
         # do initial config of alveo or connect to pipes if in sim mode
         self.sim_mode = False if sim_sock is None else True
@@ -346,16 +348,16 @@ class accl():
 
         print("CCLO HWID: {} at {}".format(hex(self.get_hwid()), hex(self.cclo.mmio.base_addr)))
         
-        if protocol == "UDP":
+        if self.protocol == "UDP":
             self.use_udp()
-        elif protocol == "TCP":
+        elif self.protocol == "TCP":
             if not self.sim_mode:
                 self.tx_buf_network = pynq.allocate((64*1024*1024,), dtype=np.int8, target=self.networkmem)
                 self.rx_buf_network = pynq.allocate((64*1024*1024,), dtype=np.int8, target=self.networkmem)
                 self.tx_buf_network.sync_to_device()
                 self.rx_buf_network.sync_to_device()
             self.use_tcp()
-        elif protocol == "RDMA":
+        elif self.protocol == "RDMA":
             raise ArgumentError("RDMA not supported yet")
         else:
             raise ArgumentError("Unrecognized Protocol")
@@ -366,6 +368,11 @@ class accl():
         self.configure_communicator(ranks, local_rank)
         print("Configuring arithmetic")
         self.configure_arithmetic(configs=arith_config)
+
+        # start connections if using TCP
+        if self.protocol == "TCP":
+            print("Starting connections to communicator ranks")
+            self.init_connection(comm_id=0)
 
         # set error timeout
         self.set_timeout(1_000_000)
@@ -635,8 +642,9 @@ class accl():
         else:
             handle.wait()     
 
-    def init_connection (self, comm_id=0):
-        self.call_sync(scenario=CCLOp.config, comm=self.communicators[comm_id]["addr"], function=CCLOCfgFunc.init_connection)
+    def init_connection(self, comm_id=0):
+        self.open_port(comm_id)
+        self.open_con(comm_id)
     
     @self_check_return_value
     def open_port(self, comm_id=0):
@@ -648,11 +656,11 @@ class accl():
     
     @self_check_return_value
     def use_udp(self, comm_id=0):
-        self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.use_udp_stack)
+        self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.set_stack_type, count=0)
     
     @self_check_return_value
     def use_tcp(self, comm_id=0):
-        self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.use_tcp_stack)   
+        self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.set_stack_type, count=1)   
     
     @self_check_return_value
     def set_dma_transaction_size(self, value=0):

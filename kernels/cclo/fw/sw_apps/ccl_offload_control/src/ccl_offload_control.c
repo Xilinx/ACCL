@@ -47,8 +47,8 @@ static communicator world;
 #ifdef ACCL_BD_SIM
 uint32_t sim_cfgmem[16*1024];
 uint32_t *cfgmem = sim_cfgmem;
-hlslib::Stream<hlslib::axi::Stream<ap_uint<32> >, 512> cmd_fifos[11];
-hlslib::Stream<hlslib::axi::Stream<ap_uint<32> >, 512> sts_fifos[13];
+hlslib::Stream<hlslib::axi::Stream<ap_uint<32> >, 512> cmd_fifos[9];
+hlslib::Stream<hlslib::axi::Stream<ap_uint<32> >, 512> sts_fifos[10];
 #else
 uint32_t *cfgmem = (uint32_t *)(0);
 #endif
@@ -138,13 +138,13 @@ void dm_config_setlen(dm_config * cfg, unsigned int count){
 
 void dm_config_update(dm_config * cfg){
     //increment addresses (if required)
-    if(cfg->which_dm & USE_OP0_DMA){
+    if(cfg->which_dm & USE_OP0_DM){
         dm_addr_increment(&(cfg->op0_addr), cfg->elems_per_transfer);
     }
-    if(cfg->which_dm & USE_OP1_DMA){
+    if(cfg->which_dm & USE_OP1_DM){
         dm_addr_increment(&(cfg->op1_addr), cfg->elems_per_transfer);
     }
-    if(cfg->which_dm & (USE_RES_DMA | USE_RES_DMA_WITHOUT_TLAST)){
+    if(cfg->which_dm & (USE_RES_DM)){
         dm_addr_increment(&(cfg->res_addr), cfg->elems_per_transfer);
     }
     //update remaining and lengths, in preparation for next transfer
@@ -164,13 +164,13 @@ void dm_config_update(dm_config * cfg){
 //shift the addresses of a config by a set amount of elements without changing len (useful for striding)
 void dm_config_stride(dm_config * cfg, unsigned int stride){
     //increment addresses (if required)
-    if(cfg->which_dm & USE_OP0_DMA){
+    if(cfg->which_dm & USE_OP0_DM){
         dm_addr_increment(&(cfg->op0_addr), stride);
     }
-    if(cfg->which_dm & USE_OP1_DMA){
+    if(cfg->which_dm & USE_OP1_DM){
         dm_addr_increment(&(cfg->op1_addr), stride);
     }
-    if(cfg->which_dm & (USE_RES_DMA | USE_RES_DMA_WITHOUT_TLAST)){
+    if(cfg->which_dm & (USE_RES_DM)){
         dm_addr_increment(&(cfg->res_addr), stride);
     }
 }
@@ -180,10 +180,14 @@ dm_config dm_config_init(   unsigned int count,
                             unsigned int op1_addr,
                             unsigned int res_addr,
                             unsigned int which_dm,
-                            unsigned int compression){
+                            unsigned int remote,
+                            unsigned int compression,
+                            unsigned int stream){
     dm_config ret;
     ret.which_dm = which_dm;
+    ret.remote = remote;
     ret.compression = compression;
+    ret.stream = stream;
     dm_config_setlen(&ret, count);
 
     ret.op0_addr = dm_addr_init(op0_addr, (compression & OP0_COMPRESSED) ? true : false) ;
@@ -270,19 +274,19 @@ void stream_isr(void) {
     if (irq & IRQCTRL_TIMER_ENABLE){
         clear_timer_interrupt();
     }
-    if (irq & (use_tcp ?  IRQCTRL_DMA2_STS_QUEUE_NON_EMPTY : IRQCTRL_DMA0_STS_QUEUE_NON_EMPTY) ){
+    if (irq & (IRQCTRL_DMA0_STS_QUEUE_NON_EMPTY) ){
         dequeue_rx_buffers();
     } 
 
     n_enqueued = enqueue_rx_buffers();
     
-    if ( n_enqueued == 0 && ((irq & (use_tcp ? IRQCTRL_DMA2_CMD_QUEUE_EMPTY : IRQCTRL_DMA0_CMD_QUEUE_EMPTY) ) || (irq & IRQCTRL_TIMER_ENABLE)) )
+    if ( n_enqueued == 0 && ((irq & IRQCTRL_DMA0_CMD_QUEUE_EMPTY) || (irq & IRQCTRL_TIMER_ENABLE)) )
     {   //if no spare buffer is present in the cmd queue disable irq_from empty CMD queue as it could lead to starvation
-        irq_mask = (use_tcp ? IRQCTRL_DMA2_STS_QUEUE_NON_EMPTY: IRQCTRL_DMA0_STS_QUEUE_NON_EMPTY) | IRQCTRL_TIMER_ENABLE;
+        irq_mask = IRQCTRL_DMA0_STS_QUEUE_NON_EMPTY | IRQCTRL_TIMER_ENABLE;
         setup_irq(irq_mask);
         start_timeout(100000);
     }else{
-        irq_mask = (use_tcp ? IRQCTRL_DMA2_STS_QUEUE_NON_EMPTY: IRQCTRL_DMA0_STS_QUEUE_NON_EMPTY) | (use_tcp ? IRQCTRL_DMA2_CMD_QUEUE_EMPTY: IRQCTRL_DMA0_CMD_QUEUE_EMPTY);
+        irq_mask = IRQCTRL_DMA0_STS_QUEUE_NON_EMPTY | IRQCTRL_DMA0_CMD_QUEUE_EMPTY;
         setup_irq(irq_mask);
         cancel_timeout();
     }
@@ -384,105 +388,68 @@ static inline void apply_switch_config(unsigned int base) {
 }
 
 //configure the switches for various scenarios:
-//1 == DATAPATH_DMA_LOOPBACK:
+//DATAPATH_DMA_LOOPBACK:
 //  DMA0 RX -> COMPRESS0 -> DMA1 TX
 //
-//2 == DATAPATH_DMA_REDUCTION:  
+//DATAPATH_DMA_REDUCTION:  
 //  DMA0 RX -> COMPRESS0 -> Arith Op0
 //  DMA1 RX -> COMPRESS1 -> Arith Op1 
 //  Arith Res -> COMPRESS2 -> DMA1 TX 
 //
-//3/4 == DATAPATH_OFFCHIP_TX_UDP/TCP: 
-//  DMA0 RX -> COMPRESS0 -> UDP/TCP TX
+//DATAPATH_OFFCHIP_TX: 
+//  DMA0 RX -> COMPRESS0 -> NET TX
 //
-//5/6 == DATAPATH_OFFCHIP_UDP/TCP_REDUCTION: 	
+//DATAPATH_OFFCHIP_REDUCTION: 	
 //  DMA0 RX -> COMPRESS0 -> Arith Op0
 //  DMA1 RX -> COMPRESS1 -> Arith Op1 
-//  Arith Res -> COMPRESS2 -> UDP/TCP TX 
+//  Arith Res -> COMPRESS2 -> NET TX 
 //
-//7 == DATAPATH_DMA_EXT_LOOPBACK:
-//  DMA0 RX -> COMPRESS0 -> EXT_KRNL_TX
-//  EXT_KRNL_RX -> COMPRESS1 -> DMA1 TX
-//
-void configure_switch(unsigned int scenario) {
+//If the stream flag for OP0 is set, connect EXT_KRNL output instead of DMA0 output
+//If the stream flag for RES is set, connect EXT_KRNL input instead of DMA1 input
+void configure_switch(unsigned int scenario, unsigned int streams) {
+    unsigned int op0_s = (streams & OP0_STREAM) ? SWITCH_S_EXT_KRNL : SWITCH_S_DMA0_RX;
+    unsigned int res_m = (streams & RES_STREAM) ? SWITCH_M_EXT_KRNL : SWITCH_M_DMA1_TX;
     switch (scenario)
     {
         case DATAPATH_DMA_LOOPBACK:
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_DMA0_RX, SWITCH_M_COMPRESS0);
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_COMPRESS0, SWITCH_M_DMA1_TX);
+            set_switch_datapath(SWITCH_BASEADDR, op0_s, SWITCH_M_COMPRESS0);
+            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_COMPRESS0, res_m);
             disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_ARITH_OP0);
             disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_ARITH_OP1);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_UDP_TX);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_TCP_TX);
+            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_NET_TX);
             disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_EXT_KRNL);
             disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_COMPRESS1);
             disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_COMPRESS2);		
             break;
         case DATAPATH_DMA_REDUCTION:
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_DMA0_RX, SWITCH_M_COMPRESS0);
+            set_switch_datapath(SWITCH_BASEADDR, op0_s, SWITCH_M_COMPRESS0);
             set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_COMPRESS0, SWITCH_M_ARITH_OP0);
             set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_DMA1_RX, SWITCH_M_COMPRESS1);
             set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_COMPRESS1, SWITCH_M_ARITH_OP1);
             set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_ARITH_RES, SWITCH_M_COMPRESS2);
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_COMPRESS2, SWITCH_M_DMA1_TX);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_UDP_TX);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_TCP_TX);
+            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_COMPRESS2, res_m);
+            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_NET_TX);
             disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_EXT_KRNL);	
             break;
-        case DATAPATH_OFFCHIP_TX_UDP:
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_DMA0_RX, SWITCH_M_COMPRESS0);
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_COMPRESS0, SWITCH_M_UDP_TX);
+        case DATAPATH_OFFCHIP_TX:
+            set_switch_datapath(SWITCH_BASEADDR, op0_s, SWITCH_M_COMPRESS0);
+            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_COMPRESS0, SWITCH_M_NET_TX);
             disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_ARITH_OP0);
             disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_ARITH_OP1);
             disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_DMA1_TX);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_TCP_TX);
             disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_EXT_KRNL);
             disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_COMPRESS1);
             disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_COMPRESS2);	
             break;
-        case DATAPATH_OFFCHIP_TX_TCP:
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_DMA1_RX, SWITCH_M_COMPRESS0);
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_COMPRESS0, SWITCH_M_TCP_TX);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_ARITH_OP0);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_ARITH_OP1);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_DMA1_TX);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_UDP_TX);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_EXT_KRNL);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_COMPRESS1);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_COMPRESS2);	
-            break;
-        case DATAPATH_OFFCHIP_UDP_REDUCTION:
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_DMA0_RX, SWITCH_M_COMPRESS0);
+        case DATAPATH_OFFCHIP_REDUCTION:
+            set_switch_datapath(SWITCH_BASEADDR, op0_s, SWITCH_M_COMPRESS0);
             set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_COMPRESS0, SWITCH_M_ARITH_OP0);
             set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_DMA1_RX, SWITCH_M_COMPRESS1);
             set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_COMPRESS1, SWITCH_M_ARITH_OP1);
             set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_ARITH_RES, SWITCH_M_COMPRESS2);
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_COMPRESS2, SWITCH_M_UDP_TX);
+            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_COMPRESS2, SWITCH_M_NET_TX);
             disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_DMA1_TX);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_TCP_TX);
             disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_EXT_KRNL);	
-            break;
-        case DATAPATH_OFFCHIP_TCP_REDUCTION:
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_DMA0_RX, SWITCH_M_COMPRESS0);
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_COMPRESS0, SWITCH_M_ARITH_OP0);
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_DMA1_RX, SWITCH_M_COMPRESS1);
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_COMPRESS1, SWITCH_M_ARITH_OP1);
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_ARITH_RES, SWITCH_M_COMPRESS2);
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_COMPRESS2, SWITCH_M_TCP_TX);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_DMA1_TX);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_UDP_TX);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_EXT_KRNL);
-            break;
-        case DATAPATH_DMA_EXT_LOOPBACK:
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_DMA0_RX, SWITCH_M_EXT_KRNL);
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_EXT_KRNL, SWITCH_M_DMA1_TX);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_ARITH_OP0);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_ARITH_OP1);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_UDP_TX);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_TCP_TX);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_COMPRESS0);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_COMPRESS1);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_COMPRESS2);
             break;
         default:
             return;
@@ -504,8 +471,9 @@ static inline void configure_plugins(unsigned int acfg, unsigned int c0cfg, unsi
 //since we either transmit over Ethernet or store a result in memory, but never both
 void configure_datapath(unsigned int scenario,
                         unsigned int function,
-                        unsigned int compression){
-    configure_switch(scenario);
+                        unsigned int compression,
+                        unsigned int stream){
+    configure_switch(scenario, stream);
     int cfg_arith, cfg_clane_op0, cfg_clane_op1, cfg_clane_res;
     //find and set arithmetic function config
     if(function >= MAX_REDUCE_FUNCTIONS){
@@ -513,9 +481,7 @@ void configure_datapath(unsigned int scenario,
     }
     cfg_arith = arcfg.arith_tdest[function];
     //find and set configs for each compression lane
-    if( (scenario == DATAPATH_DMA_REDUCTION) || 
-            (scenario == DATAPATH_OFFCHIP_UDP_REDUCTION) || 
-                (scenario == DATAPATH_OFFCHIP_TCP_REDUCTION)    ){
+    if( (scenario == DATAPATH_DMA_REDUCTION) || (scenario == DATAPATH_OFFCHIP_REDUCTION) ){
         //we're doing a reduction: op0, op1 -> res
         if(arcfg.arith_is_compressed){
             cfg_clane_op0 = (compression & OP0_COMPRESSED) ? NO_COMPRESSION : arcfg.compressor_tdest;
@@ -556,8 +522,8 @@ static inline communicator find_comm(unsigned int adr){
 
 //Packetizer/Depacketizer
 static inline void start_packetizer(unsigned int base_addr,unsigned int max_pktsize) {
-    //get number of 512b/64B transfers corresponding to max_pktsize
-    unsigned int max_pkt_transfers = (max_pktsize+63)/64;
+    //get number of DATAPATH_WIDTH_BYTES transfers corresponding to max_pktsize
+    unsigned int max_pkt_transfers = (max_pktsize+DATAPATH_WIDTH_BYTES-1)/DATAPATH_WIDTH_BYTES;
     Xil_Out32(base_addr+0x10, max_pkt_transfers);
     SET(base_addr, CONTROL_REPEAT_MASK | CONTROL_START_MASK);
 }
@@ -566,37 +532,62 @@ static inline void start_depacketizer(unsigned int base_addr) {
     SET(base_addr, CONTROL_REPEAT_MASK | CONTROL_START_MASK );
 }
 
+//create/acknowledge the instructions for the external stream packetizer to send a message
+//Input is byte length, which we convert to number of 64B transactions
+void start_krnl_message(unsigned int count){
+    //calculate ceil(count/DATAPATH_WIDTH_BYTES)
+    unsigned int ntransactions = (count+DATAPATH_WIDTH_BYTES-1)/DATAPATH_WIDTH_BYTES;
+    cputd(CMD_KRNL_PKT, ntransactions);
+}
+
+void ack_krnl_message(unsigned int count){
+    for(count=0; tngetd(STS_KRNL_PKT); count++){
+        if(timeout != 0 && count >= timeout ){
+            longjmp(excp_handler, KRNL_TIMEOUT_STS_ERROR);
+        }
+    }
+    unsigned int ntransactions = getd(STS_KRNL_PKT);
+    if(	ntransactions == ((count+DATAPATH_WIDTH_BYTES-1)/DATAPATH_WIDTH_BYTES) ){
+        return;
+    } else{
+        longjmp(excp_handler, KRNL_STS_COUNT_ERROR);
+    }
+}
+
 //create the instructions for packetizer to send a message. Those infos include, among the others the message header.
-void start_packetizer_message(unsigned int dst_rank, unsigned int count, unsigned int tag){
+void start_packetizer_message(unsigned int dst_rank, unsigned int count, unsigned int tag, bool to_stream){
     unsigned int src_rank = world.local_rank;
     unsigned int seqn = world.ranks[dst_rank].outbound_seq + 1;
     unsigned int dst = world.ranks[dst_rank].session;
-    unsigned int net_tx = use_tcp ? CMD_TCP_TX : CMD_UDP_TX; 
+    unsigned int net_tx = CMD_NET_TX;
     putd(net_tx, dst); 
     putd(net_tx, count);
     putd(net_tx, tag);
     putd(net_tx, src_rank);
-    cputd(net_tx, seqn);
+    putd(net_tx, seqn);
+    cputd(net_tx, to_stream ? tag : 0);
 }
 
 //check that packetizer has finished processing
-static inline void ack_packetizer_message(unsigned int dst_rank){
+static inline void ack_packetizer_message(unsigned int dst_rank, bool update_seqn){
     unsigned int count;
-    unsigned int sts_stream = use_tcp ? STS_TCP_PKT : STS_UDP_PKT;
+    unsigned int sts_stream = STS_NET_PKT;
     for(count=0; tngetd(sts_stream); count++){
         if(timeout != 0 && count >= timeout ){
             longjmp(excp_handler, PACK_TIMEOUT_STS_ERROR);
         }
     }
     unsigned int ack_seq_num = getd(sts_stream);
-    if(	world.ranks[dst_rank].outbound_seq+1 == ack_seq_num){
-        world.ranks[dst_rank].outbound_seq += 1;
-    } else{
-        longjmp(excp_handler, PACK_SEQ_NUMBER_ERROR);
+    if(update_seqn){
+        if(	world.ranks[dst_rank].outbound_seq+1 == ack_seq_num){
+            world.ranks[dst_rank].outbound_seq += 1;
+        } else{
+            longjmp(excp_handler, PACK_SEQ_NUMBER_ERROR);
+        }
     }
 }
 
-//TCP connection management
+//connection management
 
 //establish connection with every other rank in the communicator
 int openCon()
@@ -621,8 +612,8 @@ int openCon()
             cur_rank_ip 	= world.ranks[i].ip;
             cur_rank_port 	= world.ranks[i].port;
             //send open connection request to the packetizer
-            putd(CMD_TCP_CON, cur_rank_ip);
-            putd(CMD_TCP_CON, cur_rank_port);
+            putd(CMD_NET_CON, cur_rank_ip);
+            putd(CMD_NET_CON, cur_rank_port);
         }
     }
     ret = COLLECTIVE_OP_SUCCESS;
@@ -630,10 +621,10 @@ int openCon()
     for (int i = 0; i < size -1 ; i++)
     {	
         //ask: tngetd or the stack will return a non-success? 
-        session 	= getd(STS_TCP_CON);
-        dst_ip 		= getd(STS_TCP_CON);
-        dst_port 	= getd(STS_TCP_CON);
-        success 	= getd(STS_TCP_CON);
+        session 	= getd(STS_NET_CON);
+        dst_ip 		= getd(STS_NET_CON);
+        dst_port 	= getd(STS_NET_CON);
+        success 	= getd(STS_NET_CON);
 
         if (success)
         {
@@ -651,7 +642,7 @@ int openCon()
         }
         else
         {
-            ret = OPEN_COM_NOT_SUCCEEDED;
+            ret = OPEN_CON_NOT_SUCCEEDED;
         }
     }
     return ret;
@@ -662,26 +653,14 @@ int openPort()
     int success = 0;
 
     //open port with only the local rank
-    putd(CMD_TCP_PORT, world.ranks[world.local_rank].port);
-    success = getd(STS_TCP_PORT);
+    putd(CMD_NET_PORT, world.ranks[world.local_rank].port);
+    success = getd(STS_NET_PORT);
 
     if (success)
         return COLLECTIVE_OP_SUCCESS;
     else
         return OPEN_PORT_NOT_SUCCEEDED;
 
-}
-//function that was supposed to openPort AND to openCon. 
-//Since at this level we are not sure the other ccl_offlaod instances have open their port 
-//this function is not working.
-int init_connection()
-{
-    int ret_openPort 	= openPort();
-    int ret_openCon 	= openCon();
-
-    int retval = (ret_openPort | ret_openCon);
-
-    return retval;
 }
 
 static inline unsigned int segment(unsigned int number_of_bytes,unsigned int segment_size){
@@ -699,7 +678,7 @@ unsigned int enqueue_rx_buffers(void){
     rx_buffer *rx_buf_list = (rx_buffer*)(cfgmem+RX_BUFFER_COUNT_OFFSET/4+1);
     unsigned int ret = 0, cmd_queue;
     int i,new_dma_tag;
-    cmd_queue = use_tcp ? CMD_DMA2_TX : CMD_DMA0_TX;
+    cmd_queue = CMD_DMA0_TX;
     for(i=0; i<nbufs; i++){
         //if((rx_buf_list[i].enqueued == 1) && (rx_buf_list[i].dma_tag == next_rx_tag)) return;
         if(num_rx_enqueued >= 16) return ret;
@@ -726,17 +705,12 @@ unsigned int enqueue_rx_buffers(void){
 //dequeue sts from DMA that receives from network stack. 
 int dequeue_rx_buffers(void){
     //test if rx channel is non-empty and if so, read it
-    unsigned int invalid, status, dma_tag, dma_tx_id, net_rx_id,count = 0;
+    unsigned int invalid, status, dma_tag, dma_tx_id, net_rx_id, count = 0;
     int spare_buffer_idx;
     unsigned int nbufs = Xil_In32(RX_BUFFER_COUNT_OFFSET);
     rx_buffer *rx_buf_list = (rx_buffer*)(cfgmem+RX_BUFFER_COUNT_OFFSET/4+1);
-    if(use_tcp){
-        dma_tx_id = STS_DMA2_TX;
-        net_rx_id = STS_TCP_RX;
-    }else{
-        dma_tx_id = STS_DMA0_TX;
-        net_rx_id = STS_UDP_RX;
-    }
+    dma_tx_id = STS_DMA0_TX;
+    net_rx_id = STS_NET_RX;
 
     do {
         if(timeout != 0 && count >= timeout )
@@ -784,23 +758,31 @@ static inline int start_move(
     //NOTE: count is the number of uncompressed elements to be transferred, which we convert to bytes
 
     //start DMAs 
-    if( cfg->which_dm & USE_OP0_DMA){
-        dma_tag = (dma_tag + 1) & 0xf;
-        dma_cmd(CMD_DMA0_RX, cfg->op0_len, cfg->op0_addr.ptr, dma_tag);
+    //OP0 from stream or DMA
+    if( cfg->which_dm & USE_OP0_DM){
+        if(cfg->stream & OP0_STREAM){
+            start_krnl_message(cfg->op0_len);
+        } else{
+            dma_tag = (dma_tag + 1) & 0xf;
+            dma_cmd(CMD_DMA0_RX, cfg->op0_len, cfg->op0_addr.ptr, dma_tag);
+        }
     }
-    if( cfg->which_dm & USE_OP1_DMA){
+    //OP1 always from DMA
+    if( cfg->which_dm & USE_OP1_DM){
         dma_tag = (dma_tag + 1) & 0xf;
         dma_cmd(CMD_DMA1_RX, cfg->op1_len, cfg->op1_addr.ptr, dma_tag);
     }
-    if( cfg->which_dm & USE_RES_DMA){
-        dma_tag = (dma_tag + 1) & 0xf;
-        dma_cmd(CMD_DMA1_TX, cfg->res_len, cfg->res_addr.ptr, dma_tag);
-    } else if( cfg->which_dm & USE_RES_DMA_WITHOUT_TLAST){
-        dma_tag = (dma_tag + 1) & 0xf;
-        dma_cmd_without_EOF(CMD_DMA1_TX, cfg->res_len, cfg->res_addr.ptr, dma_tag);
-    } else if( cfg->which_dm & USE_PACKETIZER){
-        //start packetizer
-        start_packetizer_message(dst_rank, cfg->res_len, msg_tag);
+    //RES to stream, DMA, or packetizer
+    if( cfg->which_dm & USE_RES_DM){
+        if(cfg->remote & RES_REMOTE){
+            start_packetizer_message(dst_rank, cfg->res_len, msg_tag, cfg->stream & RES_STREAM);
+        } else if(!(cfg->stream & RES_STREAM)){
+            dma_tag = (dma_tag + 1) & 0xf;
+            dma_cmd(CMD_DMA1_TX, cfg->res_len, cfg->res_addr.ptr, dma_tag);
+        }
+        //if RES is STREAM, then we don't need to do anything,
+        //data directly flows through the switch into the external kernel 
+        //TODO: implement TDEST inserter to be able to target specific external kernel
     }
     return dma_tag;
 }
@@ -810,44 +792,50 @@ static inline void ack_move(
     unsigned int dst_rank) {
     unsigned int invalid, count, status;
 
-    //wait for DMAs to complete
+    //wait for DMAs to complete where appropriate
     count = 0;
     do {
         if(timeout != 0 && count >= timeout )
             longjmp(excp_handler, DMA_TIMEOUT_ERROR);
         count ++;
         invalid = 0;
-        if( cfg->which_dm & USE_OP0_DMA){
-            invalid += tngetd(STS_DMA0_RX);
+        if( cfg->which_dm & USE_OP0_DM){
+            if(!(cfg->stream & OP0_STREAM)){
+                invalid += tngetd(STS_DMA0_RX);
+            }
         }
-        if( cfg->which_dm & USE_OP1_DMA){
+        if( cfg->which_dm & USE_OP1_DM){
             invalid += tngetd(STS_DMA1_RX);
         }
-        if( cfg->which_dm & (USE_RES_DMA | USE_RES_DMA_WITHOUT_TLAST)){
-            invalid += tngetd(STS_DMA1_TX);
+        if( cfg->which_dm & (USE_RES_DM)){
+            if(!(cfg->stream & RES_STREAM) && !(cfg->remote & RES_REMOTE)){
+                invalid += tngetd(STS_DMA1_TX);
+            }
         }
-    } while (invalid);
+    } while(invalid);
 
-    if( cfg->which_dm & USE_OP0_DMA){
-        status = getd(STS_DMA0_RX);
-        dma_tag = (dma_tag + 1) & 0xf;
-        check_DMA_status(status, cfg->op0_len, dma_tag, 0);
+    if( cfg->which_dm & USE_OP0_DM){
+        if(cfg->stream & OP0_STREAM){
+            ack_krnl_message(cfg->op0_len);
+        } else {
+            status = getd(STS_DMA0_RX);
+            dma_tag = (dma_tag + 1) & 0xf;
+            check_DMA_status(status, cfg->op0_len, dma_tag, 0);
+        }
     }
-    if( cfg->which_dm & USE_OP1_DMA){
+    if( cfg->which_dm & USE_OP1_DM){
         status = getd(STS_DMA1_RX);
         dma_tag = (dma_tag + 1) & 0xf;
         check_DMA_status(status, cfg->op1_len, dma_tag, 0);
     }
-    if( cfg->which_dm & USE_RES_DMA){
-        status = getd(STS_DMA1_TX);
-        dma_tag = (dma_tag + 1) & 0xf;
-        check_DMA_status(status, cfg->res_len, dma_tag, 0);
-    } else if( cfg->which_dm & USE_RES_DMA_WITHOUT_TLAST){
-        status = getd(STS_DMA1_TX);
-        dma_tag = (dma_tag + 1) & 0xf;
-        check_DMA_status(status, cfg->res_len, dma_tag, 0);
-    } else if( cfg->which_dm & USE_PACKETIZER){
-        ack_packetizer_message(dst_rank);
+    if( cfg->which_dm & USE_RES_DM){
+        if(cfg->remote & RES_REMOTE){
+            ack_packetizer_message(dst_rank, !(cfg->stream & RES_STREAM));
+        } else if(!(cfg->stream & RES_STREAM)){
+            status = getd(STS_DMA1_TX);
+            dma_tag = (dma_tag + 1) & 0xf;
+            check_DMA_status(status, cfg->res_len, dma_tag, 0);
+        }      
     }
 }
 
@@ -870,7 +858,7 @@ int move(
 int move_segmented(
     dm_config * cfg,
     unsigned dst_rank,
-    unsigned mpi_tag
+    unsigned dst_tag
 ) {
     unsigned int dma_tag_tmp, i;
     dma_tag_tmp = dma_tag;
@@ -883,7 +871,7 @@ int move_segmented(
     //1. issue at most max_dma_in_flight of dma_transaction_size
     for (i = 0; emit_dm_config.elems_remaining > 0 && i < max_dma_in_flight ; i++){
         //start DMAs
-        dma_tag_tmp = start_move(&emit_dm_config, dma_tag_tmp, dst_rank, mpi_tag);
+        dma_tag_tmp = start_move(&emit_dm_config, dma_tag_tmp, dst_rank, dst_tag);
         dm_config_update(&emit_dm_config);
     }
     //2.ack 1 and issue another dma transfer up until there's no more dma move to issue
@@ -891,7 +879,7 @@ int move_segmented(
         //wait for DMAs to finish
         ack_move(&ack_dm_config, dst_rank);
         //start DMAs
-        dma_tag_tmp = start_move(&emit_dm_config, dma_tag_tmp, dst_rank, mpi_tag);
+        dma_tag_tmp = start_move(&emit_dm_config, dma_tag_tmp, dst_rank, dst_tag);
         //update configs
         dm_config_update(&emit_dm_config);
         dm_config_update(&ack_dm_config);
@@ -909,9 +897,10 @@ int move_segmented(
 static inline int copy(	unsigned int count,
                         uint64_t src_addr,
                         uint64_t dst_addr,
-                        unsigned int compression) {
-    configure_datapath(DATAPATH_DMA_LOOPBACK, 0, compression);
-    dm_config cfg = dm_config_init(count, src_addr, 0, dst_addr, USE_OP0_DMA | USE_RES_DMA, compression);
+                        unsigned int compression,
+                        unsigned int stream) {
+    configure_datapath(DATAPATH_DMA_LOOPBACK, 0, compression, stream);
+    dm_config cfg = dm_config_init(count, src_addr, 0, dst_addr, USE_OP0_DM | USE_RES_DM, NO_REMOTE, compression, stream);
     return move_segmented(&cfg, 0, 0);
 }
 
@@ -921,9 +910,10 @@ int combine(unsigned int count,
                     uint64_t op0_addr,
                     uint64_t op1_addr,
                     uint64_t res_addr,
-                    unsigned int compression) {
-    configure_datapath( DATAPATH_DMA_REDUCTION, function, compression);
-    dm_config cfg = dm_config_init(count, op0_addr, op1_addr, res_addr, USE_OP0_DMA | USE_OP1_DMA | USE_RES_DMA, compression);
+                    unsigned int compression,
+                    unsigned int stream) {
+    configure_datapath(DATAPATH_DMA_REDUCTION, function, compression, stream);
+    dm_config cfg = dm_config_init(count, op0_addr, op1_addr, res_addr, USE_OP0_DM | USE_OP1_DM | USE_RES_DM, NO_REMOTE, compression, stream);
     return move_segmented(&cfg, 0, 0);
 }
 
@@ -935,10 +925,11 @@ int send(
     unsigned int count,
     uint64_t src_addr,
     unsigned int dst_tag,
-    unsigned int compression
+    unsigned int compression,
+    unsigned int stream
 ){
-    configure_datapath(use_tcp ? DATAPATH_OFFCHIP_TX_TCP : DATAPATH_OFFCHIP_TX_UDP, 0, compression);
-    dm_config cfg = dm_config_init(count, src_addr, 0, 0, USE_OP0_DMA | USE_PACKETIZER, compression);
+    configure_datapath(DATAPATH_OFFCHIP_TX, 0, compression, stream);
+    dm_config cfg = dm_config_init(count, src_addr, 0, 0, USE_OP0_DM | USE_RES_DM, RES_REMOTE, compression, stream);
     return move_segmented(&cfg, dst_rank, dst_tag);
 }
 
@@ -951,8 +942,8 @@ static inline int fused_reduce_send(
                     uint64_t op1_addr,
                     unsigned int dst_tag,
                     unsigned int compression) {
-    configure_datapath(use_tcp ? DATAPATH_OFFCHIP_TCP_REDUCTION : DATAPATH_OFFCHIP_UDP_REDUCTION, 0, compression);
-    dm_config cfg = dm_config_init(count, op0_addr, op1_addr, 0, USE_OP0_DMA | USE_OP1_DMA | USE_PACKETIZER, compression);
+    configure_datapath(DATAPATH_OFFCHIP_REDUCTION, 0, compression, 0);
+    dm_config cfg = dm_config_init(count, op0_addr, op1_addr, 0, USE_OP0_DM | USE_OP1_DM | USE_RES_DM, RES_REMOTE, compression, NO_STREAM);
     return move_segmented(&cfg, dst_rank, dst_tag);
 }
 
@@ -964,7 +955,7 @@ int seek_rx_buffer(
                         unsigned int count,
                         unsigned int src_tag
                     ){
-    unsigned int seq_num; //src_port TODO: use this variable to choose depending on tcp/udp session id or port
+    unsigned int seq_num; //src_port TODO: use this variable to choose depending on session id or port
     int i;
     seq_num = world.ranks[src_rank].inbound_seq + 1;
 
@@ -1035,12 +1026,12 @@ int recv(	unsigned int src_rank,
     compression &= ETH_COMPRESSED | RES_COMPRESSED;
     compression = (compression & ETH_COMPRESSED) ? (compression ^ (OP0_COMPRESSED | ETH_COMPRESSED)) : compression;  
 
-    configure_datapath(DATAPATH_DMA_LOOPBACK, 0, compression);
+    configure_datapath(DATAPATH_DMA_LOOPBACK, 0, compression, 0);
 
     //set up datamover configs for emitting and retiring transfers
     //we need two, because we emit and retire in separate processes which are offset
-    dm_config emit_dm_config = dm_config_init(count, 0, 0, dst_addr, USE_OP0_DMA | USE_RES_DMA, compression);
-    dm_config ack_dm_config = dm_config_init(count, 0, 0, 0, USE_OP0_DMA | USE_RES_DMA, compression);
+    dm_config emit_dm_config = dm_config_init(count, 0, 0, dst_addr, USE_OP0_DM | USE_RES_DM, NO_REMOTE, compression, NO_STREAM);
+    dm_config ack_dm_config = dm_config_init(count, 0, 0, 0, USE_OP0_DM | USE_RES_DM, NO_REMOTE, compression, NO_STREAM);
 
     //1. issue at most max_dma_in_flight of dma_transaction_size
     for (i = 0; emit_dm_config.elems_remaining > 0 && i < max_dma_in_flight ; i++){
@@ -1112,12 +1103,12 @@ int fused_recv_reduce(
     //therefore OP1_COMPRESSED should be equal to ETH_COMPRESSED;
     compression = (compression & ETH_COMPRESSED) ? (compression | OP1_COMPRESSED) : compression;
 
-    configure_datapath(DATAPATH_DMA_REDUCTION, func, compression);
+    configure_datapath(DATAPATH_DMA_REDUCTION, func, compression, 0);
 
     //set up datamover configs for emitting and retiring transfers
     //we need two, because we emit and retire in separate processes which are offset
-    dm_config emit_dm_config = dm_config_init(count, op0_addr, 0, dst_addr, USE_OP0_DMA | USE_OP1_DMA | USE_RES_DMA, compression);
-    dm_config ack_dm_config = dm_config_init(count, 0, 0, 0, USE_OP0_DMA | USE_OP1_DMA | USE_RES_DMA, compression);
+    dm_config emit_dm_config = dm_config_init(count, op0_addr, 0, dst_addr, USE_OP0_DM | USE_OP1_DM | USE_RES_DM, NO_REMOTE, compression, NO_STREAM);
+    dm_config ack_dm_config = dm_config_init(count, 0, 0, 0, USE_OP0_DM | USE_OP1_DM | USE_RES_DM, NO_REMOTE, compression, NO_STREAM);
 
     //1. issue at most max_dma_in_flight of dma_transaction_size
     for (i = 0; emit_dm_config.elems_remaining > 0 && i < max_dma_in_flight ; i++){
@@ -1186,12 +1177,12 @@ int fused_recv_reduce_send(
     //therefore OP1_COMPRESSED should be equal to ETH_COMPRESSED;
     compression = (compression & ETH_COMPRESSED) ? (compression | OP1_COMPRESSED) : compression;
 
-    configure_datapath( use_tcp ? DATAPATH_OFFCHIP_TCP_REDUCTION : DATAPATH_OFFCHIP_UDP_REDUCTION, func, compression);
+    configure_datapath(DATAPATH_OFFCHIP_REDUCTION, func, compression, 0);
 
     //set up datamover configs for emitting and retiring transfers
     //we need two, because we emit and retire in separate processes which are offset
-    dm_config emit_dm_config = dm_config_init(count, op0_addr, 0, 0, USE_OP0_DMA | USE_OP1_DMA, compression);
-    dm_config ack_dm_config = dm_config_init(count, 0, 0, 0, USE_OP0_DMA | USE_OP1_DMA, compression);
+    dm_config emit_dm_config = dm_config_init(count, op0_addr, 0, 0, USE_OP0_DM | USE_OP1_DM, NO_REMOTE, compression, NO_STREAM);
+    dm_config ack_dm_config = dm_config_init(count, 0, 0, 0, USE_OP0_DM | USE_OP1_DM, NO_REMOTE, compression, NO_STREAM);
 
     //1. issue at most max_dma_in_flight of dma_transaction_size
     for (i = 0; emit_dm_config.elems_remaining > 0 && i < max_dma_in_flight ; i++){
@@ -1254,12 +1245,12 @@ int relay(
     //compression adjustment: if ETH_COMPRESSED, then we will use OP0_COMPRESSED and ETH_COMPRESSED
     compression = (compression & ETH_COMPRESSED) ? (OP0_COMPRESSED | ETH_COMPRESSED) : NO_COMPRESSION;
     //configure datapath
-    configure_datapath( use_tcp ? DATAPATH_OFFCHIP_TX_TCP: DATAPATH_OFFCHIP_TX_UDP, 0, compression);
+    configure_datapath(DATAPATH_OFFCHIP_TX, 0, compression, 0);
 
     //set up datamover configs for emitting and retiring transfers
     //we need two, because we emit and retire in separate processes which are offset
-    dm_config emit_dm_config = dm_config_init(count, 0, 0, 0, USE_OP0_DMA | USE_PACKETIZER, compression);
-    dm_config ack_dm_config = dm_config_init(count, 0, 0, 0, USE_OP0_DMA | USE_PACKETIZER, compression);
+    dm_config emit_dm_config = dm_config_init(count, 0, 0, 0, USE_OP0_DM | USE_RES_DM, RES_REMOTE, compression, NO_STREAM);
+    dm_config ack_dm_config = dm_config_init(count, 0, 0, 0, USE_OP0_DM | USE_RES_DM, RES_REMOTE, compression, NO_STREAM);
 
     //1. issue at most max_dma_in_flight of dma_transaction_size
     for (i = 0; emit_dm_config.elems_remaining > 0 && i < max_dma_in_flight ; i++){
@@ -1321,10 +1312,10 @@ int broadcast(  unsigned int count,
         compression &= ~(RES_COMPRESSED);
 
         //configure datapath
-        configure_datapath( use_tcp ? DATAPATH_OFFCHIP_TX_TCP: DATAPATH_OFFCHIP_TX_UDP, 0, compression);
+        configure_datapath(DATAPATH_OFFCHIP_TX, 0, compression, 0);
 
         //send to all members of the communicator 1 segment of the buffer at the time
-        dm_config cfg = dm_config_init(count, buf_addr, 0, 0, USE_OP0_DMA | USE_PACKETIZER, compression);
+        dm_config cfg = dm_config_init(count, buf_addr, 0, 0, USE_OP0_DM | USE_RES_DM, RES_REMOTE, compression, NO_STREAM);
 
         int emit_dst_rank, ack_dst_rank;
         while(cfg.elems_remaining > 0){
@@ -1387,10 +1378,10 @@ int scatter(unsigned int count,
         compression &= ~(RES_COMPRESSED);
 
         //configure datapath
-        configure_datapath( use_tcp ? DATAPATH_OFFCHIP_TX_TCP: DATAPATH_OFFCHIP_TX_UDP, 0, compression);
+        configure_datapath(DATAPATH_OFFCHIP_TX, 0, compression, 0);
 
         //send to all members of the communicator 1 segment of the buffer at the time
-        dm_config cfg = dm_config_init(count, src_buf_addr, 0, 0, USE_OP0_DMA | USE_PACKETIZER, compression);
+        dm_config cfg = dm_config_init(count, src_buf_addr, 0, 0, USE_OP0_DM | USE_RES_DM, RES_REMOTE, compression, NO_STREAM);
 
         int emit_dst_rank, ack_dst_rank;
         while(cfg.elems_remaining > 0){
@@ -1432,7 +1423,7 @@ int scatter(unsigned int count,
         }
         //do copy to self last (it requires reconfiguring the datapath)
         uint64_t copy_addr = phys_addr_offset(src_buf_addr, count*src_rank, (compression & OP0_COMPRESSED) ? true : false);
-        copy(count, copy_addr, dst_buf_addr, compression);
+        copy(count, copy_addr, dst_buf_addr, compression, NO_STREAM);
         //done
         return COLLECTIVE_OP_SUCCESS;
     }else{
@@ -1471,7 +1462,7 @@ int gather( unsigned int count,
             tmp_buf_addr = phys_addr_offset(dst_buf_addr, count*curr_pos, (compression & RES_COMPRESSED) ? true : false);
             if(curr_pos==world.local_rank)
             { // root copies
-                ret	= copy(count, src_buf_addr, tmp_buf_addr, compression & ~(ETH_COMPRESSED));
+                ret	= copy(count, src_buf_addr, tmp_buf_addr, compression & ~(ETH_COMPRESSED), NO_STREAM);
             }else{
                 ret = recv(prev_in_ring, count, tmp_buf_addr, TAG_ANY, compression & ~(OP0_COMPRESSED));
             }
@@ -1485,7 +1476,7 @@ int gather( unsigned int count,
         //relay: keep ETH_COMPRESSED, reset everything else
 
         number_of_shift = ((world.size+world.local_rank-root_rank)%world.size) - 1 ; //distance to the root
-        ret += send(next_in_ring, count, src_buf_addr, TAG_ANY, compression & ~(RES_COMPRESSED));
+        ret += send(next_in_ring, count, src_buf_addr, TAG_ANY, compression & ~(RES_COMPRESSED), NO_STREAM);
         for (int i = 0; i < number_of_shift; i++)
         {	
             //relay the others 
@@ -1514,18 +1505,18 @@ int allgather(  unsigned int count,
     prev_in_ring = (world.local_rank+world.size-1 ) % world.size	;
 
     //send our data to next in ring
-    ret += send(next_in_ring, count, src_buf_addr, TAG_ANY, compression & ~(RES_COMPRESSED));
+    ret += send(next_in_ring, count, src_buf_addr, TAG_ANY, compression & ~(RES_COMPRESSED), NO_STREAM);
     //receive from all members of the communicator
     for(i=0, curr_pos = world.local_rank; i<world.size && ret == COLLECTIVE_OP_SUCCESS; i++, curr_pos = (curr_pos + world.size - 1 ) % world.size){
         tmp_buf_addr = phys_addr_offset(dst_buf_addr, count*curr_pos, (compression & RES_COMPRESSED) ? true : false);
         if(curr_pos==world.local_rank){
-            ret	= copy(count, src_buf_addr, tmp_buf_addr, compression & ~(ETH_COMPRESSED));
+            ret	= copy(count, src_buf_addr, tmp_buf_addr, compression & ~(ETH_COMPRESSED), NO_STREAM);
         }else{
             ret = recv(prev_in_ring, count, tmp_buf_addr, TAG_ANY, compression & ~(OP0_COMPRESSED));
             //TODO: use the same stream to move data both to dst_buf_addr and tx_subsystem 
             //todo: use DMA1 RX to forward to next and DMA0/2 RX and DMA1 TX to copy ~ at the same time! 
             if(i+1 < world.size){ //if not the last data needed relay to the next in the sequence
-                ret = send(next_in_ring, count, tmp_buf_addr, TAG_ANY, relay_compression);
+                ret = send(next_in_ring, count, tmp_buf_addr, TAG_ANY, relay_compression, NO_STREAM);
             }
         }		
     }
@@ -1547,7 +1538,7 @@ int reduce( unsigned int count,
     //determine if we're sending or receiving
     if( prev_in_ring == root_rank){ 
         //non root ranks immediately after the root sends
-        ret = send(next_in_ring, count, src_addr, TAG_ANY, compression & ~(RES_COMPRESSED));
+        ret = send(next_in_ring, count, src_addr, TAG_ANY, compression & ~(RES_COMPRESSED), NO_STREAM);
     }else if (world.local_rank != root_rank){
         //non root ranks sends their data + data received from previous rank to the next rank in sequence as a daisy chain
         ret = fused_recv_reduce_send(prev_in_ring, next_in_ring, count, func, src_addr,  TAG_ANY, compression & ~(RES_COMPRESSED));
@@ -1585,7 +1576,7 @@ int scatter_reduce( unsigned int count,
     //1. each rank send its own chunk to the next rank in the ring
     curr_send_addr = phys_addr_offset(src_addr, count*curr_send_chunk, (compression & OP0_COMPRESSED) ? true : false);
     curr_count = (curr_send_chunk == (world.local_rank-1)) ? count_tail : count;   
-    ret = send(next_in_ring, curr_count, curr_send_addr, TAG_ANY, compression & (ETH_COMPRESSED | OP0_COMPRESSED));
+    ret = send(next_in_ring, curr_count, curr_send_addr, TAG_ANY, compression & (ETH_COMPRESSED | OP0_COMPRESSED), NO_STREAM);
     if(ret != COLLECTIVE_OP_SUCCESS) return ret;
     //2. for n-1 times sum the chunk that is coming from previous rank with your chunk at the same location. then forward the result to
     // the next rank in the ring
@@ -1636,7 +1627,7 @@ int allreduce(  unsigned int count,
         //5. send the local reduced results to next rank
         curr_send_addr = phys_addr_offset(src_addr, count*curr_recv_chunk, (compression & OP0_COMPRESSED) ? true : false);
         curr_count = (curr_send_chunk == (world.size - 1)) ? count_tail : count;
-        ret = send(next_in_ring, curr_count, curr_send_addr, TAG_ANY, compression);
+        ret = send(next_in_ring, curr_count, curr_send_addr, TAG_ANY, compression, NO_STREAM);
         if(ret != COLLECTIVE_OP_SUCCESS) return ret;
         //6. receive the reduced results from previous rank and put into correct dst buffer position
         curr_recv_addr = phys_addr_offset(dst_addr, count*curr_recv_chunk, (compression & RES_COMPRESSED) ? true : false);
@@ -1646,28 +1637,6 @@ int allreduce(  unsigned int count,
     }
 
     return COLLECTIVE_OP_SUCCESS;
-}
-
-int ext_kernel_push(unsigned int count,
-                    unsigned int krnl_id,
-                    uint64_t src_addr,
-                    unsigned int compression
-){
-    //configure switch
-    configure_datapath(DATAPATH_DMA_LOOPBACK, 0, compression);
-    dm_config cfg = dm_config_init(count, src_addr, 0, 0, USE_OP0_DMA, compression);
-    return move_segmented(&cfg, 0, 0);
-}
-
-int ext_kernel_pull(unsigned int count,
-                    unsigned int krnl_id,
-                    uint64_t dst_addr,
-                    unsigned int compression
-){
-    //configure switch
-    configure_datapath(DATAPATH_DMA_LOOPBACK, 0, compression);
-    dm_config cfg = dm_config_init(count, 0, 0, dst_addr, USE_RES_DMA, compression);
-    return move_segmented(&cfg, 0, 0);
 }
 
 //startup and main
@@ -1804,7 +1773,7 @@ int run_accl() {
                 switch (function)
                 {
                     case HOUSEKEEP_IRQEN:
-                        setup_irq((use_tcp ? (IRQCTRL_DMA2_CMD_QUEUE_EMPTY|IRQCTRL_DMA2_STS_QUEUE_NON_EMPTY) : (IRQCTRL_DMA0_CMD_QUEUE_EMPTY|IRQCTRL_DMA0_STS_QUEUE_NON_EMPTY)));
+                        setup_irq(IRQCTRL_DMA0_CMD_QUEUE_EMPTY|IRQCTRL_DMA0_STS_QUEUE_NON_EMPTY);
                         microblaze_enable_interrupts();
                         break;
                     case HOUSEKEEP_IRQDIS:
@@ -1816,28 +1785,29 @@ int run_accl() {
                         encore_soft_reset();
                         break;
                     case HOUSEKEEP_PKTEN:
-                        start_depacketizer(UDP_RXPKT_BASEADDR);
-                        start_depacketizer(TCP_RXPKT_BASEADDR);
-                        start_packetizer(UDP_TXPKT_BASEADDR, MAX_PACKETSIZE);
-                        start_packetizer(TCP_TXPKT_BASEADDR, MAX_PACKETSIZE);
+                        start_depacketizer(NET_RXPKT_BASEADDR);
+                        start_packetizer(NET_TXPKT_BASEADDR, MAX_PACKETSIZE);
                         break;
                     case HOUSEKEEP_TIMEOUT:
                         timeout = count;
                         break;
-                    case INIT_CONNECTION:
-                        retval  = init_connection();
-                        break;
                     case OPEN_PORT:
-                        retval  = openPort();
+                        if(use_tcp == 1){
+                            retval = openPort();
+                        } else{
+                            retval = OPEN_PORT_NOT_SUCCEEDED;
+                        }
                         break;
                     case OPEN_CON:
-                        retval  = openCon();
+                        if(use_tcp == 1){
+                            retval = openCon();
+                        } else{
+                            retval = OPEN_CON_NOT_SUCCEEDED;
+                        }
                         break;
-                    case USE_TCP_STACK:
-                        use_tcp = 1;
+                    case SET_STACK_TYPE:
+                        use_tcp = count;
                         break;
-                    case USE_UDP_STACK:
-                        use_tcp = 0;
                     case START_PROFILING:
                         retval = COLLECTIVE_OP_SUCCESS;
                         break;
@@ -1864,13 +1834,13 @@ int run_accl() {
                 
                 break;
             case XCCL_COMBINE:
-                retval = combine(count, function, op0_addr, op1_addr, res_addr, compression_flags);
+                retval = combine(count, function, op0_addr, op1_addr, res_addr, compression_flags, stream_flags);
                 break;
             case XCCL_COPY:
-                retval = copy(count, op0_addr, res_addr, compression_flags);
+                retval = copy(count, op0_addr, res_addr, compression_flags, stream_flags);
                 break;
             case XCCL_SEND:
-                retval = send(root_src_dst, count, op0_addr, msg_tag, compression_flags);
+                retval = send(root_src_dst, count, op0_addr, msg_tag, compression_flags, stream_flags);
                 break;
             case XCCL_RECV:
                 retval = recv(root_src_dst, count, res_addr, msg_tag, compression_flags);

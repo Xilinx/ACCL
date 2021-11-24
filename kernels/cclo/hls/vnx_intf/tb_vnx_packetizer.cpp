@@ -42,6 +42,7 @@ int main(){
 	int tag 	= 5;
 	int src 	= 6;
 	int seq  	= 7;
+	int strm  	= 9;
 	//1024B+64B transfer
 	len = 50;
 	cmd.write(dest);
@@ -67,6 +68,7 @@ int main(){
 	if(outword.data(63,32) != tag) return 1;
 	if(outword.data(95,64) != src) return 1;
 	if(outword.data(127,96) != seq) return 1;
+	if(outword.data(159,128) != strm) return 1;
 	//parse data
 	for(int i=0; i<ntransfers(len); i++){
 		outword = out.read();

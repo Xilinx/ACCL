@@ -40,6 +40,7 @@ int message_bytes 		 = cmd.read();
 int message_tag 		 = cmd.read();
 int message_src 		 = cmd.read();
 int message_seq 		 = cmd.read();
+int message_strm 		 = cmd.read();
 int bytes_to_process = message_bytes + bytes_per_word;
 
 unsigned int pktsize = 0;
@@ -51,10 +52,12 @@ while(bytes_processed < bytes_to_process){
 	outword.dest = destination;
 	//if this is the first word, put the count in a header
 	if(bytes_processed == 0){
-		outword.data(HEADER_COUNT_END, HEADER_COUNT_START) 	= message_bytes;
-		outword.data(HEADER_TAG_END	 , HEADER_TAG_START  )  = message_tag;
-		outword.data(HEADER_SRC_END	 , HEADER_SRC_START  )  = message_src;
-		outword.data(HEADER_SEQ_END	 , HEADER_SEQ_START  )  = message_seq;		
+		outword.data(HEADER_COUNT_END, HEADER_COUNT_START) = message_bytes;
+		outword.data(HEADER_TAG_END	 , HEADER_TAG_START  ) = message_tag;
+		outword.data(HEADER_SRC_END	 , HEADER_SRC_START  ) = message_src;
+		outword.data(HEADER_SEQ_END	 , HEADER_SEQ_START  ) = message_seq;
+		outword.data(HEADER_STRM_END , HEADER_STRM_START ) = message_strm;
+		outword.data(DATA_WIDTH-1, HEADER_STRM_END+1) = 0;		
 	} else {
 		outword.data = in.read().data;
 	}

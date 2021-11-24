@@ -28,62 +28,55 @@
 #define KERNEL_VENDOR  "Xilinx"
 #define KERNEL_LIBRARY "XCCL"
 
+//Datapath width (in bytes) for all streams everywhere in the design
+#define DATAPATH_WIDTH_BYTES 64
+
 //AXIS interfaces to/from MB 
 
 #define CMD_DMA0_TX  0
 #define CMD_DMA0_RX  1
 #define CMD_DMA1_TX  2
 #define CMD_DMA1_RX  3
-#define CMD_DMA2_TX  4
-#define CMD_DMA2_RX  5
-#define CMD_UDP_TX   6
-#define CMD_TCP_PORT 7
-#define CMD_TCP_CON  8
-#define CMD_TCP_TX   9
-#define CMD_HOST    10
+#define CMD_NET_TX   4
+#define CMD_NET_PORT 5
+#define CMD_NET_CON  6
+#define CMD_HOST     7
+#define CMD_KRNL_PKT 8
 
 #define STS_DMA0_RX  0
 #define STS_DMA0_TX  1
 #define STS_DMA1_RX  2
 #define STS_DMA1_TX  3
-#define STS_DMA2_RX  4
-#define STS_DMA2_TX  5
-#define STS_UDP_RX   6
-#define STS_TCP_PORT 7
-#define STS_TCP_CON  8
-#define STS_TCP_RX   9
-#define STS_HOST     10 
-#define STS_TCP_PKT  11 
-#define STS_UDP_PKT  12
+#define STS_NET_RX   4
+#define STS_NET_PORT 5
+#define STS_NET_CON  6
+#define STS_HOST     7 
+#define STS_KRNL_PKT 8
+#define STS_NET_PKT  9
 
 //MAIN SWITCH
 
-#define DATAPATH_DMA_LOOPBACK          1
-#define DATAPATH_DMA_REDUCTION         2
-#define DATAPATH_OFFCHIP_TX_UDP        3
-#define DATAPATH_OFFCHIP_TX_TCP        4
-#define DATAPATH_OFFCHIP_UDP_REDUCTION 5
-#define DATAPATH_OFFCHIP_TCP_REDUCTION 6
-#define DATAPATH_DMA_EXT_LOOPBACK      7
+#define DATAPATH_DMA_LOOPBACK      1
+#define DATAPATH_DMA_REDUCTION     2
+#define DATAPATH_OFFCHIP_TX        3
+#define DATAPATH_OFFCHIP_REDUCTION 4
 
-#define SWITCH_M_UDP_TX    0
-#define SWITCH_M_TCP_TX    1
-#define SWITCH_M_DMA1_TX   2
-#define SWITCH_M_ARITH_OP0 3
-#define SWITCH_M_ARITH_OP1 4
-#define SWITCH_M_EXT_KRNL  5
-#define SWITCH_M_COMPRESS0 6
-#define SWITCH_M_COMPRESS1 7
-#define SWITCH_M_COMPRESS2 8
+#define SWITCH_M_NET_TX    0
+#define SWITCH_M_DMA1_TX   1
+#define SWITCH_M_ARITH_OP0 2
+#define SWITCH_M_ARITH_OP1 3
+#define SWITCH_M_EXT_KRNL  4
+#define SWITCH_M_COMPRESS0 5
+#define SWITCH_M_COMPRESS1 6
+#define SWITCH_M_COMPRESS2 7
 
 #define SWITCH_S_DMA0_RX   0
 #define SWITCH_S_DMA1_RX   1
-#define SWITCH_S_DMA2_RX   2
-#define SWITCH_S_ARITH_RES 3
-#define SWITCH_S_EXT_KRNL  4
-#define SWITCH_S_COMPRESS0 5
-#define SWITCH_S_COMPRESS1 6
-#define SWITCH_S_COMPRESS2 7
+#define SWITCH_S_ARITH_RES 2
+#define SWITCH_S_EXT_KRNL  3
+#define SWITCH_S_COMPRESS0 4
+#define SWITCH_S_COMPRESS1 5
+#define SWITCH_S_COMPRESS2 6
 
 //PACKT CONST
 #define MAX_PACKETSIZE 1536
@@ -119,15 +112,13 @@
 #define HOUSEKEEP_SWRST           2
 #define HOUSEKEEP_PKTEN           3
 #define HOUSEKEEP_TIMEOUT         4
-#define INIT_CONNECTION           5 
-#define OPEN_PORT                 6
-#define OPEN_CON                  7
-#define USE_TCP_STACK             8
-#define USE_UDP_STACK             9
-#define START_PROFILING           10
-#define END_PROFILING             11
-#define SET_DMA_TRANSACTION_SIZE  12
-#define SET_MAX_DMA_TRANSACTIONS  13
+#define OPEN_PORT                 5
+#define OPEN_CON                  6
+#define SET_STACK_TYPE            7
+#define START_PROFILING           8
+#define END_PROFILING             9
+#define SET_DMA_TRANSACTION_SIZE  10
+#define SET_MAX_DMA_TRANSACTIONS  11
 
 //AXI MMAP address
 #define CONTROL_OFFSET          0x0000
@@ -143,10 +134,8 @@
 #ifndef ACCL_BD_SIM
 #define HOSTCTRL_BASEADDR     0x0        
 #define EXCHMEM_BASEADDR      0x1000
-#define UDP_RXPKT_BASEADDR    0x30000
-#define UDP_TXPKT_BASEADDR    0x40000
-#define TCP_RXPKT_BASEADDR    0x50000
-#define TCP_TXPKT_BASEADDR    0x60000
+#define NET_RXPKT_BASEADDR    0x30000
+#define NET_TXPKT_BASEADDR    0x40000
 #define GPIO_BASEADDR         0x40000000
 #define GPIO_TDEST_BASEADDR   0x40010000
 #define SWITCH_BASEADDR       0x44A00000
@@ -155,10 +144,8 @@
 #else
 #define HOSTCTRL_BASEADDR     0x0        
 #define EXCHMEM_BASEADDR      0x1000
-#define UDP_RXPKT_BASEADDR    0x3000
-#define UDP_TXPKT_BASEADDR    0x4000
-#define TCP_RXPKT_BASEADDR    0x5000
-#define TCP_TXPKT_BASEADDR    0x6000
+#define NET_RXPKT_BASEADDR    0x3000
+#define NET_TXPKT_BASEADDR    0x4000
 #define GPIO_BASEADDR         0x7000
 #define GPIO_TDEST_BASEADDR   0x8000
 #define SWITCH_BASEADDR       0x9000
@@ -245,21 +232,20 @@
 #define COLLECTIVE_NOT_IMPLEMENTED                    15
 #define RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID       16
 #define OPEN_PORT_NOT_SUCCEEDED                       17
-#define OPEN_COM_NOT_SUCCEEDED                        18
+#define OPEN_CON_NOT_SUCCEEDED                        18
 #define DMA_SIZE_ERROR                                19
 #define ARITH_ERROR                                   20 
 #define PACK_TIMEOUT_STS_ERROR                        21
 #define PACK_SEQ_NUMBER_ERROR                         22
 #define COMPRESSION_ERROR                             23
+#define KRNL_TIMEOUT_STS_ERROR                        24
+#define KRNL_STS_COUNT_ERROR                          25
 
 //data movement structures and defines
-#define USE_NONE    0
-#define USE_OP0_DMA 1
-#define USE_OP1_DMA 2
-#define USE_RES_DMA 4
-#define USE_OP2_DMA 8
-#define USE_RES_DMA_WITHOUT_TLAST 16
-#define USE_PACKETIZER 32
+#define USE_NONE   0
+#define USE_OP0_DM 1
+#define USE_OP1_DM 2
+#define USE_RES_DM 4
 
 typedef struct{
     uint64_t ptr; //actual byte pointer to the data
@@ -269,6 +255,8 @@ typedef struct{
 
 typedef struct{
     unsigned int compression; //compression options
+    unsigned int stream; //stream option
+    unsigned int remote; //indicates whether any comm is to remote nodes
     unsigned int which_dm; //indicate which datamover hardware to utilize
     unsigned int elems_remaining; //number of uncompressed elements remaining to transfer
     unsigned int elems_per_transfer; //number of uncompressed elements to transfer in each chunk
@@ -303,8 +291,8 @@ extern uint32_t *cfgmem;
 
 #include "Stream.h"
 #include "Axi.h"
-extern hlslib::Stream<hlslib::axi::Stream<ap_uint<32> >, 512> cmd_fifos[11];
-extern hlslib::Stream<hlslib::axi::Stream<ap_uint<32> >, 512> sts_fifos[13];
+extern hlslib::Stream<hlslib::axi::Stream<ap_uint<32> >, 512> cmd_fifos[9];
+extern hlslib::Stream<hlslib::axi::Stream<ap_uint<32> >, 512> sts_fifos[10];
 extern sem_t mb_irq_mutex;
 
 //push data to stream
@@ -372,6 +360,15 @@ typedef struct {
 #define OP1_COMPRESSED 2
 #define RES_COMPRESSED 4
 #define ETH_COMPRESSED 8
+
+//define stream flags
+#define NO_STREAM  0
+#define OP0_STREAM 1
+#define RES_STREAM 2
+
+//define remote flags
+#define NO_REMOTE 0
+#define RES_REMOTE 1
 
 //Tag definitions
 #define TAG_ANY 0xFFFFFFFF

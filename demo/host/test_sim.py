@@ -75,10 +75,12 @@ def test_sendrecv(cclo_inst, world_size, local_rank, count):
         print("Sending on ",local_rank," to ",next_rank)
         cclo_inst.send(0, op_buf, count, next_rank, tag=0)
         print("Receiving on ",local_rank," from ",prev_rank)
+        cclo_inst.dump_rx_buffers_spares()
         cclo_inst.recv(0, res_buf, count, prev_rank, tag=0)
         print("Sending on ",local_rank," to ",prev_rank)
         cclo_inst.send(0, res_buf, count, prev_rank, tag=1)
         print("Receiving on ",local_rank," from ",next_rank)
+        cclo_inst.dump_rx_buffers_spares()
         cclo_inst.recv(0, res_buf, count, next_rank, tag=1)
         if not np.isclose(op_buf.buf, res_buf.buf).all():
             err_count += 1
@@ -139,6 +141,7 @@ if __name__ == "__main__":
         args.combine = True
         args.copy    = True
         args.bcast   = True
+        args.scatter = True
 
     # get communicator size and our local rank in it
     comm = MPI.COMM_WORLD

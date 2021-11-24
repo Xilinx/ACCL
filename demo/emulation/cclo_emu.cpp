@@ -29,11 +29,13 @@
 #include <stdint.h>
 #include "reduce_sum.h"
 #include "vnx.h"
+#include "krnl_packetizer.h"
 #include "ccl_offload_control.h"
 #include <zmqpp/zmqpp.hpp>
 #include <string>
 #include <jsoncpp/json/json.h>
 #include <chrono>
+#include <numeric>
 
 // #include "fp_hp_stream_conv.h"
 // #include "hp_fp_stream_conv.h"
@@ -139,6 +141,47 @@ void dma_write(vector<char> &mem, Stream<axi::Command<64, 23> > &cmd, Stream<axi
 
 }
 
+template <unsigned int INW, unsigned int OUTW>
+void dwc(Stream<axi::Stream<ap_uint<INW> > > &in, Stream<axi::Stream<ap_uint<OUTW> > > &out){
+    axi::Stream<ap_uint<INW> > inword;
+    axi::Stream<ap_uint<OUTW> > outword;
+
+    //3 scenarios:
+    //1:N (up) conversion - read N times from input, write 1 times to output
+    //N:1 (down) conversion - read 1 times from input, write N times to output
+    //N:M conversion - up-conversion to least common multiple, then down-conversion
+    if(INW < OUTW && OUTW%INW == 0){
+        //1:N case
+        outword.keep = 0;
+        outword.last = 0;
+        outword.data = 0;
+        for(int i=0; i<OUTW/INW; i++){
+            inword = in.Pop();
+            outword.data((i+1)*INW-1,i*INW) = inword.data;
+            outword.keep((i+1)*INW/8-1,i*INW/8) = inword.keep;
+            outword.last = 1;
+            if((inword.last == 1) || (inword.keep(INW/8-1,INW/8-1) != 1)) break;
+        }
+        out.Push(outword);
+    } else if(INW > OUTW && INW%OUTW == 0){
+        //N:1 case
+        inword = in.Pop();
+        for(int i=0; i<INW/OUTW; i++){
+            outword.data = inword.data((i+1)*OUTW-1,i*OUTW);
+            outword.keep = inword.keep((i+1)*OUTW/8-1,i*OUTW/8);
+            //last if actually at last input read or if any previous input read is incomplete
+            outword.last = (i==(INW/OUTW-1)) || (outword.keep(OUTW/8-1,OUTW/8-1) != 1);
+            out.Push(outword);
+            if(outword.last == 1) break;
+        }
+    } else{
+        unsigned const int inter_width = lcm(INW, OUTW);
+        Stream<axi::Stream<ap_uint<inter_width> > > inter;
+        dwc<INW, inter_width>(in, inter);
+        dwc<inter_width, OUTW>(inter, out);
+    }
+}
+
 void arithmetic(uint32_t *cfgmem, Stream<axi::Stream<ap_uint<512> > > &op0, Stream<axi::Stream<ap_uint<512> > > &op1, Stream<axi::Stream<ap_uint<512> > > &res){
     hls::stream<ap_axiu<1024,0,0,0> > op_int("arith_op");
     hls::stream<ap_axiu<512,0,0,0> > res_int("arith_res"); 
@@ -231,6 +274,46 @@ void compression(uint32_t *cfgmem, int idx, Stream<axi::Stream<ap_uint<512> > > 
 
 }
 
+void ext_kernel_packetizer(Stream<axi::Stream<ap_uint<512> > > &in, Stream<axi::Stream<ap_uint<512> > > &out, Stream<axi::Stream<ap_uint<32> > > &cmd, Stream<axi::Stream<ap_uint<32> > > &sts){
+    hls::stream<ap_axiu<512,0,0,0> > in_int("krnl_in_pkt");
+    hls::stream<ap_axiu<512,0,0,0> > out_int("krnl_out_pkt"); 
+    hls::stream<ap_uint<32> > cmd_int("krnl_in_cmd");
+    hls::stream<ap_uint<32> > sts_int("krnl_out_sts"); 
+
+    axi::Stream<ap_uint<512> > tmp_in;
+    axi::Stream<ap_uint<512> > tmp_out;
+    ap_axiu<512,0,0,0> tmp_out_elem;
+    ap_axiu<512,0,0,0> tmp_in_elem;
+    axi::Stream<ap_uint<32> > tmp_sts;
+    ap_uint<32> tmp_sts_elem;
+    int transaction_count;
+
+    //load op stream
+    transaction_count = 0;
+    do {
+        tmp_in = in.Pop();
+        tmp_in_elem.data = tmp_in.data;
+        tmp_in_elem.keep = tmp_in.keep;
+        tmp_in_elem.last = tmp_in.last;
+        in_int.write(tmp_in_elem);
+        transaction_count++;
+    } while(tmp_in.last == 0);
+    cmd_int.write(cmd.Pop().data);
+    //call packetizer
+    krnl_packetizer(in_int, out_int, cmd_int, sts_int);
+    //load result stream
+    do {
+        tmp_out_elem = out_int.read();
+        tmp_out.last = tmp_out_elem.last;
+        tmp_out.data = tmp_out_elem.data;
+        tmp_out.keep = tmp_out_elem.keep;
+        out.Push(tmp_out);
+        transaction_count--;
+    } while(transaction_count > 0);
+    tmp_sts.data = sts_int.read();
+    sts.Push(tmp_sts);
+}
+
 void udp_packetizer(Stream<axi::Stream<ap_uint<512> > > &in, Stream<axi::Stream<ap_uint<512>, 16> > &out, Stream<axi::Stream<ap_uint<32> > > &cmd, Stream<axi::Stream<ap_uint<32> > > &sts){
     hls::stream<ap_axiu<512,0,0,0> > in_int("udp_in_pkt");
     hls::stream<ap_axiu<512,0,0,16> > out_int("udp_out_pkt"); 
@@ -256,7 +339,7 @@ void udp_packetizer(Stream<axi::Stream<ap_uint<512> > > &in, Stream<axi::Stream<
         transaction_count++;
     } while(tmp_in.last == 0);
     cout << "UDP TX message received" << endl;
-    for(int i=0; i<5; i++) cmd_int.write(cmd.Pop().data);
+    for(int i=0; i<6; i++) cmd_int.write(cmd.Pop().data);
     cout << "UDP TX command received" << endl;
     //call packetizer
     vnx_packetizer(in_int, out_int, cmd_int, sts_int, 1024);
@@ -277,17 +360,17 @@ void udp_packetizer(Stream<axi::Stream<ap_uint<512> > > &in, Stream<axi::Stream<
     cout << "UDP TX status sent" << endl;
 }
 
-void udp_depacketizer(Stream<axi::Stream<ap_uint<512>, 16> > &in, Stream<axi::Stream<ap_uint<512> > > &out, Stream<axi::Stream<ap_uint<32> > > &sts){
+void udp_depacketizer(Stream<axi::Stream<ap_uint<512>, 16> > &in, Stream<axi::Stream<ap_uint<512>, 16> > &out, Stream<axi::Stream<ap_uint<4*32> > > &sts){
     hls::stream<ap_axiu<512,0,0,16> > in_int("udp_in_pkt");
-    hls::stream<ap_axiu<512,0,0,0> > out_int("udp_out_pkt"); 
-    hls::stream<ap_uint<32> > sts_int("udp_out_sts");
+    hls::stream<ap_axiu<512,0,0,16> > out_int("udp_out_pkt"); 
+    hls::stream<ap_axiu<4*32,0,0,0> > sts_int("udp_out_sts");
 
     axi::Stream<ap_uint<512>, 16> tmp_in;
-    axi::Stream<ap_uint<512> > tmp_out;
+    axi::Stream<ap_uint<512>, 16> tmp_out;
     ap_axiu<512,0,0,16> tmp_in_elem;
-    ap_axiu<512,0,0,0> tmp_out_elem;
-    axi::Stream<ap_uint<32> > tmp_sts;
-    ap_uint<32> tmp_sts_elem;
+    ap_axiu<512,0,0,16> tmp_out_elem;
+    axi::Stream<ap_uint<4*32> > tmp_sts;
+    ap_axiu<4*32,0,0,0> tmp_sts_elem;
     unsigned int transaction_count;
 
     //load op stream
@@ -317,35 +400,63 @@ void udp_depacketizer(Stream<axi::Stream<ap_uint<512>, 16> > &in, Stream<axi::St
         tmp_out.last = tmp_out_elem.last;
         tmp_out.keep = tmp_out_elem.keep;
         tmp_out.data = tmp_out_elem.data;
+        tmp_out.dest = tmp_out_elem.dest;
         out.Push(tmp_out);
     } while(tmp_out_elem.last == 0);
     cout << "UDP RX message sent" << endl;
-    tmp_sts.data = sts_int.read();
-    sts.Push(tmp_sts);
-    tmp_sts.data = sts_int.read();
-    sts.Push(tmp_sts);
-    tmp_sts.data = sts_int.read();
-    sts.Push(tmp_sts);
-    tmp_sts.data = sts_int.read();
+    tmp_sts_elem = sts_int.read();
+    tmp_sts.data = tmp_sts_elem.data;
+    tmp_sts.keep = tmp_sts_elem.keep;
+    tmp_sts.last = tmp_sts_elem.last;
     sts.Push(tmp_sts);
     cout << "UDP RX status sent" << endl;
 }
 
-//emulate an AXI Stream Switch
+//strip TDEST from a stream
+template <unsigned int DWIDTH, unsigned int DESTWIDTH>
+void strip_tdest( Stream<axi::Stream<ap_uint<DWIDTH>, DESTWIDTH> > &in,
+                        Stream<axi::Stream<ap_uint<DWIDTH> > > &out){
+    axi::Stream<ap_uint<DWIDTH>, DESTWIDTH> tmpin;
+    axi::Stream<ap_uint<DWIDTH> > tmpout;
+    tmpin = in.Pop();
+    tmpout.data = tmpin.data;
+    tmpout.last = tmpin.last;
+    tmpout.keep = tmpin.keep;
+    out.Push(tmpout);
+}
+
+//emulate an AXI Stream Switch with TDEST routing
+template <unsigned int NSLAVES, unsigned int NMASTERS, unsigned int DWIDTH, unsigned int DESTWIDTH>
+void axis_switch_tdest( Stream<axi::Stream<ap_uint<DWIDTH>, DESTWIDTH> > s[NSLAVES],
+                        Stream<axi::Stream<ap_uint<DWIDTH>, DESTWIDTH> > m[NMASTERS]){
+
+    axi::Stream<ap_uint<DWIDTH>, DESTWIDTH> word;
+    for(int i=0; i<NSLAVES; i++){
+        if(!s[i].IsEmpty()){
+            do{
+                word = s[i].Pop();
+                m[min(NMASTERS-1, (unsigned int)word.dest)].Push(word);
+            } while(word.last == 0);
+        }
+    }
+
+}
+
+//emulate an AXI Stream Switch with register routing
 void axis_switch(uint32_t *cfgmem,
-            Stream<axi::Stream<ap_uint<512> > > s[8],
-            Stream<axi::Stream<ap_uint<512> > > m[9]){
+            Stream<axi::Stream<ap_uint<512> > > s[7],
+            Stream<axi::Stream<ap_uint<512> > > m[8]){
 
     //detect and reply to reconfig attempt
     if(cfgmem[0] == 2){
         cout << "Switch reconfigured" << endl;
         cfgmem[0] = 0;
     }
-    for(int m_idx=0; m_idx<9; m_idx++){
+    for(int m_idx=0; m_idx<8; m_idx++){
         unsigned int m_cfg = cfgmem[16+m_idx];
         //src = cfgmem[16+dst] and if src is 0x80000000 do nothing
         if(m_cfg != 0x80000000){
-            for(int s_idx=0; s_idx<8; s_idx++){
+            for(int s_idx=0; s_idx<7; s_idx++){
                 if(s_idx == m_cfg){
                     if(!s[s_idx].IsEmpty()){
                         m[m_idx].Push(s[s_idx].Pop());
@@ -393,9 +504,7 @@ void timer(uint32_t *cfgmem){
 //irq2 - timer
 void interrupt_controller(uint32_t *cfgmem, uint32_t *timermem, 
                             Stream<axi::Stream<ap_uint<32>> > &d0_sts,
-                            Stream<axi::Stream<ap_uint<32>> > &d0_cmd,
-                            Stream<axi::Stream<ap_uint<32>> > &d2_sts,
-                            Stream<axi::Stream<ap_uint<32>> > &d2_cmd){
+                            Stream<axi::Stream<ap_uint<32>> > &d0_cmd){
     uint32_t* mer = cfgmem + IRQCTRL_MER_OFFSET/4;
     uint32_t* iar = cfgmem + IRQCTRL_IAR_OFFSET/4;
     uint32_t* ier = cfgmem + IRQCTRL_IER_OFFSET/4;
@@ -403,8 +512,6 @@ void interrupt_controller(uint32_t *cfgmem, uint32_t *timermem,
     bool timer_irq_active = ((*timermem & TIMER_CSR_INTERRUPT_MASK) != 0);
     bool dma0_cmd_irq_active = d0_cmd.IsEmpty();
     bool dma0_sts_irq_active = !d0_sts.IsEmpty();
-    bool dma2_cmd_irq_active = d2_cmd.IsEmpty();
-    bool dma2_sts_irq_active = !d2_sts.IsEmpty();
     uint32_t interrupt_pending = 0;
     uint32_t prev_interrupt_pending = 0;
     //while master enable and hw interrupt enable
@@ -413,8 +520,6 @@ void interrupt_controller(uint32_t *cfgmem, uint32_t *timermem,
         interrupt_pending |= timer_irq_active ? IRQCTRL_TIMER_ENABLE : 0;
         interrupt_pending |= dma0_cmd_irq_active ? IRQCTRL_DMA0_CMD_QUEUE_EMPTY : 0;
         interrupt_pending |= dma0_sts_irq_active ? IRQCTRL_DMA0_STS_QUEUE_NON_EMPTY : 0;
-        interrupt_pending |= dma2_cmd_irq_active ? IRQCTRL_DMA2_CMD_QUEUE_EMPTY : 0;
-        interrupt_pending |= dma2_sts_irq_active ? IRQCTRL_DMA2_STS_QUEUE_NON_EMPTY : 0;
 
         if(interrupt_pending & *ier){
             if(prev_interrupt_pending != interrupt_pending){
@@ -626,6 +731,19 @@ void eth_endpoint_ingress_port(zmqpp::socket &socket, Stream<axi::Stream<ap_uint
     }
 }
 
+void dummy_external_kernel(Stream<axi::Stream<ap_uint<512>, 16> > &in, Stream<axi::Stream<ap_uint<512> > > &out){
+    axi::Stream<ap_uint<512>, 16> tmp;
+    axi::Stream<ap_uint<512> > tmp_no_tdest;
+    tmp = in.Pop();
+    stringstream ss;
+    ss << "External Kernel Interface: Read TDEST=" << tmp.dest << "\n";
+    cout << ss.str();
+    tmp_no_tdest.data = tmp.data;
+    tmp_no_tdest.last = tmp.last;
+    tmp_no_tdest.keep = tmp.keep;
+    out.Push(tmp_no_tdest);
+}
+
 void sim_bd(zmqpp::socket &cmd_socket, 
             zmqpp::socket &eth_tx_socket, 
             zmqpp::socket &eth_rx_socket, 
@@ -634,21 +752,24 @@ void sim_bd(zmqpp::socket &cmd_socket,
 
     Stream<axi::Stream<ap_uint<32> >, 32> host_cmd("host_cmd");
     Stream<axi::Stream<ap_uint<32> >, 32> host_sts("host_sts");
-    Stream<axi::Stream<ap_uint<512> > > krnl_rx_data;
-    Stream<axi::Stream<ap_uint<512> > > krnl_tx_data;
-    Stream<axi::Stream<ap_uint<512>, 16 > > udp_rx_data;
-    Stream<axi::Stream<ap_uint<512>, 16 > > udp_tx_data;
-    Stream<axi::Stream<ap_uint<512>, 16 > > tcp_rx_data;
-    Stream<axi::Stream<ap_uint<512>, 16 > > tcp_tx_data;
+    Stream<axi::Stream<ap_uint<512> > > krnl_to_accl_data;
+    Stream<axi::Stream<ap_uint<512>, 16> > accl_to_krnl_data[1];
+    Stream<axi::Stream<ap_uint<512>, 16> > eth_rx_data;
+    Stream<axi::Stream<ap_uint<512>, 16> > eth_rx_data_int[1];
+    Stream<axi::Stream<ap_uint<512>, 16> > eth_rx_data_switched[2];
+    Stream<axi::Stream<ap_uint<512>, 16> > eth_tx_data;
 
-    Stream<axi::Command<64, 23> > dma_write_cmd_int[3];
-    Stream<axi::Command<64, 23> > dma_read_cmd_int[3];
-    Stream<axi::Status > dma_write_sts_int[3];
-    Stream<axi::Status > dma_read_sts_int[3];
-    Stream<axi::Stream<ap_uint<512> > > dma_write_data[3];
+    Stream<axi::Command<64, 23> > dma_write_cmd_int[2];
+    Stream<axi::Command<64, 23> > dma_read_cmd_int[2];
+    Stream<axi::Status > dma_write_sts_int[2];
+    Stream<axi::Status > dma_read_sts_int[2];
+    Stream<axi::Stream<ap_uint<512> > > dma_write_data[2];
 
-    Stream<axi::Stream<ap_uint<512> > > switch_s[8];
-    Stream<axi::Stream<ap_uint<512> > > switch_m[9];
+    Stream<axi::Stream<ap_uint<512> > > switch_s[7];
+    Stream<axi::Stream<ap_uint<512> > > switch_m[8];
+
+    Stream<axi::Stream<ap_uint<4*32> > > eth_rx_status;
+    Stream<axi::Stream<ap_uint<4*32> > > tcp_rx_status;
 
     // Dataflow functions running in parallel
     HLSLIB_DATAFLOW_INIT();
@@ -656,48 +777,45 @@ void sim_bd(zmqpp::socket &cmd_socket,
     HLSLIB_FREERUNNING_FUNCTION(mb_axis_to_dma_command, cmd_fifos[CMD_DMA0_RX], dma_read_cmd_int[0]);
     HLSLIB_FREERUNNING_FUNCTION(mb_axis_to_dma_command, cmd_fifos[CMD_DMA0_TX], dma_write_cmd_int[0]);
     HLSLIB_FREERUNNING_FUNCTION(dma_write, devicemem, dma_write_cmd_int[0], dma_write_sts_int[0], dma_write_data[0]);
-    HLSLIB_FREERUNNING_FUNCTION(dma_read, devicemem, dma_read_cmd_int[0], dma_read_sts_int[0], switch_s[0]);
+    HLSLIB_FREERUNNING_FUNCTION(dma_read, devicemem, dma_read_cmd_int[0], dma_read_sts_int[0], switch_s[SWITCH_S_DMA0_RX]);
     HLSLIB_FREERUNNING_FUNCTION(dma_status_to_mb_axis, dma_write_sts_int[0], sts_fifos[STS_DMA0_TX]);
     HLSLIB_FREERUNNING_FUNCTION(dma_status_to_mb_axis, dma_read_sts_int[0], sts_fifos[STS_DMA0_RX]);
     //DMA1
     HLSLIB_FREERUNNING_FUNCTION(mb_axis_to_dma_command, cmd_fifos[CMD_DMA1_RX], dma_read_cmd_int[1]);
     HLSLIB_FREERUNNING_FUNCTION(mb_axis_to_dma_command, cmd_fifos[CMD_DMA1_TX], dma_write_cmd_int[1]);
-    HLSLIB_FREERUNNING_FUNCTION(dma_write, devicemem, dma_write_cmd_int[1], dma_write_sts_int[1], switch_m[2]);
-    HLSLIB_FREERUNNING_FUNCTION(dma_read, devicemem, dma_read_cmd_int[1], dma_read_sts_int[1], switch_s[1]);
+    HLSLIB_FREERUNNING_FUNCTION(dma_write, devicemem, dma_write_cmd_int[1], dma_write_sts_int[1], switch_m[SWITCH_M_DMA1_TX]);
+    HLSLIB_FREERUNNING_FUNCTION(dma_read, devicemem, dma_read_cmd_int[1], dma_read_sts_int[1], switch_s[SWITCH_S_DMA1_RX]);
     HLSLIB_FREERUNNING_FUNCTION(dma_status_to_mb_axis, dma_write_sts_int[1], sts_fifos[STS_DMA1_TX]);
     HLSLIB_FREERUNNING_FUNCTION(dma_status_to_mb_axis, dma_read_sts_int[1], sts_fifos[STS_DMA1_RX]);
-    //DMA2
-    HLSLIB_FREERUNNING_FUNCTION(mb_axis_to_dma_command, cmd_fifos[CMD_DMA2_RX], dma_read_cmd_int[2]);
-    HLSLIB_FREERUNNING_FUNCTION(mb_axis_to_dma_command, cmd_fifos[CMD_DMA2_TX], dma_write_cmd_int[2]);
-    HLSLIB_FREERUNNING_FUNCTION(dma_write, devicemem, dma_write_cmd_int[2], dma_write_sts_int[2], dma_write_data[2]);
-    HLSLIB_FREERUNNING_FUNCTION(dma_read, devicemem, dma_read_cmd_int[2], dma_read_sts_int[2], switch_s[2]);
-    HLSLIB_FREERUNNING_FUNCTION(dma_status_to_mb_axis, dma_write_sts_int[2], sts_fifos[STS_DMA2_TX]);
-    HLSLIB_FREERUNNING_FUNCTION(dma_status_to_mb_axis, dma_read_sts_int[2], sts_fifos[STS_DMA2_RX]);
     //SWITCH
     HLSLIB_FREERUNNING_FUNCTION(axis_switch, cfgmem+SWITCH_BASEADDR/4, switch_s, switch_m);
     //ARITH
-    HLSLIB_FREERUNNING_FUNCTION(arithmetic, cfgmem+GPIO_TDEST_BASEADDR/4, switch_m[3], switch_m[4], switch_s[3]);
+    HLSLIB_FREERUNNING_FUNCTION(arithmetic, cfgmem+GPIO_TDEST_BASEADDR/4, switch_m[SWITCH_M_ARITH_OP0], switch_m[SWITCH_M_ARITH_OP1], switch_s[SWITCH_S_ARITH_RES]);
     //COMPRESS 0
-    HLSLIB_FREERUNNING_FUNCTION(compression, cfgmem+GPIO_TDEST_BASEADDR/4, 0, switch_m[6], switch_s[5]);
+    HLSLIB_FREERUNNING_FUNCTION(compression, cfgmem+GPIO_TDEST_BASEADDR/4, 0, switch_m[SWITCH_M_COMPRESS0], switch_s[SWITCH_S_COMPRESS0]);
     //COMPRESS 1
-    HLSLIB_FREERUNNING_FUNCTION(compression, cfgmem+GPIO_TDEST_BASEADDR/4, 1, switch_m[7], switch_s[6]);
+    HLSLIB_FREERUNNING_FUNCTION(compression, cfgmem+GPIO_TDEST_BASEADDR/4, 1, switch_m[SWITCH_M_COMPRESS1], switch_s[SWITCH_S_COMPRESS1]);
     //COMPRESS 2
-    HLSLIB_FREERUNNING_FUNCTION(compression, cfgmem+GPIO_TDEST_BASEADDR/4, 2, switch_m[8], switch_s[7]);
-    //UDP PACK/DEPACK
-    HLSLIB_FREERUNNING_FUNCTION(udp_packetizer, switch_m[0], udp_tx_data, cmd_fifos[CMD_UDP_TX], sts_fifos[STS_UDP_PKT]);
-    HLSLIB_FREERUNNING_FUNCTION(udp_depacketizer, udp_rx_data, dma_write_data[0], sts_fifos[STS_UDP_RX]);
-    //TCP PACK/DEPACK (for now use UDP packetizer here too)
-    HLSLIB_FREERUNNING_FUNCTION(udp_packetizer, switch_m[1], tcp_tx_data, cmd_fifos[CMD_TCP_TX], sts_fifos[STS_TCP_PKT]);
-    HLSLIB_FREERUNNING_FUNCTION(udp_depacketizer, tcp_tx_data, dma_write_data[2], sts_fifos[STS_TCP_RX]);//loopback of tx to rx
+    HLSLIB_FREERUNNING_FUNCTION(compression, cfgmem+GPIO_TDEST_BASEADDR/4, 2, switch_m[SWITCH_M_COMPRESS2], switch_s[SWITCH_S_COMPRESS2]);
+    //network PACK/DEPACK
+    //TODO: implement conditional instantiation of UDP or TCP (de)packetizer here
+    HLSLIB_FREERUNNING_FUNCTION(udp_packetizer, switch_m[SWITCH_M_NET_TX], eth_tx_data, cmd_fifos[CMD_NET_TX], sts_fifos[STS_NET_PKT]);
+    HLSLIB_FREERUNNING_FUNCTION(udp_depacketizer, eth_rx_data, eth_rx_data_int[0], eth_rx_status);
+    HLSLIB_FREERUNNING_FUNCTION(dwc<128,32>, eth_rx_status, sts_fifos[STS_NET_RX]);
+    //TDEST switch to streaming kernel output and the DMA
+    HLSLIB_FREERUNNING_FUNCTION(axis_switch_tdest<1,2,512,16>, eth_rx_data_int, eth_rx_data_switched);
+    HLSLIB_FREERUNNING_FUNCTION(strip_tdest<512,16>, eth_rx_data_switched[0], dma_write_data[0]);
+    HLSLIB_FREERUNNING_FUNCTION(ext_kernel_packetizer, krnl_to_accl_data, switch_s[SWITCH_S_EXT_KRNL], cmd_fifos[CMD_KRNL_PKT], sts_fifos[STS_KRNL_PKT]);
+    HLSLIB_FREERUNNING_FUNCTION(dummy_external_kernel, eth_rx_data_switched[1], krnl_to_accl_data);
     //AXI Timer
     HLSLIB_FREERUNNING_FUNCTION(timer, cfgmem+TIMER_BASEADDR/4);
     //AXI IRQ Controller
-    HLSLIB_FREERUNNING_FUNCTION(interrupt_controller, cfgmem+IRQCTRL_BASEADDR/4, cfgmem+TIMER_BASEADDR/4, sts_fifos[STS_DMA0_TX], cmd_fifos[CMD_DMA0_TX], sts_fifos[STS_DMA2_TX], cmd_fifos[CMD_DMA2_TX]);
+    HLSLIB_FREERUNNING_FUNCTION(interrupt_controller, cfgmem+IRQCTRL_BASEADDR/4, cfgmem+TIMER_BASEADDR/4, sts_fifos[STS_DMA0_TX], cmd_fifos[CMD_DMA0_TX]);
     //ZMQ to host process
     HLSLIB_FREERUNNING_FUNCTION(serve_zmq, cmd_socket, cfgmem, devicemem, sts_fifos[CMD_HOST], cmd_fifos[STS_HOST]);
     //ZMQ to other nodes process(es)
-    HLSLIB_FREERUNNING_FUNCTION(eth_endpoint_egress_port, eth_tx_socket, udp_tx_data);
-    HLSLIB_FREERUNNING_FUNCTION(eth_endpoint_ingress_port, eth_rx_socket, udp_rx_data);
+    HLSLIB_FREERUNNING_FUNCTION(eth_endpoint_egress_port, eth_tx_socket, eth_tx_data);
+    HLSLIB_FREERUNNING_FUNCTION(eth_endpoint_ingress_port, eth_rx_socket, eth_rx_data);
     //MICROBLAZE
     HLSLIB_FREERUNNING_FUNCTION(stream_isr);
     HLSLIB_DATAFLOW_FUNCTION(run_accl);
