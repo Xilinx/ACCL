@@ -317,8 +317,8 @@ void ext_kernel_packetizer(Stream<axi::Stream<ap_uint<512> > > &in, Stream<axi::
 void udp_packetizer(Stream<axi::Stream<ap_uint<512> > > &in, Stream<axi::Stream<ap_uint<512>, 16> > &out, Stream<axi::Stream<ap_uint<32> > > &cmd, Stream<axi::Stream<ap_uint<32> > > &sts){
     hls::stream<ap_axiu<512,0,0,0> > in_int("udp_in_pkt");
     hls::stream<ap_axiu<512,0,0,16> > out_int("udp_out_pkt"); 
-    hls::stream<ap_uint<32> > cmd_int("udp_in_cmd");
-    hls::stream<ap_uint<32> > sts_int("udp_out_sts"); 
+    hls::stream<ap_uint<32> > cmd_int("udp_cmd_pkt");
+    hls::stream<ap_uint<32> > sts_int("udp_sts_pkt"); 
 
     axi::Stream<ap_uint<512> > tmp_in;
     axi::Stream<ap_uint<512>, 16> tmp_out;
@@ -361,9 +361,9 @@ void udp_packetizer(Stream<axi::Stream<ap_uint<512> > > &in, Stream<axi::Stream<
 }
 
 void udp_depacketizer(Stream<axi::Stream<ap_uint<512>, 16> > &in, Stream<axi::Stream<ap_uint<512>, 16> > &out, Stream<axi::Stream<ap_uint<4*32> > > &sts){
-    hls::stream<ap_axiu<512,0,0,16> > in_int("udp_in_pkt");
-    hls::stream<ap_axiu<512,0,0,16> > out_int("udp_out_pkt"); 
-    hls::stream<ap_axiu<4*32,0,0,0> > sts_int("udp_out_sts");
+    hls::stream<ap_axiu<512,0,0,16> > in_int("udp_in_dpkt");
+    hls::stream<ap_axiu<512,0,0,16> > out_int("udp_out_dpkt"); 
+    hls::stream<ap_axiu<4*32,0,0,0> > sts_int("udp_sts_dpkt");
 
     axi::Stream<ap_uint<512>, 16> tmp_in;
     axi::Stream<ap_uint<512>, 16> tmp_out;
@@ -404,12 +404,14 @@ void udp_depacketizer(Stream<axi::Stream<ap_uint<512>, 16> > &in, Stream<axi::St
         out.Push(tmp_out);
     } while(tmp_out_elem.last == 0);
     cout << "UDP RX message sent" << endl;
-    tmp_sts_elem = sts_int.read();
-    tmp_sts.data = tmp_sts_elem.data;
-    tmp_sts.keep = tmp_sts_elem.keep;
-    tmp_sts.last = tmp_sts_elem.last;
-    sts.Push(tmp_sts);
-    cout << "UDP RX status sent" << endl;
+    if(tmp_out.dest == 0){
+        tmp_sts_elem = sts_int.read();
+        tmp_sts.data = tmp_sts_elem.data;
+        tmp_sts.keep = tmp_sts_elem.keep;
+        tmp_sts.last = tmp_sts_elem.last;
+        sts.Push(tmp_sts);
+        cout << "UDP RX status sent" << endl;
+    }
 }
 
 //strip TDEST from a stream
@@ -439,7 +441,6 @@ void axis_switch_tdest( Stream<axi::Stream<ap_uint<DWIDTH>, DESTWIDTH> > s[NSLAV
             } while(word.last == 0);
         }
     }
-
 }
 
 //emulate an AXI Stream Switch with register routing
@@ -752,7 +753,7 @@ void sim_bd(zmqpp::socket &cmd_socket,
 
     Stream<axi::Stream<ap_uint<32> >, 32> host_cmd("host_cmd");
     Stream<axi::Stream<ap_uint<32> >, 32> host_sts("host_sts");
-    Stream<axi::Stream<ap_uint<512> > > krnl_to_accl_data;
+    Stream<axi::Stream<ap_uint<512> >, 32> krnl_to_accl_data;
     Stream<axi::Stream<ap_uint<512>, 16> > accl_to_krnl_data[1];
     Stream<axi::Stream<ap_uint<512>, 16> > eth_rx_data;
     Stream<axi::Stream<ap_uint<512>, 16> > eth_rx_data_int[1];

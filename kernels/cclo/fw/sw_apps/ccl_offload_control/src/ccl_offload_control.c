@@ -534,20 +534,21 @@ static inline void start_depacketizer(unsigned int base_addr) {
 
 //create/acknowledge the instructions for the external stream packetizer to send a message
 //Input is byte length, which we convert to number of 64B transactions
-void start_krnl_message(unsigned int count){
-    //calculate ceil(count/DATAPATH_WIDTH_BYTES)
-    unsigned int ntransactions = (count+DATAPATH_WIDTH_BYTES-1)/DATAPATH_WIDTH_BYTES;
+void start_krnl_message(unsigned int len){
+    //calculate ceil(len/DATAPATH_WIDTH_BYTES)
+    unsigned int ntransactions = (len+DATAPATH_WIDTH_BYTES-1)/DATAPATH_WIDTH_BYTES;
     cputd(CMD_KRNL_PKT, ntransactions);
 }
 
-void ack_krnl_message(unsigned int count){
+void ack_krnl_message(unsigned int len){
+    unsigned int count;
     for(count=0; tngetd(STS_KRNL_PKT); count++){
         if(timeout != 0 && count >= timeout ){
             longjmp(excp_handler, KRNL_TIMEOUT_STS_ERROR);
         }
     }
     unsigned int ntransactions = getd(STS_KRNL_PKT);
-    if(	ntransactions == ((count+DATAPATH_WIDTH_BYTES-1)/DATAPATH_WIDTH_BYTES) ){
+    if(	ntransactions == ((len+DATAPATH_WIDTH_BYTES-1)/DATAPATH_WIDTH_BYTES) ){
         return;
     } else{
         longjmp(excp_handler, KRNL_STS_COUNT_ERROR);

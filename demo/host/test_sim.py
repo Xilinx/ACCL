@@ -19,7 +19,7 @@ import sys
 import numpy as np
 import time
 sys.path.append('../../driver/pynq/')
-from accl import accl, ACCLReduceFunctions
+from accl import accl, ACCLReduceFunctions, ACCLStreamFlags
 from accl import SimBuffer
 import argparse
 import itertools
@@ -75,13 +75,35 @@ def test_sendrecv(cclo_inst, world_size, local_rank, count):
         print("Sending on ",local_rank," to ",next_rank)
         cclo_inst.send(0, op_buf, count, next_rank, tag=0)
         print("Receiving on ",local_rank," from ",prev_rank)
-        cclo_inst.dump_rx_buffers_spares()
         cclo_inst.recv(0, res_buf, count, prev_rank, tag=0)
         print("Sending on ",local_rank," to ",prev_rank)
         cclo_inst.send(0, res_buf, count, prev_rank, tag=1)
         print("Receiving on ",local_rank," from ",next_rank)
-        cclo_inst.dump_rx_buffers_spares()
         cclo_inst.recv(0, res_buf, count, next_rank, tag=1)
+        if not np.isclose(op_buf.buf, res_buf.buf).all():
+            err_count += 1
+            print("Send/recv failed on pair ", op_dt, res_dt)
+        else:
+            print("Send/recv succeeded on pair ", op_dt, res_dt)
+    if err_count == 0:
+        print("Send/recv succeeded")
+
+def test_sendrecv_plkernel(cclo_inst, world_size, local_rank, count):
+    #NOTE: this requires loopback on the external stream interface
+    err_count = 0
+    dt = [np.float32]#[np.float32, np.half]
+    for op_dt, res_dt in itertools.product(dt, repeat=2):
+        op_buf, _, res_buf = get_buffers(count, op_dt, op_dt, res_dt, cclo_inst)
+        # send to next rank; receive from previous rank; send back data to previous rank; receive from next rank; compare
+        next_rank = (local_rank+1)%world_size
+        prev_rank = (local_rank+world_size-1)%world_size
+        print("Sending from memory on ",local_rank," to stream on ",next_rank)
+        cclo_inst.send(0, op_buf, count, next_rank, stream_flags=ACCLStreamFlags.RES_STREAM, tag=1)
+        # recv is direct, no call required
+        print("Sending from stream on ",local_rank," to memory on ",prev_rank)
+        cclo_inst.send(0, res_buf, count, prev_rank, stream_flags=ACCLStreamFlags.OP0_STREAM, tag=5)
+        print("Receiving in memory on ",local_rank," from stream on ",next_rank)
+        cclo_inst.recv(0, res_buf, count, next_rank, tag=5)
         if not np.isclose(op_buf.buf, res_buf.buf).all():
             err_count += 1
             print("Send/recv failed on pair ", op_dt, res_dt)
@@ -122,7 +144,7 @@ def test_scatter(cclo_inst, world_size, local_rank, root, count):
         print("Scatter succeeded")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Tests for MPI collectives offload with UDP (VNx) backend')
+    parser = argparse.ArgumentParser(description='Tests for ACCL (emulation mode)')
     parser.add_argument('--nruns',      type=int,            default=1,     help='How many times to run each test')
     parser.add_argument('--start_port', type=int,            default=5500,  help='Start of range of ports usable for sim')
     parser.add_argument('--count',      type=int,            default=16,    help='How many B per buffer')
@@ -132,6 +154,7 @@ if __name__ == "__main__":
     parser.add_argument('--combine',    action='store_true', default=False, help='Run fp/dp/i32/i64 test')
     parser.add_argument('--copy',       action='store_true', default=False, help='Run copy test')
     parser.add_argument('--sndrcv',     action='store_true', default=False, help='Run send/receive test')
+    parser.add_argument('--sndrcv_strm', action='store_true', default=False, help='Run send/receive test')
     parser.add_argument('--bcast',      action='store_true', default=False, help='Run bcast test')
     parser.add_argument('--scatter',    action='store_true', default=False, help='Run scatter test')
 
@@ -142,6 +165,7 @@ if __name__ == "__main__":
         args.copy    = True
         args.bcast   = True
         args.scatter = True
+        args.sndrcv_strm = True
 
     # get communicator size and our local rank in it
     comm = MPI.COMM_WORLD
@@ -173,6 +197,10 @@ if __name__ == "__main__":
         if args.sndrcv:
             for i in range(args.nruns):
                 test_sendrecv(cclo_inst, world_size, local_rank, args.count)
+
+        if args.sndrcv_strm:
+            for i in range(args.nruns):  
+                test_sendrecv_plkernel(cclo_inst, world_size, local_rank, args.count)
 
         if args.bcast:
             for i in range(args.nruns):

@@ -198,6 +198,12 @@ class ACCLCompressionFlags(IntEnum):
     RES_COMPRESSED = 4
     ETH_COMPRESSED = 8
 
+@unique
+class ACCLStreamFlags(IntEnum):
+    NO_STREAM = 0
+    OP0_STREAM = 1
+    RES_STREAM = 2
+
 class ACCLArithConfig():
     def __init__(self, uncompressed_elem_bits, compressed_elem_bits, elem_ratio, 
                     compressor_tdest, decompressor_tdest, arith_is_compressed, arith_tdest):
@@ -587,11 +593,11 @@ class accl():
                 arithcfg = self.arith_config[(u_dt.name, c_dt.name)]
         return arithcfg.addr, compression_flags, addr_0, addr_1, addr_2
 
-    def call_async(self, scenario=CCLOp.nop, count=1, comm=0, root_src_dst=0, function=0, tag=TAG_ANY, compress_dtype=None, stream_flags=0, addr_0=None, addr_1=None, addr_2=None, waitfor=[]):
+    def call_async(self, scenario=CCLOp.nop, count=1, comm=0, root_src_dst=0, function=0, tag=TAG_ANY, compress_dtype=None, stream_flags=ACCLStreamFlags.NO_STREAM, addr_0=None, addr_1=None, addr_2=None, waitfor=[]):
         arithcfg, compression_flags, addr_0, addr_1, addr_2 = self.prepare_call(addr_0, addr_1, addr_2, compress_dtype)
         return self.cclo.start(scenario, count, comm, root_src_dst, function, tag, arithcfg, compression_flags, stream_flags, addr_0, addr_1, addr_2, waitfor=waitfor)        
 
-    def call_sync(self, scenario=CCLOp.nop, count=1, comm=0, root_src_dst=0, function=0, tag=TAG_ANY, compress_dtype=None, stream_flags=0, addr_0=None, addr_1=None, addr_2=None):
+    def call_sync(self, scenario=CCLOp.nop, count=1, comm=0, root_src_dst=0, function=0, tag=TAG_ANY, compress_dtype=None, stream_flags=ACCLStreamFlags.NO_STREAM, addr_0=None, addr_1=None, addr_2=None):
         arithcfg, compression_flags, addr_0, addr_1, addr_2 = self.prepare_call(addr_0, addr_1, addr_2, compress_dtype)
         return self.cclo.call(scenario, count, comm, root_src_dst, function, tag, arithcfg, compression_flags, stream_flags, addr_0, addr_1, addr_2)        
 
@@ -751,10 +757,10 @@ class accl():
             handle.wait()
 
     @self_check_return_value
-    def send(self, comm_id, srcbuf, count, dst, tag=TAG_ANY, from_fpga=False, run_async=False, waitfor=[]):
+    def send(self, comm_id, srcbuf, count, dst, tag=TAG_ANY, from_fpga=False, stream_flags=ACCLStreamFlags.NO_STREAM, run_async=False, waitfor=[]):
         if not from_fpga:
             srcbuf.sync_to_device()
-        handle = self.call_async(scenario=CCLOp.send, count=count, comm=self.communicators[comm_id]["addr"], root_src_dst=dst, tag=tag, addr_0=srcbuf, waitfor=waitfor)
+        handle = self.call_async(scenario=CCLOp.send, count=count, comm=self.communicators[comm_id]["addr"], root_src_dst=dst, tag=tag, stream_flags=stream_flags, addr_0=srcbuf, waitfor=waitfor)
         if run_async:
             return handle 
         else:
