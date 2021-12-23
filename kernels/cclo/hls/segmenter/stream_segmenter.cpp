@@ -15,24 +15,40 @@
 #
 # *******************************************************************************/
 
-#include "streamdefines.h"
-#include "ap_int.h"
+#include "stream_segmenter.h"
 
-using namespace hls;
 using namespace std;
 
-void loopback(STREAM<stream_word> & in, STREAM<stream_word> & out) {
+void stream_segmenter(STREAM<stream_word > & in,
+			STREAM<stream_word > & out,
+			STREAM<segmenter_cmd > & cmd,
+			STREAM<ap_uint<32> > & sts) {
 #pragma HLS INTERFACE axis register both port=in
 #pragma HLS INTERFACE axis register both port=out
+#pragma HLS INTERFACE axis register both port=cmd
+#pragma HLS INTERFACE axis register both port=sts
 #pragma HLS INTERFACE ap_ctrl_none port=return
 
 unsigned const bytes_per_word = DATA_WIDTH/8;
-stream_word tmp;
 
-do{
+//read commands from the command stream
+segmenter_cmd cmd_tmp = STREAM_READ(cmd);
+int nwords = 0;
+while(nwords<cmd_tmp.nwords){
 #pragma HLS PIPELINE II=1
-	tmp = STREAM_READ(in);
+	stream_word tmp = STREAM_READ(in);
+	tmp.dest = cmd_tmp.dest;
+	if(cmd_tmp.indeterminate_btt){
+		tmp.last = tmp.last | (nwords == (cmd_tmp.nwords-1));
+	} else {
+		tmp.last = (nwords == (cmd_tmp.nwords-1));
+	}
 	STREAM_WRITE(out, tmp);
-} while(tmp.last == 0);
-
+	nwords++;
+	if(tmp.last == 1) break;
+}
+//acknowledge by sending back the number of words
+if(cmd_tmp.emit_ack){
+	STREAM_WRITE(sts, nwords);
+}
 }

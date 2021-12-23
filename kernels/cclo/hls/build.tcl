@@ -17,6 +17,7 @@
 
 set command [lindex $argv 0]
 set device [lindex $argv 1]
+set ipname [lindex $argv 2]
 
 set do_sim 0
 set do_syn 0
@@ -50,15 +51,22 @@ switch $command {
     }
 }
 
-open_project build_loopback
+set hlslib_dir "[pwd]/../../../../hlslib/include/hlslib/xilinx/"
+set fw_dir "[pwd]/../../fw/sw_apps/ccl_offload_control/src/"
+set eth_dir "[pwd]/../eth_intf/"
+set seg_dir "[pwd]/../segmenter/"
+set rx_dir "[pwd]/../rxbuf_offload/"
 
-add_files loopback.cpp -cflags "-std=c++14 -I[pwd]/../cclo/hls -DACCL_SYNTHESIS"
-add_files -tb tb_loopback.cpp -cflags "-std=c++14 -I[pwd]/../cclo/hls -DACCL_SYNTHESIS"
+open_project build_$ipname
 
-set_top loopback
+add_files $ipname.cpp -cflags "-std=c++14 -I. -I../ -I$hlslib_dir -I$fw_dir -I$eth_dir -I$seg_dir -I$rx_dir -DACCL_SYNTHESIS"
+if {$do_sim || $do_cosim} {
+    add_files -tb tb_$ipname.cpp -cflags "-std=c++14 -I. -I../ -I$hlslib_dir -I$fw_dir -I$eth_dir -I$seg_dir -I$rx_dir -DACCL_SYNTHESIS"
+}
+
+set_top $ipname
 
 open_solution sol1
-config_export -format xo -library ACCL -output [pwd]/loopback.xo
 
 if {$do_sim} {
     csim_design -clean
@@ -67,10 +75,12 @@ if {$do_sim} {
 if {$do_syn} {
     set_part $device
     create_clock -period 4 -name default
+    config_interface -m_axi_addr64=false
     csynth_design
 }
 
 if {$do_export} {
+    config_export -format ip_catalog
     export_design
 }
 

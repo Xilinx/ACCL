@@ -69,21 +69,21 @@ proc create_hier_cell_udp_tx_subsystem { parentCell nameHier } {
  ] $tx_fifo
 
   # Create TX instances and set properties
-  set vnx_packetizer_0 [ create_bd_cell -type ip -vlnv xilinx.com:hls:vnx_packetizer:1.0 vnx_packetizer_0 ]
+  set udp_packetizer_0 [ create_bd_cell -type ip -vlnv xilinx.com:hls:udp_packetizer:1.0 udp_packetizer_0 ]
 
   # Create interface connections
-  connect_bd_intf_net -intf_net status [get_bd_intf_pins m_axis_sts] [get_bd_intf_pins vnx_packetizer_0/sts_V]
-  connect_bd_intf_net -intf_net control [get_bd_intf_pins s_axi_control] [get_bd_intf_pins vnx_packetizer_0/s_axi_control]
-  connect_bd_intf_net -intf_net command [get_bd_intf_pins s_axis_command] [get_bd_intf_pins vnx_packetizer_0/cmd_V]
+  connect_bd_intf_net -intf_net status [get_bd_intf_pins m_axis_sts] [get_bd_intf_pins udp_packetizer_0/sts_V]
+  connect_bd_intf_net -intf_net control [get_bd_intf_pins s_axi_control] [get_bd_intf_pins udp_packetizer_0/s_axi_control]
+  connect_bd_intf_net -intf_net command [get_bd_intf_pins s_axis_command] [get_bd_intf_pins udp_packetizer_0/cmd_V]
   connect_bd_intf_net -intf_net pkt2fifo [get_bd_intf_pins m_axis_data] [get_bd_intf_pins tx_fifo/M_AXIS]
-  connect_bd_intf_net -intf_net in2pkt [get_bd_intf_pins s_axis_data] [get_bd_intf_pins vnx_packetizer_0/in_r]
-  connect_bd_intf_net -intf_net fifo2out [get_bd_intf_pins tx_fifo/S_AXIS] [get_bd_intf_pins vnx_packetizer_0/out_r]
+  connect_bd_intf_net -intf_net in2pkt [get_bd_intf_pins s_axis_data] [get_bd_intf_pins udp_packetizer_0/in_r]
+  connect_bd_intf_net -intf_net fifo2out [get_bd_intf_pins tx_fifo/S_AXIS] [get_bd_intf_pins udp_packetizer_0/out_r]
 
   # Create port connections
   connect_bd_net -net ap_clk [get_bd_pins ap_clk]  [get_bd_pins tx_fifo/s_axis_aclk] \
-                                                   [get_bd_pins vnx_packetizer_0/ap_clk]
+                                                   [get_bd_pins udp_packetizer_0/ap_clk]
   connect_bd_net -net ap_rst_n [get_bd_pins ap_rst_n] [get_bd_pins tx_fifo/s_axis_aresetn] \
-                                                      [get_bd_pins vnx_packetizer_0/ap_rst_n]
+                                                      [get_bd_pins udp_packetizer_0/ap_rst_n]
 
   # Restore current instance
   current_bd_instance $oldCurInst
@@ -186,7 +186,3 @@ proc create_hier_cell_tcp_tx_subsystem { parentCell nameHier } {
   # Restore current instance
   current_bd_instance $oldCurInst
 }
-
-# Create instance: tx_subsystem
-create_hier_cell_udp_tx_subsystem [current_bd_instance .] udp_tx_subsystem
-create_hier_cell_tcp_tx_subsystem [current_bd_instance .] tcp_tx_subsystem

@@ -33,56 +33,21 @@
 
 //AXIS interfaces to/from MB 
 
-#define CMD_DMA0_TX  0
-#define CMD_DMA0_RX  1
-#define CMD_DMA1_TX  2
-#define CMD_DMA1_RX  3
-#define CMD_NET_TX   4
-#define CMD_NET_PORT 5
-#define CMD_NET_CON  6
-#define CMD_HOST     7
-#define CMD_KRNL_PKT 8
+#define CMD_CALL     0
+#define CMD_NET_PORT 1
+#define CMD_NET_CON  2
+#define CMD_DMA_MOVE 3
 
-#define STS_DMA0_RX  0
-#define STS_DMA0_TX  1
-#define STS_DMA1_RX  2
-#define STS_DMA1_TX  3
-#define STS_NET_RX   4
-#define STS_NET_PORT 5
-#define STS_NET_CON  6
-#define STS_HOST     7 
-#define STS_KRNL_PKT 8
-#define STS_NET_PKT  9
-
-//MAIN SWITCH
-
-#define DATAPATH_DMA_LOOPBACK      1
-#define DATAPATH_DMA_REDUCTION     2
-#define DATAPATH_OFFCHIP_TX        3
-#define DATAPATH_OFFCHIP_REDUCTION 4
-
-#define SWITCH_M_NET_TX    0
-#define SWITCH_M_DMA1_TX   1
-#define SWITCH_M_EXT_KRNL  2
-#define SWITCH_M_ARITH_OP0 3
-#define SWITCH_M_ARITH_OP1 4
-#define SWITCH_M_COMPRESS0 5
-#define SWITCH_M_COMPRESS1 6
-#define SWITCH_M_COMPRESS2 7
-
-#define SWITCH_S_DMA0_RX   0
-#define SWITCH_S_DMA1_RX   1
-#define SWITCH_S_EXT_KRNL  2
-#define SWITCH_S_ARITH_RES 3
-#define SWITCH_S_COMPRESS0 4
-#define SWITCH_S_COMPRESS1 5
-#define SWITCH_S_COMPRESS2 6
+#define STS_CALL     0
+#define STS_NET_PORT 1
+#define STS_NET_CON  2
+#define STS_DMA_MOVE 3
 
 //PACKT CONST
 #define MAX_PACKETSIZE 1536
 #define MAX_SEG_SIZE 1048576
 //DMA CONST 
-#define DMA_MAX_BTT              0x7FFFFF
+#define DMA_MAX_BTT              ((1<<23)/64*64)
 #define DMA_MAX_TRANSACTIONS     20
 #define DMA_TRANSACTION_SIZE     4194304 //info: can correspond to MAX_BTT
 #define MAX_DMA_TAGS 16
@@ -131,26 +96,19 @@
 #define RETVAL_OFFSET     0x1FFC
 #define END_OF_EXCHMEM    0x2000
 
-#ifndef ACCL_BD_SIM
-#define HOSTCTRL_BASEADDR     0x0        
+#ifndef ACCL_BD_SIM        
 #define EXCHMEM_BASEADDR      0x1000
 #define NET_RXPKT_BASEADDR    0x30000
 #define NET_TXPKT_BASEADDR    0x40000
 #define GPIO_BASEADDR         0x40000000
-#define GPIO_TDEST_BASEADDR   0x40010000
-#define SWITCH_BASEADDR       0x44A00000
-#define IRQCTRL_BASEADDR      0x44A10000
-#define TIMER_BASEADDR        0x44A20000
-#else
-#define HOSTCTRL_BASEADDR     0x0        
+#else       
 #define EXCHMEM_BASEADDR      0x1000
 #define NET_RXPKT_BASEADDR    0x3000
 #define NET_TXPKT_BASEADDR    0x4000
 #define GPIO_BASEADDR         0x7000
-#define GPIO_TDEST_BASEADDR   0x8000
-#define SWITCH_BASEADDR       0x9000
-#define IRQCTRL_BASEADDR      0xA000
-#define TIMER_BASEADDR        0xB000
+#define RX_DEQUEUE_BASEADDR   0x8000
+#define RX_ENQUEUE_BASEADDR   0x9000
+#define RX_SEEK_BASEADDR      0xA000
 #endif
 
 //https://www.xilinx.com/html_docs/xilinx2020_2/vitis_doc/managing_interface_synthesis.html#tzw1539734223235
@@ -165,87 +123,66 @@
 #define GPIO_READY_MASK       0x00000001
 #define GPIO_SWRST_MASK       0x00000002
 
-//from AXI interrupt controller v4.1 LogiCORE IP product guide
-//https://www.xilinx.com/support/documentation/ip_documentation/axi_intc/v4_1/pg099-axi-intc.pdf
-#define IRQCTRL_ISR_OFFSET   0x000
-#define IRQCTRL_IPR_OFFSET   0x004
-#define IRQCTRL_IER_OFFSET   0x008
-#define IRQCTRL_IAR_OFFSET   0x00C
-#define IRQCTRL_SIE_OFFSET   0x010
-#define IRQCTRL_CIE_OFFSET   0x014
-#define IRQCTRL_IVR_OFFSET   0x018
-#define IRQCTRL_MER_OFFSET   0x01C
-#define IRQCTRL_IMR_OFFSET   0x020
-#define IRQCTRL_ILR_OFFSET   0x024
-#define IRQCTRL_IVAR_OFFSET  0x100
-#define IRQCTRL_IVEAR_OFFSET 0x200
-#define IRQCTRL_SIZE         0x300
-
-#define IRQCTRL_TIMER_ENABLE             0x01
-#define IRQCTRL_DMA0_CMD_QUEUE_EMPTY     0x02
-#define IRQCTRL_DMA0_STS_QUEUE_NON_EMPTY 0x04
-#define IRQCTRL_DMA2_CMD_QUEUE_EMPTY     0x08
-#define IRQCTRL_DMA2_STS_QUEUE_NON_EMPTY 0x10
-
-#define IRQCTRL_MER_HARDWARE_INTERRUPT_ENABLE 0x2
-#define IRQCTRL_MER_MASTER_ENABLE             0x1
-
-//from AXI Timer v2.0 LogiCORE IP Product Guide
-//https://www.xilinx.com/support/documentation/ip_documentation/axi_timer/v2_0/pg079-axi-timer.pdf
-#define TIMER_CSR0_OFFSET 0x00
-#define TIMER_LR0_OFFSET  0x04
-#define TIMER_CR0_OFFSET  0x08
-#define TIMER_CSR1_OFFSET 0x10
-#define TIMER_LR1_OFFSET  0x14
-#define TIMER_CR1_OFFSET  0x18
-#define TIMER_SIZE        0x20
-//TIMERX_CONTROL_AND_STATUS_REGISTER
-#define TIMER_CSR_CASC_MASK              1 << 11
-#define TIMER_CSR_ENABLE_ALL_MASK        1 << 10 
-#define TIMER_CSR_PWMX_ENABLE_MASK       1 << 9 
-#define TIMER_CSR_INTERRUPT_MASK         1 << 8 
-#define TIMER_CSR_ENABLE_MASK            1 << 7 
-#define TIMER_CSR_INTERRUPT_ENABLE_MASK  1 << 6
-#define TIMER_CSR_LOAD_TIMER_MASK        1 << 5
-#define TIMER_CSR_AUTO_RELOAD_TIMER_MASK 1 << 4
-#define TIMER_CSR_CAPTURE_MASK           1 << 3
-#define TIMER_CSR_GENERATE_MASK          1 << 2
-#define TIMER_CSR_UP_DOWN_MASK           1 << 1
-#define TIMER_CSR_MODE_TIMER_MASK        1 << 0
-
 //EXCEPTIONS
-#define COLLECTIVE_OP_SUCCESS                         0    
-#define DMA_MISMATCH_ERROR                            1     
-#define DMA_INTERNAL_ERROR                            2     
-#define DMA_DECODE_ERROR                              3  
-#define DMA_SLAVE_ERROR                               4 
-#define DMA_NOT_OKAY_ERROR                            5     
-#define DMA_NOT_END_OF_PACKET_ERROR                   6             
-#define DMA_NOT_EXPECTED_BTT_ERROR                    7
-#define DMA_TIMEOUT_ERROR                             8             
-#define CONFIG_SWITCH_ERROR                           9
-#define DEQUEUE_BUFFER_TIMEOUT_ERROR                  10
-#define DEQUEUE_BUFFER_SPARE_BUFFER_STATUS_ERROR      11
-#define RECEIVE_TIMEOUT_ERROR                         12
-#define DEQUEUE_BUFFER_SPARE_BUFFER_DMATAG_MISMATCH   13
-#define DEQUEUE_BUFFER_SPARE_BUFFER_INDEX_ERROR       14
-#define COLLECTIVE_NOT_IMPLEMENTED                    15
-#define RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID       16
-#define OPEN_PORT_NOT_SUCCEEDED                       17
-#define OPEN_CON_NOT_SUCCEEDED                        18
-#define DMA_SIZE_ERROR                                19
-#define ARITH_ERROR                                   20 
-#define PACK_TIMEOUT_STS_ERROR                        21
-#define PACK_SEQ_NUMBER_ERROR                         22
-#define COMPRESSION_ERROR                             23
-#define KRNL_TIMEOUT_STS_ERROR                        24
-#define KRNL_STS_COUNT_ERROR                          25
+#define NO_ERROR                                      0   
+#define DMA_MISMATCH_ERROR                            (1<< 0)    
+#define DMA_INTERNAL_ERROR                            (1<< 1)    
+#define DMA_DECODE_ERROR                              (1<< 2) 
+#define DMA_SLAVE_ERROR                               (1<< 3)
+#define DMA_NOT_OKAY_ERROR                            (1<< 4)    
+#define DMA_NOT_END_OF_PACKET_ERROR                   (1<< 5)            
+#define DMA_NOT_EXPECTED_BTT_ERROR                    (1<< 6)
+#define DMA_TIMEOUT_ERROR                             (1<< 7)            
+#define CONFIG_SWITCH_ERROR                           (1<< 8)
+#define DEQUEUE_BUFFER_TIMEOUT_ERROR                  (1<< 9)
+#define DEQUEUE_BUFFER_SPARE_BUFFER_STATUS_ERROR      (1<<10)
+#define RECEIVE_TIMEOUT_ERROR                         (1<<11)
+#define DEQUEUE_BUFFER_SPARE_BUFFER_DMATAG_MISMATCH   (1<<12)
+#define DEQUEUE_BUFFER_SPARE_BUFFER_INDEX_ERROR       (1<<13)
+#define COLLECTIVE_NOT_IMPLEMENTED                    (1<<14)
+#define RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID       (1<<15)
+#define OPEN_PORT_NOT_SUCCEEDED                       (1<<16)
+#define OPEN_CON_NOT_SUCCEEDED                        (1<<17)
+#define DMA_SIZE_ERROR                                (1<<18)
+#define ARITH_ERROR                                   (1<<19) 
+#define PACK_TIMEOUT_STS_ERROR                        (1<<20)
+#define PACK_SEQ_NUMBER_ERROR                         (1<<21)
+#define COMPRESSION_ERROR                             (1<<22)
+#define KRNL_TIMEOUT_STS_ERROR                        (1<<23)
+#define KRNL_STS_COUNT_ERROR                          (1<<24)
+#define SEGMENTER_EXPECTED_BTT_ERROR                  (1<<25)
+#define DMA_TAG_MISMATCH_ERROR                        (1<<26)
 
-//data movement structures and defines
-#define USE_NONE   0
-#define USE_OP0_DM 1
-#define USE_OP1_DM 2
-#define USE_RES_DM 4
+//define opcodes for move offload
+//each address parameter (op0, op1, res) should carry one of these opcodes
+#define MOVE_NONE      0 //this parameter is not in use
+#define MOVE_STREAM    1 //will move using a stream (no address) - only available on op0 and res
+#define MOVE_IMMEDIATE 2 //will move using an immediate address - available on both ops and res (res will currently ignore address if RES_REMOTE is set)
+#define MOVE_ON_RECV   3 //will resolve address from RX dequeue using immediate src, tag (replacing address), and len - only available on op1
+#define MOVE_INCREMENT 4 //resolve new address by adding together the count and address of the previous move - available on both ops and res
+#define MOVE_REPEAT    5 //use address of previous move - available on both ops and res
+#define MOVE_STRIDE    6 //resolve address by adding an immediate stride count (replacing address) to address of previous move - available on both ops and res
+
+//define compression flags; these are one-hot, one bit per parameter
+//ETH_COMPRESSED is a meta-flag, it's passed in the call to the CCLO,
+//but it does not go down into the move operation, but instead 
+//influences the value of the actual compression flags for each move step
+//e.g. a broadcast with just ETH_COMPRESSED flag turns into:
+//(on root) multiple moves (MOVE_IMMEDIATE then MOVE_STRIDE or MOVE_INCREMENT) with RES_COMPRESSED set
+//(elsewhere) one MOVE_IMMEDIATE+MOVE_ON_RECV with OP1_COMPRESSED
+#define NO_COMPRESSION 0
+#define OP0_COMPRESSED (1<<0)
+#define OP1_COMPRESSED (1<<1)
+#define RES_COMPRESSED (1<<2)
+#define ETH_COMPRESSED (1<<3)
+
+//define if result is stored locally or sent to remote node
+#define RES_LOCAL  0
+#define RES_REMOTE 1
+
+//flags as sent by the host indicating streaming operands
+#define OP0_STREAM 1
+#define RES_STREAM 2
 
 typedef struct{
     uint64_t ptr; //actual byte pointer to the data
@@ -290,19 +227,19 @@ extern uint32_t *cfgmem;
 #else
 
 #include "Stream.h"
-#include "Axi.h"
-extern hlslib::Stream<hlslib::axi::Stream<ap_uint<32> >, 512> cmd_fifos[9];
-extern hlslib::Stream<hlslib::axi::Stream<ap_uint<32> >, 512> sts_fifos[10];
+#include "ap_axi_sdata.h"
+extern hlslib::Stream<ap_axiu<32,0,0,0>, 512> cmd_fifos[4];
+extern hlslib::Stream<ap_axiu<32,0,0,0>, 512> sts_fifos[4];
 extern sem_t mb_irq_mutex;
 
 //push data to stream
-#define putd(channel, value) cmd_fifos[channel].Push(hlslib::axi::Stream<ap_uint<32> >(value, 0))
+#define putd(channel, value) cmd_fifos[channel].Push((ap_axiu<32,0,0,0>){.data=value, .last=0})
 //push data to stream and set control bit
-#define cputd(channel, value) cmd_fifos[channel].Push(hlslib::axi::Stream<ap_uint<32> >(value, 1))
+#define cputd(channel, value) cmd_fifos[channel].Push((ap_axiu<32,0,0,0>){.data=value, .last=1})
 //test-only non-blocking get from stream channel
 #define tngetd(channel) sts_fifos[channel].IsEmpty()
 //blocking get from stream channel
-#define getd(channel) sts_fifos[channel].Pop().data
+#define getd(channel) ((sts_fifos[channel].Pop()).data)
 
 #endif
 
@@ -310,7 +247,6 @@ typedef struct {
     unsigned int addrl;
     unsigned int addrh;
     unsigned int max_len;
-    unsigned int dma_tag;
     unsigned int status;
     unsigned int rx_tag;
     unsigned int rx_len;
@@ -320,6 +256,7 @@ typedef struct {
 #define STATUS_IDLE     0x00
 #define STATUS_ENQUEUED 0x01
 #define STATUS_RESERVED 0x02
+#define STATUS_ERROR    0x04
 
 #define RX_BUFFER_COUNT_OFFSET 0x1000
 
@@ -344,31 +281,15 @@ typedef struct {
 #define MAX_REDUCE_FUNCTIONS 10
 
 typedef struct {
-    unsigned int uncompressed_elem_bits;//bitwidth of one element of uncompressed data
-    unsigned int compressed_elem_bits;  //bitwidth of one element of compressed data
-    unsigned int elem_ratio;            //how many uncompressed elements per compressed element
+    unsigned int uncompressed_elem_bytes;//bitwidth of one element of uncompressed data
+    unsigned int compressed_elem_bytes;  //bitwidth of one element of compressed data
+    unsigned int elem_ratio_log;         //how many uncompressed elements per compressed element
     unsigned int compressor_tdest;      //clane TDEST for targeting the compressor
     unsigned int decompressor_tdest;    //clane TDEST for targeting the compressor
     unsigned int arith_nfunctions;      //number of supported functions (<= MAX_REDUCE_FUNCTIONS)
     unsigned int arith_is_compressed;   //perform arithmetic on compressed (1) or uncompressed (0) values
     unsigned int arith_tdest[MAX_REDUCE_FUNCTIONS]; //arithmetic TDEST
 } datapath_arith_config;
-
-//define compression flags
-#define NO_COMPRESSION 0
-#define OP0_COMPRESSED 1
-#define OP1_COMPRESSED 2
-#define RES_COMPRESSED 4
-#define ETH_COMPRESSED 8
-
-//define stream flags
-#define NO_STREAM  0
-#define OP0_STREAM 1
-#define RES_STREAM 2
-
-//define remote flags
-#define NO_REMOTE 0
-#define RES_REMOTE 1
 
 //Tag definitions
 #define TAG_ANY 0xFFFFFFFF

@@ -1,0 +1,86 @@
+#pragma once
+
+#include "streamdefines.h"
+#include "ap_int.h"
+#include "ap_utils.h"
+#include "ccl_offload_control.h"
+#include "eth_intf.h"
+
+#define STATUS_OFFSET           0
+#define ADDRL_OFFSET            1
+#define ADDRH_OFFSET            2
+#define MAX_LEN_OFFSET          3
+#define DMA_TAG_OFFSET          4
+#define RX_TAG_OFFSET           5
+#define RX_LEN_OFFSET           6
+#define RX_SRC_OFFSET           7
+#define SEQUENCE_NUMBER_OFFSET  8   
+#define SPARE_BUFFER_SIZE       36
+#define SPARE_BUFFER_FIELDS     9       
+
+typedef struct {
+    unsigned int tag;
+    unsigned int len;
+    unsigned int src;
+    unsigned int seqn;
+} rxbuf_signature;
+
+typedef struct {
+    ap_uint<32> index;
+    rxbuf_signature signature;
+} rxbuf_notification;
+
+typedef struct {
+    ap_uint<64> addr;
+    ap_uint<32> index;
+    bool valid;
+} rxbuf_seek_result;
+
+typedef struct {
+    ap_uint<16> index;
+    bool first;
+    bool last;
+} rxbuf_status_control;
+
+typedef struct {
+    bool active;
+    unsigned int index;
+    ap_uint<64> address;
+    unsigned int remaining;
+    eth_header header;
+} rxbuf_session_descriptor;
+
+void rxbuf_enqueue(
+    STREAM<ap_uint<104> > &dma_cmd,
+    STREAM<ap_uint<32> > &inflight_queue,
+    unsigned int *rx_buffers
+);
+
+void rxbuf_dequeue(
+	STREAM<ap_uint<32> > &dma_sts,
+	STREAM<eth_header> &eth_hdr,
+	STREAM<ap_uint<32> > &inflight_queue,
+	STREAM<rxbuf_notification> &notification_queue,
+	unsigned int *rx_buffers
+);
+
+void rxbuf_seek(
+    STREAM<rxbuf_notification> &rx_notify,
+    STREAM<rxbuf_signature> &rx_seek_request,
+    STREAM<rxbuf_seek_result> &rx_seek_ack,
+    STREAM<ap_uint<32> > &rx_release_request,
+	unsigned int *rx_buffers
+);
+
+void rxbuf_session(
+	STREAM<ap_uint<104> > &rxbuf_dma_cmd, //incoming command for a full DMA transfer targeting a RX buffer
+    STREAM<ap_uint<32> > &rxbuf_dma_sts, //status of a rxbuf write (assembled from statuses of fragments)
+	STREAM<ap_uint<32> > &rxbuf_idx_in, //indicates RX buffer index corresponding to DMA command on rxbuf_dma_cmd
+    STREAM<ap_uint<32> > &rxbuf_idx_out, //forward index of completed RX buffer
+    STREAM<ap_uint<104> > &fragment_dma_cmd, //outgoing DMA command for a partial message write to a RX buffer
+	STREAM<ap_uint<32> > &fragment_dma_sts, //status of a fragment write
+    STREAM<eth_notification> &session_notification, //get notified when there is data for a session
+	STREAM<stream_word> &data_in, //incoming data from the PoE
+    STREAM<stream_word> &data_out, //outgoing data to datamover
+    STREAM<eth_header> &eth_hdr_out //forward header of message in completed RX buffer
+);

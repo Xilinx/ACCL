@@ -50,15 +50,17 @@ switch $command {
     }
 }
 
-open_project build_loopback
 
-add_files loopback.cpp -cflags "-std=c++14 -I[pwd]/../cclo/hls -DACCL_SYNTHESIS"
-add_files -tb tb_loopback.cpp -cflags "-std=c++14 -I[pwd]/../cclo/hls -DACCL_SYNTHESIS"
+open_project build_tcp_stack
 
-set_top loopback
+add_files dummy_tcp_stack.cpp -cflags "-std=c++14 -I../cclo/hls/ -I../cclo/hls/eth_intf/ -I../../hlslib/include/hlslib/xilinx -DACCL_SYNTHESIS"
+add_files -tb tb_dummy_tcp_stack.cpp -cflags "-std=c++14 -I../cclo/hls/ -I../cclo/hls/eth_intf/ -I../../hlslib/include/hlslib/xilinx -DACCL_SYNTHESIS"
+
+
+set_top network_krnl
 
 open_solution sol1
-config_export -format xo -library ACCL -output [pwd]/loopback.xo
+config_export -format xo
 
 if {$do_sim} {
     csim_design -clean

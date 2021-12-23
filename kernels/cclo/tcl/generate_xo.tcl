@@ -16,6 +16,12 @@
 # *******************************************************************************/
 
 set elf [lindex $::argv 0]
+set stacktype [lindex $::argv 1]
+set en_dma [lindex $::argv 2]
+set en_arith [lindex $::argv 3]
+set en_compress [lindex $::argv 4]
+set en_extkrnl [lindex $::argv 5]
+set mb_debug_level [lindex $::argv 6]
 
 set kernel_name    "ccl_offload"
 set kernel_vendor  "Xilinx"
@@ -77,11 +83,9 @@ proc edit_core {core} {
 
     config_axi_if $core "m_axi_0" 64 32 32
     config_axi_if $core "m_axi_1" 64 32 32
-    config_axi_if $core "m_axi_2" 64 32 32
 
     ::ipx::associate_bus_interfaces -busif "m_axi_0" -clock "ap_clk" $core
     ::ipx::associate_bus_interfaces -busif "m_axi_1" -clock "ap_clk" $core
-    ::ipx::associate_bus_interfaces -busif "m_axi_2" -clock "ap_clk" $core
     ::ipx::associate_bus_interfaces -busif "s_axi_control" -clock "ap_clk" $core
 
     config_axis_if $core "s_axis_udp_rx_data" "ap_clk" 64 0 0 16 1 0 1 1
@@ -222,7 +226,14 @@ set_property SCOPED_TO_CELLS { control/microblaze_0 } [get_files -all -of_object
 
 #run kernel packaging
 reset_run synth_1
-set_property -name {STEPS.SYNTH_DESIGN.ARGS.MORE OPTIONS} -value {-mode out_of_context} -objects [get_runs synth_1]
+set extra_synth_options "-mode out_of_context"
+if { $en_arith == 1 } { set extra_synth_options "$extra_synth_options -verilog_define ARITH_ENABLE " }
+if { $en_compress == 1 } { set extra_synth_options "$extra_synth_options -verilog_define COMPRESSION_ENABLE " }
+if { $en_dma == 1 } { set extra_synth_options "$extra_synth_options -verilog_define DMA_ENABLE " }
+if { $en_extkrnl == 1 } { set extra_synth_options "$extra_synth_options -verilog_define STREAM_ENABLE " }
+if { $stacktype == "TCP" } { set extra_synth_options "$extra_synth_options -verilog_define TCP_ENABLE " }
+if { $mb_debug_level > 0 } { set extra_synth_options "$extra_synth_options -verilog_define MB_DEBUG_ENABLE " }
+set_property -name {STEPS.SYNTH_DESIGN.ARGS.MORE OPTIONS} -value $extra_synth_options -objects [get_runs synth_1]
 launch_runs synth_1 -jobs 12
 wait_on_run [get_runs synth_1]
 open_run synth_1 -name synth_1

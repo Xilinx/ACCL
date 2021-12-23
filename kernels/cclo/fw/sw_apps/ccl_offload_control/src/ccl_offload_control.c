@@ -34,9 +34,7 @@ void microblaze_enable_interrupts(){sem_post(&mb_irq_mutex);};
 
 static volatile int 		 use_tcp = 1;
 static volatile int 		 dma_tag;
-static volatile unsigned int next_rx_tag 	 = 0;
-static volatile unsigned int num_rx_enqueued = 0;
-static volatile unsigned int timeout 	 	 = 1 << 28;
+static volatile unsigned int timeout = 1 << 28;
 static volatile unsigned int dma_tag_lookup [MAX_DMA_TAGS]; //index of the spare buffer that has been issued with that dma tag. -1 otherwise
 static volatile	unsigned int dma_transaction_size 	= DMA_MAX_BTT;
 static volatile unsigned int max_dma_in_flight 		= DMA_MAX_TRANSACTIONS;
@@ -47,14 +45,11 @@ static communicator world;
 #ifdef ACCL_BD_SIM
 uint32_t sim_cfgmem[16*1024];
 uint32_t *cfgmem = sim_cfgmem;
-hlslib::Stream<hlslib::axi::Stream<ap_uint<32> >, 512> cmd_fifos[9];
-hlslib::Stream<hlslib::axi::Stream<ap_uint<32> >, 512> sts_fifos[10];
+hlslib::Stream<ap_axiu<32,0,0,0>, 512> cmd_fifos[4];
+hlslib::Stream<ap_axiu<32,0,0,0>, 512> sts_fifos[4];
 #else
 uint32_t *cfgmem = (uint32_t *)(0);
 #endif
-
-unsigned int enqueue_rx_buffers(void);
-int  dequeue_rx_buffers(void);
 
 //circular buffer operation
 void cb_init(circular_buffer *cb, unsigned int capacity){
@@ -85,426 +80,6 @@ bool cb_full(circular_buffer *cb){
     return (cb->occupancy == cb->capacity);
 }
 
-//functions to compute datamover configuration and address info
-dm_addr dm_addr_init(uint64_t ptr, bool is_compressed){
-    dm_addr ret;
-    ret.ptr = ptr;
-    ret.elem_ratio = is_compressed ? arcfg.elem_ratio : 1;
-    ret.elem_bytes = is_compressed ? (arcfg.compressed_elem_bits+7)/8 : (arcfg.uncompressed_elem_bits+7)/8;
-    return ret;
-}
-
-void dm_addr_increment(dm_addr *addr, unsigned int nelems){
-    if (nelems % addr->elem_ratio != 0){
-        longjmp(excp_handler, COMPRESSION_ERROR);
-    }
-    addr->ptr += (nelems/addr->elem_ratio)*addr->elem_bytes;
-}
-
-//utility function which enables getting physical address at 
-//a specific element offset from the physical base addres
-uint64_t phys_addr_offset(uint64_t addr, unsigned int offset, bool is_compressed){
-    dm_addr adr = dm_addr_init(addr, is_compressed);
-    dm_addr_increment(&adr, offset);
-    return adr.ptr;
-}
-
-void dm_config_setlen(dm_config * cfg, unsigned int count){
-    cfg->elems_remaining = count;
-    //determine the maximum transfer size, in elements
-    //make sure we always transfer an integer number of both compressed 
-    //and uncompressed elements if compression is in use
-    //NOTE: cfg must have compression attribute set
-    //NOTE: which_dm and compression should be sanitized to make sure they are coherent with each-other
-    unsigned int max_dma_transaction_elems = dma_transaction_size/(arcfg.uncompressed_elem_bits/8);
-    if(cfg->compression != NO_COMPRESSION)
-        max_dma_transaction_elems = (max_dma_transaction_elems / arcfg.elem_ratio) * arcfg.elem_ratio;
-    //clamp max transaction to the max number of elements to transfer in a single DMA command
-    cfg->elems_per_transfer = (max_dma_transaction_elems > cfg->elems_remaining) ? cfg->elems_remaining : max_dma_transaction_elems;
-    //compute compressed and uncompressed byte lengths for the max transaction size
-    unsigned int ulen = (cfg->elems_per_transfer*arcfg.uncompressed_elem_bits+7)/8;
-    if(cfg->compression == NO_COMPRESSION){
-        cfg->op0_len = ulen;
-        cfg->op1_len = ulen;
-        cfg->res_len = ulen;
-    } else {
-        unsigned int clen = ((cfg->elems_per_transfer/arcfg.elem_ratio)*arcfg.compressed_elem_bits+7)/8;
-        //set transaction size for each individual datamover
-        cfg->op0_len = (cfg->compression & OP0_COMPRESSED) ? clen : ulen;
-        cfg->op1_len = (cfg->compression & OP1_COMPRESSED) ? clen : ulen;
-        cfg->res_len = (cfg->compression & RES_COMPRESSED) ? clen : ulen;
-    }
-}
-
-void dm_config_update(dm_config * cfg){
-    //increment addresses (if required)
-    if(cfg->which_dm & USE_OP0_DM){
-        dm_addr_increment(&(cfg->op0_addr), cfg->elems_per_transfer);
-    }
-    if(cfg->which_dm & USE_OP1_DM){
-        dm_addr_increment(&(cfg->op1_addr), cfg->elems_per_transfer);
-    }
-    if(cfg->which_dm & (USE_RES_DM)){
-        dm_addr_increment(&(cfg->res_addr), cfg->elems_per_transfer);
-    }
-    //update remaining and lengths, in preparation for next transfer
-    if(cfg->elems_remaining < cfg->elems_per_transfer){
-        //just update elems_remaining to zero, lengths become irrelevant 
-        cfg->elems_remaining = 0;
-    } else {
-        //update elems remaining
-        cfg->elems_remaining -= cfg->elems_per_transfer;
-        //if updated elems remaining is not zero but less than a full transfer, update lengths
-        if(cfg->elems_remaining > 0 && cfg->elems_remaining < cfg->elems_per_transfer){
-            dm_config_setlen(cfg, cfg->elems_remaining);
-        }
-    }
-}
-
-//shift the addresses of a config by a set amount of elements without changing len (useful for striding)
-void dm_config_stride(dm_config * cfg, unsigned int stride){
-    //increment addresses (if required)
-    if(cfg->which_dm & USE_OP0_DM){
-        dm_addr_increment(&(cfg->op0_addr), stride);
-    }
-    if(cfg->which_dm & USE_OP1_DM){
-        dm_addr_increment(&(cfg->op1_addr), stride);
-    }
-    if(cfg->which_dm & (USE_RES_DM)){
-        dm_addr_increment(&(cfg->res_addr), stride);
-    }
-}
-
-dm_config dm_config_init(   unsigned int count,
-                            unsigned int op0_addr,
-                            unsigned int op1_addr,
-                            unsigned int res_addr,
-                            unsigned int which_dm,
-                            unsigned int remote,
-                            unsigned int compression,
-                            unsigned int stream){
-    dm_config ret;
-    ret.which_dm = which_dm;
-    ret.remote = remote;
-    ret.compression = compression;
-    ret.stream = stream;
-    dm_config_setlen(&ret, count);
-
-    ret.op0_addr = dm_addr_init(op0_addr, (compression & OP0_COMPRESSED) ? true : false) ;
-    ret.op1_addr = dm_addr_init(op1_addr, (compression & OP1_COMPRESSED) ? true : false) ;
-    ret.res_addr = dm_addr_init(res_addr, (compression & RES_COMPRESSED) ? true : false) ;
-
-    return ret;
-}
-
-//IRQ CTRL
-
-//enable interrupts from interrupt controller
-static inline void enable_irq(){
-    //set master enable register  MER
-    Xil_Out32(IRQCTRL_BASEADDR + IRQCTRL_MER_OFFSET, IRQCTRL_MER_HARDWARE_INTERRUPT_ENABLE|IRQCTRL_MER_MASTER_ENABLE);
-}
-//disable interrupts from interrupt controller
-static inline void disable_irq(){
-    //set interrupt enable register IER with correct mask
-    //unset master enable register  MER
-    Xil_Out32(IRQCTRL_BASEADDR + IRQCTRL_MER_OFFSET, 0);
-}
-
-// set interrupt controller
-static inline void set_irq(int mask){
-    //set interrupt enable register IER with correct mask
-    Xil_Out32(IRQCTRL_BASEADDR + IRQCTRL_IER_OFFSET, mask);
-}
-
-// set interrupt controller
-static inline void setup_irq(int mask){
-    disable_irq();
-    //set INTERRUPT_ENABLE_REGISTER with correct mask
-    set_irq(mask);
-    enable_irq();
-}
-
-// acknowledge irq complete
-static inline void ack_irq(int mask){
-    //set INTERRUPT_ACKNOWLEDGE_REGISTER IER with the mask
-    Xil_Out32(IRQCTRL_BASEADDR + IRQCTRL_IAR_OFFSET, mask);
-}
-
-//gets INTERRUPT_PENDING_REGISTER 
-// that holds a 1 in bit i-esim means a that interrupt i-esim occurred  
-static inline int get_irq(void){
-#ifdef ACCL_BD_SIM
-    //in simulation, poll for a pending interrupt
-    while(Xil_In32(IRQCTRL_BASEADDR + IRQCTRL_IPR_OFFSET) == 0);
-#endif
-    return Xil_In32(IRQCTRL_BASEADDR + IRQCTRL_IPR_OFFSET);
-}
-
-//AXI Timer
-
-//creates a timeout that will interrupt the MB code execution 
-static inline void start_timeout(unsigned int time){
-    //1. set timer load register x(TLRx) with time so that TIMING_INTERVAL = (TLRx + 2) * AXI_CLOCK_PERIOD
-    //2. load timer register
-    //3. set counter enable/down/non-autoreload/interrupt enable/clear load /generate mode
-    Xil_Out32(TIMER_BASEADDR + TIMER_LR0_OFFSET, time);
-    Xil_Out32(TIMER_BASEADDR + TIMER_CSR0_OFFSET, TIMER_CSR_LOAD_TIMER_MASK);
-    Xil_Out32(TIMER_BASEADDR + TIMER_CSR0_OFFSET, TIMER_CSR_ENABLE_MASK | TIMER_CSR_INTERRUPT_ENABLE_MASK | TIMER_CSR_UP_DOWN_MASK);
-}
-
-//cancel the timeout
-static inline void cancel_timeout(){
-    //1. set counter disable/interrupt disable
-    Xil_Out32(TIMER_BASEADDR + TIMER_CSR0_OFFSET, TIMER_CSR_INTERRUPT_MASK);
-}
-
-//clear timer interrupt
-static inline void clear_timer_interrupt(){
-    Xil_Out32(TIMER_BASEADDR + TIMER_CSR0_OFFSET, TIMER_CSR_INTERRUPT_MASK);
-}
-
-void stream_isr(void) {
-#ifdef ACCL_BD_SIM
-    sem_wait(&mb_irq_mutex);
-#endif
-    int n_enqueued;
-    int irq_mask;
-    int irq = get_irq();
-    if (irq & IRQCTRL_TIMER_ENABLE){
-        clear_timer_interrupt();
-    }
-    if (irq & (IRQCTRL_DMA0_STS_QUEUE_NON_EMPTY) ){
-        dequeue_rx_buffers();
-    } 
-
-    n_enqueued = enqueue_rx_buffers();
-    
-    if ( n_enqueued == 0 && ((irq & IRQCTRL_DMA0_CMD_QUEUE_EMPTY) || (irq & IRQCTRL_TIMER_ENABLE)) )
-    {   //if no spare buffer is present in the cmd queue disable irq_from empty CMD queue as it could lead to starvation
-        irq_mask = IRQCTRL_DMA0_STS_QUEUE_NON_EMPTY | IRQCTRL_TIMER_ENABLE;
-        setup_irq(irq_mask);
-        start_timeout(100000);
-    }else{
-        irq_mask = IRQCTRL_DMA0_STS_QUEUE_NON_EMPTY | IRQCTRL_DMA0_CMD_QUEUE_EMPTY;
-        setup_irq(irq_mask);
-        cancel_timeout();
-    }
-    ack_irq(irq);
-#ifdef ACCL_BD_SIM
-    sem_post(&mb_irq_mutex);
-#endif
-}
-//DMA functions
-
-//issue a dma command 
-static inline void dma_cmd_addrh_addrl(unsigned int channel, unsigned int btt, unsigned int addrh, unsigned int addrl, unsigned int tag){
-    putd(channel, 0xC0800000 | btt); // 31=DRR 30=EOF 29-24=DSA 23=Type 22-0=BTT
-    putd(channel, addrl);
-    putd(channel, addrh);
-    cputd(channel, 0x2000 | tag); 	 // 15-12=xCACHE 11-8=xUSER 7-4=RSVD 3-0=TAG
-}
-
-//start a DMA operations on a specific channel
-static inline void dma_cmd(unsigned int channel, unsigned int btt, uint64_t addr, unsigned int tag) {
-    unsigned int addrl = addr & 0xFFFFFFFF;
-    unsigned int addrh = (addr >> 32) & 0xFFFFFFFF;
-
-    dma_cmd_addrh_addrl( channel,  btt, addrh, addrl, tag);
-}
-
-static inline void dma_cmd_without_EOF(unsigned int channel, unsigned int btt, uint64_t addr, unsigned int tag) {
-    unsigned int addrl = addr & 0xFFFFFFFF;
-    unsigned int addrh = (addr >> 32) & 0xFFFFFFFF;
-
-    putd(channel, 0x80800000 | btt); // 31=DRR 30=EOF 29-24=DSA 23=Type 22-0=BTT
-    putd(channel, addrl);
-    putd(channel, addrh);
-    cputd(channel, 0x2000 | tag); 	 // 15-12=xCACHE 11-8=xUSER 7-4=RSVD 3-0=TAG
-}
-
-//check DMA status and in case recalls the exception handler
-void check_DMA_status(unsigned int status, unsigned int expected_btt, unsigned int tag, unsigned int indeterminate_btt_mode_active){
-    // 3-0 TAG 
-    // 4 INTERNAL 	ERROR usually a btt=0 trigger this
-    // 5 DECODE 	ERROR address decode error timeout
-    // 6 SLAVE 		ERROR DMA encountered a slave reported error
-    // 7 OKAY		the associated transfer command has been completed with the OKAY response on all intermediate transfers.	 
-    if ((status & 0x000f) != tag ){
-        longjmp(excp_handler, DMA_MISMATCH_ERROR);
-    }
-    if ( status & 0x0010){
-        longjmp(excp_handler, DMA_INTERNAL_ERROR);
-    }
-    if ( status & 0x0020){
-        longjmp(excp_handler, DMA_DECODE_ERROR);
-    }
-    if ( status & 0x0040){
-        longjmp(excp_handler, DMA_SLAVE_ERROR);
-    }
-    if ( !(status & 0x0080)){
-        longjmp(excp_handler, DMA_NOT_OKAY_ERROR);
-    }
-    if(indeterminate_btt_mode_active==1){
-        //30-8 		BYTES received
-        //31 		END OF PACKET indicates that S2MM received a TLAST 
-        if ( !(status & 0x80000000)){
-            longjmp(excp_handler, DMA_NOT_END_OF_PACKET_ERROR);
-        }
-
-        if ( ( (status & 0x7FFFFF00) >> 8) != expected_btt ){
-            longjmp(excp_handler, DMA_NOT_EXPECTED_BTT_ERROR);
-        }
-    }
-}
-
-//AXIS SWITCH management
-
-//configure a acis switch path from a source to a destination
-//PG085 page 26
-//config registers start at 0x40
-static inline void set_switch_datapath(unsigned int base, unsigned int src, unsigned int dst) {
-    Xil_Out32(base+0x40+4*dst, src);
-}
-
-//disable a axis switch master output port
-//PG085 page 26
-//config registers start at 0x40
-static inline void disable_switch_datapath(unsigned int base, unsigned int dst) {
-    Xil_Out32(base+0x40+4*dst, 0x80000000);
-}
-//procedure to apply configurations of axis switch
-//PG085 page 26
-static inline void apply_switch_config(unsigned int base) {
-    //update registers
-    Xil_Out32(base, 2);
-    //wait for the switch to come back online and clear control register
-    unsigned int count = 0;
-    while(Xil_In32(base) != 0){
-        if(timeout != 0 && count >= timeout )
-            longjmp(excp_handler, CONFIG_SWITCH_ERROR);
-        count ++;
-    }
-}
-
-//configure the switches for various scenarios:
-//DATAPATH_DMA_LOOPBACK:
-//  DMA0 RX -> COMPRESS0 -> DMA1 TX
-//
-//DATAPATH_DMA_REDUCTION:  
-//  DMA0 RX -> COMPRESS0 -> Arith Op0
-//  DMA1 RX -> COMPRESS1 -> Arith Op1 
-//  Arith Res -> COMPRESS2 -> DMA1 TX 
-//
-//DATAPATH_OFFCHIP_TX: 
-//  DMA0 RX -> COMPRESS0 -> NET TX
-//
-//DATAPATH_OFFCHIP_REDUCTION: 	
-//  DMA0 RX -> COMPRESS0 -> Arith Op0
-//  DMA1 RX -> COMPRESS1 -> Arith Op1 
-//  Arith Res -> COMPRESS2 -> NET TX 
-//
-//If the stream flag for OP0 is set, connect EXT_KRNL output instead of DMA0 output
-//If the stream flag for RES is set, connect EXT_KRNL input instead of DMA1 input
-void configure_switch(unsigned int scenario, unsigned int streams) {
-    unsigned int op0_s = (streams & OP0_STREAM) ? SWITCH_S_EXT_KRNL : SWITCH_S_DMA0_RX;
-    unsigned int res_m = (streams & RES_STREAM) ? SWITCH_M_EXT_KRNL : SWITCH_M_DMA1_TX;
-    switch (scenario)
-    {
-        case DATAPATH_DMA_LOOPBACK:
-            set_switch_datapath(SWITCH_BASEADDR, op0_s, SWITCH_M_COMPRESS0);
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_COMPRESS0, res_m);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_ARITH_OP0);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_ARITH_OP1);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_NET_TX);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_EXT_KRNL);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_COMPRESS1);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_COMPRESS2);		
-            break;
-        case DATAPATH_DMA_REDUCTION:
-            set_switch_datapath(SWITCH_BASEADDR, op0_s, SWITCH_M_COMPRESS0);
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_COMPRESS0, SWITCH_M_ARITH_OP0);
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_DMA1_RX, SWITCH_M_COMPRESS1);
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_COMPRESS1, SWITCH_M_ARITH_OP1);
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_ARITH_RES, SWITCH_M_COMPRESS2);
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_COMPRESS2, res_m);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_NET_TX);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_EXT_KRNL);	
-            break;
-        case DATAPATH_OFFCHIP_TX:
-            set_switch_datapath(SWITCH_BASEADDR, op0_s, SWITCH_M_COMPRESS0);
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_COMPRESS0, SWITCH_M_NET_TX);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_ARITH_OP0);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_ARITH_OP1);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_DMA1_TX);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_EXT_KRNL);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_COMPRESS1);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_COMPRESS2);	
-            break;
-        case DATAPATH_OFFCHIP_REDUCTION:
-            set_switch_datapath(SWITCH_BASEADDR, op0_s, SWITCH_M_COMPRESS0);
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_COMPRESS0, SWITCH_M_ARITH_OP0);
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_DMA1_RX, SWITCH_M_COMPRESS1);
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_COMPRESS1, SWITCH_M_ARITH_OP1);
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_ARITH_RES, SWITCH_M_COMPRESS2);
-            set_switch_datapath(SWITCH_BASEADDR, SWITCH_S_COMPRESS2, SWITCH_M_NET_TX);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_DMA1_TX);
-            disable_switch_datapath(SWITCH_BASEADDR, SWITCH_M_EXT_KRNL);	
-            break;
-        default:
-            return;
-    }
-    apply_switch_config(SWITCH_BASEADDR);
-}
-
-//Configure external parts of the datapath
-//by setting appropriate TDEST on streams
-static inline void configure_plugins(unsigned int acfg, unsigned int c0cfg, unsigned int c1cfg, unsigned int c2cfg){
-    unsigned int val = 0;
-    val = (c2cfg<<24) | (c1cfg<<16) | (c0cfg<<8) | acfg;
-    Xil_Out32(GPIO_TDEST_BASEADDR, val);
-}
-
-//Configure entire datapath (internal switch and plugins)
-//from operand and result types (compressed/uncompressed) and compression config
-//NOTE:  ETH_COMPRESSED and RES_COMPRESSED should not be set simultaneously
-//since we either transmit over Ethernet or store a result in memory, but never both
-void configure_datapath(unsigned int scenario,
-                        unsigned int function,
-                        unsigned int compression,
-                        unsigned int stream){
-    configure_switch(scenario, stream);
-    int cfg_arith, cfg_clane_op0, cfg_clane_op1, cfg_clane_res;
-    //find and set arithmetic function config
-    if(function >= MAX_REDUCE_FUNCTIONS){
-        longjmp(excp_handler, COMPRESSION_ERROR);
-    }
-    cfg_arith = arcfg.arith_tdest[function];
-    //find and set configs for each compression lane
-    if( (scenario == DATAPATH_DMA_REDUCTION) || (scenario == DATAPATH_OFFCHIP_REDUCTION) ){
-        //we're doing a reduction: op0, op1 -> res
-        if(arcfg.arith_is_compressed){
-            cfg_clane_op0 = (compression & OP0_COMPRESSED) ? NO_COMPRESSION : arcfg.compressor_tdest;
-            cfg_clane_op1 = (compression & OP1_COMPRESSED) ? NO_COMPRESSION : arcfg.compressor_tdest;
-            cfg_clane_res = (compression & (RES_COMPRESSED | ETH_COMPRESSED)) ? NO_COMPRESSION : arcfg.compressor_tdest;
-        } else {
-            cfg_clane_op0 = (compression & OP0_COMPRESSED) ? arcfg.decompressor_tdest : NO_COMPRESSION;
-            cfg_clane_op1 = (compression & OP1_COMPRESSED) ? arcfg.decompressor_tdest : NO_COMPRESSION;
-            cfg_clane_res = (compression & (RES_COMPRESSED | ETH_COMPRESSED)) ? arcfg.decompressor_tdest : NO_COMPRESSION;
-        }
-    } else {
-        //we're doing a copy or send: op0 -> res
-        cfg_clane_op0 = NO_COMPRESSION;
-        cfg_clane_op1 = NO_COMPRESSION;
-        if(compression & OP0_COMPRESSED){
-            cfg_clane_res = (compression & (RES_COMPRESSED | ETH_COMPRESSED)) ? NO_COMPRESSION : arcfg.decompressor_tdest;
-        } else {
-            cfg_clane_res = (compression & (RES_COMPRESSED | ETH_COMPRESSED)) ? arcfg.compressor_tdest : NO_COMPRESSION;
-        } 
-    }
-    configure_plugins(cfg_arith, cfg_clane_op0, cfg_clane_op1, cfg_clane_res);
-}
-
 //retrieves the communicator
 static inline communicator find_comm(unsigned int adr){
     communicator ret;
@@ -530,62 +105,6 @@ static inline void start_packetizer(unsigned int base_addr,unsigned int max_pkts
 
 static inline void start_depacketizer(unsigned int base_addr) {
     SET(base_addr, CONTROL_REPEAT_MASK | CONTROL_START_MASK );
-}
-
-//create/acknowledge the instructions for the external stream packetizer to send a message
-//Input is byte length, which we convert to number of 64B transactions
-void start_krnl_message(unsigned int len){
-    //calculate ceil(len/DATAPATH_WIDTH_BYTES)
-    unsigned int ntransactions = (len+DATAPATH_WIDTH_BYTES-1)/DATAPATH_WIDTH_BYTES;
-    cputd(CMD_KRNL_PKT, ntransactions);
-}
-
-void ack_krnl_message(unsigned int len){
-    unsigned int count;
-    for(count=0; tngetd(STS_KRNL_PKT); count++){
-        if(timeout != 0 && count >= timeout ){
-            longjmp(excp_handler, KRNL_TIMEOUT_STS_ERROR);
-        }
-    }
-    unsigned int ntransactions = getd(STS_KRNL_PKT);
-    if(	ntransactions == ((len+DATAPATH_WIDTH_BYTES-1)/DATAPATH_WIDTH_BYTES) ){
-        return;
-    } else{
-        longjmp(excp_handler, KRNL_STS_COUNT_ERROR);
-    }
-}
-
-//create the instructions for packetizer to send a message. Those infos include, among the others the message header.
-void start_packetizer_message(unsigned int dst_rank, unsigned int count, unsigned int tag, bool to_stream){
-    unsigned int src_rank = world.local_rank;
-    unsigned int seqn = world.ranks[dst_rank].outbound_seq + 1;
-    unsigned int dst = world.ranks[dst_rank].session;
-    unsigned int net_tx = CMD_NET_TX;
-    putd(net_tx, dst); 
-    putd(net_tx, count);
-    putd(net_tx, tag);
-    putd(net_tx, src_rank);
-    putd(net_tx, seqn);
-    cputd(net_tx, to_stream ? tag : 0);
-}
-
-//check that packetizer has finished processing
-static inline void ack_packetizer_message(unsigned int dst_rank, bool update_seqn){
-    unsigned int count;
-    unsigned int sts_stream = STS_NET_PKT;
-    for(count=0; tngetd(sts_stream); count++){
-        if(timeout != 0 && count >= timeout ){
-            longjmp(excp_handler, PACK_TIMEOUT_STS_ERROR);
-        }
-    }
-    unsigned int ack_seq_num = getd(sts_stream);
-    if(update_seqn){
-        if(	world.ranks[dst_rank].outbound_seq+1 == ack_seq_num){
-            world.ranks[dst_rank].outbound_seq += 1;
-        } else{
-            longjmp(excp_handler, PACK_SEQ_NUMBER_ERROR);
-        }
-    }
 }
 
 //connection management
@@ -617,7 +136,7 @@ int openCon()
             putd(CMD_NET_CON, cur_rank_port);
         }
     }
-    ret = COLLECTIVE_OP_SUCCESS;
+    ret = NO_ERROR;
     //wait until the connections status are all returned
     for (int i = 0; i < size -1 ; i++)
     {	
@@ -658,7 +177,7 @@ int openPort()
     success = getd(STS_NET_PORT);
 
     if (success)
-        return COLLECTIVE_OP_SUCCESS;
+        return NO_ERROR;
     else
         return OPEN_PORT_NOT_SUCCEEDED;
 
@@ -667,90 +186,11 @@ int openPort()
 static inline unsigned int segment(unsigned int number_of_bytes,unsigned int segment_size){
     return  (number_of_bytes + segment_size - 1) / segment_size;
 } 
-
-//DMA0/2 TX management 
-
-//enques cmd from DMA that receives from network stack. 
-//RX address queue management
-//maintaint a list of N buffers in device memory
-//queue those buffers for receives
-unsigned int enqueue_rx_buffers(void){
-    unsigned int nbufs = Xil_In32(RX_BUFFER_COUNT_OFFSET);
-    rx_buffer *rx_buf_list = (rx_buffer*)(cfgmem+RX_BUFFER_COUNT_OFFSET/4+1);
-    unsigned int ret = 0, cmd_queue;
-    int i,new_dma_tag;
-    cmd_queue = CMD_DMA0_TX;
-    for(i=0; i<nbufs; i++){
-        //if((rx_buf_list[i].enqueued == 1) && (rx_buf_list[i].dma_tag == next_rx_tag)) return;
-        if(num_rx_enqueued >= 16) return ret;
-        if(rx_buf_list[i].status   != STATUS_IDLE) continue;
-        //found a spare buffer to enqueue 
-        //look for a new dma tag
-        for(new_dma_tag=0; new_dma_tag < MAX_DMA_TAGS && dma_tag_lookup[new_dma_tag] != -1; new_dma_tag++);
-        //new_dma_tag now holds the new dma tag to use
-        if( new_dma_tag >= MAX_DMA_TAGS) return ret; //but something probably wrong in num_rx_enqueued
-    
-        //whatever we find now we can enqueue
-        dma_cmd_addrh_addrl(cmd_queue, DMA_MAX_BTT, rx_buf_list[i].addrh, rx_buf_list[i].addrl, new_dma_tag);
-        rx_buf_list[i].status 	= STATUS_ENQUEUED;
-        rx_buf_list[i].dma_tag 	= new_dma_tag;
-        dma_tag_lookup[new_dma_tag] = i;
-        //next_rx_tag = (next_rx_tag + 1) & 0xf;
-        num_rx_enqueued++;
-        ret ++;
-    }
-
-    return ret;
-}
-
-//dequeue sts from DMA that receives from network stack. 
-int dequeue_rx_buffers(void){
-    //test if rx channel is non-empty and if so, read it
-    unsigned int invalid, status, dma_tag, dma_tx_id, net_rx_id, count = 0;
-    int spare_buffer_idx;
-    unsigned int nbufs = Xil_In32(RX_BUFFER_COUNT_OFFSET);
-    rx_buffer *rx_buf_list = (rx_buffer*)(cfgmem+RX_BUFFER_COUNT_OFFSET/4+1);
-    dma_tx_id = STS_DMA0_TX;
-    net_rx_id = STS_NET_RX;
-
-    do {
-        if(timeout != 0 && count >= timeout )
-            longjmp(excp_handler, DEQUEUE_BUFFER_TIMEOUT_ERROR);
-        count ++;
-        invalid = tngetd(dma_tx_id); 
-        if(invalid == 0){
-            count = 0;
-            status = getd(dma_tx_id);
-            dma_tag = status & 0xf;
-            spare_buffer_idx = dma_tag_lookup[dma_tag];
-            
-            if (rx_buf_list[spare_buffer_idx].status != STATUS_ENQUEUED){
-                longjmp(excp_handler, DEQUEUE_BUFFER_SPARE_BUFFER_STATUS_ERROR);
-            }
-            if( rx_buf_list[spare_buffer_idx].dma_tag != dma_tag ){
-                longjmp(excp_handler, DEQUEUE_BUFFER_SPARE_BUFFER_DMATAG_MISMATCH);
-            } 
-            if(spare_buffer_idx >= nbufs){
-                longjmp(excp_handler, DEQUEUE_BUFFER_SPARE_BUFFER_INDEX_ERROR);
-            }
-            rx_buf_list[spare_buffer_idx].rx_len 		  	= getd(net_rx_id);
-            rx_buf_list[spare_buffer_idx].rx_tag 		  	= getd(net_rx_id);
-            rx_buf_list[spare_buffer_idx].rx_src 		  	= getd(net_rx_id);
-            rx_buf_list[spare_buffer_idx].sequence_number 	= getd(net_rx_id);
-            rx_buf_list[spare_buffer_idx].status 			= STATUS_RESERVED;
-            check_DMA_status(status, rx_buf_list[spare_buffer_idx].rx_len, rx_buf_list[spare_buffer_idx].dma_tag, 1);
-            num_rx_enqueued--;
-            dma_tag_lookup[dma_tag] = -1;
-            
-        }
-    } while (invalid == 0);
-    return 0;
-}
-
+/*
 //configure datapath before calling this method
 //starts one or more datamovers (AXI-MM DMs or Ethernet Packetizer)
 //updates the config when done
-static inline int start_move(	
+static inline int start_move(
                     dm_config * cfg,
                     unsigned int dma_tag,
                     unsigned int dst_rank,
@@ -839,23 +279,82 @@ static inline void ack_move(
         }      
     }
 }
-
+*/
 //configure datapath before calling this method
 //instructs the data plane to move data
-int move(
-    dm_config * cfg,
-    unsigned dst_rank,
-    unsigned mpi_tag
+//use MOVE_IMMEDIATE
+inline int move(
+    uint32_t op0_opcode,
+    uint32_t op1_opcode,
+    uint32_t res_opcode,
+    uint32_t compression_flags,
+    uint32_t remote_flags,
+    uint32_t func_id,
+    uint32_t count,
+    uint32_t comm_offset,
+    uint32_t arcfg_offset,
+    uint64_t op0_addr,
+    uint64_t op1_addr,
+    uint64_t res_addr,
+    uint32_t op0_stride,
+    uint32_t op1_stride,
+    uint32_t res_stride,
+    uint32_t rx_tag,
+    uint32_t rx_src,
+    uint32_t dst_rank,
+    uint32_t mpi_tag
 ) {
-    dma_tag = start_move(cfg, dma_tag, dst_rank, mpi_tag);
-    ack_move(cfg, dst_rank);
-    dm_config_update(cfg);
-    return COLLECTIVE_OP_SUCCESS;
-}
+    uint32_t opcode = 0;
+    opcode |= op0_opcode;
+    opcode |= op1_opcode << 3;
+    opcode |= res_opcode << 6;
+    opcode |= remote_flags << 9;
+    bool res_is_remote = (remote_flags == RES_REMOTE);
+    opcode |= compression_flags << 10;
+    opcode |= func_id << 13;
+    putd(CMD_DMA_MOVE, opcode);
+    putd(CMD_DMA_MOVE, count);
 
-//configure datapath before calling this method
-//segment a logical move into multiple moves
-//provides better overlap of control with data plane operation
+    //get arith config offset if needed, as an offset in a uint32_t array
+    if(op0_opcode != MOVE_NONE && op1_opcode != MOVE_NONE){
+        putd(CMD_DMA_MOVE, arcfg_offset/4);
+    }
+    //get addr for op0, or equivalents
+    if(op0_opcode == MOVE_IMMEDIATE){
+        putd(CMD_DMA_MOVE, (uint32_t)op0_addr);
+        putd(CMD_DMA_MOVE, (uint32_t)(op0_addr>>32));
+    } else if(op0_opcode == MOVE_STRIDE){
+        putd(CMD_DMA_MOVE, op0_stride);
+    }
+    //get addr for op1, or equivalents
+    if(op1_opcode == MOVE_IMMEDIATE){
+        putd(CMD_DMA_MOVE, (uint32_t)op1_addr);
+        putd(CMD_DMA_MOVE, (uint32_t)(op1_addr>>32));
+    } else if(op1_opcode == MOVE_ON_RECV){
+        putd(CMD_DMA_MOVE, rx_src);
+        putd(CMD_DMA_MOVE, rx_tag);
+    } else if(op1_opcode == MOVE_STRIDE){
+        putd(CMD_DMA_MOVE, op1_stride);
+    }
+    //get addr for res, or equivalents
+    if(res_opcode == MOVE_IMMEDIATE){
+        putd(CMD_DMA_MOVE, (uint32_t)res_addr);
+        putd(CMD_DMA_MOVE, (uint32_t)(res_addr>>32));
+    } else if(res_opcode == MOVE_STRIDE){
+        putd(CMD_DMA_MOVE, res_stride);
+    }
+    //get send related stuff, if result is remote or stream
+    if(res_is_remote || res_opcode == MOVE_STREAM){
+        putd(CMD_DMA_MOVE, mpi_tag);
+    }
+    if(res_is_remote){
+        putd(CMD_DMA_MOVE, comm_offset/4);
+        putd(CMD_DMA_MOVE, dst_rank);
+    }
+    return getd(STS_DMA_MOVE);
+}
+/*
+//segment a logical move into multiple MOVE_IMMEDIATEs
 int move_segmented(
     dm_config * cfg,
     unsigned dst_rank,
@@ -891,21 +390,29 @@ int move_segmented(
         ack_move(&ack_dm_config, dst_rank);
         dm_config_update(&ack_dm_config);
     }
-    return COLLECTIVE_OP_SUCCESS;
+    return NO_ERROR;
 }
+*/
 
 //performs a copy using DMA0. DMA0 rx reads while DMA1 tx overwrites
+//use MOVE_IMMEDIATE
 static inline int copy(	unsigned int count,
                         uint64_t src_addr,
                         uint64_t dst_addr,
+                        unsigned int arcfg_offset,
                         unsigned int compression,
                         unsigned int stream) {
-    configure_datapath(DATAPATH_DMA_LOOPBACK, 0, compression, stream);
-    dm_config cfg = dm_config_init(count, src_addr, 0, dst_addr, USE_OP0_DM | USE_RES_DM, NO_REMOTE, compression, stream);
-    return move_segmented(&cfg, 0, 0);
+return move(
+    (stream & OP0_STREAM) ? MOVE_IMMEDIATE : MOVE_STREAM, 
+    MOVE_NONE, 
+    (stream & RES_STREAM) ? MOVE_IMMEDIATE : MOVE_STREAM, 
+    compression, RES_LOCAL, 0,
+    count, 0, arcfg_offset, src_addr, 0, dst_addr, 0, 0, 0,
+    0, 0, 0, 0);
 }
-
+/*
 //performs an accumulate using DMA1 and DMA0. DMA0 rx reads op1 DMA1 rx reads op2 while DMA1 tx back to dst buffer
+//use MOVE_IMMEDIATE
 int combine(unsigned int count,
                     unsigned int function,
                     uint64_t op0_addr,
@@ -919,8 +426,7 @@ int combine(unsigned int count,
 }
 
 //transmits a buffer to a rank of the world communicator
-//op0 -> network
-//TODO: safer implementation.
+//use MOVE_IMMEDIATE
 int send(
     unsigned int dst_rank,
     unsigned int count,
@@ -968,7 +474,6 @@ int seek_rx_buffer(
     unsigned int nbufs = Xil_In32(RX_BUFFER_COUNT_OFFSET);
     rx_buffer *rx_buf_list = (rx_buffer*)(cfgmem+RX_BUFFER_COUNT_OFFSET/4+1);
     for(i=0; i<nbufs; i++){	
-        microblaze_disable_interrupts();
         if(rx_buf_list[i].status == STATUS_RESERVED)
         {
             if((rx_buf_list[i].rx_src == src_rank) && (rx_buf_list[i].rx_len == count))
@@ -977,12 +482,10 @@ int seek_rx_buffer(
                 {
                     //only now advance sequence number
                     world.ranks[src_rank].inbound_seq++;
-                    microblaze_enable_interrupts();
                     return i;
                 }
             }
         }
-        microblaze_enable_interrupts();
     }
     return -1;
 }
@@ -991,6 +494,7 @@ int seek_rx_buffer(
 //matches count, src and tag if tag is not ANY
 //returns the index of the spare_buffer
 //timeout is jumps to exception handler
+//useful as infrastructure for [I]MProbe/[I]MRecv
 int wait_on_rx(	unsigned int src_rank,
                     unsigned int count,
                     unsigned int src_tag){
@@ -1003,6 +507,7 @@ int wait_on_rx(	unsigned int src_rank,
 }
 
 //waits for a messages to come and move their contents in a buffer
+//use MOVE_ON_RECV
 int recv(	unsigned int src_rank,	
             unsigned int count,
             uint64_t dst_addr,
@@ -1078,12 +583,13 @@ int recv(	unsigned int src_rank,
         rx_buf_list[buf_idx].status = STATUS_IDLE;
         microblaze_enable_interrupts();
     }
-    return COLLECTIVE_OP_SUCCESS;
+    return NO_ERROR;
 }
 
-//1) receives from a rank 
+//1) receives from a rank
 //2) sums with a a buffer 
 //3) the result is saved in (possibly another) local buffer
+//use MOVE_ON_RECV
 int fused_recv_reduce(
         unsigned int src_rank,
         unsigned int count,
@@ -1152,12 +658,13 @@ int fused_recv_reduce(
         microblaze_enable_interrupts();
     }
 
-    return COLLECTIVE_OP_SUCCESS;
+    return NO_ERROR;
 }
 
 //1) receives from a rank 
 //2) sums with a a buffer
 //3) result is sent to another rank
+//use MOVE_ON_RECV
 int fused_recv_reduce_send(
         unsigned int src_rank,
         unsigned int dst_rank,
@@ -1226,10 +733,11 @@ int fused_recv_reduce_send(
         microblaze_enable_interrupts();
     }
 
-    return COLLECTIVE_OP_SUCCESS;
+    return NO_ERROR;
 }
 
 //receives from a rank and forwards to another rank 
+//use MOVE_ON_RECV
 int relay(
         unsigned int src_rank,
         unsigned int dst_rank,
@@ -1294,12 +802,13 @@ int relay(
         microblaze_enable_interrupts();
     }
 
-    return COLLECTIVE_OP_SUCCESS;
+    return NO_ERROR;
 }
 
 //COLLECTIVES
 
-//root read multiple times the same segment and send it to each rank before moving to the next part of the buffer to be transmitted. 
+//root read multiple times the same segment and send it to each rank before moving to the next part of the buffer to be transmitted.
+//use MOVE_IMMEDIATE and MOVE_INCREMENTING and MOVE_REPEATING in sequence 
 int broadcast(  unsigned int count,
                 unsigned int src_rank,
                 uint64_t buf_addr,
@@ -1350,7 +859,7 @@ int broadcast(  unsigned int count,
             //TODO: this can be interleaved with command issuing to avoid pausing
             dm_config_update(&cfg);
         }
-        return COLLECTIVE_OP_SUCCESS;
+        return NO_ERROR;
     }else{
         //on non-root odes we only care about ETH_COMPRESSED and RES_COMPRESSED
         //so mask out OP0_COMPRESSED
@@ -1362,6 +871,7 @@ int broadcast(  unsigned int count,
 }
 
 //scatter segment at a time. root sends each rank a segment in a round robin fashion 
+//use MOVE_IMMEDIATE and MOVE_INCREMENTING and MOVE_STRIDE in sequence 
 int scatter(unsigned int count,
             unsigned int src_rank,
             uint64_t src_buf_addr,
@@ -1426,7 +936,7 @@ int scatter(unsigned int count,
         uint64_t copy_addr = phys_addr_offset(src_buf_addr, count*src_rank, (compression & OP0_COMPRESSED) ? true : false);
         copy(count, copy_addr, dst_buf_addr, compression, NO_STREAM);
         //done
-        return COLLECTIVE_OP_SUCCESS;
+        return NO_ERROR;
     }else{
         //on non-root odes we only care about ETH_COMPRESSED and RES_COMPRESSED
         //so mask out OP0_COMPRESSED
@@ -1438,6 +948,8 @@ int scatter(unsigned int count,
 }
 
 //naive gather: non root relay data to the root. root copy segments in dst buffer as they come.
+//on root, SEND_ON_RECV
+//elsewhere MOVE_STRIDE then SEND_ON_RECV for relay
 int gather( unsigned int count,
             unsigned int root_rank,
             uint64_t src_buf_addr,
@@ -1445,7 +957,7 @@ int gather( unsigned int count,
             unsigned int compression){
     uint64_t tmp_buf_addr;
     unsigned int i,curr_pos, next_in_ring, prev_in_ring, number_of_shift;
-    int ret = COLLECTIVE_OP_SUCCESS;
+    int ret = NO_ERROR;
 
     next_in_ring = (world.local_rank + 1			  ) % world.size	;
     prev_in_ring = (world.local_rank + world.size - 1 ) % world.size	;
@@ -1457,7 +969,7 @@ int gather( unsigned int count,
         //recv: keep RES_COMPRESSED and ETH_COMPRESSED, reset OP0_COMPRESSED
 
         //receive from all members of the communicator
-        for(i=0, curr_pos = prev_in_ring; i<world.size && ret == COLLECTIVE_OP_SUCCESS; i++, curr_pos = (curr_pos + world.size - 1 ) % world.size){
+        for(i=0, curr_pos = prev_in_ring; i<world.size && ret == NO_ERROR; i++, curr_pos = (curr_pos + world.size - 1 ) % world.size){
             //TODO: optimize receives; what we want is to move any data which arrives into the correct segment of the buffer
             //currently this will go sequentially through the segments, which is slow and also requires more spare RX buffers
             tmp_buf_addr = phys_addr_offset(dst_buf_addr, count*curr_pos, (compression & RES_COMPRESSED) ? true : false);
@@ -1494,7 +1006,7 @@ int allgather(  unsigned int count,
                 unsigned int compression){
     uint64_t tmp_buf_addr;
     unsigned int i,curr_pos, next_in_ring, prev_in_ring;
-    int ret = COLLECTIVE_OP_SUCCESS;
+    int ret = NO_ERROR;
 
     //compression is tricky for the relay: we've already received into the destination buffer 
     //with associated flag RES_COMPRESSED; this buffer becomes the source for a send
@@ -1508,7 +1020,7 @@ int allgather(  unsigned int count,
     //send our data to next in ring
     ret += send(next_in_ring, count, src_buf_addr, TAG_ANY, compression & ~(RES_COMPRESSED), NO_STREAM);
     //receive from all members of the communicator
-    for(i=0, curr_pos = world.local_rank; i<world.size && ret == COLLECTIVE_OP_SUCCESS; i++, curr_pos = (curr_pos + world.size - 1 ) % world.size){
+    for(i=0, curr_pos = world.local_rank; i<world.size && ret == NO_ERROR; i++, curr_pos = (curr_pos + world.size - 1 ) % world.size){
         tmp_buf_addr = phys_addr_offset(dst_buf_addr, count*curr_pos, (compression & RES_COMPRESSED) ? true : false);
         if(curr_pos==world.local_rank){
             ret	= copy(count, src_buf_addr, tmp_buf_addr, compression & ~(ETH_COMPRESSED), NO_STREAM);
@@ -1578,7 +1090,7 @@ int scatter_reduce( unsigned int count,
     curr_send_addr = phys_addr_offset(src_addr, count*curr_send_chunk, (compression & OP0_COMPRESSED) ? true : false);
     curr_count = (curr_send_chunk == (world.local_rank-1)) ? count_tail : count;   
     ret = send(next_in_ring, curr_count, curr_send_addr, TAG_ANY, compression & (ETH_COMPRESSED | OP0_COMPRESSED), NO_STREAM);
-    if(ret != COLLECTIVE_OP_SUCCESS) return ret;
+    if(ret != NO_ERROR) return ret;
     //2. for n-1 times sum the chunk that is coming from previous rank with your chunk at the same location. then forward the result to
     // the next rank in the ring
     for (i = 0; i < world.size-2; ++i, curr_recv_chunk=(curr_recv_chunk + world.size - 1) % world.size)
@@ -1589,7 +1101,7 @@ int scatter_reduce( unsigned int count,
         //TODO: figure out compression
         curr_count = (curr_recv_chunk == (world.local_rank-1)) ? count_tail : count;
         ret = fused_recv_reduce_send(prev_in_ring, next_in_ring, curr_count, func, curr_recv_addr, TAG_ANY, compression & (ETH_COMPRESSED | OP0_COMPRESSED)); 
-        if(ret != COLLECTIVE_OP_SUCCESS) return ret;
+        if(ret != NO_ERROR) return ret;
     }
     //at last iteration (n-1) you can sum and save the result at the same location (which is the right place to be)
     if (world.size > 1){
@@ -1597,9 +1109,9 @@ int scatter_reduce( unsigned int count,
         curr_send_addr = phys_addr_offset(dst_addr, count*curr_recv_chunk, (compression & RES_COMPRESSED) ? true : false);
         curr_count = (curr_recv_chunk == (world.local_rank-1)) ? count_tail : count;
         ret = fused_recv_reduce(prev_in_ring, curr_count, func, curr_recv_addr, curr_send_addr, TAG_ANY, compression); 
-        if(ret != COLLECTIVE_OP_SUCCESS) return ret;
+        if(ret != NO_ERROR) return ret;
     }
-    return COLLECTIVE_OP_SUCCESS;
+    return NO_ERROR;
 }
 
 //2 stage allreduce: distribute sums across the ranks. smaller bandwidth between ranks and use multiple arith at the same time. scatter_reduce+all_gather
@@ -1629,16 +1141,17 @@ int allreduce(  unsigned int count,
         curr_send_addr = phys_addr_offset(src_addr, count*curr_recv_chunk, (compression & OP0_COMPRESSED) ? true : false);
         curr_count = (curr_send_chunk == (world.size - 1)) ? count_tail : count;
         ret = send(next_in_ring, curr_count, curr_send_addr, TAG_ANY, compression, NO_STREAM);
-        if(ret != COLLECTIVE_OP_SUCCESS) return ret;
+        if(ret != NO_ERROR) return ret;
         //6. receive the reduced results from previous rank and put into correct dst buffer position
         curr_recv_addr = phys_addr_offset(dst_addr, count*curr_recv_chunk, (compression & RES_COMPRESSED) ? true : false);
         curr_count = (curr_recv_chunk == (world.size - 1)) ? count_tail : count;
         ret = recv(prev_in_ring, curr_count, curr_recv_addr, TAG_ANY, compression);
-        if(ret != COLLECTIVE_OP_SUCCESS) return ret;
+        if(ret != NO_ERROR) return ret;
     }
 
-    return COLLECTIVE_OP_SUCCESS;
+    return NO_ERROR;
 }
+*/
 
 //startup and main
 
@@ -1651,24 +1164,13 @@ void check_hwid(void){
 
 //initialize the system
 void init(void) {
-    int myoffset;
-    // Register irq handler
-#ifndef ACCL_BD_SIM
-    microblaze_register_handler((XInterruptHandler)stream_isr,(void*)0);
-#endif
-    microblaze_enable_interrupts();
-
     // initialize exchange memory to zero.
+    int myoffset;
     for ( myoffset = EXCHMEM_BASEADDR; myoffset < END_OF_EXCHMEM; myoffset +=4) {
         Xil_Out32(myoffset, 0);
     }
     // Check hardware ID
     check_hwid();
-    //initialize dma tag
-    dma_tag = 0;
-    for(int i=0; i < MAX_DMA_TAGS; i++){
-        dma_tag_lookup[i]=-1;
-    }
     //deactivate reset of all peripherals
     SET(GPIO_DATA_REG, GPIO_SWRST_MASK);
     //enable access from host to exchange memory by removing reset of interface
@@ -1680,27 +1182,10 @@ void init(void) {
 //since this cancels any dma movement in flight and 
 //clears the queues it's necessary to reset the dma tag and dma_tag_lookup
 void encore_soft_reset(void){
-    int myoffset;
-    //disable interrupts (since this procedure will toggle the irq pin)
-    microblaze_disable_interrupts();
-    setup_irq(0);
     //1. activate reset pin  
     CLR(GPIO_DATA_REG, GPIO_SWRST_MASK);
-    //2. clean up (exchange memory and static variables)
-    for ( myoffset = EXCHMEM_BASEADDR; myoffset < END_OF_EXCHMEM; myoffset +=4) {
-        Xil_Out32(myoffset, 0);
-    }
-    num_rx_enqueued = 0;
-    dma_tag = 0;
-    //next_rx_tag = 0;
-    //clear dma lookup table
-    for(int i=0; i < MAX_DMA_TAGS; i++){
-        dma_tag_lookup[i]=-1;
-    }
-    //3. recheck hardware ID
-    check_hwid();
-    //4. then deactivate reset of all other blocks
-    SET(GPIO_DATA_REG, GPIO_SWRST_MASK);
+    //2. re-initialize
+    init();
 }
 
 //poll for a call from the host
@@ -1709,7 +1194,7 @@ static inline void wait_for_call(void) {
     unsigned int invalid;
     do {
         invalid = 0;
-        invalid += tngetd(CMD_HOST);
+        invalid += tngetd(CMD_CALL);
     } while (invalid);
 }
 
@@ -1717,7 +1202,7 @@ static inline void wait_for_call(void) {
 void finalize_call(unsigned int retval) {
     Xil_Out32(RETVAL_OFFSET, retval);
     // Done: Set done and idle
-    putd(STS_HOST, retval);
+    putd(STS_CALL, retval);
 }
 
 int run_accl() {
@@ -1741,21 +1226,21 @@ int run_accl() {
         wait_for_call();
         
         //read parameters from host command queue
-        scenario            = getd(CMD_HOST);
-        count               = getd(CMD_HOST);
-        comm                = getd(CMD_HOST);
-        root_src_dst        = getd(CMD_HOST);
-        function            = getd(CMD_HOST);
-        msg_tag             = getd(CMD_HOST);
-        datapath_cfg        = getd(CMD_HOST);
-        compression_flags   = getd(CMD_HOST);
-        stream_flags        = getd(CMD_HOST);
-        op0_addrl           = getd(CMD_HOST);
-        op0_addrh           = getd(CMD_HOST);
-        op1_addrl           = getd(CMD_HOST);
-        op1_addrh           = getd(CMD_HOST);
-        res_addrl           = getd(CMD_HOST);
-        res_addrh           = getd(CMD_HOST);
+        scenario            = getd(CMD_CALL);
+        count               = getd(CMD_CALL);
+        comm                = getd(CMD_CALL);
+        root_src_dst        = getd(CMD_CALL);
+        function            = getd(CMD_CALL);
+        msg_tag             = getd(CMD_CALL);
+        datapath_cfg        = getd(CMD_CALL);
+        compression_flags   = getd(CMD_CALL);
+        stream_flags        = getd(CMD_CALL);
+        op0_addrl           = getd(CMD_CALL);
+        op0_addrh           = getd(CMD_CALL);
+        op1_addrl           = getd(CMD_CALL);
+        op1_addrh           = getd(CMD_CALL);
+        res_addrl           = getd(CMD_CALL);
+        res_addrh           = getd(CMD_CALL);
 
         op0_addr = ((uint64_t) op0_addrh << 32) | op0_addrl;
         op1_addr = ((uint64_t) op1_addrh << 32) | op1_addrl;
@@ -1773,15 +1258,6 @@ int run_accl() {
                 retval = 0;
                 switch (function)
                 {
-                    case HOUSEKEEP_IRQEN:
-                        setup_irq(IRQCTRL_DMA0_CMD_QUEUE_EMPTY|IRQCTRL_DMA0_STS_QUEUE_NON_EMPTY);
-                        microblaze_enable_interrupts();
-                        break;
-                    case HOUSEKEEP_IRQDIS:
-                        microblaze_disable_interrupts();
-                        setup_irq(0);
-                        clear_timer_interrupt();
-                        break;
                     case HOUSEKEEP_SWRST:
                         encore_soft_reset();
                         break;
@@ -1809,24 +1285,18 @@ int run_accl() {
                     case SET_STACK_TYPE:
                         use_tcp = count;
                         break;
-                    case START_PROFILING:
-                        retval = COLLECTIVE_OP_SUCCESS;
-                        break;
-                    case END_PROFILING:
-                        retval = COLLECTIVE_OP_SUCCESS;
-                        break;
                     case SET_DMA_TRANSACTION_SIZE:
                         retval = DMA_NOT_EXPECTED_BTT_ERROR;
                         if(count < DMA_MAX_BTT){
                             dma_transaction_size = count;
-                            retval = COLLECTIVE_OP_SUCCESS;
+                            retval = NO_ERROR;
                         }
                         break;
                     case SET_MAX_DMA_TRANSACTIONS:
                         retval = DMA_NOT_OKAY_ERROR;
                         if(count < DMA_MAX_TRANSACTIONS){
                             max_dma_in_flight = count;
-                            retval = COLLECTIVE_OP_SUCCESS;
+                            retval = NO_ERROR;
                         }
                         break;
                     default:
@@ -1834,41 +1304,41 @@ int run_accl() {
                 }
                 
                 break;
-            case XCCL_COMBINE:
-                retval = combine(count, function, op0_addr, op1_addr, res_addr, compression_flags, stream_flags);
-                break;
             case XCCL_COPY:
-                retval = copy(count, op0_addr, res_addr, compression_flags, stream_flags);
+                retval = copy(count, op0_addr, res_addr, datapath_cfg, compression_flags, stream_flags);
                 break;
-            case XCCL_SEND:
-                retval = send(root_src_dst, count, op0_addr, msg_tag, compression_flags, stream_flags);
-                break;
-            case XCCL_RECV:
-                retval = recv(root_src_dst, count, res_addr, msg_tag, compression_flags);
-                break;
-            case XCCL_BCAST:
-                retval = broadcast(count, root_src_dst, op0_addr, compression_flags);
-                break;
-            case XCCL_SCATTER:
-                retval = scatter(count, root_src_dst, op0_addr, res_addr, compression_flags);
-                break;
-            case XCCL_GATHER:
-                retval = gather(count, root_src_dst, op0_addr, res_addr, compression_flags);
-                break;
-            case XCCL_REDUCE:
-                retval = reduce(count, function, root_src_dst, op0_addr, res_addr, compression_flags);
-                break;
-            case XCCL_ALLGATHER:
-                retval = allgather(count, op0_addr, res_addr, compression_flags);
-                break;
-            case XCCL_ALLREDUCE:
-                retval = allreduce(count, function, op0_addr, res_addr, compression_flags);
-                break;
-            case XCCL_REDUCE_SCATTER:
-                retval = scatter_reduce(count, function, op0_addr, res_addr, compression_flags);
-                break;
+            // case XCCL_COMBINE:
+            //     retval = combine(count, function, op0_addr, op1_addr, res_addr, compression_flags, stream_flags);
+            //     break;
+            // case XCCL_SEND:
+            //     retval = send(root_src_dst, count, op0_addr, msg_tag, compression_flags, stream_flags);
+            //     break;
+            // case XCCL_RECV:
+            //     retval = recv(root_src_dst, count, res_addr, msg_tag, compression_flags);
+            //     break;
+            // case XCCL_BCAST:
+            //     retval = broadcast(count, root_src_dst, op0_addr, compression_flags);
+            //     break;
+            // case XCCL_SCATTER:
+            //     retval = scatter(count, root_src_dst, op0_addr, res_addr, compression_flags);
+            //     break;
+            // case XCCL_GATHER:
+            //     retval = gather(count, root_src_dst, op0_addr, res_addr, compression_flags);
+            //     break;
+            // case XCCL_REDUCE:
+            //     retval = reduce(count, function, root_src_dst, op0_addr, res_addr, compression_flags);
+            //     break;
+            // case XCCL_ALLGATHER:
+            //     retval = allgather(count, op0_addr, res_addr, compression_flags);
+            //     break;
+            // case XCCL_ALLREDUCE:
+            //     retval = allreduce(count, function, op0_addr, res_addr, compression_flags);
+            //     break;
+            // case XCCL_REDUCE_SCATTER:
+            //     retval = scatter_reduce(count, function, op0_addr, res_addr, compression_flags);
+            //     break;
             default:
-                retval = COLLECTIVE_OP_SUCCESS;
+                retval = NO_ERROR;
                 break;
         }
 

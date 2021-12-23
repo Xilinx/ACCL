@@ -16,8 +16,14 @@
 # *******************************************************************************/
 set fpgapart [lindex $::argv 0]
 set boardpart [lindex $::argv 1]
-set debug [lindex $::argv 2]
+set hw_debug_level [lindex $::argv 2]
 set xsafile [lindex $::argv 3]
+set stacktype [lindex $::argv 4]
+set en_dma [lindex $::argv 5]
+set en_arith [lindex $::argv 6]
+set en_compress [lindex $::argv 7]
+set en_extkrnl [lindex $::argv 8]
+set mb_debug_level [lindex $::argv 9]
 
 # create project with correct target
 create_project -force ccl_offload_ex ./ccl_offload_ex -part $fpgapart -rtl_kernel
@@ -33,22 +39,23 @@ set_property  ip_repo_paths  {./hls/} [current_project]
 update_ip_catalog
 
 #rebuild bd
-source  -notrace tcl/rebuild_bd.tcl
+source -notrace tcl/rebuild_bd.tcl
+create_root_design $stacktype $en_dma $en_arith $en_compress $en_extkrnl $mb_debug_level
 
 #add debug if requested
-if [string equal $debug "dma"] {
+if [string equal $hw_debug_level "dma"] {
   puts "Adding DMA debug to block design"
   source  -notrace tcl/debug_dma.tcl
-} elseif [string equal $debug "pkt"] {
+} elseif [string equal $hw_debug_level "pkt"] {
   puts "Adding (de)packetizer debug to block design"
   source  -notrace tcl/debug_pkt.tcl
-} elseif [string equal $debug "arith"] {
+} elseif [string equal $hw_debug_level "arith"] {
   puts "Adding arithmetic debug to block design"
   source  -notrace tcl/debug_arith.tcl
-} elseif [string equal $debug "control"] {
+} elseif [string equal $hw_debug_level "control"] {
   puts "Adding control debug to block design"
   source  -notrace tcl/debug_control.tcl
-} elseif [string equal $debug "all"] {
+} elseif [string equal $hw_debug_level "all"] {
   puts "Adding all debug cores to block design"
   source  -notrace tcl/debug_dma.tcl
   source  -notrace tcl/debug_pkt.tcl

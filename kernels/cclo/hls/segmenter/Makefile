@@ -1,4 +1,4 @@
-/*******************************************************************************
+# /*******************************************************************************
 #  Copyright (C) 2021 Xilinx, Inc
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,6 +15,13 @@
 #
 # *******************************************************************************/
 
-#include "streamdefines.h"
+DEVICE=xcu250-figd2104-2L-e
+IPNAME=stream_segmenter
+SEGMENTER_IP=build_$(IPNAME)/sol1/impl/ip/xilinx_com_hls_$(IPNAME)_1_0.zip
+TARGET=ip
 
-void fp_hp_stream_conv(STREAM<stream_word> & in, STREAM<stream_word> & out);
+all: $(SEGMENTER_IP) 
+
+$(SEGMENTER_IP): ../build.tcl $(IPNAME).cpp tb_$(IPNAME).cpp
+	vitis_hls $< -tclargs $(TARGET) $(DEVICE) $(IPNAME)
+

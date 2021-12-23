@@ -50,11 +50,10 @@ switch $command {
     }
 }
 
-
 open_project build_fp_hp_stream_conv
 
-add_files fp_hp_stream_conv.cpp -cflags "-std=c++14"
-add_files -tb tb.cpp -cflags "-std=c++14"
+add_files fp_hp_stream_conv.cpp -cflags "-std=c++14 -I[pwd]/../cclo/hls -DACCL_SYNTHESIS"
+add_files -tb tb.cpp -cflags "-std=c++14 -I[pwd]/../cclo/hls -DACCL_SYNTHESIS"
 
 set_top fp_hp_stream_conv
 

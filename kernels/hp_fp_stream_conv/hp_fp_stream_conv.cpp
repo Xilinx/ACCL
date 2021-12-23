@@ -15,16 +15,13 @@
 #
 # *******************************************************************************/
 
-#include "ap_axi_sdata.h"
-#include "hls_stream.h"
 #include "ap_int.h"
 #include "hp_fp_stream_conv.h"
 
 using namespace hls;
 using namespace std;
 
-void hp_fp_stream_conv(	stream<ap_axiu<DATA_WIDTH,0,0,0> > & in,
-                    stream<ap_axiu<DATA_WIDTH,0,0,0> > & out) {
+void hp_fp_stream_conv(STREAM<stream_word> & in, STREAM<stream_word> & out) {
 #pragma HLS INTERFACE axis register both port=in
 #pragma HLS INTERFACE axis register both port=out
 #pragma HLS INTERFACE ap_ctrl_none port=return
@@ -32,15 +29,15 @@ void hp_fp_stream_conv(	stream<ap_axiu<DATA_WIDTH,0,0,0> > & in,
     unsigned const simd = DATA_WIDTH / 32;
 
     int done = 0; 
-    ap_axiu<DATA_WIDTH,0,0,0> in_block;
+    stream_word in_block;
     ap_uint<DATA_WIDTH/2> in_data1, in_data2;
     ap_uint<DATA_WIDTH/16> in_keep1, in_keep2;
     ap_uint<DATA_WIDTH> res;
-    ap_axiu<DATA_WIDTH,0,0,0> wword;
+    stream_word wword;
 
     while(done == 0) {
 #pragma HLS PIPELINE II=1
-        in_block = in.read();
+        in_block = STREAM_READ(in);
         in_data1 = in_block.data(DATA_WIDTH/2-1,0);
         in_data2 = in_block.data(DATA_WIDTH-1,DATA_WIDTH/2);
         in_keep1 = in_block.keep(DATA_WIDTH/16-1,0);
@@ -59,7 +56,7 @@ void hp_fp_stream_conv(	stream<ap_axiu<DATA_WIDTH,0,0,0> > & in,
         }
         wword.data = res;
         wword.last = (in_block.last == 1) && (in_keep2 == 0);
-        out.write(wword);
+        STREAM_WRITE(out, wword);
         if(wword.last == 1){
             break;
         }
@@ -77,7 +74,7 @@ void hp_fp_stream_conv(	stream<ap_axiu<DATA_WIDTH,0,0,0> > & in,
         }
         wword.data = res;
         wword.last = in_block.last;
-        out.write(wword);
+        STREAM_WRITE(out, wword);
         done = (in_block.last == 1);
     }
 

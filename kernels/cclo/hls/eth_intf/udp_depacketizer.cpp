@@ -15,24 +15,45 @@
 #
 # *******************************************************************************/
 
-#include "streamdefines.h"
-#include "ap_int.h"
+#include "eth_intf.h"
+#include <iostream>
 
-using namespace hls;
 using namespace std;
 
-void loopback(STREAM<stream_word> & in, STREAM<stream_word> & out) {
+void udp_depacketizer(
+    STREAM<stream_word > & in,
+    STREAM<stream_word > & out,
+    STREAM<eth_header> & sts) {
 #pragma HLS INTERFACE axis register both port=in
 #pragma HLS INTERFACE axis register both port=out
-#pragma HLS INTERFACE ap_ctrl_none port=return
+#pragma HLS INTERFACE axis register both port=sts
+#pragma HLS INTERFACE s_axilite port=return
 
 unsigned const bytes_per_word = DATA_WIDTH/8;
-stream_word tmp;
 
-do{
+//copy count from header into sts stream
+stream_word inword = STREAM_READ(in);
+stream_word outword;
+eth_header hdr = eth_header(inword.data(HEADER_LENGTH-1,0));
+int count = hdr.count;
+
+if(hdr.strm == 0){
+	STREAM_WRITE(sts, hdr);
+}
+
+while(count > 0){
 #pragma HLS PIPELINE II=1
-	tmp = STREAM_READ(in);
-	STREAM_WRITE(out, tmp);
-} while(tmp.last == 0);
+	inword = STREAM_READ(in);
+	outword.data = inword.data;
+	outword.keep = inword.keep;
+	outword.dest = hdr.strm;
+	count -= bytes_per_word;
+	if(count <= 0){
+		outword.last = 1;
+	}else{
+		outword.last = 0;
+	}
+	STREAM_WRITE(out, outword);
+}
 
 }

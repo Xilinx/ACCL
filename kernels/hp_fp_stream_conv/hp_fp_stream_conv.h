@@ -15,16 +15,6 @@
 #
 # *******************************************************************************/
 
-#include "ap_axi_sdata.h"
-#include "hls_stream.h"
-#include "ap_int.h"
+#include "streamdefines.h"
 
-using namespace hls;
-using namespace std;
-
-#ifndef DATA_WIDTH
-#define DATA_WIDTH 512
-#endif
-
-void hp_fp_stream_conv(	stream<ap_axiu<DATA_WIDTH,0,0,0> > & in,
-                    stream<ap_axiu<DATA_WIDTH,0,0,0> > & out);
+void hp_fp_stream_conv(STREAM<stream_word> & in, STREAM<stream_word> & out);

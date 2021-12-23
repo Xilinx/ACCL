@@ -16,7 +16,13 @@
 # *******************************************************************************/
 
 PLATFORM ?= xilinx_u280_xdma_201920_3
-DEBUG ?= none
+HW_DEBUG ?= none
+STACK_TYPE ?= UDP
+EN_DMA ?= 1
+EN_ARITH ?= 1
+EN_COMPRESS ?= 1
+EN_EXT_KRNL ?= 1
+MB_DEBUG_LEVEL ?= 0
 XCCL_ELF=vitis_ws/ccl_offload_control/Debug/ccl_offload_control.elf
 XCCL_XSA=ccl_offload_ex/ccl_offload.xsa
 XCCL_XO=ccl_offload.xo
@@ -34,19 +40,16 @@ else
 endif
 
 GEN_KERNEL_TCL := tcl/generate_kernel.tcl
-REBUILD_BD_TCL := tcl/rebuild_bd.tcl
-
+REBUILD_BD_TCL := tcl/rebuild_bd.tcl tcl/control_bd.tcl tcl/rx_bd.tcl tcl/tx_bd.tcl
 
 all: $(XCCL_XO)
 
 .PHONY: xsa
 xsa: $(XCCL_XSA)
 
-$(XCCL_XSA): $(GEN_KERNEL_TCL) $(REBUILD_BD_TCL)  tcl/control_bd.tcl tcl/dma_bd.tcl tcl/rx_bd.tcl tcl/tx_bd.tcl
-	$(MAKE) -C hls/hostctrl DEVICE=$(FPGAPART)
-	$(MAKE) -C hls/vnx_intf DEVICE=$(FPGAPART)
-	$(MAKE) -C hls/tcp_intf DEVICE=$(FPGAPART)
-	vivado -mode batch -source $< -tclargs $(FPGAPART) $(BOARDPART) $(DEBUG) $(XCCL_XSA)
+$(XCCL_XSA): $(GEN_KERNEL_TCL) $(REBUILD_BD_TCL)
+	$(MAKE) -C hls/ DEVICE=$(FPGAPART)
+	vivado -mode batch -source $< -tclargs $(FPGAPART) $(BOARDPART) $(HW_DEBUG) $(XCCL_XSA) $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) $(MB_DEBUG_LEVEL)
 
 OPTIMIZATION=s
 #valid values 0,1,2,3,s,g
@@ -73,7 +76,7 @@ $(XCCL_ELF): tcl/generate_sw.tcl $(FW_SOURCES) $(XCCL_XSA)
 xo: $(XCCL_XO)
 
 $(XCCL_XO): tcl/generate_xo.tcl $(XCCL_XSA) $(XCCL_ELF)
-	vivado -mode batch -source $< -tclargs $(XCCL_ELF)
+	vivado -mode batch -source $< -tclargs $(XCCL_ELF) $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) $(MB_DEBUG_LEVEL)
 
 distclean:
 	git clean -xfd

@@ -24,9 +24,9 @@
 using namespace hls;
 using namespace std;
 
-template<unsigned int data_width, typename T>
-void stream_add(stream<ap_axiu<2*data_width,0,0,0> > & in,
-                stream<ap_axiu<data_width,0,0,0> > & out) {
+template<unsigned int data_width, unsigned int dest_width, typename T>
+void stream_add(STREAM<ap_axiu<2*data_width,0,0,dest_width> > & in,
+                STREAM<ap_axiu<data_width,0,0,dest_width> > & out) {
 
 	unsigned const dwb = 8*sizeof(T);
 	unsigned const simd = data_width / dwb;
@@ -35,7 +35,7 @@ void stream_add(stream<ap_axiu<2*data_width,0,0,0> > & in,
 
 	while(done == 0) {
 #pragma HLS PIPELINE II=1
-		ap_axiu<2*data_width,0,0,0> op_block = in.read();
+		ap_axiu<2*data_width,0,0,dest_width> op_block = STREAM_READ(in);
 		ap_uint<data_width> op1 = op_block.data(data_width-1,0);
 		ap_uint<data_width> op2 = op_block.data(2*data_width-1,data_width);
 		ap_uint<data_width> res;
@@ -49,54 +49,49 @@ void stream_add(stream<ap_axiu<2*data_width,0,0,0> > & in,
 			ap_uint<dwb> res_word = *reinterpret_cast<ap_uint<dwb>*>(&sum);
 			res((j+1)*dwb-1,j*dwb) = res_word;
 		}
-		ap_axiu<data_width,0,0,0> wword;
+		ap_axiu<data_width,0,0,dest_width> wword;
 		wword.data = res;
 		wword.last = op_block.last;
 		wword.keep = op_block.keep;
-		out.write(wword);
+		STREAM_WRITE(out, wword);
 
 		done = (op_block.last == 1);
 	}
 }
 
-void reduce_sum_float(stream<ap_axiu<2*DATA_WIDTH,0,0,0> > & in,
-				stream<ap_axiu<DATA_WIDTH,0,0,0> > & out) {
+void reduce_sum_float(STREAM<ap_axiu<2*DATA_WIDTH,0,0,DEST_WIDTH> > & in, STREAM<stream_word> & out) {
 #pragma HLS INTERFACE axis register both port=in
 #pragma HLS INTERFACE axis register both port=out
 #pragma HLS INTERFACE ap_ctrl_none port=return
-stream_add<DATA_WIDTH, float>(in, out);
+stream_add<DATA_WIDTH, DEST_WIDTH, float>(in, out);
 }
 
-void reduce_sum_double(stream<ap_axiu<2*DATA_WIDTH,0,0,0> > & in,
-				stream<ap_axiu<DATA_WIDTH,0,0,0> > & out) {
+void reduce_sum_double(STREAM<ap_axiu<2*DATA_WIDTH,0,0,DEST_WIDTH> > & in, STREAM<stream_word> & out) {
 #pragma HLS INTERFACE axis register both port=in
 #pragma HLS INTERFACE axis register both port=out
 #pragma HLS INTERFACE ap_ctrl_none port=return
-stream_add<DATA_WIDTH, double>(in, out);
+stream_add<DATA_WIDTH, DEST_WIDTH, double>(in, out);
 }
 
-void reduce_sum_int32_t(stream<ap_axiu<2*DATA_WIDTH,0,0,0> > & in,
-				stream<ap_axiu<DATA_WIDTH,0,0,0> > & out) {
+void reduce_sum_int32_t(STREAM<ap_axiu<2*DATA_WIDTH,0,0,DEST_WIDTH> > & in, STREAM<stream_word> & out) {
 #pragma HLS INTERFACE axis register both port=in
 #pragma HLS INTERFACE axis register both port=out
 #pragma HLS INTERFACE ap_ctrl_none port=return
-stream_add<DATA_WIDTH, int32_t>(in, out);
+stream_add<DATA_WIDTH, DEST_WIDTH, int32_t>(in, out);
 }
 
-void reduce_sum_int64_t(stream<ap_axiu<2*DATA_WIDTH,0,0,0> > & in,
-				stream<ap_axiu<DATA_WIDTH,0,0,0> > & out) {
+void reduce_sum_int64_t(STREAM<ap_axiu<2*DATA_WIDTH,0,0,DEST_WIDTH> > & in, STREAM<stream_word> & out) {
 #pragma HLS INTERFACE axis register both port=in
 #pragma HLS INTERFACE axis register both port=out
 #pragma HLS INTERFACE ap_ctrl_none port=return
-stream_add<DATA_WIDTH, int64_t>(in, out);
+stream_add<DATA_WIDTH, DEST_WIDTH, int64_t>(in, out);
 }
 
 #ifdef REDUCE_HALF_PRECISION
-void reduce_sum_half(stream<ap_axiu<2*DATA_WIDTH,0,0,0> > & in,
-				stream<ap_axiu<DATA_WIDTH,0,0,0> > & out) {
+void reduce_sum_half(STREAM<ap_axiu<2*DATA_WIDTH,0,0,DEST_WIDTH> > & in, STREAM<stream_word> & out) {
 #pragma HLS INTERFACE axis register both port=in
 #pragma HLS INTERFACE axis register both port=out
 #pragma HLS INTERFACE ap_ctrl_none port=return
-stream_add<DATA_WIDTH, half>(in, out);
+stream_add<DATA_WIDTH, DEST_WIDTH, half>(in, out);
 }
 #endif

@@ -15,29 +15,21 @@
 #
 # *******************************************************************************/
 
-#include "ap_axi_sdata.h"
-#include "hls_stream.h"
+#include "streamdefines.h"
 #include "ap_int.h"
 #include <stdint.h>
-
-using namespace hls;
-using namespace std;
-
-#ifndef DATA_WIDTH
-#define DATA_WIDTH 512
-#endif
 
 #ifndef DATA_TYPE
 #define DATA_TYPE float
 #endif
 
-template<unsigned int data_width, typename T>
-void stream_add(stream<ap_axiu<2*data_width,0,0,0> > & in, stream<ap_axiu<data_width,0,0,0> > & out);
+template<unsigned int data_width, unsigned int dest_width, typename T>
+void stream_add(STREAM<ap_axiu<2*data_width,0,0,dest_width> > & in, STREAM<ap_axiu<data_width,0,0,dest_width> > & out);
 
-void reduce_sum_float(stream<ap_axiu<2*DATA_WIDTH,0,0,0> > & in, stream<ap_axiu<DATA_WIDTH,0,0,0> > & out);
-void reduce_sum_int32_t(stream<ap_axiu<2*DATA_WIDTH,0,0,0> > & in, stream<ap_axiu<DATA_WIDTH,0,0,0> > & out);
-void reduce_sum_double(stream<ap_axiu<2*DATA_WIDTH,0,0,0> > & in, stream<ap_axiu<DATA_WIDTH,0,0,0> > & out);
-void reduce_sum_int64_t(stream<ap_axiu<2*DATA_WIDTH,0,0,0> > & in, stream<ap_axiu<DATA_WIDTH,0,0,0> > & out);
+void reduce_sum_float(STREAM<ap_axiu<2*DATA_WIDTH,0,0,DEST_WIDTH> > & in, STREAM<stream_word> & out);
+void reduce_sum_int32_t(STREAM<ap_axiu<2*DATA_WIDTH,0,0,DEST_WIDTH> > & in, STREAM<stream_word> & out);
+void reduce_sum_double(STREAM<ap_axiu<2*DATA_WIDTH,0,0,DEST_WIDTH> > & in, STREAM<stream_word> & out);
+void reduce_sum_int64_t(STREAM<ap_axiu<2*DATA_WIDTH,0,0,DEST_WIDTH> > & in, STREAM<stream_word> & out);
 #ifdef REDUCE_HALF_PRECISION
-void reduce_sum_half(stream<ap_axiu<2*DATA_WIDTH,0,0,0> > & in, stream<ap_axiu<DATA_WIDTH,0,0,0> > & out) ;
+void reduce_sum_half(STREAM<ap_axiu<2*DATA_WIDTH,0,0,DEST_WIDTH> > & in, STREAM<stream_word> & out) ;
 #endif

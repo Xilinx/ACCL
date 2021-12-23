@@ -57,8 +57,8 @@ switch $command {
 
 open_project build_${ipname}
 
-add_files reduce_sum.cpp -cflags "-std=c++14 -DDATA_WIDTH=${dwidth} -DREDUCE_HALF_PRECISION -I[pwd]/"
-add_files -tb tb.cpp -cflags "-std=c++14 -DDATA_WIDTH=${dwidth} -DREDUCE_HALF_PRECISION -I[pwd]/"
+add_files reduce_sum.cpp -cflags "-std=c++14 -DDATA_WIDTH=${dwidth} -DREDUCE_HALF_PRECISION -I[pwd]/ -I[pwd]/../cclo/hls -DACCL_SYNTHESIS"
+add_files -tb tb.cpp -cflags "-std=c++14 -DDATA_WIDTH=${dwidth} -DREDUCE_HALF_PRECISION -I[pwd]/ -I[pwd]/../cclo/hls -DACCL_SYNTHESIS"
 
 set_top ${ipname}
 
