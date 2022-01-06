@@ -37,7 +37,7 @@ void router_cmd_execute(
     STREAM<segmenter_cmd> &clane2_res_seg_cmd,
     STREAM<ap_uint<32> > &ack_instruction
 ){
-#pragma HLS PIPELINE II=1
+#pragma HLS PIPELINE II=1 style=flp
     router_instruction insn = STREAM_READ(instruction);
     segmenter_cmd cmd;
     bool op0_compress, op1_compress, res_compress;
@@ -169,6 +169,7 @@ void router_ack_execute(
     STREAM<ap_uint<32> > &krnl_out_seg_ack,
     STREAM<ap_uint<32> > &error 
 ){
+#pragma HLS PIPELINE II=1 style=flp
     if(!STREAM_IS_EMPTY(instruction)){
         ap_uint<32> expected = STREAM_READ(instruction);
         ap_uint<32> received = STREAM_READ(krnl_out_seg_ack);
@@ -189,7 +190,7 @@ void dma_cmd_execute(
     STREAM<ap_uint<104> > &dma_cmd_channel,
     STREAM<ap_uint<32> > &ack_instruction
 ) {
-#pragma HLS PIPELINE II=1
+#pragma HLS PIPELINE II=1 style=flp
     ap_uint<4> tag = 0;
     ap_uint<32> ncommands = 0;
     unsigned int btt;
@@ -220,7 +221,7 @@ void dma_ack_execute(
     STREAM<ap_uint<32> > &dma_sts_channel,
     STREAM<ap_uint<32> > &error
 ) {
-#pragma HLS PIPELINE II=1
+#pragma HLS PIPELINE II=1 style=flp
     ap_uint<32> ret = NO_ERROR;
     ap_uint<32> ncmds;
     axi::Status status;
@@ -247,8 +248,8 @@ void dma_ack_execute(
             ncmds--;
             tag++;
         }
+        STREAM_WRITE(error, ret);
     }
-    STREAM_WRITE(error, ret);
 }
 
 void eth_cmd_execute(
@@ -257,6 +258,7 @@ void eth_cmd_execute(
     STREAM<ap_uint<32> > &ack_instruction,
     unsigned int max_segment_len
 ) {
+#pragma HLS PIPELINE II=1 style=flp
     unsigned int seg_len, sequence_number;
     if(!STREAM_IS_EMPTY(instruction)){
         packetizer_instruction insn = STREAM_READ(instruction);
@@ -290,6 +292,7 @@ void eth_ack_execute(
     STREAM<ap_uint<32> > &eth_ack_channel,
     STREAM<ap_uint<32> > &error
 ) {
+#pragma HLS PIPELINE II=1 style=flp
     unsigned int expected_seq_number, ack_seq_num;
     if(!STREAM_IS_EMPTY(instruction)){
         expected_seq_number = STREAM_READ(instruction);
@@ -306,6 +309,7 @@ void instruction_fetch(
     STREAM<ap_axiu<32,0,0,0> > &cmd,
     STREAM<move_instruction> &instruction
 ){
+#pragma HLS PIPELINE II=1 style=flp
     ap_uint<32> tmp;
     move_instruction ret;
 
@@ -323,10 +327,9 @@ void instruction_fetch(
     
     ret.count = (STREAM_READ(cmd)).data;
 
-    //get arith config offset if needed
-    if(ret.op0_opcode != MOVE_NONE && ret.op1_opcode != MOVE_NONE){
-        ret.arcfg_offset = (STREAM_READ(cmd)).data;
-    }
+    //get arith config offset
+    ret.arcfg_offset = (STREAM_READ(cmd)).data;
+
     //get addr for op0, or equivalents
     if(ret.op0_opcode == MOVE_IMMEDIATE){
         ret.op0_addr(31,0) = (STREAM_READ(cmd)).data;
@@ -382,7 +385,7 @@ void instruction_decode(
     unsigned int * exchange_mem,
     unsigned int max_segment_len
 ){
-#pragma HLS PIPELINE II=1
+#pragma HLS PIPELINE II=1 style=flp
     move_instruction insn = STREAM_READ(instruction);
     unsigned int src, seqn, session;
     datamover_instruction dm0_rd, dm1_rd, dm1_wr;
@@ -572,7 +575,7 @@ void instruction_retire(
     STREAM<ap_uint<32> > &strm_tx_err,
     STREAM<ap_axiu<32,0,0,0> > &error
 ){
-#pragma HLS PIPELINE II=1
+#pragma HLS PIPELINE II=1 style=flp
     move_ack_instruction insn = STREAM_READ(instruction);
     ap_axiu<32,0,0,0> err;
     err.last = 1;
@@ -698,12 +701,7 @@ void dma_mover(
     dma_cmd_execute(dma0_read_insn, dma0_read_cmd, dma0_read_ack_insn);
     dma_cmd_execute(dma1_read_insn, dma1_read_cmd, dma1_read_ack_insn);
     dma_cmd_execute(dma1_write_insn, dma1_write_cmd, dma1_write_ack_insn);
-    dma_ack_execute(dma0_read_ack_insn, dma0_read_sts, dma0_read_error);
-    dma_ack_execute(dma1_read_ack_insn, dma1_read_sts, dma1_read_error);
-    dma_ack_execute(dma1_write_ack_insn, dma1_write_sts, dma1_write_error);
     eth_cmd_execute(eth_insn, eth_cmd, eth_tx_ack_instruction, max_segment_len);
-    eth_ack_execute(eth_tx_ack_instruction, eth_sts, eth_tx_error);
-
     router_cmd_execute(
         router_insn, 
         dma0_read_seg_cmd,
@@ -721,6 +719,11 @@ void dma_mover(
         clane2_res_seg_cmd,
         strm_tx_ack_instruction
     );
+
+    dma_ack_execute(dma0_read_ack_insn, dma0_read_sts, dma0_read_error);
+    dma_ack_execute(dma1_read_ack_insn, dma1_read_sts, dma1_read_error);
+    dma_ack_execute(dma1_write_ack_insn, dma1_write_sts, dma1_write_error);
+    eth_ack_execute(eth_tx_ack_instruction, eth_sts, eth_tx_error);
     router_ack_execute(strm_tx_ack_instruction, krnl_out_seg_sts, strm_tx_error);
 
     instruction_retire(

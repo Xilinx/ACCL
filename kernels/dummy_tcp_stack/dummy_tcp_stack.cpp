@@ -18,7 +18,6 @@
 #include "dummy_tcp_stack.h"
 #include "Axi.h" //for axi::Stream
 
-using namespace hls;
 using namespace std;
 
 #define DATA_WIDTH 512
@@ -107,7 +106,7 @@ void rx_handler(
 static stream<hlslib::axi::Stream<ap_uint<DATA_WIDTH>, DEST_WIDTH> > rxDataBuffer;
 #pragma HLS STREAM variable=rxDataBuffer depth=512
 #else
-static hlslib::Stream<hlslib::axi::Stream<ap_uint<DATA_WIDTH>, DEST_WIDTH>, 512>rxDataBuffer;
+static hlslib::Stream<hlslib::axi::Stream<ap_uint<DATA_WIDTH>, DEST_WIDTH>, 512> rxDataBuffer;
 #endif
 
     enum rxFsmStateType {BUFFER_DATA, SEND_NOTI, WAIT_REQ, SEND_MSG};

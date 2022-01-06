@@ -82,7 +82,7 @@ struct eth_header{
 typedef struct{
 	ap_uint<16> session_id;
 	ap_uint<16> length;
-}eth_notification;
+} eth_notification;
 
 void udp_packetizer(
 	STREAM<stream_word > & in,

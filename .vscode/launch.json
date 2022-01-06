@@ -9,7 +9,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${fileDirname}/${fileBasenameNoExtension}",
-            "args": [1, 0, 5500],
+            "args": [1, 0, 5500, "tcp"],
             "stopAtEntry": true,
             "cwd": "${fileDirname}",
             "environment": [],
@@ -22,7 +22,6 @@
                     "ignoreFailures": true
                 }
             ],
-            "preLaunchTask": "g++ build active file",
             "miDebuggerPath": "/usr/bin/gdb"
         }
     ]

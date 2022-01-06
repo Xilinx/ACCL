@@ -18,7 +18,7 @@
 #include <stdbool.h>
 #include "ccl_offload_control.h"
 
-#ifndef ACCL_BD_SIM
+#ifdef ACCL_SYNTHESIS
 #include "xparameters.h"
 #include "mb_interface.h"
 #include "microblaze_interrupts_i.h"
@@ -42,13 +42,13 @@ static volatile unsigned int max_dma_in_flight 		= DMA_MAX_TRANSACTIONS;
 static datapath_arith_config arcfg;
 static communicator world;
 
-#ifdef ACCL_BD_SIM
-uint32_t sim_cfgmem[16*1024];
+#ifndef ACCL_SYNTHESIS
+uint32_t sim_cfgmem[END_OF_EXCHMEM/4];
 uint32_t *cfgmem = sim_cfgmem;
 hlslib::Stream<ap_axiu<32,0,0,0>, 512> cmd_fifos[4];
 hlslib::Stream<ap_axiu<32,0,0,0>, 512> sts_fifos[4];
 #else
-uint32_t *cfgmem = (uint32_t *)(0);
+uint32_t *cfgmem = (uint32_t *)(EXCHMEM_BASEADDR);
 #endif
 
 //circular buffer operation
@@ -299,10 +299,10 @@ inline int move(
     uint32_t op0_stride,
     uint32_t op1_stride,
     uint32_t res_stride,
+    uint32_t rx_src_rank,
     uint32_t rx_tag,
-    uint32_t rx_src,
-    uint32_t dst_rank,
-    uint32_t mpi_tag
+    uint32_t tx_dst_rank,
+    uint32_t tx_tag
 ) {
     uint32_t opcode = 0;
     opcode |= op0_opcode;
@@ -315,10 +315,9 @@ inline int move(
     putd(CMD_DMA_MOVE, opcode);
     putd(CMD_DMA_MOVE, count);
 
-    //get arith config offset if needed, as an offset in a uint32_t array
-    if(op0_opcode != MOVE_NONE && op1_opcode != MOVE_NONE){
-        putd(CMD_DMA_MOVE, arcfg_offset/4);
-    }
+    //arith config offset, as an offset in a uint32_t array
+    putd(CMD_DMA_MOVE, arcfg_offset/4);
+
     //get addr for op0, or equivalents
     if(op0_opcode == MOVE_IMMEDIATE){
         putd(CMD_DMA_MOVE, (uint32_t)op0_addr);
@@ -331,7 +330,7 @@ inline int move(
         putd(CMD_DMA_MOVE, (uint32_t)op1_addr);
         putd(CMD_DMA_MOVE, (uint32_t)(op1_addr>>32));
     } else if(op1_opcode == MOVE_ON_RECV){
-        putd(CMD_DMA_MOVE, rx_src);
+        putd(CMD_DMA_MOVE, rx_src_rank);
         putd(CMD_DMA_MOVE, rx_tag);
     } else if(op1_opcode == MOVE_STRIDE){
         putd(CMD_DMA_MOVE, op1_stride);
@@ -345,11 +344,11 @@ inline int move(
     }
     //get send related stuff, if result is remote or stream
     if(res_is_remote || res_opcode == MOVE_STREAM){
-        putd(CMD_DMA_MOVE, mpi_tag);
+        putd(CMD_DMA_MOVE, tx_tag);
     }
     if(res_is_remote){
         putd(CMD_DMA_MOVE, comm_offset/4);
-        putd(CMD_DMA_MOVE, dst_rank);
+        putd(CMD_DMA_MOVE, tx_dst_rank);
     }
     return getd(STS_DMA_MOVE);
 }
@@ -402,27 +401,34 @@ static inline int copy(	unsigned int count,
                         unsigned int arcfg_offset,
                         unsigned int compression,
                         unsigned int stream) {
-return move(
-    (stream & OP0_STREAM) ? MOVE_IMMEDIATE : MOVE_STREAM, 
-    MOVE_NONE, 
-    (stream & RES_STREAM) ? MOVE_IMMEDIATE : MOVE_STREAM, 
-    compression, RES_LOCAL, 0,
-    count, 0, arcfg_offset, src_addr, 0, dst_addr, 0, 0, 0,
-    0, 0, 0, 0);
+    return move(
+        (stream & OP0_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE, 
+        MOVE_NONE, 
+        (stream & RES_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE, 
+        compression, RES_LOCAL, 0,
+        count, 0, arcfg_offset, src_addr, 0, dst_addr, 0, 0, 0,
+        0, 0, 0, 0
+    );
 }
-/*
+
 //performs an accumulate using DMA1 and DMA0. DMA0 rx reads op1 DMA1 rx reads op2 while DMA1 tx back to dst buffer
 //use MOVE_IMMEDIATE
 int combine(unsigned int count,
-                    unsigned int function,
-                    uint64_t op0_addr,
-                    uint64_t op1_addr,
-                    uint64_t res_addr,
-                    unsigned int compression,
-                    unsigned int stream) {
-    configure_datapath(DATAPATH_DMA_REDUCTION, function, compression, stream);
-    dm_config cfg = dm_config_init(count, op0_addr, op1_addr, res_addr, USE_OP0_DM | USE_OP1_DM | USE_RES_DM, NO_REMOTE, compression, stream);
-    return move_segmented(&cfg, 0, 0);
+            unsigned int function,
+            uint64_t op0_addr,
+            uint64_t op1_addr,
+            uint64_t res_addr,
+            unsigned int arcfg_offset,
+            unsigned int compression,
+            unsigned int stream) {
+    return move(
+        (stream & OP0_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE, 
+        MOVE_IMMEDIATE,
+        (stream & RES_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE, 
+        compression, RES_LOCAL, 0,
+        count, 0, arcfg_offset, op0_addr, op1_addr, res_addr, 0, 0, 0,
+        0, 0, 0, 0
+    );
 }
 
 //transmits a buffer to a rank of the world communicator
@@ -431,15 +437,41 @@ int send(
     unsigned int dst_rank,
     unsigned int count,
     uint64_t src_addr,
+    unsigned int comm_offset,
+    unsigned int arcfg_offset,
     unsigned int dst_tag,
     unsigned int compression,
     unsigned int stream
 ){
-    configure_datapath(DATAPATH_OFFCHIP_TX, 0, compression, stream);
-    dm_config cfg = dm_config_init(count, src_addr, 0, 0, USE_OP0_DM | USE_RES_DM, RES_REMOTE, compression, stream);
-    return move_segmented(&cfg, dst_rank, dst_tag);
+    return move(
+        (stream & OP0_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE, 
+        MOVE_NONE,
+        MOVE_IMMEDIATE, 
+        compression, RES_REMOTE, 0,
+        count, comm_offset, arcfg_offset, src_addr, 0, 0, 0, 0, 0,
+        0, 0, dst_rank, dst_tag
+    );
 }
 
+//waits for a messages to come and move their contents in a buffer
+//use MOVE_ON_RECV
+int recv(	unsigned int src_rank,	
+            unsigned int count,
+            uint64_t dst_addr,
+            unsigned int arcfg_offset,
+            unsigned int src_tag,
+            unsigned int compression){
+    return move(
+        MOVE_ON_RECV, 
+        MOVE_NONE,
+        MOVE_IMMEDIATE, 
+        compression, RES_LOCAL, 0,
+        count, 0, arcfg_offset, 0, 0, dst_addr, 0, 0, 0,
+        src_rank, src_tag, 0, 0
+    );
+}
+
+/*
 //performs a reduction using DMA0 and DMA1 and then sends the result 
 //through tx_subsystem to dst_rank
 static inline int fused_reduce_send(
@@ -505,87 +537,9 @@ int wait_on_rx(	unsigned int src_rank,
     }
     longjmp(excp_handler, RECEIVE_TIMEOUT_ERROR);
 }
+*/
 
-//waits for a messages to come and move their contents in a buffer
-//use MOVE_ON_RECV
-int recv(	unsigned int src_rank,	
-            unsigned int count,
-            uint64_t dst_addr,
-            unsigned int src_tag,
-            unsigned int compression){
-    unsigned int buf_idx;
-    unsigned int dma_tag_tmp, i;
-    rx_buffer *rx_buf_list = (rx_buffer*)(cfgmem+RX_BUFFER_COUNT_OFFSET/4+1);
-
-    circular_buffer spare_buffer_queue;
-    cb_init(&spare_buffer_queue, max_dma_in_flight);
-
-
-    dma_tag_tmp = dma_tag;
-
-    //set up compression flags properly from the host-provided recv compression flags:
-    //ETH_COMPRESSED tells us if our received (rx) buffer is compressed
-    //RES_COMPRESSED tells us if our destination (dst) buffer is compressed
-    //ALL other flags must be set to zero (but make sure)
-    //effectively we move rx -> dst so rx becomes op0 and dst becomes res
-    //therefore we need to convert the ETH_COMPRESSED flag to OP0_COMPRESSED
-    compression &= ETH_COMPRESSED | RES_COMPRESSED;
-    compression = (compression & ETH_COMPRESSED) ? (compression ^ (OP0_COMPRESSED | ETH_COMPRESSED)) : compression;  
-
-    configure_datapath(DATAPATH_DMA_LOOPBACK, 0, compression, 0);
-
-    //set up datamover configs for emitting and retiring transfers
-    //we need two, because we emit and retire in separate processes which are offset
-    dm_config emit_dm_config = dm_config_init(count, 0, 0, dst_addr, USE_OP0_DM | USE_RES_DM, NO_REMOTE, compression, NO_STREAM);
-    dm_config ack_dm_config = dm_config_init(count, 0, 0, 0, USE_OP0_DM | USE_RES_DM, NO_REMOTE, compression, NO_STREAM);
-
-    //1. issue at most max_dma_in_flight of dma_transaction_size
-    for (i = 0; emit_dm_config.elems_remaining > 0 && i < max_dma_in_flight ; i++){
-        //wait for segment to come
-        buf_idx = wait_on_rx(src_rank, emit_dm_config.op0_len, src_tag);
-        if  (buf_idx < 0 ) return RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID;
-        emit_dm_config.op0_addr.ptr = ((uint64_t) rx_buf_list[buf_idx].addrh << 32) | rx_buf_list[buf_idx].addrl;
-        //start DMAs
-        dma_tag_tmp  = start_move(&emit_dm_config, dma_tag_tmp, 0, 0);
-        dm_config_update(&emit_dm_config);
-        //save spare buffer id
-        cb_push(&spare_buffer_queue, buf_idx);
-    }
-    //2.ack 1 and issue another dma transfer up until there's no more dma move to issue
-    while(emit_dm_config.elems_remaining > 0){
-        //wait for DMAs to finish
-        ack_move(&ack_dm_config, 0);
-        dm_config_update(&ack_dm_config);
-        //set spare buffer as free
-        buf_idx = cb_pop(&spare_buffer_queue);
-        microblaze_disable_interrupts();
-        rx_buf_list[buf_idx].status = STATUS_IDLE;
-        microblaze_enable_interrupts();
-        //enqueue other DMA movement
-        //wait for segment to come
-        buf_idx = wait_on_rx(src_rank, emit_dm_config.op0_len, src_tag);
-        if  (buf_idx < 0 ) return RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID;
-        emit_dm_config.op0_addr.ptr = ((uint64_t) rx_buf_list[buf_idx].addrh << 32) | rx_buf_list[buf_idx].addrl;
-        //start DMAs
-        dma_tag_tmp = start_move(&emit_dm_config, dma_tag_tmp, 0, 0);
-        dm_config_update(&emit_dm_config);
-        //save spare buffer id
-        cb_push(&spare_buffer_queue, buf_idx);
-    }
-    //3. finish ack the remaining
-    while(ack_dm_config.elems_remaining > 0){
-        //wait for DMAs to finish
-        ack_move(&ack_dm_config, 0);
-        dm_config_update(&ack_dm_config);
-        //set spare buffer as free
-        buf_idx = cb_pop(&spare_buffer_queue);
-        microblaze_disable_interrupts();
-        rx_buf_list[buf_idx].status = STATUS_IDLE;
-        microblaze_enable_interrupts();
-    }
-    return NO_ERROR;
-}
-
+/*
 //1) receives from a rank
 //2) sums with a a buffer 
 //3) the result is saved in (possibly another) local buffer
@@ -1307,15 +1261,15 @@ int run_accl() {
             case XCCL_COPY:
                 retval = copy(count, op0_addr, res_addr, datapath_cfg, compression_flags, stream_flags);
                 break;
-            // case XCCL_COMBINE:
-            //     retval = combine(count, function, op0_addr, op1_addr, res_addr, compression_flags, stream_flags);
-            //     break;
-            // case XCCL_SEND:
-            //     retval = send(root_src_dst, count, op0_addr, msg_tag, compression_flags, stream_flags);
-            //     break;
-            // case XCCL_RECV:
-            //     retval = recv(root_src_dst, count, res_addr, msg_tag, compression_flags);
-            //     break;
+            case XCCL_COMBINE:
+                retval = combine(count, function, op0_addr, op1_addr, res_addr, datapath_cfg, compression_flags, stream_flags);
+                break;
+            case XCCL_SEND:
+                retval = send(root_src_dst, count, op0_addr, comm, datapath_cfg, msg_tag, compression_flags, stream_flags);
+                break;
+            case XCCL_RECV:
+                retval = recv(root_src_dst, count, res_addr, datapath_cfg, msg_tag, compression_flags);
+                break;
             // case XCCL_BCAST:
             //     retval = broadcast(count, root_src_dst, op0_addr, compression_flags);
             //     break;
@@ -1347,7 +1301,7 @@ int run_accl() {
     return 0;
 }
 
-#ifndef ACCL_BD_SIM
+#ifdef ACCL_SYNTHESIS
 int main(int argc, char **argv){
     return run_accl();
 }

@@ -14,6 +14,9 @@
 #  limitations under the License.
 #
 # *******************************************************************************/
+
+#pragma once
+
 #include "eth_intf.h"
 #include "streamdefines.h"
 
@@ -31,4 +34,4 @@ void network_krnl(
     STREAM<pkt8>& m_axis_tcp_port_status,
     STREAM<stream_word>& net_rx,
     STREAM<stream_word>& net_tx
-)
+);

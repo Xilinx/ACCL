@@ -29,24 +29,29 @@ void rxbuf_enqueue(
 #pragma HLS INTERFACE axis 		port=inflight_queue
 #pragma HLS INTERFACE m_axi 	port=rx_buffers	depth=9*16 offset=slave num_read_outstanding=4	num_write_outstanding=4 bundle=mem
 #pragma HLS INTERFACE s_axilite port=return
-#pragma HLS PIPELINE II=4 rewind 
+#pragma HLS PIPELINE II=4
 
 	unsigned int nbufs = 0;
+	//poll nbuffers (base of rx buffers space) until it is non-zero
+	//NOTE: software should write nbuffers *after* writing all the rest of the configuration
 	if(nbufs == 0){
-		nbufs = *rx_buffers++;
+		nbufs = rx_buffers[0];
+		if(nbufs == 0){
+			return;
+		}
+		rx_buffers++;
 	}
 	static ap_uint<4> tag = 0;
 	hlslib::axi::Command<64, 23> cmd;
 	#pragma HLS data_pack variable=dma_cmd struct_level
 	//iterate until you run out of spare buffers
-	elaborate_spares: for(ap_uint<32> i=0; i < nbufs; i++){
-		#pragma HLS pipeline II=1
+	for(int i=0; i < nbufs; i++){
 		ap_uint<32> status, max_len;
 		ap_uint<64> addr;
-		status = *(rx_buffers + (i * SPARE_BUFFER_FIELDS) + STATUS_OFFSET);
-		addr(31,  0) = *(rx_buffers + (i * SPARE_BUFFER_FIELDS) + ADDRL_OFFSET);
-		addr(63, 32) = *(rx_buffers + (i * SPARE_BUFFER_FIELDS) + ADDRH_OFFSET);
-		max_len = *(rx_buffers + (i * SPARE_BUFFER_FIELDS) + MAX_LEN_OFFSET);
+		status = rx_buffers[(i * SPARE_BUFFER_FIELDS) + STATUS_OFFSET];
+		addr(31,  0) = rx_buffers[(i * SPARE_BUFFER_FIELDS) + ADDRL_OFFSET];
+		addr(63, 32) = rx_buffers[(i * SPARE_BUFFER_FIELDS) + ADDRH_OFFSET];
+		max_len = rx_buffers[(i * SPARE_BUFFER_FIELDS) + MAX_LEN_OFFSET];
 
 		//look for IDLE spare buffers
 		//can't be pipelined fully because of this test.

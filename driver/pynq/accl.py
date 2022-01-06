@@ -205,11 +205,11 @@ class ACCLStreamFlags(IntEnum):
     RES_STREAM = 2
 
 class ACCLArithConfig():
-    def __init__(self, uncompressed_elem_bits, compressed_elem_bits, elem_ratio, 
+    def __init__(self, uncompressed_elem_bytes, compressed_elem_bytes, elem_ratio_log, 
                     compressor_tdest, decompressor_tdest, arith_is_compressed, arith_tdest):
-        self.uncompressed_elem_bits = uncompressed_elem_bits
-        self.compressed_elem_bits = compressed_elem_bits
-        self.elem_ratio = elem_ratio
+        self.uncompressed_elem_bytes = uncompressed_elem_bytes
+        self.compressed_elem_bytes = compressed_elem_bytes
+        self.elem_ratio_log = elem_ratio_log
         self.compressor_tdest = compressor_tdest
         self.decompressor_tdest = decompressor_tdest
         self.arith_is_compressed = arith_is_compressed
@@ -226,11 +226,11 @@ class ACCLArithConfig():
 
     def write(self, mmio, addr):
         self.exchmem_addr = addr
-        mmio.write(addr, self.uncompressed_elem_bits)
+        mmio.write(addr, self.uncompressed_elem_bytes)
         addr += 4
-        mmio.write(addr, self.compressed_elem_bits)
+        mmio.write(addr, self.compressed_elem_bytes)
         addr += 4
-        mmio.write(addr, self.elem_ratio)
+        mmio.write(addr, self.elem_ratio_log)
         addr += 4
         mmio.write(addr, self.compressor_tdest)
         addr += 4
@@ -246,12 +246,12 @@ class ACCLArithConfig():
         return addr
 
 ACCL_DEFAULT_ARITH_CONFIG = {
-    ('float16', 'float16'): ACCLArithConfig(16, 16, 1, 0, 0, 0, [4]),
-    ('float32', 'float16'): ACCLArithConfig(32, 16, 1, 1, 1, 1, [4]),
-    ('float32', 'float32'): ACCLArithConfig(32, 32, 1, 0, 0, 0, [0]),
-    ('float64', 'float64'): ACCLArithConfig(64, 64, 1, 0, 0, 0, [1]),
-    ('int32'  , 'int32'  ): ACCLArithConfig(32, 32, 1, 0, 0, 0, [2]),
-    ('int64'  , 'int64'  ): ACCLArithConfig(64, 64, 1, 0, 0, 0, [3]),
+    ('float16', 'float16'): ACCLArithConfig(2, 2, 0, 0, 0, 0, [4]),
+    ('float32', 'float16'): ACCLArithConfig(4, 2, 0, 1, 1, 1, [4]),
+    ('float32', 'float32'): ACCLArithConfig(4, 4, 0, 0, 0, 0, [0]),
+    ('float64', 'float64'): ACCLArithConfig(8, 8, 0, 0, 0, 0, [1]),
+    ('int32'  , 'int32'  ): ACCLArithConfig(4, 4, 0, 0, 0, 0, [2]),
+    ('int64'  , 'int64'  ): ACCLArithConfig(8, 8, 0, 0, 0, 0, [3]),
 }
 
 @unique
@@ -284,9 +284,8 @@ class ErrorCode(IntEnum):
     KRNL_STS_COUNT_ERROR              = 25
 
 TAG_ANY = 0xFFFF_FFFF
-EXCHANGE_MEM_OFFSET_ADDRESS= 0x1000
-EXCHANGE_MEM_ADDRESS_RANGE = 0x1000
-HOST_CTRL_ADDRESS_RANGE    = 0x800
+EXCHANGE_MEM_OFFSET_ADDRESS= 0x0
+EXCHANGE_MEM_ADDRESS_RANGE = 0x2000
 RETCODE_OFFSET = 0x1FFC
 IDCODE_OFFSET = 0x1FF8
 
@@ -402,15 +401,6 @@ class accl():
                 memory.append(hex(self.cclo.read(EXCHANGE_MEM_OFFSET_ADDRESS+i+(j*4))))
             print(hex(EXCHANGE_MEM_OFFSET_ADDRESS + i), memory)
 
-    def dump_host_control_memory(self):
-        print("host control:")
-        num_word_per_line=4
-        for i in range(0,HOST_CTRL_ADDRESS_RANGE, 4*num_word_per_line):
-            memory = []
-            for j in range(num_word_per_line):
-                memory.append(hex(self.cclo.read(i+(j*4))))
-            print(hex(self.cclo.mmio.base_addr + i), memory)
-
     def deinit(self):
         print("Removing CCLO object at ",hex(self.cclo.mmio.base_addr))
         self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.reset_periph)
@@ -437,7 +427,6 @@ class accl():
     def setup_rx_buffers(self, nbufs, bufsize, devicemem):
         addr = self.rx_buffers_adr
         self.rx_buffer_size = bufsize
-        self.cclo.write(addr, nbufs)
         if not isinstance(devicemem, list):
             devicemem = [devicemem]
         for i in range(nbufs):
@@ -453,15 +442,19 @@ class accl():
             self.rx_buffer_spares.append(buf)
             #program this buffer into the accelerator
             addr += 4
+            self.cclo.write(addr, 0)
+            addr += 4
             self.cclo.write(addr, self.rx_buffer_spares[-1].physical_address & 0xffffffff)
             addr += 4
             self.cclo.write(addr, (self.rx_buffer_spares[-1].physical_address>>32) & 0xffffffff)
             addr += 4
             self.cclo.write(addr, bufsize)
             # clear remaining fields
-            for _ in range(3,9):
+            for _ in range(4,9):
                 addr += 4
                 self.cclo.write(addr, 0)
+        #NOTE: the buffer count HAS to be written last (offload checks for this) 
+        self.cclo.write(self.rx_buffers_adr, nbufs)
 
         self.communicators_addr = addr+4
         max_higher = 1
@@ -488,6 +481,8 @@ class accl():
         nbufs = min(len(self.rx_buffer_spares), nbufs)
         for i in range(nbufs):
             addr   += 4
+            rstatus  = self.cclo.read(addr)
+            addr   += 4
             addrl   =self.cclo.read(addr)
             addr   += 4
             addrh   = self.cclo.read(addr)
@@ -496,8 +491,6 @@ class accl():
             #assert self.cclo.read(addr) == self.rx_buffer_size
             addr   += 4
             dmatag  = self.cclo.read(addr)
-            addr   += 4
-            rstatus  = self.cclo.read(addr)
             addr   += 4
             rxtag   = self.cclo.read(addr)
             addr   += 4

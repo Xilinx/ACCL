@@ -16,7 +16,7 @@
 # *******************************************************************************/
 
 #include <stdint.h>
-#ifdef ACCL_BD_SIM
+#ifndef ACCL_SYNTHESIS
 #include <stdio.h>
 #include <semaphore.h>
 #endif
@@ -86,18 +86,12 @@
 #define SET_MAX_DMA_TRANSACTIONS  11
 
 //AXI MMAP address
-#define CONTROL_OFFSET          0x0000
-#define ARG00_OFFSET            0x0010
-#define AXI00_PTR0_OFFSET       0x0018
-#define AXI01_PTR0_OFFSET       0x0024
-#define END_OF_REG_OFFSET       0x0030
-#define TIME_TO_ACCESS_EXCH_MEM 0x1FF4
 #define HWID_OFFSET       0x1FF8
 #define RETVAL_OFFSET     0x1FFC
 #define END_OF_EXCHMEM    0x2000
 
-#ifndef ACCL_BD_SIM        
-#define EXCHMEM_BASEADDR      0x1000
+#ifdef ACCL_SYNTHESIS  
+#define EXCHMEM_BASEADDR      0x00000
 #define NET_RXPKT_BASEADDR    0x30000
 #define NET_TXPKT_BASEADDR    0x40000
 #define GPIO_BASEADDR         0x40000000
@@ -214,7 +208,7 @@ extern uint32_t *cfgmem;
 #define CLR(offset, mask) Xil_Out32(offset, Xil_In32(offset) & ~(mask))
 
 //stream handling
-#ifndef ACCL_BD_SIM
+#ifdef ACCL_SYNTHESIS
 //push data to stream
 #define putd(channel, value) asm volatile ("putd\t%0,%1" :: "d" (value), "d" (channel))
 //push data to stream and set control bit
@@ -258,8 +252,7 @@ typedef struct {
 #define STATUS_RESERVED 0x02
 #define STATUS_ERROR    0x04
 
-#define RX_BUFFER_COUNT_OFFSET 0x1000
-
+#define RX_BUFFER_COUNT_OFFSET 0x0
 #define COMM_OFFSET (RX_BUFFER_COUNT_OFFSET+4*(1 + Xil_In32(RX_BUFFER_COUNT_OFFSET)*9))
 
 typedef struct {
@@ -306,7 +299,7 @@ typedef struct circular_buffer
 } circular_buffer;
 
 //define exception handling for simulation
-#ifdef ACCL_BD_SIM
+#ifndef ACCL_SYNTHESIS
 #define setjmp(x) 0
 void finalize_call(unsigned int);
 #define longjmp(x, y) finalize_call(y)

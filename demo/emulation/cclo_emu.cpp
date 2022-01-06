@@ -27,6 +27,7 @@
 #include <stdint.h>
 #include "reduce_sum.h"
 #include "eth_intf.h"
+#include "dummy_tcp_stack.h"
 #include "stream_segmenter.h"
 #include "rxbuf_offload.h"
 #include "dma_mover.h"
@@ -224,7 +225,11 @@ void axis_switch( Stream<stream_word> s[NSLAVES], Stream<stream_word> m[NMASTERS
         if(!s[i].IsEmpty()){
             do{
                 word = s[i].Pop();
-                m[min(NMASTERS-1, (unsigned int)word.dest)].Push(word);
+                int d = min(NMASTERS-1, (unsigned int)word.dest);
+                m[d].Push(word);
+                stringstream ss;
+                ss << "Switch arbitrate: S" << i << " -> M" << d << "(" << (unsigned int)word.dest << ")" << "\n";
+                cout << ss.str();
             } while(word.last == 0);
         }
     }
@@ -400,8 +405,8 @@ void eth_endpoint_ingress_port(zmqpp::socket &socket, Stream<stream_word > &out)
 
     //get and check destination ID
     message >> dst_text;
-    message >> msg_text;
     message >> sender_rank_text;
+    message >> msg_text;
     cout << "ETH Receive " << msg_text << " from " << sender_rank_text << endl;
 
     //parse msg_text as json
@@ -468,11 +473,10 @@ void sim_bd(zmqpp::socket &cmd_socket,
     Stream<stream_word > clane2_op;
     Stream<stream_word > clane2_res;
 
-    Stream<ap_uint<104> > dma_write_cmd_int[2];
-    Stream<ap_uint<104> > dma_read_cmd_int[2];
-    Stream<ap_uint<32> > dma_write_sts_int[2];
-    Stream<ap_uint<32> > dma_read_sts_int[2];
-    Stream<stream_word > dma_write_data[2];
+    Stream<ap_uint<104>, 32> dma_write_cmd_int[2];
+    Stream<ap_uint<104>, 32> dma_read_cmd_int[2];
+    Stream<ap_uint<32>, 32> dma_write_sts_int[2];
+    Stream<ap_uint<32>, 32> dma_read_sts_int[2];
     Stream<stream_word > dma_read_data[2];
 
     Stream<stream_word > switch_s[8];
@@ -484,7 +488,7 @@ void sim_bd(zmqpp::socket &cmd_socket,
     Stream<ap_uint<32> > eth_tx_sts;
     Stream<eth_header > eth_rx_sts;
 
-    Stream<ap_uint<32> > inflight_rxbuf;
+    Stream<ap_uint<32>, 32> inflight_rxbuf;
 
     Stream<rxbuf_notification> eth_rx_notif;
     Stream<rxbuf_signature> eth_rx_seek_req;
@@ -500,7 +504,7 @@ void sim_bd(zmqpp::socket &cmd_socket,
     Stream<pkt32> eth_tx_meta;
     Stream<pkt64> eth_tx_status;
 
-    Stream<pkt128> eth_notification;
+    Stream<pkt128> eth_notif;
     Stream<pkt32> eth_read_pkg;
     Stream<pkt16> eth_rx_meta;
     Stream<eth_notification> eth_notif_out;
@@ -513,15 +517,15 @@ void sim_bd(zmqpp::socket &cmd_socket,
     // Dataflow functions running in parallel
     HLSLIB_DATAFLOW_INIT();
     //DMA0
-    HLSLIB_FREERUNNING_FUNCTION(dma_write, devicemem, dma_write_cmd_int[0], dma_write_sts_int[0], dma_write_data[0]);
+    HLSLIB_FREERUNNING_FUNCTION(dma_write, devicemem, dma_write_cmd_int[0], dma_write_sts_int[0], switch_m[SWITCH_M_DMA0_WRITE]);
     HLSLIB_FREERUNNING_FUNCTION(dma_read, devicemem, dma_read_cmd_int[0], dma_read_sts_int[0], dma_read_data[0]);
     //DMA1
-    HLSLIB_FREERUNNING_FUNCTION(dma_write, devicemem, dma_write_cmd_int[1], dma_write_sts_int[1], dma_write_data[1]);
+    HLSLIB_FREERUNNING_FUNCTION(dma_write, devicemem, dma_write_cmd_int[1], dma_write_sts_int[1], switch_m[SWITCH_M_DMA1_WRITE]);
     HLSLIB_FREERUNNING_FUNCTION(dma_read, devicemem, dma_read_cmd_int[1], dma_read_sts_int[1], dma_read_data[1]);
     //RX buffer handling offload
-    HLSLIB_FREERUNNING_FUNCTION(rxbuf_enqueue, dma_write_cmd_int[0], inflight_rxbuf, cfgmem+RX_ENQUEUE_BASEADDR/4+0x10);
-    HLSLIB_FREERUNNING_FUNCTION(rxbuf_dequeue, dma_write_sts_int[0], eth_rx_sts, inflight_rxbuf, eth_rx_notif, cfgmem+RX_DEQUEUE_BASEADDR/4);
-    HLSLIB_FREERUNNING_FUNCTION(rxbuf_seek, eth_rx_notif, eth_rx_seek_req, eth_rx_seek_ack, rxbuf_release_req, cfgmem+RX_SEEK_BASEADDR/4);
+    HLSLIB_FREERUNNING_FUNCTION(rxbuf_enqueue, dma_write_cmd_int[0], inflight_rxbuf, cfgmem);
+    HLSLIB_FREERUNNING_FUNCTION(rxbuf_dequeue, dma_write_sts_int[0], eth_rx_sts, inflight_rxbuf, eth_rx_notif, cfgmem);
+    HLSLIB_FREERUNNING_FUNCTION(rxbuf_seek, eth_rx_notif, eth_rx_seek_req, eth_rx_seek_ack, rxbuf_release_req, cfgmem);
     //move offload
     HLSLIB_FREERUNNING_FUNCTION(
         dma_mover, cfgmem, MAX_SEG_SIZE, cmd_fifos[CMD_DMA_MOVE], sts_fifos[STS_DMA_MOVE],
@@ -537,17 +541,17 @@ void sim_bd(zmqpp::socket &cmd_socket,
     HLSLIB_FREERUNNING_FUNCTION(axis_switch<8, 9>, switch_s, switch_m);
     HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, dma_read_data[0],             switch_s[SWITCH_S_DMA0_READ], seg_cmd[0],  seg_sts[0] );   //DMA0 read
     HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, dma_read_data[1],             switch_s[SWITCH_S_DMA1_READ], seg_cmd[1],  seg_sts[1] );   //DMA1 read
-    HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, krnl_to_accl_data,            switch_s[SWITCH_S_EXT_KRNL],  seg_cmd[3],  seg_sts[3] );   //ext kernel in
-    HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, switch_m[SWITCH_M_EXT_KRNL],  accl_to_krnl_data,            seg_cmd[4],  seg_sts[4] );   //ext kernel out
-    HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, switch_m[SWITCH_M_ARITH_OP0], arith_op0,                    seg_cmd[5],  seg_sts[5] );   //arith op0
-    HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, switch_m[SWITCH_M_ARITH_OP1], arith_op1,                    seg_cmd[6],  seg_sts[6] );   //arith op1
-    HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, arith_res,                    switch_s[SWITCH_S_ARITH_RES], seg_cmd[7],  seg_sts[7] );   //arith result 
-    HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, switch_m[SWITCH_M_CLANE0], clane0_op,                    seg_cmd[8],  seg_sts[8] );   //clane0 op    
-    HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, clane0_res,                   switch_s[SWITCH_S_CLANE0], seg_cmd[9],  seg_sts[9] );   //clane0 result
-    HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, switch_m[SWITCH_M_CLANE1], clane1_op,                    seg_cmd[10], seg_sts[10]);   //clane1 op    
-    HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, clane1_res,                   switch_s[SWITCH_S_CLANE1], seg_cmd[11], seg_sts[11]);   //clane1 result
-    HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, switch_m[SWITCH_M_CLANE2], clane2_op,                    seg_cmd[12], seg_sts[12]);   //clane2 op    
-    HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, clane2_res,                   switch_s[SWITCH_S_CLANE2], seg_cmd[13], seg_sts[13]);   //clane2 result
+    HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, krnl_to_accl_data,            switch_s[SWITCH_S_EXT_KRNL],  seg_cmd[2],  seg_sts[2] );   //ext kernel in
+    HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, switch_m[SWITCH_M_EXT_KRNL],  accl_to_krnl_data,            seg_cmd[3],  seg_sts[3] );   //ext kernel out
+    HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, switch_m[SWITCH_M_ARITH_OP0], arith_op0,                    seg_cmd[4],  seg_sts[4] );   //arith op0
+    HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, switch_m[SWITCH_M_ARITH_OP1], arith_op1,                    seg_cmd[5],  seg_sts[5] );   //arith op1
+    HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, arith_res,                    switch_s[SWITCH_S_ARITH_RES], seg_cmd[6],  seg_sts[6] );   //arith result 
+    HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, switch_m[SWITCH_M_CLANE0], clane0_op,                    seg_cmd[7],  seg_sts[7] );   //clane0 op    
+    HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, clane0_res,                   switch_s[SWITCH_S_CLANE0], seg_cmd[8],  seg_sts[8] );   //clane0 result
+    HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, switch_m[SWITCH_M_CLANE1], clane1_op,                    seg_cmd[9], seg_sts[9]);   //clane1 op    
+    HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, clane1_res,                   switch_s[SWITCH_S_CLANE1], seg_cmd[10], seg_sts[10]);   //clane1 result
+    HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, switch_m[SWITCH_M_CLANE2], clane2_op,                    seg_cmd[11], seg_sts[11]);   //clane2 op    
+    HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, clane2_res,                   switch_s[SWITCH_S_CLANE2], seg_cmd[12], seg_sts[12]);   //clane2 result
     //ARITH
     HLSLIB_FREERUNNING_FUNCTION(arithmetic, arith_op0, arith_op1, arith_res);
     //COMPRESS 0, 1, 2
@@ -555,12 +559,11 @@ void sim_bd(zmqpp::socket &cmd_socket,
     HLSLIB_FREERUNNING_FUNCTION(compression, clane1_op, clane1_res);
     HLSLIB_FREERUNNING_FUNCTION(compression, clane2_op, clane2_res);
     //network PACK/DEPACK
-    //TODO: implement conditional instantiation of UDP or TCP (de)packetizer here
     if(use_tcp){
-        HLSLIB_FREERUNNING_FUNCTION(tcp_packetizer, switch_m[SWITCH_M_ETH_TX], eth_tx_data_int, eth_tx_cmd, eth_tx_sts, MAX_PACKETSIZE);
-        HLSLIB_FREERUNNING_FUNCTION(tcp_depacketizer, eth_rx_data_int, switch_m[SWITCH_S_ETH_RX], eth_rx_sts);
-        HLSLIB_FREERUNNING_FUNCTION(tcp_rxHandler, eth_notification,  eth_read_pkg, eth_rx_meta,  eth_tx_data_stack, eth_tx_data_int, eth_notif_out);
-        HLSLIB_FREERUNNING_FUNCTION(tcp_txHandler, eth_tx_data_int, cmd_txHandler, eth_tx_meta,  eth_tx_data_int,  eth_tx_status);
+        HLSLIB_FREERUNNING_FUNCTION(tcp_packetizer, switch_m[SWITCH_M_ETH_TX], eth_tx_data_int, eth_tx_cmd, cmd_txHandler, eth_tx_sts, MAX_PACKETSIZE);
+        HLSLIB_FREERUNNING_FUNCTION(tcp_depacketizer, eth_rx_data_int, switch_s[SWITCH_S_ETH_RX], eth_rx_sts);
+        HLSLIB_FREERUNNING_FUNCTION(tcp_rxHandler, eth_notif,  eth_read_pkg, eth_rx_meta,  eth_rx_data_stack, eth_rx_data_int, eth_notif_out);
+        HLSLIB_FREERUNNING_FUNCTION(tcp_txHandler, eth_tx_data_int, cmd_txHandler, eth_tx_meta,  eth_tx_data_stack,  eth_tx_status);
         HLSLIB_FREERUNNING_FUNCTION(
             tcp_sessionHandler,
             cmd_fifos[CMD_NET_PORT], sts_fifos[STS_NET_PORT],
@@ -571,19 +574,12 @@ void sim_bd(zmqpp::socket &cmd_socket,
         //instantiate dummy TCP stack which responds to appropriate comm patterns
         HLSLIB_FREERUNNING_FUNCTION(
             network_krnl,
-            eth_notification, 
-            eth_read_pkg,
-            eth_rx_meta, 
-            eth_rx_data_stack,
-            eth_tx_meta, 
-            eth_tx_data_stack, 
-            eth_tx_status,
-            eth_open_connection,
-            eth_open_status,
-            eth_listen_port, 
-            eth_port_status,
-            eth_rx_data,
-            eth_tx_data
+            eth_notif, eth_read_pkg,
+            eth_rx_meta, eth_rx_data_stack,
+            eth_tx_meta, eth_tx_data_stack, eth_tx_status,
+            eth_open_connection, eth_open_status,
+            eth_listen_port, eth_port_status,
+            eth_rx_data, eth_tx_data
         );
     } else{
         HLSLIB_FREERUNNING_FUNCTION(udp_packetizer, switch_m[SWITCH_M_ETH_TX], eth_tx_data, eth_tx_cmd, eth_tx_sts, MAX_PACKETSIZE);
@@ -645,5 +641,5 @@ int main(int argc, char** argv){
 
     this_thread::sleep_for(chrono::milliseconds(1000));
 
-    sim_bd(cmd_socket, eth_tx_socket, eth_rx_socket, devicemem, cfgmem, local_rank, eth_type == "tcp");
+    sim_bd(cmd_socket, eth_tx_socket, eth_rx_socket, devicemem, cfgmem, eth_type == "tcp", local_rank);
 }

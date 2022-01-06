@@ -130,6 +130,7 @@ void tcp_txHandler(
             stream_word currPkt;
             currPkt.data = currWord.data;
             currPkt.keep = currWord.keep;
+            currPkt.dest = currWord.dest;
             currPkt.last = (wordCnt == currentPkgWord);
             STREAM_WRITE(m_axis_tcp_tx_data, currPkt);
             if (wordCnt == currentPkgWord)

@@ -52,7 +52,7 @@ void rxbuf_dequeue(
 	}else{
 		new_status = STATUS_RESERVED;
 	}
-	rx_buffers[ spare_idx * SPARE_BUFFER_FIELDS + STATUS_OFFSET] = new_status;
+	rx_buffers[1 + spare_idx * SPARE_BUFFER_FIELDS + STATUS_OFFSET] = new_status;
 	//send to the DMA mover data required to identify/resolve a receive: tag, src, count, address
 	rxbuf_notification s;
 	// s.addr(31, 0) = rx_buffers[1 + spare_idx * SPARE_BUFFER_FIELDS + ADDRL_OFFSET];

@@ -125,15 +125,15 @@ void requestFSM(
 }
 
 void consumeFSM(STREAM<pkt16>& s_axis_tcp_rx_meta, 
-               STREAM<pkt512>& s_axis_tcp_rx_data,
-               STREAM<pkt512 >& m_data_out,
+               STREAM<stream_word>& s_axis_tcp_rx_data,
+               STREAM<stream_word>& m_data_out,
                STREAM<bool>& decrCntReq
                )
 {
 #pragma HLS PIPELINE II=1
 #pragma HLS INLINE off
 
-    pkt512 currWord;
+    stream_word currWord;
     enum consumeFsmStateType {WAIT_PKG, CONSUME};
     static consumeFsmStateType  serverFsmState = WAIT_PKG;
 
@@ -143,7 +143,7 @@ void consumeFSM(STREAM<pkt16>& s_axis_tcp_rx_meta,
         if (!STREAM_IS_EMPTY(s_axis_tcp_rx_meta) && !STREAM_IS_EMPTY(s_axis_tcp_rx_data))
         {
             STREAM_READ(s_axis_tcp_rx_meta);
-            pkt512 receiveWord = STREAM_READ(s_axis_tcp_rx_data);
+            stream_word receiveWord = STREAM_READ(s_axis_tcp_rx_data);
             currWord.data = receiveWord.data;
             currWord.keep = receiveWord.keep;
             currWord.last = receiveWord.last;
@@ -162,7 +162,7 @@ void consumeFSM(STREAM<pkt16>& s_axis_tcp_rx_meta,
     case CONSUME:
         if (!STREAM_IS_EMPTY(s_axis_tcp_rx_data))
         {
-            pkt512 receiveWord = STREAM_READ(s_axis_tcp_rx_data);
+            stream_word receiveWord = STREAM_READ(s_axis_tcp_rx_data);
             currWord.data = receiveWord.data;
             currWord.keep = receiveWord.keep;
             currWord.last = receiveWord.last;

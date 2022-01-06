@@ -157,6 +157,7 @@ if __name__ == "__main__":
     parser.add_argument('--sndrcv_strm', action='store_true', default=False, help='Run send/receive test')
     parser.add_argument('--bcast',      action='store_true', default=False, help='Run bcast test')
     parser.add_argument('--scatter',    action='store_true', default=False, help='Run scatter test')
+    parser.add_argument('--tcp',        action='store_true', default=False, help='Run test using TCP')
 
     args = parser.parse_args()
     if args.all:
@@ -180,7 +181,7 @@ if __name__ == "__main__":
         ranks.append({"ip": "127.0.0.1", "port": args.start_port+world_size+i, "session_id":i})
 
     #configure FPGA and CCLO cores with the default 16 RX buffers of bsize KB each
-    cclo_inst = accl(ranks, local_rank, protocol="UDP", sim_sock="tcp://localhost:"+str(args.start_port+local_rank))
+    cclo_inst = accl(ranks, local_rank, protocol=("TCP" if args.tcp else "UDP"), sim_sock="tcp://localhost:"+str(args.start_port+local_rank))
     cclo_inst.set_timeout(10**8)
     #barrier here to make sure all the devices are configured before testing
     comm.barrier()

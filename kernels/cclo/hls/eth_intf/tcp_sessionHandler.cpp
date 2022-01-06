@@ -24,13 +24,14 @@ void tcp_openConReq(
 ){
 #pragma HLS PIPELINE II=1 style=flp
 #pragma HLS INLINE off
-	unsigned int ip = (STREAM_READ(cmd)).data;
-	int port = (STREAM_READ(cmd)).data;	
-
-	pkt64 openConnection_pkt;
-    openConnection_pkt.data(31,0) = ip;
-    openConnection_pkt.data(47,32) = port;
-    STREAM_WRITE(m_axis_tcp_open_connection, openConnection_pkt);
+    if (!STREAM_IS_EMPTY(cmd)){
+        unsigned int ip = (STREAM_READ(cmd)).data;
+        int port = (STREAM_READ(cmd)).data;	
+        pkt64 openConnection_pkt;
+        openConnection_pkt.data(31,0) = ip;
+        openConnection_pkt.data(47,32) = port;
+        STREAM_WRITE(m_axis_tcp_open_connection, openConnection_pkt);
+    }
 }
 
 void tcp_openConResp(   
@@ -129,7 +130,7 @@ void tcp_openPort(
             port_status = STREAM_READ(s_axis_tcp_port_status);
             success = port_status.data;
             listenState = WR_STS;
-        }         
+        }   
         break;
     case WR_STS:
         if (!STREAM_IS_FULL(sts))

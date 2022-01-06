@@ -54,9 +54,10 @@ void tcp_packetizer(
 	while(bytes_processed < bytes_to_process){
 	#pragma HLS PIPELINE II=1
 		stream_word outword;
+		outword.dest = cmdword.dst;
 		//if this is the first word, put the count in a header
 		if(bytes_processed == 0){
-			outword.data(DATA_WIDTH, HEADER_LENGTH) = 0;
+			outword.data(DATA_WIDTH-1, HEADER_LENGTH) = 0;
 			outword.data(HEADER_LENGTH-1,0) = (ap_uint<HEADER_LENGTH>)cmdword;
 		} else {
 			outword.data = STREAM_READ(in).data;
