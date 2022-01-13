@@ -40,6 +40,12 @@ void tcp_depacketizer(
 	//read header and put in sts stream
 	int count = hdr.count;
 
+#ifndef ACCL_SYNTHESIS
+	std::stringstream ss;
+	ss << "TCP Depacketizer: Processing incoming message count=" << count << "\n";
+	std::cout << ss.str();
+#endif
+
 	if(hdr.strm == 0){
 		STREAM_WRITE(sts, hdr);
 	}

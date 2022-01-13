@@ -26,7 +26,7 @@
 
 #define KERNEL_NAME    "ccl_offload"
 #define KERNEL_VENDOR  "Xilinx"
-#define KERNEL_LIBRARY "XCCL"
+#define KERNEL_LIBRARY "ACCL"
 
 //Datapath width (in bytes) for all streams everywhere in the design
 #define DATAPATH_WIDTH_BYTES 64
@@ -56,34 +56,29 @@
 //**  XCC Operations          **
 //******************************
 //Housekeeping
-#define XCCL_CONFIG         0
+#define ACCL_CONFIG         0
 //Primitives
-#define XCCL_COPY           1
-#define XCCL_COMBINE        2
-#define XCCL_SEND           3 
-#define XCCL_RECV           4
+#define ACCL_COPY           1
+#define ACCL_COMBINE        2
+#define ACCL_SEND           3 
+#define ACCL_RECV           4
 //Collectives
-#define XCCL_BCAST          5
-#define XCCL_SCATTER        6
-#define XCCL_GATHER         7
-#define XCCL_REDUCE         8
-#define XCCL_ALLGATHER      9
-#define XCCL_ALLREDUCE      10
-#define XCCL_REDUCE_SCATTER 11
+#define ACCL_BCAST          5
+#define ACCL_SCATTER        6
+#define ACCL_GATHER         7
+#define ACCL_REDUCE         8
+#define ACCL_ALLGATHER      9
+#define ACCL_ALLREDUCE      10
+#define ACCL_REDUCE_SCATTER 11
 
-//XCCL_CONFIG SUBFUNCTIONS
-#define HOUSEKEEP_IRQEN           0
-#define HOUSEKEEP_IRQDIS          1
-#define HOUSEKEEP_SWRST           2
-#define HOUSEKEEP_PKTEN           3
-#define HOUSEKEEP_TIMEOUT         4
-#define OPEN_PORT                 5
-#define OPEN_CON                  6
-#define SET_STACK_TYPE            7
-#define START_PROFILING           8
-#define END_PROFILING             9
-#define SET_DMA_TRANSACTION_SIZE  10
-#define SET_MAX_DMA_TRANSACTIONS  11
+//ACCL_CONFIG SUBFUNCTIONS
+#define HOUSEKEEP_SWRST                0
+#define HOUSEKEEP_PKTEN                1
+#define HOUSEKEEP_TIMEOUT              2
+#define HOUSEKEEP_OPEN_PORT            3
+#define HOUSEKEEP_OPEN_CON             4
+#define HOUSEKEEP_SET_STACK_TYPE       5
+#define HOUSEKEEP_SET_MAX_SEGMENT_SIZE 6
 
 //AXI MMAP address
 #define HWID_OFFSET       0x1FF8

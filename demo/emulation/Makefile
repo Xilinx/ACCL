@@ -11,15 +11,20 @@ DMA_MOVER_DIR=$(CCLO_HLS_ROOT)/dma_mover
 MB_FW_DIR=$(ACCL_REPO_ROOT)/kernels/cclo/fw/sw_apps/ccl_offload_control/src
 NRANKS=2
 START_PORT=5500
-DEFINES:=-DZMQ_CALL_VERBOSE
 
-INCLUDES=-I$(HLSLIB_INCLUDE) -I$(XILINX_VIVADO)/include/ -I$(REDUCTION_DIR) -I$(CCLO_ETH_DIR) -I$(SEGMENTER_DIR) -I$(MB_FW_DIR) -I$(CCLO_HLS_ROOT) -I$(DMA_MOVER_DIR) -I$(RXBUF_OFFLOAD_DIR) -I$(DUMMY_TCP_DIR)
+#Additional defines, for example: -DZMQ_CALL_VERBOSE
+EXTRA_DEFINES:=
+
+MPI_INCLUDES=-I/usr/lib/x86_64-linux-gnu/openmpi/include/openmpi -I/usr/lib/x86_64-linux-gnu/openmpi/include
+MPI_LIBPATHS=-L/usr/lib/x86_64-linux-gnu/openmpi/lib
+
+INCLUDES=$(MPI_INCLUDES) -I$(HLSLIB_INCLUDE) -I$(XILINX_VIVADO)/include/ -I$(REDUCTION_DIR) -I$(CCLO_ETH_DIR) -I$(SEGMENTER_DIR) -I$(MB_FW_DIR) -I$(CCLO_HLS_ROOT) -I$(DMA_MOVER_DIR) -I$(RXBUF_OFFLOAD_DIR) -I$(DUMMY_TCP_DIR)
 SOURCES=cclo_emu.cpp $(MB_FW_DIR)/ccl_offload_control.c $(REDUCTION_DIR)/reduce_sum.cpp $(CCLO_ETH_DIR)/*.cpp $(SEGMENTER_DIR)/*.cpp $(RXBUF_OFFLOAD_DIR)/*.cpp $(DMA_MOVER_DIR)/*.cpp $(DUMMY_TCP_DIR)/*.cpp
 
 all: cclo_emu
 
 cclo_emu: cclo_emu.cpp $(MB_FW_DIR)/ccl_offload_control.c
-	g++ -std=c++17 -Wno-attributes -fdiagnostics-color=always -g $(DEFINES) $(INCLUDES) $(SOURCES) -o $@ -lpthread -lzmqpp -lzmq -ljsoncpp
+	g++ -std=c++17 -Wno-attributes -fdiagnostics-color=always -g $(EXTRA_DEFINES) $(INCLUDES) $(SOURCES) $(MPI_LIBPATHS) -o $@ -lpthread -lzmqpp -lzmq -ljsoncpp -lmpi_cxx -lmpi
 
 .PHONY: run
 run: cclo_emu

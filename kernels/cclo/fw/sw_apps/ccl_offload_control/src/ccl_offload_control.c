@@ -36,8 +36,7 @@ static volatile int 		 use_tcp = 1;
 static volatile int 		 dma_tag;
 static volatile unsigned int timeout = 1 << 28;
 static volatile unsigned int dma_tag_lookup [MAX_DMA_TAGS]; //index of the spare buffer that has been issued with that dma tag. -1 otherwise
-static volatile	unsigned int dma_transaction_size 	= DMA_MAX_BTT;
-static volatile unsigned int max_dma_in_flight 		= DMA_MAX_TRANSACTIONS;
+static volatile	unsigned int max_segment_size = DMA_MAX_BTT;
 
 static datapath_arith_config arcfg;
 static communicator world;
@@ -50,6 +49,17 @@ hlslib::Stream<ap_axiu<32,0,0,0>, 512> sts_fifos[4];
 #else
 uint32_t *cfgmem = (uint32_t *)(EXCHMEM_BASEADDR);
 #endif
+
+//utility functions
+/*Function to find minimum of x and y*/
+inline int min(int x, int y){
+    return  y + ((x - y) & ((x - y) >> 31));
+}
+ 
+/*Function to find maximum of x and y*/
+inline int max(int x, int y){
+    return x - ((x - y) & ((x - y) >> 31));
+}
 
 //circular buffer operation
 void cb_init(circular_buffer *cb, unsigned int capacity){
@@ -346,8 +356,10 @@ inline int move(
     if(res_is_remote || res_opcode == MOVE_STREAM){
         putd(CMD_DMA_MOVE, tx_tag);
     }
-    if(res_is_remote){
+    if(res_is_remote || op1_opcode == MOVE_ON_RECV){
         putd(CMD_DMA_MOVE, comm_offset/4);
+    }
+    if(res_is_remote){
         putd(CMD_DMA_MOVE, tx_dst_rank);
     }
     return getd(STS_DMA_MOVE);
@@ -458,15 +470,16 @@ int send(
 int recv(	unsigned int src_rank,	
             unsigned int count,
             uint64_t dst_addr,
+            unsigned int comm_offset,
             unsigned int arcfg_offset,
             unsigned int src_tag,
             unsigned int compression){
     return move(
-        MOVE_ON_RECV, 
         MOVE_NONE,
+        MOVE_ON_RECV, 
         MOVE_IMMEDIATE, 
         compression, RES_LOCAL, 0,
-        count, 0, arcfg_offset, 0, 0, dst_addr, 0, 0, 0,
+        count, comm_offset, arcfg_offset, 0, 0, dst_addr, 0, 0, 0,
         src_rank, src_tag, 0, 0
     );
 }
@@ -758,72 +771,75 @@ int relay(
 
     return NO_ERROR;
 }
-
+*/
 //COLLECTIVES
 
-//root read multiple times the same segment and send it to each rank before moving to the next part of the buffer to be transmitted.
+//root reads multiple times the same segment and send it to each rank before 
+//moving to the next part of the buffer to be transmitted.
 //use MOVE_IMMEDIATE and MOVE_INCREMENTING and MOVE_REPEATING in sequence 
 int broadcast(  unsigned int count,
                 unsigned int src_rank,
                 uint64_t buf_addr,
-                unsigned int compression){
-    int i, dma_tag_tmp=dma_tag;
-    //determine if we're sending or receiving
-    if(src_rank == world.local_rank){
-        
-        //on the root we only care about ETH_COMPRESSED and OP0_COMPRESSED
-        //so mask out RES_COMPRESSED
-        compression &= ~(RES_COMPRESSED);
+                unsigned int comm_offset, 
+                unsigned int arcfg_offset,
+                unsigned int compression,
+                unsigned int stream){
 
-        //configure datapath
-        configure_datapath(DATAPATH_OFFCHIP_TX, 0, compression, 0);
-
-        //send to all members of the communicator 1 segment of the buffer at the time
-        dm_config cfg = dm_config_init(count, buf_addr, 0, 0, USE_OP0_DM | USE_RES_DM, RES_REMOTE, compression, NO_STREAM);
-
-        int emit_dst_rank, ack_dst_rank;
-        while(cfg.elems_remaining > 0){
-            //1. issue at most max_dma_in_flight transfers to consecutive ranks
-            for (i = 0, emit_dst_rank=0; emit_dst_rank < world.size && i < max_dma_in_flight ; i++, emit_dst_rank++){
-                if(emit_dst_rank != src_rank){
-                    //start DMAs
-                    dma_tag_tmp = start_move(&cfg, dma_tag_tmp, emit_dst_rank, TAG_ANY);
-                }
-            }
-            //2.ack 1 and issue another dma transfer up until there's no more dma move to issue
-            for(ack_dst_rank = 0; emit_dst_rank < world.size; ack_dst_rank++, emit_dst_rank++){
-                if(ack_dst_rank != src_rank){
-                    //wait for DMAs to finish
-                    ack_move(&cfg, ack_dst_rank);
-                }
-                //enqueue other DMA movement
-                if(emit_dst_rank != src_rank){
-                    //start DMAs
-                    dma_tag_tmp = start_move(&cfg, dma_tag_tmp, emit_dst_rank, TAG_ANY);
-                }
-            }
-            //3. finish ack the remaining
-            for(; ack_dst_rank < world.size; ack_dst_rank++){
-                if(ack_dst_rank != src_rank){
-                    //wait for DMAs to finish
-                    ack_move(&cfg, ack_dst_rank);
-                }
-            }
-            //advance config
-            //TODO: this can be interleaved with command issuing to avoid pausing
-            dm_config_update(&cfg);
-        }
-        return NO_ERROR;
-    }else{
-        //on non-root odes we only care about ETH_COMPRESSED and RES_COMPRESSED
-        //so mask out OP0_COMPRESSED
-        //NOTE: recv currently ignores OP0_COMPRESSED anyway, but this is safer and better for documentation
-        compression &= ~(OP0_COMPRESSED);
-        return recv(src_rank, count, buf_addr, TAG_ANY, compression);
+    int err = NO_ERROR;
+    unsigned int max_seg_count; 
+    int elems_remaining = count;
+    //convert max segment size to max segment count
+    //if pulling from a stream, segment size is irrelevant and we use the 
+    //count directly because streams can't be read losslessly
+    if(stream & OP0_STREAM){
+        max_seg_count = count;
+    } else{
+        //compute count from uncompressed elem bytes in aright config
+        //instead of Xil_In32 we could use:
+        //(datapath_arith_config*)(arcfg_offset)->uncompressed_elem_bytes;
+        max_seg_count = max_segment_size / Xil_In32(arcfg_offset);
     }
-    
-}
 
+    while(elems_remaining > 0){
+        //determine if we're sending or receiving
+        if(src_rank == world.local_rank){
+            //on the root we only care about ETH_COMPRESSED and OP0_COMPRESSED
+            //so replace RES_COMPRESSED with ETH_COMPRESSED
+            compression = compression | (compression >> 1);
+
+            //send a segment to each of the ranks (excluding self)
+            for(int i=0; i < world.size; i++){
+                err |= move(
+                    (i==0) ? ((elems_remaining == count) ? MOVE_IMMEDIATE : MOVE_INCREMENT) : MOVE_REPEAT, 
+                    MOVE_NONE, 
+                    MOVE_IMMEDIATE, 
+                    compression, RES_REMOTE, 0,
+                    (i == src_rank) ? 0 : min(max_seg_count, elems_remaining), 
+                    comm_offset, arcfg_offset, 
+                    buf_addr, 0, 0, 0, 0, 0,
+                    0, 0, i, TAG_ANY
+                );
+            }
+        } else{
+            //on non-root odes we only care about ETH_COMPRESSED and RES_COMPRESSED
+            //so replace OP0_COMPRESSED with the value of ETH_COMPRESSED
+            compression = compression | (compression >> 3);
+            err |= move(
+                MOVE_NONE,
+                MOVE_ON_RECV, 
+                (elems_remaining == count) ? MOVE_IMMEDIATE : MOVE_INCREMENT, 
+                compression, RES_LOCAL, 0,
+                min(max_seg_count, elems_remaining),
+                comm_offset, arcfg_offset, 
+                0, 0, buf_addr, 0, 0, 0,
+                src_rank, TAG_ANY, 0, 0
+            );
+        }
+        elems_remaining -= max_seg_count;
+    }
+    return err;
+}
+/*
 //scatter segment at a time. root sends each rank a segment in a round robin fashion 
 //use MOVE_IMMEDIATE and MOVE_INCREMENTING and MOVE_STRIDE in sequence 
 int scatter(unsigned int count,
@@ -1208,7 +1224,7 @@ int run_accl() {
         
         switch (scenario)
         {
-            case XCCL_CONFIG:
+            case ACCL_CONFIG:
                 retval = 0;
                 switch (function)
                 {
@@ -1222,34 +1238,27 @@ int run_accl() {
                     case HOUSEKEEP_TIMEOUT:
                         timeout = count;
                         break;
-                    case OPEN_PORT:
+                    case HOUSEKEEP_OPEN_PORT:
                         if(use_tcp == 1){
                             retval = openPort();
                         } else{
                             retval = OPEN_PORT_NOT_SUCCEEDED;
                         }
                         break;
-                    case OPEN_CON:
+                    case HOUSEKEEP_OPEN_CON:
                         if(use_tcp == 1){
                             retval = openCon();
                         } else{
                             retval = OPEN_CON_NOT_SUCCEEDED;
                         }
                         break;
-                    case SET_STACK_TYPE:
+                    case HOUSEKEEP_SET_STACK_TYPE:
                         use_tcp = count;
                         break;
-                    case SET_DMA_TRANSACTION_SIZE:
+                    case HOUSEKEEP_SET_MAX_SEGMENT_SIZE:
                         retval = DMA_NOT_EXPECTED_BTT_ERROR;
                         if(count < DMA_MAX_BTT){
-                            dma_transaction_size = count;
-                            retval = NO_ERROR;
-                        }
-                        break;
-                    case SET_MAX_DMA_TRANSACTIONS:
-                        retval = DMA_NOT_OKAY_ERROR;
-                        if(count < DMA_MAX_TRANSACTIONS){
-                            max_dma_in_flight = count;
+                            max_segment_size = count;
                             retval = NO_ERROR;
                         }
                         break;
@@ -1258,37 +1267,37 @@ int run_accl() {
                 }
                 
                 break;
-            case XCCL_COPY:
+            case ACCL_COPY:
                 retval = copy(count, op0_addr, res_addr, datapath_cfg, compression_flags, stream_flags);
                 break;
-            case XCCL_COMBINE:
+            case ACCL_COMBINE:
                 retval = combine(count, function, op0_addr, op1_addr, res_addr, datapath_cfg, compression_flags, stream_flags);
                 break;
-            case XCCL_SEND:
+            case ACCL_SEND:
                 retval = send(root_src_dst, count, op0_addr, comm, datapath_cfg, msg_tag, compression_flags, stream_flags);
                 break;
-            case XCCL_RECV:
-                retval = recv(root_src_dst, count, res_addr, datapath_cfg, msg_tag, compression_flags);
+            case ACCL_RECV:
+                retval = recv(root_src_dst, count, res_addr, comm, datapath_cfg, msg_tag, compression_flags);
                 break;
-            // case XCCL_BCAST:
-            //     retval = broadcast(count, root_src_dst, op0_addr, compression_flags);
-            //     break;
-            // case XCCL_SCATTER:
+            case ACCL_BCAST:
+                retval = broadcast(count, root_src_dst, op0_addr, comm, datapath_cfg, compression_flags, stream_flags);
+                break;
+            // case ACCL_SCATTER:
             //     retval = scatter(count, root_src_dst, op0_addr, res_addr, compression_flags);
             //     break;
-            // case XCCL_GATHER:
+            // case ACCL_GATHER:
             //     retval = gather(count, root_src_dst, op0_addr, res_addr, compression_flags);
             //     break;
-            // case XCCL_REDUCE:
+            // case ACCL_REDUCE:
             //     retval = reduce(count, function, root_src_dst, op0_addr, res_addr, compression_flags);
             //     break;
-            // case XCCL_ALLGATHER:
+            // case ACCL_ALLGATHER:
             //     retval = allgather(count, op0_addr, res_addr, compression_flags);
             //     break;
-            // case XCCL_ALLREDUCE:
+            // case ACCL_ALLREDUCE:
             //     retval = allreduce(count, function, op0_addr, res_addr, compression_flags);
             //     break;
-            // case XCCL_REDUCE_SCATTER:
+            // case ACCL_REDUCE_SCATTER:
             //     retval = scatter_reduce(count, function, op0_addr, res_addr, compression_flags);
             //     break;
             default:

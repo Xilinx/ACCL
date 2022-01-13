@@ -33,6 +33,7 @@ typedef struct {
 typedef struct {
     ap_uint<64> addr;
     ap_uint<32> index;
+    ap_uint<32> len;
     bool valid;
 } rxbuf_seek_result;
 

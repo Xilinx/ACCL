@@ -78,25 +78,25 @@ typedef struct{
     bool check_eth_tx;
     bool check_strm_tx;
     bool release_rxbuf;
-    ap_uint<32> rxbuf_idx;
+    ap_uint<32> release_count = 0;
 } move_ack_instruction;
 
 typedef struct{
     unsigned int total_bytes;
     ap_uint<64> addr;
+    bool last = true;
 } datamover_instruction;
 
 typedef struct{
-    ap_uint<23> total_bytes;
-    ap_uint<4> tag;
-    ap_uint<1> indeterminate_btt;
-    ap_uint<1> last_cmd;
+    unsigned int ncommands;
+    bool last = true;
 } datamover_ack_instruction;
 
 typedef struct{
     unsigned int c_nwords;
     unsigned int u_nwords;
     bool stream_in;
+    bool use_secondary_op_lane;
     bool stream_out;
     bool eth_out;
     bool op0_compressed;
@@ -118,6 +118,11 @@ typedef struct{
     unsigned int mpi_tag;
     bool to_stream;
 } packetizer_instruction;
+
+typedef struct{
+    unsigned int expected_seqn;
+    bool last = true;
+} packetizer_ack_instruction;
 
 void dma_mover(
     //interfaces to processor

@@ -173,18 +173,13 @@ class CCLOp(IntEnum):
 
 @unique
 class CCLOCfgFunc(IntEnum):
-    enable_irq               = 0
-    disable_irq              = 1
-    reset_periph             = 2
-    enable_pkt               = 3
-    set_timeout              = 4
-    open_port                = 5
-    open_con                 = 6
-    set_stack_type           = 7
-    start_profiling          = 8
-    end_profiling            = 9
-    set_dma_transaction_size = 10
-    set_max_dma_transactions = 11
+    reset_periph         = 0
+    enable_pkt           = 1
+    set_timeout          = 2
+    open_port            = 3
+    open_con             = 4
+    set_stack_type       = 5
+    set_max_segment_size = 6
 
 @unique
 class ACCLReduceFunctions(IntEnum):
@@ -463,16 +458,12 @@ class accl():
         else:
             self.utility_spare = SimBuffer(np.zeros((bufsize*max_higher,), dtype=np.int8), self.cclo.socket)
 
-        #Start irq-driven RX buffer scheduler and (de)packetizer
-        #self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.reset_periph)
-        self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.enable_irq)
+        #Start (de)packetizer
         self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.enable_pkt)
-        print("time taken to enqueue buffers", self.cclo.read(0x1FF4))
         #set segmentation size equal to buffer size
-        self.set_dma_transaction_size(bufsize)
-        self.set_max_dma_in_flight(10)
+        self.set_max_segment_size(bufsize)
     
-    def dump_rx_buffers_spares(self, nbufs=None):
+    def dump_rx_buffers(self, nbufs=None):
         addr = self.rx_buffers_adr
         if nbufs is None:
             assert self.cclo.read(addr) == len(self.rx_buffer_spares)
@@ -518,7 +509,7 @@ class accl():
             except Exception :
                 content= "xxread failedxx"
             buf_phys_addr = addrh*(2**32)+addrl
-            print(f"SPARE RX BUFFER{i}:\t ADDR: {hex(buf_phys_addr)} \t STATUS: {status} \t OCCUPANCY: {rxlen}/{maxsize} \t DMA TAG: {hex(dmatag)} \t  MPI TAG:{hex(rxtag)} \t SEQ: {seq} \t SRC:{rxsrc} \t DATA: {content}")
+            print(f"SPARE RX BUFFER{i}:\t ADDR: {hex(buf_phys_addr)} \t STATUS: {status} \t OCCUPANCY: {rxlen}/{maxsize} \t  MPI TAG:{hex(rxtag)} \t SEQ: {seq} \t SRC:{rxsrc} \t DATA: {content}")
 
     def prepare_call(self, addr_0, addr_1, addr_2, compress_dtype=None):
         # no addresses, this is a config call
@@ -625,24 +616,12 @@ class accl():
         if run_async:
             return handle
         else:
-            handle.wait()
-
-    def start_profiling(self, run_async=False, waitfor=[]):
-        handle = self.call_async(scenario=CCLOp.config, function=CCLOCfgFunc.start_profiling, waitfor=waitfor)
-        if run_async:
-            return handle
-        else:
-            handle.wait()
-
-    def end_profiling(self, run_async=False, waitfor=[]):
-        handle = self.call_async(scenario=CCLOp.config, function=CCLOCfgFunc.end_profiling, waitfor=waitfor)
-        if run_async:
-            return handle
-        else:
             handle.wait()     
 
     def init_connection(self, comm_id=0):
+        print("Opening ports to communicator ranks")
         self.open_port(comm_id)
+        print("Starting sessions to communicator ranks")
         self.open_con(comm_id)
     
     @self_check_return_value
@@ -662,15 +641,14 @@ class accl():
         self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.set_stack_type, count=1)   
     
     @self_check_return_value
-    def set_dma_transaction_size(self, value=0):
+    def set_max_segment_size(self, value=0):
         if value % 8 != 0:
             warnings.warn("ACCL: dma transaction must be divisible by 8 to use reduce collectives")
         elif value > self.rx_buffer_size:
             warnings.warn("ACCL: transaction size should be less or equal to configured buffer size!")
             return
-        self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.set_dma_transaction_size, count=value)   
+        self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.set_max_segment_size, count=value)   
         self.segment_size = value
-        print("time taken to start and stop timer", self.cclo.read(0x1FF4))
 
     @self_check_return_value
     def set_max_dma_in_flight(self, value=0):

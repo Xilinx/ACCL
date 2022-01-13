@@ -37,6 +37,7 @@
 #include <jsoncpp/json/json.h>
 #include <chrono>
 #include <numeric>
+#include <mpi.h>
 
 using namespace std;
 using namespace hlslib;
@@ -58,13 +59,13 @@ void dma_read(vector<char> &mem, Stream<ap_uint<104> > &cmd, Stream<ap_uint<32> 
         }
         tmp.last = (byte_count >= command.length);
         rdata.Push(tmp);
-        cout << "DMA Read: Data pushed last=" << tmp.last << endl;
     }
     status.okay = 1;
     status.tag = command.tag;
     sts.Push(status);
-    cout << "DMA Read: Status pushed" << endl;
-
+    ss.str(string());
+    ss << "DMA Read: Status pushed" << "\n";
+    cout << ss.str();
 }
 
 void dma_write(vector<char> &mem, Stream<ap_uint<104> > &cmd, Stream<ap_uint<32> > &sts, Stream<stream_word > &wdata){
@@ -89,12 +90,14 @@ void dma_write(vector<char> &mem, Stream<ap_uint<104> > &cmd, Stream<ap_uint<32>
             break;
         }
     }
+    //TODO: flush?
     status.okay = 1;
     status.tag = command.tag;
     status.bytesReceived = byte_count;
     sts.Push(status);
-    cout << "DMA Write: Status pushed" << endl;
-
+    ss.str(string());
+    ss << "DMA Write: Status pushed endOfPacket=" << status.endOfPacket << " btt=" << status.bytesReceived << "\n";
+    cout << ss.str();
 }
 
 template <unsigned int INW, unsigned int OUTW, unsigned int DESTW>
@@ -361,7 +364,7 @@ void serve_zmq(zmqpp::socket &socket, uint32_t *cfgmem, vector<char> &devicemem,
     socket.send(str);
 }
 
-void eth_endpoint_egress_port(zmqpp::socket &socket, Stream<stream_word > &in, unsigned int local_rank){
+void eth_endpoint_egress_port(zmqpp::socket &socket, Stream<stream_word > &in, unsigned int local_rank, bool remap_dest){
 
     zmqpp::message message;
     Json::Value packet;
@@ -382,6 +385,16 @@ void eth_endpoint_egress_port(zmqpp::socket &socket, Stream<stream_word > &in, u
         }
     }while(tmp.last == 0);
     dest = tmp.dest;
+    //do a bit of dest translation, because
+    //dest is actually a local session number, and sessions are allocated
+    //sequentially to ranks, skipping the local rank
+    //therefore ranks  0, 1, ... , local_rank, local_rank+1, ... , N-2, N-1
+    //map to sesssions 0, 1, ... ,        N/A, local_rank  , ... , N-3, N-2
+    if(remap_dest){
+        if(dest >= local_rank){
+            dest++;
+        }
+    }
     //first part of the message is the destination port ID
     message << to_string(dest);
     //second part of the message is the local rank of the sender
@@ -389,7 +402,7 @@ void eth_endpoint_egress_port(zmqpp::socket &socket, Stream<stream_word > &in, u
     //finally package the data
     string str = Json::writeString(builder, packet);
     message << str;
-    cout << "ETH Send to " << dest << " " << str;
+    cout << "ETH Send to " << dest << endl;
     socket.send(message);
 }
 
@@ -407,7 +420,7 @@ void eth_endpoint_ingress_port(zmqpp::socket &socket, Stream<stream_word > &out)
     message >> dst_text;
     message >> sender_rank_text;
     message >> msg_text;
-    cout << "ETH Receive " << msg_text << " from " << sender_rank_text << endl;
+    cout << "ETH Receive from " << sender_rank_text << endl;
 
     //parse msg_text as json
     Json::Value packet, data;
@@ -457,8 +470,8 @@ void sim_bd(zmqpp::socket &cmd_socket,
     Stream<stream_word, 32> krnl_to_accl_data;
     Stream<stream_word > accl_to_krnl_data;
 
-    Stream<stream_word > eth_rx_data;
-    Stream<stream_word > eth_tx_data;
+    Stream<stream_word, 1024> eth_rx_data;
+    Stream<stream_word, 1024> eth_tx_data;
 
     Stream<stream_word > arith_op0;
     Stream<stream_word > arith_op1;
@@ -509,8 +522,8 @@ void sim_bd(zmqpp::socket &cmd_socket,
     Stream<pkt16> eth_rx_meta;
     Stream<eth_notification> eth_notif_out;
 
-    Stream<stream_word> eth_tx_data_int;
-    Stream<stream_word> eth_rx_data_int;
+    Stream<stream_word, 1024> eth_tx_data_int;
+    Stream<stream_word, 1024> eth_rx_data_int;
     Stream<stream_word> eth_tx_data_stack;
     Stream<stream_word> eth_rx_data_stack;
 
@@ -528,7 +541,7 @@ void sim_bd(zmqpp::socket &cmd_socket,
     HLSLIB_FREERUNNING_FUNCTION(rxbuf_seek, eth_rx_notif, eth_rx_seek_req, eth_rx_seek_ack, rxbuf_release_req, cfgmem);
     //move offload
     HLSLIB_FREERUNNING_FUNCTION(
-        dma_mover, cfgmem, MAX_SEG_SIZE, cmd_fifos[CMD_DMA_MOVE], sts_fifos[STS_DMA_MOVE],
+        dma_mover, cfgmem, 1024/*MAX_SEG_SIZE*/, cmd_fifos[CMD_DMA_MOVE], sts_fifos[STS_DMA_MOVE],
         eth_rx_seek_req, eth_rx_seek_ack, rxbuf_release_req,
         dma_read_cmd_int[0], dma_read_cmd_int[1], dma_write_cmd_int[1], 
         dma_read_sts_int[0], dma_read_sts_int[1], dma_write_sts_int[1], 
@@ -583,14 +596,14 @@ void sim_bd(zmqpp::socket &cmd_socket,
         );
     } else{
         HLSLIB_FREERUNNING_FUNCTION(udp_packetizer, switch_m[SWITCH_M_ETH_TX], eth_tx_data, eth_tx_cmd, eth_tx_sts, MAX_PACKETSIZE);
-        HLSLIB_FREERUNNING_FUNCTION(udp_depacketizer, eth_rx_data, switch_m[SWITCH_S_ETH_RX], eth_rx_sts);
+        HLSLIB_FREERUNNING_FUNCTION(udp_depacketizer, eth_rx_data, switch_s[SWITCH_S_ETH_RX], eth_rx_sts);
     }
     //emulated external kernel
     HLSLIB_FREERUNNING_FUNCTION(dummy_external_kernel, accl_to_krnl_data, krnl_to_accl_data);
     //ZMQ to host process
     HLSLIB_FREERUNNING_FUNCTION(serve_zmq, cmd_socket, cfgmem, devicemem, sts_fifos[CMD_CALL], cmd_fifos[STS_CALL]);
     //ZMQ to other nodes process(es)
-    HLSLIB_FREERUNNING_FUNCTION(eth_endpoint_egress_port, eth_tx_socket, eth_tx_data, local_rank);
+    HLSLIB_FREERUNNING_FUNCTION(eth_endpoint_egress_port, eth_tx_socket, eth_tx_data, local_rank, use_tcp);
     HLSLIB_FREERUNNING_FUNCTION(eth_endpoint_ingress_port, eth_rx_socket, eth_rx_data);
     //MICROBLAZE
     HLSLIB_DATAFLOW_FUNCTION(run_accl);
@@ -599,13 +612,18 @@ void sim_bd(zmqpp::socket &cmd_socket,
 
 int main(int argc, char** argv){
     vector<char> devicemem;
-    sem_init(&mb_irq_mutex, 0, 0);
 
-    unsigned int world_size = atoi(argv[1]);
-    unsigned int local_rank = atoi(argv[2]);
-    string eth_type = argv[4];
+    MPI_Init(NULL, NULL);      // initialize MPI environment
+    int world_size; // number of processes
+    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+
+    int local_rank; // the rank of the process
+    MPI_Comm_rank(MPI_COMM_WORLD, &local_rank);
+
+    string eth_type = argv[1];
+    unsigned int starting_port = atoi(argv[2]);
     const string endpoint_base = "tcp://127.0.0.1:";
-    unsigned int starting_port = atoi(argv[3]);
+
     string cmd_endpoint = endpoint_base + to_string(starting_port + local_rank);
     cout << cmd_endpoint << endl;
     vector<string> eth_endpoints;

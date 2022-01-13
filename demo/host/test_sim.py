@@ -217,6 +217,6 @@ if __name__ == "__main__":
         print(e)
         import traceback
         traceback.print_tb(e.__traceback__)
-        cclo_inst.dump_rx_buffers_spares()
+        cclo_inst.dump_rx_buffers()
 
     cclo_inst.deinit()

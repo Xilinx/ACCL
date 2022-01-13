@@ -108,6 +108,11 @@ void requestFSM(
         ap_uint<16> dstPort = tcp_notification_pkt.data(79,64);
         ap_uint<1> closed = tcp_notification_pkt.data(80,80);
         STREAM_WRITE(m_notif_out, ((eth_notification){.session_id=sessionID, .length=length}));
+#ifndef ACCL_SYNTHESIS
+        std::stringstream ss;
+        ss << "TCP RX Handler: Requesting data length=" << length << "\n";
+        std::cout << ss.str();
+#endif
 
         if (length!=0)
         {

@@ -55,11 +55,10 @@ void rxbuf_seek(
         for(int i=0; i<num_pending; i++){
             pending_notif = STREAM_READ(rx_pending);
             if((pending_notif.signature.tag == seek_sig.tag || pending_notif.signature.tag == TAG_ANY) && 
-                pending_notif.signature.src == seek_sig.src &&
-                    pending_notif.signature.len == seek_sig.len && 
-                        pending_notif.signature.seqn == seek_sig.seqn){
+                    pending_notif.signature.src == seek_sig.src && pending_notif.signature.seqn == seek_sig.seqn){
                 seek_res.addr(31,0) = rx_buffers[1 + pending_notif.index * SPARE_BUFFER_FIELDS + ADDRL_OFFSET];
                 seek_res.addr(63,32) = rx_buffers[1 + pending_notif.index * SPARE_BUFFER_FIELDS + ADDRH_OFFSET];
+                seek_res.len = pending_notif.signature.len;
                 seek_res.index = pending_notif.index;
                 seek_res.valid = true;
                 num_pending--;

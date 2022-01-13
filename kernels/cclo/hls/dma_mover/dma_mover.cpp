@@ -38,126 +38,143 @@ void router_cmd_execute(
     STREAM<ap_uint<32> > &ack_instruction
 ){
 #pragma HLS PIPELINE II=1 style=flp
-    router_instruction insn = STREAM_READ(instruction);
-    segmenter_cmd cmd;
-    bool op0_compress, op1_compress, res_compress;
-    bool op0_decompress, op1_decompress, res_decompress;
-    bool use_clane0, use_clane1, use_clane2;
-    //select final destination
-    unsigned int final_dest;
-    if(insn.stream_out){
-        final_dest = SWITCH_M_EXT_KRNL;
-    } else if(insn.eth_out){
-        final_dest = SWITCH_M_ETH_TX;
-    } else {
-        final_dest = SWITCH_M_DMA1_WRITE;
-    }
-    //precondition the segmenter cmd
-    cmd.emit_ack = 0;
-    cmd.indeterminate_btt = 0;
-    //command segmenters
-    if(!insn.use_arithmetic){
-        op0_compress = !insn.op0_compressed & insn.res_compressed;
-        op0_decompress = insn.op0_compressed & !insn.res_compressed;
-        op1_compress = false;
-        op1_decompress = false;
-        res_compress = false;
-        res_decompress = false;
-        use_clane0 = op0_compress | op0_decompress;
-        use_clane1 = false;
-        use_clane2 = false;
-        //input from DMA0 read or kernel stream
-        cmd.dest = use_clane0 ? SWITCH_M_CLANE0 : final_dest;
-        cmd.nwords = insn.op0_compressed ? insn.c_nwords : insn.u_nwords;
-        if(insn.stream_in){
-            STREAM_WRITE(krnl_in_seg_cmd, cmd);
-        } else{
-            STREAM_WRITE(dma0_read_seg_cmd, cmd);
+    if(!STREAM_IS_EMPTY(instruction)){
+        router_instruction insn = STREAM_READ(instruction);
+        segmenter_cmd cmd;
+        bool op0_compress, op1_compress, res_compress;
+        bool op0_decompress, op1_decompress, res_decompress;
+        bool use_clane0, use_clane1, use_clane2;
+        //select final destination
+        unsigned int final_dest;
+        if(insn.stream_out){
+            final_dest = SWITCH_M_EXT_KRNL;
+        } else if(insn.eth_out){
+            final_dest = SWITCH_M_ETH_TX;
+        } else {
+            final_dest = SWITCH_M_DMA1_WRITE;
         }
-        //command clane0 with correct operation
-        if(use_clane0){
-            //direct clane0 operation
-            cmd.dest = op0_compress ? insn.compress_func : insn.decompress_func;
+        //precondition the segmenter cmd
+        cmd.emit_ack = 0;
+        cmd.indeterminate_btt = 0;
+        //command segmenters
+        if(!insn.use_arithmetic){
+            if(insn.use_secondary_op_lane){
+                op1_compress = !insn.op1_compressed & insn.res_compressed;
+                op1_decompress = insn.op1_compressed & !insn.res_compressed;
+                use_clane1 = op1_compress | op1_decompress;
+                //input from DMA1 read
+                cmd.dest = use_clane1 ? SWITCH_M_CLANE1 : final_dest;
+                cmd.nwords = insn.op1_compressed ? insn.c_nwords : insn.u_nwords;
+                STREAM_WRITE(dma1_read_seg_cmd, cmd);
+                //command clane1 with correct operation
+                if(use_clane1){
+                    //direct clane0 operation
+                    cmd.dest = op1_compress ? insn.compress_func : insn.decompress_func;
+                    cmd.nwords = insn.op1_compressed ? insn.c_nwords : insn.u_nwords;
+                    STREAM_WRITE(clane1_op_seg_cmd, cmd);
+                    //direct clane0 result to DMA1 write or kernel stream
+                    cmd.dest = final_dest;
+                    cmd.nwords = op1_compress ? insn.c_nwords : insn.u_nwords;
+                    STREAM_WRITE(clane1_res_seg_cmd, cmd);
+                }
+            } else{
+                op0_compress = !insn.op0_compressed & insn.res_compressed;
+                op0_decompress = insn.op0_compressed & !insn.res_compressed;
+                use_clane0 = op0_compress | op0_decompress;
+                //input from DMA0 read or kernel stream
+                cmd.dest = use_clane0 ? SWITCH_M_CLANE0 : final_dest;
+                cmd.nwords = insn.op0_compressed ? insn.c_nwords : insn.u_nwords;
+                if(insn.stream_in){
+                    STREAM_WRITE(krnl_in_seg_cmd, cmd);
+                } else{
+                    STREAM_WRITE(dma0_read_seg_cmd, cmd);
+                }
+                //command clane0 with correct operation
+                if(use_clane0){
+                    //direct clane0 operation
+                    cmd.dest = op0_compress ? insn.compress_func : insn.decompress_func;
+                    cmd.nwords = insn.op0_compressed ? insn.c_nwords : insn.u_nwords;
+                    STREAM_WRITE(clane0_op_seg_cmd, cmd);
+                    //direct clane0 result to DMA1 write or kernel stream
+                    cmd.dest = final_dest;
+                    cmd.nwords = op0_compress ? insn.c_nwords : insn.u_nwords;
+                    STREAM_WRITE(clane0_res_seg_cmd, cmd);
+                }
+            }
+        } else {
+            if(insn.arith_compressed){
+                op0_compress = !insn.op0_compressed;
+                op0_decompress = false;
+                op1_compress = !insn.op1_compressed;
+                op1_decompress = false;
+                res_compress = false;
+                res_decompress = !insn.res_compressed;
+            } else{
+                op0_compress = false;
+                op0_decompress = insn.op0_compressed;
+                op1_compress = false;
+                op1_decompress = insn.op1_compressed;
+                res_compress = insn.res_compressed;
+                res_decompress = false;
+            }
+            use_clane0 = op0_compress | op0_decompress;
+            use_clane1 = op1_compress | op1_decompress;
+            use_clane2 = res_compress | res_decompress;
+            //input from DMA0 read or kernel stream to clane0
+            cmd.dest = use_clane0? SWITCH_M_CLANE0 : SWITCH_M_ARITH_OP0;
             cmd.nwords = insn.op0_compressed ? insn.c_nwords : insn.u_nwords;
-            STREAM_WRITE(clane0_op_seg_cmd, cmd);
-            //direct clane0 result to DMA1 write or kernel stream
-            cmd.dest = final_dest;
-            cmd.nwords = op0_compress ? insn.c_nwords : insn.u_nwords;
-            STREAM_WRITE(clane0_res_seg_cmd, cmd);
-        }
-	} else {
-        if(insn.arith_compressed){
-            op0_compress = !insn.op0_compressed;
-            op0_decompress = false;
-            op1_compress = !insn.op1_compressed;
-            op1_decompress = false;
-            res_compress = false;
-            res_decompress = !insn.res_compressed;
-        } else{
-            op0_compress = false;
-            op0_decompress = insn.op0_compressed;
-            op1_compress = false;
-            op1_decompress = insn.op1_compressed;
-            res_compress = insn.res_compressed;
-            res_decompress = false;
-        }
-        use_clane0 = op0_compress | op0_decompress;
-        use_clane1 = op1_compress | op1_decompress;
-        use_clane2 = res_compress | res_decompress;
-        //input from DMA0 read or kernel stream to clane0
-        cmd.dest = use_clane0? SWITCH_M_CLANE0 : SWITCH_M_ARITH_OP0;
-        cmd.nwords = insn.op0_compressed ? insn.c_nwords : insn.u_nwords;
-        if(insn.stream_in){
-            STREAM_WRITE(krnl_in_seg_cmd, cmd);
-        } else{
-            STREAM_WRITE(dma0_read_seg_cmd, cmd);
-        }
-        //input from DMA1 read to clane1
-        cmd.dest = use_clane1 ? SWITCH_M_CLANE1 : SWITCH_M_ARITH_OP1;
-        cmd.nwords = insn.op1_compressed ? insn.c_nwords : insn.u_nwords;
-        STREAM_WRITE(dma1_read_seg_cmd, cmd);
-        //direct clanes to arithmetic
-        if(use_clane0){
-            cmd.dest = op0_compress ? insn.compress_func : insn.decompress_func;
-            cmd.nwords = insn.op0_compressed ? insn.c_nwords : insn.u_nwords;
-            STREAM_WRITE(clane0_op_seg_cmd, cmd);
-            cmd.dest = SWITCH_M_ARITH_OP0;
-            cmd.nwords = op0_compress ? insn.c_nwords : insn.u_nwords;
-            STREAM_WRITE(clane0_res_seg_cmd, cmd);
-        }
-        if(use_clane1){
-            cmd.dest = op1_compress ? insn.compress_func : insn.decompress_func;
+            if(insn.stream_in){
+                STREAM_WRITE(krnl_in_seg_cmd, cmd);
+            } else{
+                STREAM_WRITE(dma0_read_seg_cmd, cmd);
+            }
+            //input from DMA1 read to clane1
+            cmd.dest = use_clane1 ? SWITCH_M_CLANE1 : SWITCH_M_ARITH_OP1;
             cmd.nwords = insn.op1_compressed ? insn.c_nwords : insn.u_nwords;
-            STREAM_WRITE(clane1_op_seg_cmd, cmd);
-            cmd.dest = SWITCH_M_ARITH_OP1;
-            cmd.nwords = op1_compress ? insn.c_nwords : insn.u_nwords;
-            STREAM_WRITE(clane1_res_seg_cmd, cmd);
-        }
-        //set arithmetic function, and direct result to clane2
-        cmd.dest = insn.arith_func;
-        cmd.nwords = insn.arith_compressed ? insn.c_nwords : insn.u_nwords;
-        STREAM_WRITE(arith_op0_seg_cmd, cmd);
-        STREAM_WRITE(arith_op1_seg_cmd, cmd);
-        cmd.dest = use_clane2 ? SWITCH_M_CLANE2 : final_dest;
-        cmd.nwords = insn.arith_compressed ? insn.c_nwords : insn.u_nwords;
-        STREAM_WRITE(arith_res_seg_cmd, cmd);
-        //direct clane0 result to DMA1 write or kernel stream
-        if(use_clane2){
-            cmd.dest = res_compress ? insn.compress_func : insn.decompress_func;
+            STREAM_WRITE(dma1_read_seg_cmd, cmd);
+            //direct clanes to arithmetic
+            if(use_clane0){
+                cmd.dest = op0_compress ? insn.compress_func : insn.decompress_func;
+                cmd.nwords = insn.op0_compressed ? insn.c_nwords : insn.u_nwords;
+                STREAM_WRITE(clane0_op_seg_cmd, cmd);
+                cmd.dest = SWITCH_M_ARITH_OP0;
+                cmd.nwords = op0_compress ? insn.c_nwords : insn.u_nwords;
+                STREAM_WRITE(clane0_res_seg_cmd, cmd);
+            }
+            if(use_clane1){
+                cmd.dest = op1_compress ? insn.compress_func : insn.decompress_func;
+                cmd.nwords = insn.op1_compressed ? insn.c_nwords : insn.u_nwords;
+                STREAM_WRITE(clane1_op_seg_cmd, cmd);
+                cmd.dest = SWITCH_M_ARITH_OP1;
+                cmd.nwords = op1_compress ? insn.c_nwords : insn.u_nwords;
+                STREAM_WRITE(clane1_res_seg_cmd, cmd);
+            }
+            //set arithmetic function, and direct result to clane2
+            cmd.dest = insn.arith_func;
             cmd.nwords = insn.arith_compressed ? insn.c_nwords : insn.u_nwords;
-            STREAM_WRITE(clane2_op_seg_cmd, cmd);
-            cmd.dest = final_dest;
-            cmd.nwords = insn.res_compressed ? insn.c_nwords : insn.u_nwords;
-            STREAM_WRITE(clane2_res_seg_cmd, cmd);
+            STREAM_WRITE(arith_op0_seg_cmd, cmd);
+            STREAM_WRITE(arith_op1_seg_cmd, cmd);
+            cmd.dest = use_clane2 ? SWITCH_M_CLANE2 : final_dest;
+            cmd.nwords = insn.arith_compressed ? insn.c_nwords : insn.u_nwords;
+            STREAM_WRITE(arith_res_seg_cmd, cmd);
+            //direct clane0 result to DMA1 write or kernel stream
+            if(use_clane2){
+                cmd.dest = res_compress ? insn.compress_func : insn.decompress_func;
+                cmd.nwords = insn.arith_compressed ? insn.c_nwords : insn.u_nwords;
+                STREAM_WRITE(clane2_op_seg_cmd, cmd);
+                cmd.dest = final_dest;
+                cmd.nwords = insn.res_compressed ? insn.c_nwords : insn.u_nwords;
+                STREAM_WRITE(clane2_res_seg_cmd, cmd);
+            }
         }
-	}
-    //control output kernel stream segmenter if in use
-    if(insn.stream_out){
-        cmd.dest = insn.krnl_id;
-        cmd.nwords = insn.res_compressed ? insn.c_nwords : insn.u_nwords;
-        cmd.emit_ack = 1;
-        STREAM_WRITE(krnl_out_seg_cmd, cmd);
-        STREAM_WRITE(ack_instruction, cmd.nwords);
+        //control output kernel stream segmenter if in use
+        if(insn.stream_out){
+            cmd.dest = insn.krnl_id;
+            cmd.nwords = insn.res_compressed ? insn.c_nwords : insn.u_nwords;
+            cmd.emit_ack = 1;
+            STREAM_WRITE(krnl_out_seg_cmd, cmd);
+            STREAM_WRITE(ack_instruction, cmd.nwords);
+        }
     }
 }
 
@@ -181,81 +198,89 @@ void router_ack_execute(
     }
 }
 
-
 // start a DMA operations on a specific channel
 // compute number of bytes from compression info
 // break up a large transfer into DMA_MAX_BTT chunks
 void dma_cmd_execute(
     STREAM<datamover_instruction> &instruction,
     STREAM<ap_uint<104> > &dma_cmd_channel,
-    STREAM<ap_uint<32> > &ack_instruction
+    STREAM<datamover_ack_instruction> &ack_instruction
 ) {
 #pragma HLS PIPELINE II=1 style=flp
-    ap_uint<4> tag = 0;
-    ap_uint<32> ncommands = 0;
+    ap_uint<4> tag;
+    ap_uint<32> ncommands;
     unsigned int btt;
     axi::Command<64, 23> dma_cmd;
-    datamover_ack_instruction ack_cmd;
     datamover_instruction instr;
+    datamover_ack_instruction ack_instr;
 
     if(!STREAM_IS_EMPTY(instruction)){
-        instr = STREAM_READ(instruction);
-        while(instr.total_bytes > 0){
-            btt = (instr.total_bytes > DMA_MAX_BTT) ? DMA_MAX_BTT : instr.total_bytes;
-            dma_cmd.length = btt;
-            dma_cmd.address = instr.addr;
-            dma_cmd.tag = tag;
-            STREAM_WRITE(dma_cmd_channel, dma_cmd);
-            //update state
-            instr.total_bytes -= btt;
-            tag++;
-            ncommands++;
-        }
-        STREAM_WRITE(ack_instruction, ncommands);
+        do{
+            instr = STREAM_READ(instruction);
+            ack_instr.ncommands = 0;
+            ack_instr.last = instr.last;
+            tag = 0;
+            while(instr.total_bytes > 0){
+                btt = (instr.total_bytes > DMA_MAX_BTT) ? DMA_MAX_BTT : instr.total_bytes;
+                dma_cmd.length = btt;
+                dma_cmd.address = instr.addr;
+                dma_cmd.tag = tag;
+                STREAM_WRITE(dma_cmd_channel, dma_cmd);
+                //update state
+                instr.total_bytes -= btt;
+                tag++;
+                ack_instr.ncommands++;
+            }
+            STREAM_WRITE(ack_instruction, ack_instr);
+        } while(!instr.last);
     }
 }
 
 // check DMA status, record any errors and forward
 void dma_ack_execute(
-    STREAM<ap_uint<32> > &instruction,
+    STREAM<datamover_ack_instruction> &instruction,
     STREAM<ap_uint<32> > &dma_sts_channel,
     STREAM<ap_uint<32> > &error
 ) {
 #pragma HLS PIPELINE II=1 style=flp
     ap_uint<32> ret = NO_ERROR;
-    ap_uint<32> ncmds;
+    datamover_ack_instruction instr;
     axi::Status status;
-    unsigned int tag = 0;
+    unsigned int tag;
     if(!STREAM_IS_EMPTY(instruction)){
-        ncmds = STREAM_READ(instruction);
-        while(ncmds > 0){
-            status = axi::Status(STREAM_READ(dma_sts_channel));
-            if(status.tag != tag) {
-                ret = ret | DMA_TAG_MISMATCH_ERROR;
+        do{
+            instr = STREAM_READ(instruction);
+            tag = 0;
+            while(instr.ncommands > 0){
+                status = axi::Status(STREAM_READ(dma_sts_channel));
+                if(status.tag != tag) {
+                    ret = ret | DMA_TAG_MISMATCH_ERROR;
+                }
+                if(status.internalError) {
+                    ret = ret | DMA_INTERNAL_ERROR;
+                }
+                if(status.decodeError) {
+                    ret = ret | DMA_DECODE_ERROR;
+                }
+                if(status.slaveError) {
+                    ret = ret | DMA_SLAVE_ERROR;
+                }
+                if(!status.okay) {
+                    ret = ret | DMA_NOT_OKAY_ERROR;
+                }
+                instr.ncommands--;
+                tag++;
             }
-            if(status.internalError) {
-                ret = ret | DMA_INTERNAL_ERROR;
-            }
-            if(status.decodeError) {
-                ret = ret | DMA_DECODE_ERROR;
-            }
-            if(status.slaveError) {
-                ret = ret | DMA_SLAVE_ERROR;
-            }
-            if(!status.okay) {
-                ret = ret | DMA_NOT_OKAY_ERROR;
-            }
-            ncmds--;
-            tag++;
-        }
-        STREAM_WRITE(error, ret);
+            STREAM_WRITE(error, ret);
+        } while(!instr.last);
+
     }
 }
 
 void eth_cmd_execute(
     STREAM<packetizer_instruction> &instruction,
     STREAM<eth_header> &eth_cmd_channel,
-    STREAM<ap_uint<32> > &ack_instruction,
+    STREAM<packetizer_ack_instruction> &ack_instruction,
     unsigned int max_segment_len
 ) {
 #pragma HLS PIPELINE II=1 style=flp
@@ -268,6 +293,7 @@ void eth_cmd_execute(
             //max_segment_len should be a multiple of the datapath width (64B)
             //this shouldn't be a problem in practice
             seg_len = (insn.len > max_segment_len) ? max_segment_len : insn.len;
+            insn.len -= seg_len;
             // prepare header arguments
             eth_header pkt_cmd;
             // enqueue message headers
@@ -278,30 +304,40 @@ void eth_cmd_execute(
             pkt_cmd.strm = insn.to_stream ? insn.mpi_tag : 0;
             pkt_cmd.dst = insn.dst_sess_id;
             STREAM_WRITE(eth_cmd_channel, pkt_cmd);
-            STREAM_WRITE(ack_instruction, sequence_number);
-            // update state
-            insn.len -= seg_len;
+            packetizer_ack_instruction ack_insn;
+            ack_insn.expected_seqn = sequence_number;
+            ack_insn.last = (insn.len <= 0);
+            STREAM_WRITE(ack_instruction, ack_insn);
             sequence_number++;
+#ifndef ACCL_SYNTHESIS
+            std::stringstream ss;
+            ss << "DMA MOVE Offload: Emitting Eth segment dst=" << pkt_cmd.dst << " len=" << pkt_cmd.count << "\n";
+            std::cout << ss.str();
+#endif
         }
     }
 }
 
 // check that packetizer has finished processing every packet it was supposed to.
 void eth_ack_execute(
-    STREAM<ap_uint<32> > &instruction,
+    STREAM<packetizer_ack_instruction> &instruction,
     STREAM<ap_uint<32> > &eth_ack_channel,
     STREAM<ap_uint<32> > &error
 ) {
 #pragma HLS PIPELINE II=1 style=flp
-    unsigned int expected_seq_number, ack_seq_num;
+    packetizer_ack_instruction insn;
+    unsigned int ack_seq_num;
+    ap_uint<32> err;
     if(!STREAM_IS_EMPTY(instruction)){
-        expected_seq_number = STREAM_READ(instruction);
-        ack_seq_num = STREAM_READ(eth_ack_channel);
-        if(expected_seq_number == ack_seq_num) {
-            STREAM_WRITE(error, NO_ERROR);
-        } else {
-            STREAM_WRITE(error, PACK_SEQ_NUMBER_ERROR);
-        }
+        err = NO_ERROR;
+        do{
+            insn = STREAM_READ(instruction);
+            ack_seq_num = STREAM_READ(eth_ack_channel);
+            if(insn.expected_seqn != ack_seq_num) {
+                err |= PACK_SEQ_NUMBER_ERROR;
+            }
+        } while(!insn.last);
+        STREAM_WRITE(error, err);
     }
 }
 
@@ -358,8 +394,10 @@ void instruction_fetch(
     if(ret.res_is_remote || ret.res_opcode == MOVE_STREAM){
         ret.mpi_tag = (STREAM_READ(cmd)).data;
     }
-    if(ret.res_is_remote){
+    if(ret.res_is_remote || ret.op1_opcode == MOVE_ON_RECV){
         ret.comm_offset = (STREAM_READ(cmd)).data;
+    }
+    if(ret.res_is_remote){
         ret.dst_rank = (STREAM_READ(cmd)).data;
     }
 
@@ -382,12 +420,13 @@ void instruction_decode(
     STREAM<move_ack_instruction> &err_instruction,
     STREAM<rxbuf_signature> &rxbuf_req,
     STREAM<rxbuf_seek_result> &rxbuf_ack,
+    STREAM<ap_uint<32> > &rxbuf_release_idx,
     unsigned int * exchange_mem,
     unsigned int max_segment_len
 ){
 #pragma HLS PIPELINE II=1 style=flp
     move_instruction insn = STREAM_READ(instruction);
-    unsigned int src, seqn, session;
+    unsigned int src, seqn, session, nsegments;
     datamover_instruction dm0_rd, dm1_rd, dm1_wr;
     packetizer_instruction pkt_wr;
     router_instruction rtr;
@@ -403,13 +442,6 @@ void instruction_decode(
     //actual commands to any execution units; this effectively creates an initialization
     //instruction, like a NOP with side-effects in the address registers
     bool dry_run = (insn.count == 0);
-    //get communicator if targeting a remote node
-    if(insn.res_is_remote && !dry_run){
-        pkt_wr.src_rank = *(exchange_mem + insn.comm_offset + COMM_LOCAL_RANK_OFFSET);
-        pkt_wr.seqn = *(exchange_mem + insn.comm_offset + COMM_RANKS_OFFSET + (insn.dst_rank * RANK_SIZE) + RANK_OUTBOUND_SEQ_OFFSET);
-        pkt_wr.dst_sess_id = *(exchange_mem + insn.comm_offset + COMM_RANKS_OFFSET + (insn.dst_rank * RANK_SIZE) + RANK_SESSION_OFFSET);
-        *(exchange_mem + insn.comm_offset + COMM_RANKS_OFFSET + (insn.dst_rank * RANK_SIZE) + RANK_OUTBOUND_SEQ_OFFSET) = pkt_wr.seqn+1;
-    }
     //get arithmetic config unless we have already cached it
     static datapath_arith_config arcfg;
     static bool arcfg_cached = false;
@@ -427,11 +459,12 @@ void instruction_decode(
     rtr.u_nwords = (total_bytes_uncompressed+63) / 64;
     rtr.stream_in = (insn.op0_opcode == MOVE_STREAM);
     rtr.stream_out = (insn.res_opcode == MOVE_STREAM);
-    rtr.eth_out = (insn.res_opcode != MOVE_NONE) & insn.res_is_remote;
+    rtr.eth_out = (insn.res_opcode != MOVE_NONE) && insn.res_is_remote;
     rtr.op0_compressed = insn.op0_is_compressed;
     rtr.op1_compressed = insn.op1_is_compressed;
     rtr.res_compressed = insn.res_is_compressed;
-    rtr.use_arithmetic = (insn.op0_opcode != MOVE_NONE) & (insn.op1_opcode != MOVE_NONE);
+    rtr.use_arithmetic = (insn.op0_opcode != MOVE_NONE) && (insn.op1_opcode != MOVE_NONE);
+    rtr.use_secondary_op_lane = (insn.op1_opcode != MOVE_NONE) && (insn.op0_opcode == MOVE_NONE);
     rtr.arith_compressed = arcfg.arith_is_compressed;
     rtr.arith_func = arcfg.arith_tdest[insn.func_id];
     rtr.compress_func = arcfg.compressor_tdest;
@@ -470,15 +503,21 @@ void instruction_decode(
         if(!dry_run){
             STREAM_WRITE(op0_dm_insn, dm0_rd);
             ack_insn.check_dma0_rx = true;
+#ifndef ACCL_SYNTHESIS
+            std::stringstream ss;
+            ss << "DMA MOVE Offload: Op0 Read addr=" << dm0_rd.addr << " len=" << dm0_rd.total_bytes << "\n";
+            std::cout << ss.str();
+#endif
         }
         prev_dm0_rd = dm0_rd;
     }
     //DM1 read channel corresponding to OP1
     static datamover_instruction prev_dm1_rd;
     rxbuf_seek_result seek_res;
-    unsigned int inbound_seqn;
+    unsigned int inbound_seqn, bytes_remaining;
     if(insn.op1_opcode != MOVE_NONE){
         dm1_rd.total_bytes = insn.op1_is_compressed ? total_bytes_compressed : total_bytes_uncompressed;
+        dm1_rd.last = true;
         switch(insn.op1_opcode){
             //add options here - reuse, increment, etc
             case MOVE_IMMEDIATE:
@@ -498,39 +537,76 @@ void instruction_decode(
                 break;
             case MOVE_ON_RECV:
                 //get expected sequence number for the source rank by incrementing previous sequence number
-                inbound_seqn = 1 + *(exchange_mem + insn.comm_offset + COMM_RANKS_OFFSET + (insn.rx_src * RANK_SIZE) + RANK_INBOUND_SEQ_OFFSET);
-                //emit rx seek queries until one returns true
-                do{
-                    STREAM_WRITE(rxbuf_req, ((rxbuf_signature){.tag=insn.rx_tag, .len=dm1_rd.total_bytes, .src=insn.rx_src, .seqn=inbound_seqn}));
-                    seek_res = STREAM_READ(rxbuf_ack);
-                }while(!seek_res.valid);
-                dm1_rd.addr = seek_res.addr;
-                //update expected sequence number
-                *(exchange_mem + insn.comm_offset + COMM_RANKS_OFFSET + (insn.rx_src * RANK_SIZE) + RANK_INBOUND_SEQ_OFFSET) = inbound_seqn;
-                //instruct to release this buffer once the DMA movement is complete
+                inbound_seqn = exchange_mem[insn.comm_offset + COMM_RANKS_OFFSET + (insn.rx_src * RANK_SIZE) + RANK_INBOUND_SEQ_OFFSET];
+                bytes_remaining = dm1_rd.total_bytes;
+                ack_insn.release_count = 0;
+                ack_insn.check_dma1_rx = true;
                 ack_insn.release_rxbuf = true;
-                ack_insn.rxbuf_idx = seek_res.index;
+                //perform a gather from rx buffers
+                while(bytes_remaining > 0){
+                    //emit rx seek queries until one returns true
+                    do{
+                        STREAM_WRITE(rxbuf_req, ((rxbuf_signature){.tag=insn.rx_tag, .len=bytes_remaining, .src=insn.rx_src, .seqn=inbound_seqn}));
+                        seek_res = STREAM_READ(rxbuf_ack);
+                    }while(!seek_res.valid);
+                    dm1_rd.addr = seek_res.addr;
+                    dm1_rd.total_bytes = seek_res.len;
+                    bytes_remaining -= seek_res.len;
+                    dm1_rd.last = (bytes_remaining <= 0);
+                    //instruct to release this buffer once the DMA movement is complete
+                    STREAM_WRITE(rxbuf_release_idx, seek_res.index);
+                    ack_insn.release_count++;
+                    inbound_seqn++;
+                    STREAM_WRITE(op1_dm_insn, dm1_rd);
+#ifndef ACCL_SYNTHESIS
+                    std::stringstream ss;
+                    ss << "DMA MOVE Offload: Segment " << ack_insn.release_count << ", remaining bytes: " << bytes_remaining << "\n";
+                    ss << "DMA MOVE Offload: Op1 Read on Recv addr=" << dm1_rd.addr << " len=" << dm1_rd.total_bytes << "\n";
+                    std::cout << ss.str();
+#endif
+                }
+                //update expected sequence number
+                exchange_mem[insn.comm_offset + COMM_RANKS_OFFSET + (insn.rx_src * RANK_SIZE) + RANK_INBOUND_SEQ_OFFSET] = inbound_seqn;
                 break;
             default:
                 dm1_rd.addr = insn.op1_addr;
                 break;
         }
-        if(!dry_run){
+        if(!dry_run && (insn.op1_opcode != MOVE_ON_RECV)){
             STREAM_WRITE(op1_dm_insn, dm1_rd);
             ack_insn.check_dma1_rx = true;
+            ack_insn.release_rxbuf = false;
+#ifndef ACCL_SYNTHESIS
+            std::stringstream ss;
+            ss << "DMA MOVE Offload: Op1 Read addr=" << dm1_rd.addr << " len=" << dm1_rd.total_bytes << "\n";
+            std::cout << ss.str();
+#endif
         }
         prev_dm1_rd = dm1_rd;
+    }
+    //get communicator if targeting a remote node
+    if(insn.res_is_remote && !dry_run){
+        pkt_wr.src_rank = *(exchange_mem + insn.comm_offset + COMM_LOCAL_RANK_OFFSET);
+        pkt_wr.seqn = *(exchange_mem + insn.comm_offset + COMM_RANKS_OFFSET + (insn.dst_rank * RANK_SIZE) + RANK_OUTBOUND_SEQ_OFFSET);
+        pkt_wr.dst_sess_id = *(exchange_mem + insn.comm_offset + COMM_RANKS_OFFSET + (insn.dst_rank * RANK_SIZE) + RANK_SESSION_OFFSET);
+        pkt_wr.len = insn.res_is_compressed ? total_bytes_compressed : total_bytes_uncompressed;
+        pkt_wr.mpi_tag = insn.mpi_tag;
+        pkt_wr.to_stream = (insn.res_opcode == MOVE_STREAM);
+        nsegments = ((pkt_wr.len+max_segment_len-1)/max_segment_len);
+        *(exchange_mem + insn.comm_offset + COMM_RANKS_OFFSET + (insn.dst_rank * RANK_SIZE) + RANK_OUTBOUND_SEQ_OFFSET) = pkt_wr.seqn+nsegments;
     }
     //DM1 write channel corresponding to RES
     static datamover_instruction prev_dm1_wr;
     if(insn.res_opcode != MOVE_NONE){
         if(insn.res_is_remote){
-            pkt_wr.len = insn.res_is_compressed ? total_bytes_compressed : total_bytes_uncompressed;
-            pkt_wr.mpi_tag = insn.mpi_tag;
-            pkt_wr.to_stream = (insn.res_opcode == MOVE_STREAM);
             if(!dry_run){
                 STREAM_WRITE(eth_insn, pkt_wr);
                 ack_insn.check_eth_tx = true;
+#ifndef ACCL_SYNTHESIS
+                std::stringstream ss;
+                ss << "DMA MOVE Offload: Send dst=" << pkt_wr.dst_sess_id << " len=" << pkt_wr.len << " tag=" << pkt_wr.mpi_tag << "\n";
+                std::cout << ss.str();
+#endif
             }
         } else if(!(insn.res_opcode == MOVE_STREAM)){
             dm1_wr.total_bytes = insn.res_is_compressed ? total_bytes_compressed : total_bytes_uncompressed;
@@ -557,7 +633,13 @@ void instruction_decode(
             if(!dry_run){
                 STREAM_WRITE(res_dm_insn, dm1_wr);
                 ack_insn.check_dma1_tx = true;
+#ifndef ACCL_SYNTHESIS
+                std::stringstream ss;
+                ss << "DMA MOVE Offload: Res Write addr=" << dm1_wr.addr << " len=" << dm1_wr.total_bytes << "\n";
+                std::cout << ss.str();
+#endif
             }
+            prev_dm1_wr = dm1_wr;
         }
     }
 
@@ -567,6 +649,7 @@ void instruction_decode(
 
 void instruction_retire(
     STREAM<move_ack_instruction> &instruction,
+    STREAM<ap_uint<32> > &rxbuf_release_idx,
     STREAM<ap_uint<32> > &dma0_rx_err,
     STREAM<ap_uint<32> > &dma1_rx_err,
     STREAM<ap_uint<32> > &rxbuf_release_req,
@@ -584,8 +667,16 @@ void instruction_retire(
     if(insn.check_dma1_rx){
         err.data |= STREAM_READ(dma1_rx_err);
         if(insn.release_rxbuf && err.data == NO_ERROR){
-            STREAM_WRITE(rxbuf_release_req, insn.rxbuf_idx);
+            for(int i=0; i<insn.release_count; i++){
+                STREAM_WRITE(rxbuf_release_req, STREAM_READ(rxbuf_release_idx));
+#ifndef ACCL_SYNTHESIS
+                std::stringstream ss;
+                ss << "DMA MOVE Offload: Releasing segment " << i << " of " << insn.release_count << "\n";
+                std::cout << ss.str();
+#endif
+            }
         }
+
     }
     if(insn.check_dma1_tx) err.data |= STREAM_READ(dma1_tx_err);
     if(insn.check_eth_tx) err.data |= STREAM_READ(eth_tx_err);
@@ -668,19 +759,29 @@ void dma_mover(
     STREAM<router_instruction> router_insn;
     STREAM<move_ack_instruction> err_instruction;
 
-    STREAM<ap_uint<32> > dma0_read_ack_insn;
-    STREAM<ap_uint<32> > dma1_read_ack_insn;
-    STREAM<ap_uint<32> > dma1_write_ack_insn;
+    STREAM<datamover_ack_instruction> dma0_read_ack_insn;
+    STREAM<datamover_ack_instruction> dma1_read_ack_insn;
+    STREAM<datamover_ack_instruction> dma1_write_ack_insn;
 
     STREAM<ap_uint<32> > dma0_read_error;
     STREAM<ap_uint<32> > dma1_read_error;
     STREAM<ap_uint<32> > dma1_write_error;
 
-    STREAM<ap_uint<32> > eth_tx_ack_instruction;
+    STREAM<packetizer_ack_instruction> eth_tx_ack_instruction;
     STREAM<ap_uint<32> > eth_tx_error;
 
     STREAM<ap_uint<32> > strm_tx_ack_instruction;
     STREAM<ap_uint<32> > strm_tx_error;
+
+    //NOTE: we implement a 64-deep fifo for release indexes
+    //which implies the maximum message size is 64 segments,
+    //and each segment is up to the size of the RX spares
+#ifdef ACCL_SYNTHESIS
+    static hls::stream<ap_uint<32> > rxbuf_release_idx;
+    #pragma HLS STREAM variable=rxbuf_release_idx depth=64
+#else
+    static hlslib::Stream<ap_uint<32>, 64> rxbuf_release_idx;
+#endif
 
     instruction_fetch(command, instruction);
 
@@ -694,6 +795,7 @@ void dma_mover(
         err_instruction,
         rxbuf_req,
         rxbuf_ack,
+        rxbuf_release_idx,
         exchange_mem,
         max_segment_len
     );
@@ -728,6 +830,7 @@ void dma_mover(
 
     instruction_retire(
         err_instruction,
+        rxbuf_release_idx,
         dma0_read_error,
         dma1_read_error,
         rxbuf_release_req,

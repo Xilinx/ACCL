@@ -64,6 +64,8 @@ typedef ap_axiu<DATA_WIDTH, 0, 0, DEST_WIDTH> stream_word;
 #else
 //use hlslib streams
 #include "Stream.h"
+#include <sstream>
+#include <iostream>
 #define STREAM hlslib::Stream 
 #define STREAM_IS_EMPTY(s) s.IsEmpty()
 #define STREAM_IS_FULL(s) s.IsFull()
