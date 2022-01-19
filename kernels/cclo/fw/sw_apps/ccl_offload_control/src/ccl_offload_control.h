@@ -16,9 +16,11 @@
 # *******************************************************************************/
 
 #include <stdint.h>
-#ifndef ACCL_SYNTHESIS
+#ifdef MB_FW_EMULATION
 #include <stdio.h>
 #include <semaphore.h>
+#include "Stream.h"
+#include "ap_axi_sdata.h"
 #endif
 
 #ifndef _CCL_OFFLOAD_CONTROL_H_
@@ -85,19 +87,25 @@
 #define RETVAL_OFFSET     0x1FFC
 #define END_OF_EXCHMEM    0x2000
 
-#ifdef ACCL_SYNTHESIS  
-#define EXCHMEM_BASEADDR      0x00000
-#define NET_RXPKT_BASEADDR    0x30000
-#define NET_TXPKT_BASEADDR    0x40000
-#define GPIO_BASEADDR         0x40000000
-#else       
-#define EXCHMEM_BASEADDR      0x1000
+#ifndef MB_FW_EMULATION  
+#define EXCHMEM_BASEADDR      0x0
+#define DMA_MOVER_BASEADDR    0x2000
 #define NET_RXPKT_BASEADDR    0x3000
 #define NET_TXPKT_BASEADDR    0x4000
-#define GPIO_BASEADDR         0x7000
-#define RX_DEQUEUE_BASEADDR   0x8000
-#define RX_ENQUEUE_BASEADDR   0x9000
-#define RX_SEEK_BASEADDR      0xA000
+#define RX_DEQUEUE_BASEADDR   0x5000
+#define RX_ENQUEUE_BASEADDR   0x6000
+#define RX_SEEK_BASEADDR      0x7000
+#define GPIO_BASEADDR         0x40000000
+#else       
+#define EXCHMEM_BASEADDR      0x0000
+#define DMA_MOVER_BASEADDR    0x2000
+#define NET_RXPKT_BASEADDR    0x3000
+#define NET_TXPKT_BASEADDR    0x4000
+#define RX_DEQUEUE_BASEADDR   0x5000
+#define RX_ENQUEUE_BASEADDR   0x6000
+#define RX_SEEK_BASEADDR      0x7000
+#define GPIO_BASEADDR         0x8000
+
 #endif
 
 //https://www.xilinx.com/html_docs/xilinx2020_2/vitis_doc/managing_interface_synthesis.html#tzw1539734223235
@@ -203,7 +211,7 @@ extern uint32_t *cfgmem;
 #define CLR(offset, mask) Xil_Out32(offset, Xil_In32(offset) & ~(mask))
 
 //stream handling
-#ifdef ACCL_SYNTHESIS
+#ifndef MB_FW_EMULATION
 //push data to stream
 #define putd(channel, value) asm volatile ("putd\t%0,%1" :: "d" (value), "d" (channel))
 //push data to stream and set control bit
@@ -215,8 +223,6 @@ extern uint32_t *cfgmem;
 
 #else
 
-#include "Stream.h"
-#include "ap_axi_sdata.h"
 extern hlslib::Stream<ap_axiu<32,0,0,0>, 512> cmd_fifos[4];
 extern hlslib::Stream<ap_axiu<32,0,0,0>, 512> sts_fifos[4];
 extern sem_t mb_irq_mutex;
@@ -294,7 +300,7 @@ typedef struct circular_buffer
 } circular_buffer;
 
 //define exception handling for simulation
-#ifndef ACCL_SYNTHESIS
+#ifdef MB_FW_EMULATION
 #define setjmp(x) 0
 void finalize_call(unsigned int);
 #define longjmp(x, y) finalize_call(y)

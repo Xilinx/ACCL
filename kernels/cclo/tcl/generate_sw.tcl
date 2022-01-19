@@ -24,9 +24,9 @@ file mkdir vitis_ws
 setws vitis_ws
 repo -set $repo_directory
 platform create -name $kernel_name -hw $platform
-domain create -name $domain_name -proc control_microblaze_0
+domain create -name $domain_name -proc cclo_control_microblaze_0
 platform generate
-app create -name ${kernel_name}_control -template {CCL Offload Control} -platform $kernel_name -proc control_microblaze_0
+app create -name ${kernel_name}_control -template {CCL Offload Control} -platform $kernel_name -proc cclo_control_microblaze_0
 # reference: vitis XSCT doc https://www.xilinx.com/html_docs/xilinx2020_2/vitis_doc/vpu1585821553007.html
 #app config -name ${kernel_name}_control -info compiler-optimization
 #possible values: "None (-O0)", "Optimize (-O1)", "Optimize more (-O2)", "Optimize most (-O3)", "Optimize for size (-Os)"

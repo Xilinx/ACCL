@@ -24,6 +24,7 @@ EN_COMPRESS ?= 1
 EN_EXT_KRNL ?= 1
 MB_DEBUG_LEVEL ?= 0
 XCCL_ELF=vitis_ws/ccl_offload_control/Debug/ccl_offload_control.elf
+XCCL_SIMDLL=ccl_offload_ex/ccl_offload_ex.sim/sim_1/behav/xsim/xsim.dir/ccl_offload_behav/xsimk.so
 XCCL_XSA=ccl_offload_ex/ccl_offload.xsa
 XCCL_XO=ccl_offload.xo
 
@@ -65,18 +66,25 @@ else ifeq ($(OPTIMIZATION),s)
    OPTIMIZATION_STRING = "Optimize for size (-Os)"
 endif
 
-.PHONY: elf
+.PHONY: elf simdll xo distclean
+
 elf: $(XCCL_ELF)
 
-$(XCCL_ELF): tcl/generate_sw.tcl $(FW_SOURCES) $(XCCL_XSA)
+$(XCCL_ELF): tcl/generate_sw.tcl tcl/associate_elf.tcl $(FW_SOURCES) $(XCCL_XSA)
 	rm -rf vitis_ws && mkdir vitis_ws
 	xsct $< ccl_offload $(XCCL_XSA) ./fw $(OPTIMIZATION_STRING)
+	vivado -mode batch -source tcl/associate_elf.tcl -tclargs $(XCCL_ELF)
 
-.PHONY: xo
+simdll: $(XCCL_SIMDLL)
+
+$(XCCL_SIMDLL): tcl/generate_sim.tcl elf
+	vivado -mode batch -source $< -tclargs $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) $(MB_DEBUG_LEVEL)
+	cd ccl_offload_ex/ccl_offload_ex.sim/sim_1/behav/xsim/ && ./compile.sh && ./elaborate.sh
+
 xo: $(XCCL_XO)
 
 $(XCCL_XO): tcl/generate_xo.tcl $(XCCL_XSA) $(XCCL_ELF)
-	vivado -mode batch -source $< -tclargs $(XCCL_ELF) $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) $(MB_DEBUG_LEVEL)
+	vivado -mode batch -source $< -tclargs $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) $(MB_DEBUG_LEVEL)
 
 distclean:
 	git clean -xfd

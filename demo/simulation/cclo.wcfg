@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<wave_config>
+   <wave_state>
+   </wave_state>
+   <db_ref_list>
+      <db_ref path="test.wdb" id="1">
+         <top_modules>
+            <top_module name="axi_bram_ctrl_funcs" />
+            <top_module name="ccl_offload" />
+            <top_module name="glbl" />
+            <top_module name="ipif_pkg" />
+            <top_module name="lib_pkg" />
+            <top_module name="lmb_bram_if_funcs" />
+            <top_module name="vcomponents" />
+         </top_modules>
+      </db_ref>
+   </db_ref_list>
+   <zoom_setting>
+      <ZoomStartTime time="350219800fs"></ZoomStartTime>
+      <ZoomEndTime time="384869801fs"></ZoomEndTime>
+      <Cursor1Time time="365574000fs"></Cursor1Time>
+   </zoom_setting>
+   <column_width_setting>
+      <NameColumnWidth column_width="276"></NameColumnWidth>
+      <ValueColumnWidth column_width="116"></ValueColumnWidth>
+   </column_width_setting>
+   <WVObjectSize size="5" />
+   <wvobject type="logic" fp_name="/ccl_offload/ap_clk">
+      <obj_property name="ElementShortName">ap_clk</obj_property>
+      <obj_property name="ObjectShortName">ap_clk</obj_property>
+   </wvobject>
+   <wvobject type="logic" fp_name="/ccl_offload/ap_rst_n">
+      <obj_property name="ElementShortName">ap_rst_n</obj_property>
+      <obj_property name="ObjectShortName">ap_rst_n</obj_property>
+   </wvobject>
+   <wvobject type="vbus" fp_name="vbus266">
+      <obj_property name="label">S_AXI_CONTROL</obj_property>
+      <obj_property name="DisplayName">label</obj_property>
+      <obj_property name="isExpanded"></obj_property>
+      <wvobject type="logic" fp_name="/ccl_offload/ap_clk">
+         <obj_property name="ElementShortName">ap_clk</obj_property>
+         <obj_property name="ObjectShortName">ap_clk</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ap_rst_n">
+         <obj_property name="ElementShortName">ap_rst_n</obj_property>
+         <obj_property name="ObjectShortName">ap_rst_n</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/s_axi_control_araddr">
+         <obj_property name="ElementShortName">s_axi_control_araddr[12:0]</obj_property>
+         <obj_property name="ObjectShortName">s_axi_control_araddr[12:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/s_axi_control_arprot">
+         <obj_property name="ElementShortName">s_axi_control_arprot[2:0]</obj_property>
+         <obj_property name="ObjectShortName">s_axi_control_arprot[2:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/s_axi_control_arready">
+         <obj_property name="ElementShortName">s_axi_control_arready</obj_property>
+         <obj_property name="ObjectShortName">s_axi_control_arready</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/s_axi_control_arvalid">
+         <obj_property name="ElementShortName">s_axi_control_arvalid</obj_property>
+         <obj_property name="ObjectShortName">s_axi_control_arvalid</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/s_axi_control_awaddr">
+         <obj_property name="ElementShortName">s_axi_control_awaddr[12:0]</obj_property>
+         <obj_property name="ObjectShortName">s_axi_control_awaddr[12:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/s_axi_control_awprot">
+         <obj_property name="ElementShortName">s_axi_control_awprot[2:0]</obj_property>
+         <obj_property name="ObjectShortName">s_axi_control_awprot[2:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/s_axi_control_awready">
+         <obj_property name="ElementShortName">s_axi_control_awready</obj_property>
+         <obj_property name="ObjectShortName">s_axi_control_awready</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/s_axi_control_awvalid">
+         <obj_property name="ElementShortName">s_axi_control_awvalid</obj_property>
+         <obj_property name="ObjectShortName">s_axi_control_awvalid</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/s_axi_control_bready">
+         <obj_property name="ElementShortName">s_axi_control_bready</obj_property>
+         <obj_property name="ObjectShortName">s_axi_control_bready</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/s_axi_control_bresp">
+         <obj_property name="ElementShortName">s_axi_control_bresp[1:0]</obj_property>
+         <obj_property name="ObjectShortName">s_axi_control_bresp[1:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/s_axi_control_bvalid">
+         <obj_property name="ElementShortName">s_axi_control_bvalid</obj_property>
+         <obj_property name="ObjectShortName">s_axi_control_bvalid</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/s_axi_control_rdata">
+         <obj_property name="ElementShortName">s_axi_control_rdata[31:0]</obj_property>
+         <obj_property name="ObjectShortName">s_axi_control_rdata[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/s_axi_control_rready">
+         <obj_property name="ElementShortName">s_axi_control_rready</obj_property>
+         <obj_property name="ObjectShortName">s_axi_control_rready</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/s_axi_control_rresp">
+         <obj_property name="ElementShortName">s_axi_control_rresp[1:0]</obj_property>
+         <obj_property name="ObjectShortName">s_axi_control_rresp[1:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/s_axi_control_rvalid">
+         <obj_property name="ElementShortName">s_axi_control_rvalid</obj_property>
+         <obj_property name="ObjectShortName">s_axi_control_rvalid</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/s_axi_control_wdata">
+         <obj_property name="ElementShortName">s_axi_control_wdata[31:0]</obj_property>
+         <obj_property name="ObjectShortName">s_axi_control_wdata[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/s_axi_control_wready">
+         <obj_property name="ElementShortName">s_axi_control_wready</obj_property>
+         <obj_property name="ObjectShortName">s_axi_control_wready</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/s_axi_control_wstrb">
+         <obj_property name="ElementShortName">s_axi_control_wstrb[3:0]</obj_property>
+         <obj_property name="ObjectShortName">s_axi_control_wstrb[3:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/s_axi_control_wvalid">
+         <obj_property name="ElementShortName">s_axi_control_wvalid</obj_property>
+         <obj_property name="ObjectShortName">s_axi_control_wvalid</obj_property>
+      </wvobject>
+   </wvobject>
+   <wvobject type="vbus" fp_name="vbus271">
+      <obj_property name="label">S_AXIS_CALL_REQ</obj_property>
+      <obj_property name="DisplayName">label</obj_property>
+      <obj_property name="isExpanded"></obj_property>
+      <wvobject type="logic" fp_name="/ccl_offload/ap_rst_n">
+         <obj_property name="ElementShortName">ap_rst_n</obj_property>
+         <obj_property name="ObjectShortName">ap_rst_n</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ap_clk">
+         <obj_property name="ElementShortName">ap_clk</obj_property>
+         <obj_property name="ObjectShortName">ap_clk</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/s_axis_call_req_tdata">
+         <obj_property name="ElementShortName">s_axis_call_req_tdata[31:0]</obj_property>
+         <obj_property name="ObjectShortName">s_axis_call_req_tdata[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/s_axis_call_req_tlast">
+         <obj_property name="ElementShortName">s_axis_call_req_tlast</obj_property>
+         <obj_property name="ObjectShortName">s_axis_call_req_tlast</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/s_axis_call_req_tready">
+         <obj_property name="ElementShortName">s_axis_call_req_tready</obj_property>
+         <obj_property name="ObjectShortName">s_axis_call_req_tready</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/s_axis_call_req_tvalid">
+         <obj_property name="ElementShortName">s_axis_call_req_tvalid</obj_property>
+         <obj_property name="ObjectShortName">s_axis_call_req_tvalid</obj_property>
+      </wvobject>
+   </wvobject>
+   <wvobject type="vbus" fp_name="vbus276">
+      <obj_property name="label">M_AXIS_CALL_ACK</obj_property>
+      <obj_property name="DisplayName">label</obj_property>
+      <obj_property name="isExpanded"></obj_property>
+      <wvobject type="logic" fp_name="/ccl_offload/ap_clk">
+         <obj_property name="ElementShortName">ap_clk</obj_property>
+         <obj_property name="ObjectShortName">ap_clk</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ap_rst_n">
+         <obj_property name="ElementShortName">ap_rst_n</obj_property>
+         <obj_property name="ObjectShortName">ap_rst_n</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/m_axis_call_ack_tdata">
+         <obj_property name="ElementShortName">m_axis_call_ack_tdata[31:0]</obj_property>
+         <obj_property name="ObjectShortName">m_axis_call_ack_tdata[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/m_axis_call_ack_tlast">
+         <obj_property name="ElementShortName">m_axis_call_ack_tlast</obj_property>
+         <obj_property name="ObjectShortName">m_axis_call_ack_tlast</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/m_axis_call_ack_tready">
+         <obj_property name="ElementShortName">m_axis_call_ack_tready</obj_property>
+         <obj_property name="ObjectShortName">m_axis_call_ack_tready</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/m_axis_call_ack_tvalid">
+         <obj_property name="ElementShortName">m_axis_call_ack_tvalid</obj_property>
+         <obj_property name="ObjectShortName">m_axis_call_ack_tvalid</obj_property>
+      </wvobject>
+   </wvobject>
+</wave_config>

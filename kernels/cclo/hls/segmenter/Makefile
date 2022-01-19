@@ -22,6 +22,6 @@ TARGET=ip
 
 all: $(SEGMENTER_IP) 
 
-$(SEGMENTER_IP): ../build.tcl $(IPNAME).cpp tb_$(IPNAME).cpp
+$(SEGMENTER_IP): ../build.tcl $(IPNAME).cpp
 	vitis_hls $< -tclargs $(TARGET) $(DEVICE) $(IPNAME)
 

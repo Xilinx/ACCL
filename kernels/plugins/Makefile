@@ -16,6 +16,7 @@
 #
 # *******************************************************************************/
 
+PERIPHERAL_IPS = loopback reduce_sum fp_hp_stream_conv hp_fp_stream_conv 
 TARGET=ip
 PLATFORM ?= xilinx_u280_xdma_201920_3
 DEBUG ?= none
@@ -28,11 +29,11 @@ else
 	$(error Unsupported PLATFORM)
 endif
 
-.PHONY: plugins cclo
+all: $(PERIPHERAL_IPS) cclo
 
-all: plugins cclo
+.PHONY: loopback cclo reduce_sum fp_hp_stream_conv hp_fp_stream_conv
 
-plugins:
+$(PERIPHERAL_IPS):
 	$(MAKE) -C $@ DEVICE=$(FPGAPART) TARGET=$(TARGET)
 
 cclo:

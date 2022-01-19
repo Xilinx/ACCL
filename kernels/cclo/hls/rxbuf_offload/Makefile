@@ -20,9 +20,9 @@ DEVICE=xcu250-figd2104-2L-e
 RXBUF_DEQUEUE_IP=build_rxbuf_dequeue/sol1/impl/ip/xilinx_com_hls_rxbuf_dequeue_1_0.zip
 RXBUF_ENQUEUE_IP=build_rxbuf_enqueue/sol1/impl/ip/xilinx_com_hls_rxbuf_enqueue_1_0.zip
 RXBUF_SEEK_IP=build_rxbuf_seek/sol1/impl/ip/xilinx_com_hls_rxbuf_seek_1_0.zip
-RXBUF_SEESSION_IP=build_rxbuf_seession/sol1/impl/ip/xilinx_com_hls_rxbuf_seession_1_0.zip
+RXBUF_SESSION_IP=build_rxbuf_session/sol1/impl/ip/xilinx_com_hls_rxbuf_session_1_0.zip
 
-all: $(RXBUF_DEQUEUE_IP) $(RXBUF_ENQUEUE_IP) $(RXBUF_SEEK_IP) $(RXBUF_SEESSION_IP)
+all: $(RXBUF_DEQUEUE_IP) $(RXBUF_ENQUEUE_IP) $(RXBUF_SEEK_IP) $(RXBUF_SESSION_IP)
 
 $(RXBUF_DEQUEUE_IP): ../build.tcl rxbuf_dequeue.cpp 
 	vitis_hls $< -tclargs $(TARGET) $(DEVICE) rxbuf_dequeue
@@ -33,5 +33,5 @@ $(RXBUF_ENQUEUE_IP): ../build.tcl rxbuf_enqueue.cpp
 $(RXBUF_SEEK_IP): ../build.tcl rxbuf_seek.cpp 
 	vitis_hls $< -tclargs $(TARGET) $(DEVICE) rxbuf_seek
 
-$(RXBUF_SEESSION_IP): ../build.tcl rxbuf_session.cpp
+$(RXBUF_SESSION_IP): ../build.tcl rxbuf_session.cpp
 	vitis_hls $< -tclargs $(TARGET) $(DEVICE) rxbuf_session

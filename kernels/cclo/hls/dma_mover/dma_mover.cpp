@@ -447,7 +447,19 @@ void instruction_decode(
     static bool arcfg_cached = false;
     static unsigned int prev_arcfg_offset;
     if(!arcfg_cached || (insn.arcfg_offset != prev_arcfg_offset && !dry_run)){
-        arcfg = *((datapath_arith_config*)(exchange_mem + insn.arcfg_offset));
+        //Do the equivalent of this: 
+        //  arcfg = *((datapath_arith_config*)(exchange_mem + insn.arcfg_offset));
+        //Doing it directly infers a wide bus as if the entire struct is read at once
+        arcfg.uncompressed_elem_bytes = exchange_mem[insn.arcfg_offset + 0];
+        arcfg.compressed_elem_bytes = exchange_mem[insn.arcfg_offset + 1];
+        arcfg.elem_ratio_log = exchange_mem[insn.arcfg_offset + 2];
+        arcfg.compressor_tdest = exchange_mem[insn.arcfg_offset + 3];
+        arcfg.decompressor_tdest = exchange_mem[insn.arcfg_offset + 4];
+        arcfg.arith_nfunctions = exchange_mem[insn.arcfg_offset + 5];
+        arcfg.arith_is_compressed = exchange_mem[insn.arcfg_offset + 6];
+        for(int i=0; i<arcfg.arith_nfunctions; i++){
+            arcfg.arith_tdest[i] = exchange_mem[insn.arcfg_offset + 7 + i];
+        }
         arcfg_cached = true;
         prev_arcfg_offset = insn.arcfg_offset;
     }

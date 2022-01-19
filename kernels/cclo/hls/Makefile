@@ -19,6 +19,6 @@ DEVICE=xcu250-figd2104-2L-e
 
 all:
 	$(MAKE) -C eth_intf DEVICE=$(DEVICE)
-	$(MAKE) -C dma_queue/ DEVICE=$(DEVICE)
-	$(MAKE) -C dma_mover/ DEVICE=$(DEVICE)
-	$(MAKE) -C segmenter/ DEVICE=$(DEVICE)
+	$(MAKE) -C rxbuf_offload DEVICE=$(DEVICE)
+	$(MAKE) -C dma_mover DEVICE=$(DEVICE)
+	$(MAKE) -C segmenter DEVICE=$(DEVICE)

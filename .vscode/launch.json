@@ -9,7 +9,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${fileDirname}/${fileBasenameNoExtension}",
-            "args": [1, 0, 5500, "tcp"],
+            "args": [1, 0, 5500, "udp", "2>/dev/null"],
             "stopAtEntry": true,
             "cwd": "${fileDirname}",
             "environment": [],

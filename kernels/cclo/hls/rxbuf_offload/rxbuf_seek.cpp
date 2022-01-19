@@ -27,7 +27,8 @@ void rxbuf_seek(
 #pragma HLS INTERFACE axis port=rx_notify
 #pragma HLS INTERFACE axis port=rx_seek_request
 #pragma HLS INTERFACE axis port=rx_seek_ack
-#pragma HLS INTERFACE m_axi port=rx_buffers	offset=slave
+#pragma HLS INTERFACE axis port=rx_release_request
+#pragma HLS INTERFACE m_axi port=rx_buffers	offset=slave bundle=mem
 #pragma HLS INTERFACE s_axilite port=return
 #pragma HLS PIPELINE II=1
 

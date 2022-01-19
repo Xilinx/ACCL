@@ -66,6 +66,7 @@ if [string equal $hw_debug_level "dma"] {
 # add wrapper
 add_files -norecurse ./hdl/ccl_offload.v
 update_compile_order -fileset sources_1
+update_compile_order -fileset sim_1
 generate_target all [get_files  ./ccl_offload_ex/ccl_offload_ex.srcs/sources_1/bd/ccl_offload_bd/ccl_offload_bd.bd]
 #build a .xsa file handoff
 write_hw_platform -fixed -force -file $xsafile

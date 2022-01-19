@@ -18,7 +18,7 @@
 #include <stdbool.h>
 #include "ccl_offload_control.h"
 
-#ifdef ACCL_SYNTHESIS
+#ifndef MB_FW_EMULATION
 #include "xparameters.h"
 #include "mb_interface.h"
 #include "microblaze_interrupts_i.h"
@@ -41,7 +41,7 @@ static volatile	unsigned int max_segment_size = DMA_MAX_BTT;
 static datapath_arith_config arcfg;
 static communicator world;
 
-#ifndef ACCL_SYNTHESIS
+#ifdef MB_FW_EMULATION
 uint32_t sim_cfgmem[END_OF_EXCHMEM/4];
 uint32_t *cfgmem = sim_cfgmem;
 hlslib::Stream<ap_axiu<32,0,0,0>, 512> cmd_fifos[4];
@@ -293,7 +293,7 @@ static inline void ack_move(
 //configure datapath before calling this method
 //instructs the data plane to move data
 //use MOVE_IMMEDIATE
-inline int move(
+int move(
     uint32_t op0_opcode,
     uint32_t op1_opcode,
     uint32_t res_opcode,
@@ -1310,7 +1310,7 @@ int run_accl() {
     return 0;
 }
 
-#ifdef ACCL_SYNTHESIS
+#ifndef MB_FW_EMULATION
 int main(int argc, char **argv){
     return run_accl();
 }

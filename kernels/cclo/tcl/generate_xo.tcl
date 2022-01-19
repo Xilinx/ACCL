@@ -15,7 +15,6 @@
 #
 # *******************************************************************************/
 
-set elf [lindex $::argv 0]
 set stacktype [lindex $::argv 1]
 set en_dma [lindex $::argv 2]
 set en_arith [lindex $::argv 3]
@@ -217,12 +216,6 @@ proc package_project_dcp_and_xdc {path_to_dcp path_to_xdc path_to_packaged kerne
 
 # open project
 open_project ./ccl_offload_ex/ccl_offload_ex.xpr
-
-# add elf file and associate it
-add_files -norecurse $elf
-update_compile_order -fileset sources_1
-set_property SCOPED_TO_REF ccl_offload_bd [get_files -all -of_objects [get_fileset sources_1] $elf]
-set_property SCOPED_TO_CELLS { control/microblaze_0 } [get_files -all -of_objects [get_fileset sources_1] $elf]
 
 #run kernel packaging
 reset_run synth_1

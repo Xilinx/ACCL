@@ -24,7 +24,7 @@ SOURCES=cclo_emu.cpp $(MB_FW_DIR)/ccl_offload_control.c $(REDUCTION_DIR)/reduce_
 all: cclo_emu
 
 cclo_emu: cclo_emu.cpp $(MB_FW_DIR)/ccl_offload_control.c
-	g++ -std=c++17 -Wno-attributes -fdiagnostics-color=always -g $(EXTRA_DEFINES) $(INCLUDES) $(SOURCES) $(MPI_LIBPATHS) -o $@ -lpthread -lzmqpp -lzmq -ljsoncpp -lmpi_cxx -lmpi
+	g++ -std=c++17 -Wno-attributes -fdiagnostics-color=always -g -DMB_FW_EMULATION $(EXTRA_DEFINES) $(INCLUDES) $(SOURCES) $(MPI_LIBPATHS) -o $@ -lpthread -lzmqpp -lzmq -ljsoncpp -lmpi_cxx -lmpi
 
 .PHONY: run
 run: cclo_emu

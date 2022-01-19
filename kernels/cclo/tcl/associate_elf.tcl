@@ -1,4 +1,3 @@
-
 # /*******************************************************************************
 #  Copyright (C) 2021 Xilinx, Inc
 #
@@ -16,24 +15,21 @@
 #
 # *******************************************************************************/
 
-TARGET=ip
-PLATFORM ?= xilinx_u280_xdma_201920_3
-DEBUG ?= none
+set elf [lindex $::argv 0]
 
-ifeq (u250,$(findstring u250, $(PLATFORM)))
-	FPGAPART=xcu250-figd2104-2L-e
-else ifeq (u280,$(findstring u280, $(PLATFORM)))
-	FPGAPART=xcu280-fsvh2892-2L-e
-else
-	$(error Unsupported PLATFORM)
-endif
+# open project
+open_project ./ccl_offload_ex/ccl_offload_ex.xpr
 
-.PHONY: plugins cclo
+# add elf file and associate it
+add_files -fileset sources_1 -norecurse $elf
+add_files -fileset sim_1 -norecurse $elf
+update_compile_order -fileset sources_1
+update_compile_order -fileset sim_1
+set_property SCOPED_TO_REF ccl_offload_bd [get_files -all -of_objects [get_fileset sources_1] $elf]
+set_property SCOPED_TO_CELLS { cclo/control/microblaze_0 } [get_files -all -of_objects [get_fileset sources_1] $elf]
+set_property SCOPED_TO_REF ccl_offload_bd [get_files -all -of_objects [get_fileset sim_1] $elf]
+set_property SCOPED_TO_CELLS { cclo/control/microblaze_0 } [get_files -all -of_objects [get_fileset sim_1] $elf]
 
-all: plugins cclo
-
-plugins:
-	$(MAKE) -C $@ DEVICE=$(FPGAPART) TARGET=$(TARGET)
-
-cclo:
-	$(MAKE) -C $@ PLATFORM=$(FPGAPART) DEBUG=$(DEBUG)
+# close and exit
+close_project
+exit

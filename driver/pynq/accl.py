@@ -101,10 +101,11 @@ class SimBuffer():
 
 class SimDevice():
     def __init__(self, zmqadr="tcp://localhost:5555"):
-        print("SimDevice connecting to ZMQ")
+        print("SimDevice connecting to ZMQ on", zmqadr)
         self.socket = zmq.Context().socket(zmq.REQ)
         self.socket.connect(zmqadr)
         self.mmio = SimMMIO(self.socket)
+        print("SimDevice connected")
 
     # Call request  {"type": 4, arg names and values}
     # Call response {"status": OK|ERR}

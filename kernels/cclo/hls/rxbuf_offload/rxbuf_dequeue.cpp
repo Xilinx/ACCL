@@ -30,6 +30,7 @@ void rxbuf_dequeue(
 #pragma HLS INTERFACE axis 		port=dma_sts
 #pragma HLS INTERFACE axis 		port=eth_hdr
 #pragma HLS INTERFACE axis 		port=inflight_queue
+#pragma HLS INTERFACE axis 		port=notification_queue
 #pragma HLS INTERFACE m_axi 	port=rx_buffers depth=16*9 offset=slave num_read_outstanding=4 num_write_outstanding=4  bundle=mem
 #pragma HLS INTERFACE s_axilite port=return
 #pragma HLS PIPELINE II=1 style=flp
