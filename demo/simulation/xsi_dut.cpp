@@ -80,7 +80,7 @@ void XSI_DUT::run_ncycles(unsigned int n){
     }
 }
 
-uint64_t get_cycle_count(){
+uint64_t XSI_DUT::get_cycle_count(){
     return cycle_count;
 }
 
