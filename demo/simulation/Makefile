@@ -16,15 +16,40 @@
 # *******************************************************************************/
 
 ACCL_REPO_ROOT=$(shell pwd)/../../
+HLSLIB_INCLUDE=$(ACCL_REPO_ROOT)/hlslib/include/hlslib/xilinx/
 MPI_INCLUDES=-I/usr/lib/x86_64-linux-gnu/openmpi/include/openmpi -I/usr/lib/x86_64-linux-gnu/openmpi/include
 MPI_LIBPATHS=-L/usr/lib/x86_64-linux-gnu/openmpi/lib
 MB_FW_DIR=$(ACCL_REPO_ROOT)/kernels/cclo/fw/sw_apps/ccl_offload_control/src
+CCLO_HLS_ROOT=$(ACCL_REPO_ROOT)/kernels/cclo/hls
+ZMQ_DIR=$(ACCL_REPO_ROOT)/demo/zmq
 
-tb: testbench.cpp xsi_loader.cpp xsi_loader.h
-	g++ -std=c++17 -fdiagnostics-color=always -g testbench.cpp xsi_loader.cpp -DZMQ_CALL_VERBOSE -I. -I${XILINX_VIVADO}/data/xsim/include/ -I${MPI_INCLUDES} -I${MB_FW_DIR} -o $@ -L${MPI_LIBPATHS} -ldl -lrt -lpthread -lmpi_cxx -lmpi -lzmqpp -lzmq -ljsoncpp
+INCLUDES = -I$(XILINX_VIVADO)/include/ -I. -I${XILINX_VIVADO}/data/xsim/include/ -I${HLSLIB_INCLUDE} -I${MPI_INCLUDES} -I${MB_FW_DIR} -I${ZMQ_DIR} -I${CCLO_HLS_ROOT}
+XSIMK_PATH_TAIL = xsim.dir/ccl_offload_behav/xsimk.so
+XSIM_COMPILE_FOLDER ?= $(ACCL_REPO_ROOT)/kernels/cclo/ccl_offload_ex/ccl_offload_ex.sim/sim_1/behav/xsim/
 
-run: tb
-	LD_LIBRARY_PATH=${XILINX_VIVADO}/lib/lnx64.o ./tb xsim.dir/ccl_offload/xsimk.so
+SYMLINKS = ccl_offload_bd_axi_bram_ctrl_0_bram_0.mem ccl_offload_bd_dlmb_bram_if_cntlr_bram_0.mem xsim.dir
+
+STACKTYPE ?= "udp"
+NRANKS ?= 1
+START_PORT ?= 5500
+
+all: cclo_sim
+
+cclo_sim: cclo_sim.cpp xsi_loader.cpp xsi_loader.h xsi_dut.cpp xsi_dut.h
+	g++ -std=c++17 -fmax-errors=3 -fdiagnostics-color=always -g cclo_sim.cpp xsi_dut.cpp xsi_loader.cpp ${ZMQ_DIR}/*.cpp -DZMQ_CALL_VERBOSE ${INCLUDES} -o $@ -L${MPI_LIBPATHS} -ldl -lrt -lpthread -lmpi_cxx -lmpi -lzmqpp -lzmq -ljsoncpp
+
+.PHONY = symlinks
+
+symlinks: $(SYMLINKS)
+
+$(SYMLINKS):
+	ln -s ${XSIM_COMPILE_FOLDER}/$@ $@
+
+run: cclo_sim $(SYMLINKS)
+	LD_LIBRARY_PATH=${XILINX_VIVADO}/lib/lnx64.o mpirun -np ${NRANKS} ./cclo_sim ${STACKTYPE} ${START_PORT} ${XSIMK_PATH_TAIL}
+
+clean:
+	-rm $(SYMLINKS) cclo_sim *.wdb
 
 distclean:
 	git clean -xfd

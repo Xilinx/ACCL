@@ -3,7 +3,7 @@
    <wave_state>
    </wave_state>
    <db_ref_list>
-      <db_ref path="test.wdb" id="1">
+      <db_ref path="./waveform_rank0.wdb" id="1">
          <top_modules>
             <top_module name="axi_bram_ctrl_funcs" />
             <top_module name="ccl_offload" />
@@ -16,27 +16,24 @@
       </db_ref>
    </db_ref_list>
    <zoom_setting>
-      <ZoomStartTime time="350219800fs"></ZoomStartTime>
-      <ZoomEndTime time="384869801fs"></ZoomEndTime>
-      <Cursor1Time time="365574000fs"></Cursor1Time>
+      <ZoomStartTime time="180626073fs"></ZoomStartTime>
+      <ZoomEndTime time="182081989fs"></ZoomEndTime>
+      <Cursor1Time time="181174000fs"></Cursor1Time>
    </zoom_setting>
    <column_width_setting>
-      <NameColumnWidth column_width="276"></NameColumnWidth>
-      <ValueColumnWidth column_width="116"></ValueColumnWidth>
+      <NameColumnWidth column_width="314"></NameColumnWidth>
+      <ValueColumnWidth column_width="96"></ValueColumnWidth>
    </column_width_setting>
    <WVObjectSize size="5" />
-   <wvobject type="logic" fp_name="/ccl_offload/ap_clk">
-      <obj_property name="ElementShortName">ap_clk</obj_property>
-      <obj_property name="ObjectShortName">ap_clk</obj_property>
-   </wvobject>
-   <wvobject type="logic" fp_name="/ccl_offload/ap_rst_n">
-      <obj_property name="ElementShortName">ap_rst_n</obj_property>
-      <obj_property name="ObjectShortName">ap_rst_n</obj_property>
-   </wvobject>
-   <wvobject type="vbus" fp_name="vbus266">
-      <obj_property name="label">S_AXI_CONTROL</obj_property>
+   <wave_markers>
+      <marker label="" time="176686000" />
+      <marker label="" time="175700000" />
+      <marker label="" time="175730000" />
+      <marker label="" time="175704000" />
+   </wave_markers>
+   <wvobject type="group" fp_name="group243">
+      <obj_property name="label">TOP LEVEL PORTS</obj_property>
       <obj_property name="DisplayName">label</obj_property>
-      <obj_property name="isExpanded"></obj_property>
       <wvobject type="logic" fp_name="/ccl_offload/ap_clk">
          <obj_property name="ElementShortName">ap_clk</obj_property>
          <obj_property name="ObjectShortName">ap_clk</obj_property>
@@ -45,139 +42,2480 @@
          <obj_property name="ElementShortName">ap_rst_n</obj_property>
          <obj_property name="ObjectShortName">ap_rst_n</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/ccl_offload/s_axi_control_araddr">
-         <obj_property name="ElementShortName">s_axi_control_araddr[12:0]</obj_property>
-         <obj_property name="ObjectShortName">s_axi_control_araddr[12:0]</obj_property>
+      <wvobject type="vbus" fp_name="vbus266">
+         <obj_property name="label">S_AXI_CONTROL</obj_property>
+         <obj_property name="DisplayName">label</obj_property>
+         <wvobject type="logic" fp_name="/ccl_offload/ap_clk">
+            <obj_property name="ElementShortName">ap_clk</obj_property>
+            <obj_property name="ObjectShortName">ap_clk</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ap_rst_n">
+            <obj_property name="ElementShortName">ap_rst_n</obj_property>
+            <obj_property name="ObjectShortName">ap_rst_n</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_control_araddr">
+            <obj_property name="ElementShortName">s_axi_control_araddr[12:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_control_araddr[12:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_control_arprot">
+            <obj_property name="ElementShortName">s_axi_control_arprot[2:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_control_arprot[2:0]</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/s_axi_control_arready">
+            <obj_property name="ElementShortName">s_axi_control_arready</obj_property>
+            <obj_property name="ObjectShortName">s_axi_control_arready</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/s_axi_control_arvalid">
+            <obj_property name="ElementShortName">s_axi_control_arvalid</obj_property>
+            <obj_property name="ObjectShortName">s_axi_control_arvalid</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_control_awaddr">
+            <obj_property name="ElementShortName">s_axi_control_awaddr[12:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_control_awaddr[12:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_control_awprot">
+            <obj_property name="ElementShortName">s_axi_control_awprot[2:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_control_awprot[2:0]</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/s_axi_control_awready">
+            <obj_property name="ElementShortName">s_axi_control_awready</obj_property>
+            <obj_property name="ObjectShortName">s_axi_control_awready</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/s_axi_control_awvalid">
+            <obj_property name="ElementShortName">s_axi_control_awvalid</obj_property>
+            <obj_property name="ObjectShortName">s_axi_control_awvalid</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/s_axi_control_bready">
+            <obj_property name="ElementShortName">s_axi_control_bready</obj_property>
+            <obj_property name="ObjectShortName">s_axi_control_bready</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_control_bresp">
+            <obj_property name="ElementShortName">s_axi_control_bresp[1:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_control_bresp[1:0]</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/s_axi_control_bvalid">
+            <obj_property name="ElementShortName">s_axi_control_bvalid</obj_property>
+            <obj_property name="ObjectShortName">s_axi_control_bvalid</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_control_rdata">
+            <obj_property name="ElementShortName">s_axi_control_rdata[31:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_control_rdata[31:0]</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/s_axi_control_rready">
+            <obj_property name="ElementShortName">s_axi_control_rready</obj_property>
+            <obj_property name="ObjectShortName">s_axi_control_rready</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_control_rresp">
+            <obj_property name="ElementShortName">s_axi_control_rresp[1:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_control_rresp[1:0]</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/s_axi_control_rvalid">
+            <obj_property name="ElementShortName">s_axi_control_rvalid</obj_property>
+            <obj_property name="ObjectShortName">s_axi_control_rvalid</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_control_wdata">
+            <obj_property name="ElementShortName">s_axi_control_wdata[31:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_control_wdata[31:0]</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/s_axi_control_wready">
+            <obj_property name="ElementShortName">s_axi_control_wready</obj_property>
+            <obj_property name="ObjectShortName">s_axi_control_wready</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_control_wstrb">
+            <obj_property name="ElementShortName">s_axi_control_wstrb[3:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_control_wstrb[3:0]</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/s_axi_control_wvalid">
+            <obj_property name="ElementShortName">s_axi_control_wvalid</obj_property>
+            <obj_property name="ObjectShortName">s_axi_control_wvalid</obj_property>
+         </wvobject>
       </wvobject>
-      <wvobject type="array" fp_name="/ccl_offload/s_axi_control_arprot">
-         <obj_property name="ElementShortName">s_axi_control_arprot[2:0]</obj_property>
-         <obj_property name="ObjectShortName">s_axi_control_arprot[2:0]</obj_property>
+      <wvobject type="vbus" fp_name="vbus271">
+         <obj_property name="label">S_AXIS_CALL_REQ</obj_property>
+         <obj_property name="DisplayName">label</obj_property>
+         <wvobject type="logic" fp_name="/ccl_offload/ap_rst_n">
+            <obj_property name="ElementShortName">ap_rst_n</obj_property>
+            <obj_property name="ObjectShortName">ap_rst_n</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ap_clk">
+            <obj_property name="ElementShortName">ap_clk</obj_property>
+            <obj_property name="ObjectShortName">ap_clk</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axis_call_req_tdata">
+            <obj_property name="ElementShortName">s_axis_call_req_tdata[31:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axis_call_req_tdata[31:0]</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/s_axis_call_req_tlast">
+            <obj_property name="ElementShortName">s_axis_call_req_tlast</obj_property>
+            <obj_property name="ObjectShortName">s_axis_call_req_tlast</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/s_axis_call_req_tready">
+            <obj_property name="ElementShortName">s_axis_call_req_tready</obj_property>
+            <obj_property name="ObjectShortName">s_axis_call_req_tready</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/s_axis_call_req_tvalid">
+            <obj_property name="ElementShortName">s_axis_call_req_tvalid</obj_property>
+            <obj_property name="ObjectShortName">s_axis_call_req_tvalid</obj_property>
+         </wvobject>
       </wvobject>
-      <wvobject type="logic" fp_name="/ccl_offload/s_axi_control_arready">
-         <obj_property name="ElementShortName">s_axi_control_arready</obj_property>
-         <obj_property name="ObjectShortName">s_axi_control_arready</obj_property>
+      <wvobject type="vbus" fp_name="vbus276">
+         <obj_property name="label">M_AXIS_CALL_ACK</obj_property>
+         <obj_property name="DisplayName">label</obj_property>
+         <wvobject type="logic" fp_name="/ccl_offload/ap_clk">
+            <obj_property name="ElementShortName">ap_clk</obj_property>
+            <obj_property name="ObjectShortName">ap_clk</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ap_rst_n">
+            <obj_property name="ElementShortName">ap_rst_n</obj_property>
+            <obj_property name="ObjectShortName">ap_rst_n</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/m_axis_call_ack_tdata">
+            <obj_property name="ElementShortName">m_axis_call_ack_tdata[31:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axis_call_ack_tdata[31:0]</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/m_axis_call_ack_tlast">
+            <obj_property name="ElementShortName">m_axis_call_ack_tlast</obj_property>
+            <obj_property name="ObjectShortName">m_axis_call_ack_tlast</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/m_axis_call_ack_tready">
+            <obj_property name="ElementShortName">m_axis_call_ack_tready</obj_property>
+            <obj_property name="ObjectShortName">m_axis_call_ack_tready</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/m_axis_call_ack_tvalid">
+            <obj_property name="ElementShortName">m_axis_call_ack_tvalid</obj_property>
+            <obj_property name="ObjectShortName">m_axis_call_ack_tvalid</obj_property>
+         </wvobject>
       </wvobject>
-      <wvobject type="logic" fp_name="/ccl_offload/s_axi_control_arvalid">
-         <obj_property name="ElementShortName">s_axi_control_arvalid</obj_property>
-         <obj_property name="ObjectShortName">s_axi_control_arvalid</obj_property>
+      <wvobject type="vbus" fp_name="vbus404">
+         <obj_property name="label">S_AXI_DATA</obj_property>
+         <obj_property name="DisplayName">label</obj_property>
+         <wvobject type="logic" fp_name="/ccl_offload/ap_clk">
+            <obj_property name="ElementShortName">ap_clk</obj_property>
+            <obj_property name="ObjectShortName">ap_clk</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ap_rst_n">
+            <obj_property name="ElementShortName">ap_rst_n</obj_property>
+            <obj_property name="ObjectShortName">ap_rst_n</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_data_araddr">
+            <obj_property name="ElementShortName">s_axi_data_araddr[63:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_data_araddr[63:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_data_arburst">
+            <obj_property name="ElementShortName">s_axi_data_arburst[1:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_data_arburst[1:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_data_arcache">
+            <obj_property name="ElementShortName">s_axi_data_arcache[3:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_data_arcache[3:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_data_arid">
+            <obj_property name="ElementShortName">s_axi_data_arid[3:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_data_arid[3:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_data_arlen">
+            <obj_property name="ElementShortName">s_axi_data_arlen[7:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_data_arlen[7:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_data_arlock">
+            <obj_property name="ElementShortName">s_axi_data_arlock[0:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_data_arlock[0:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_data_arprot">
+            <obj_property name="ElementShortName">s_axi_data_arprot[2:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_data_arprot[2:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_data_arqos">
+            <obj_property name="ElementShortName">s_axi_data_arqos[3:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_data_arqos[3:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_data_arready">
+            <obj_property name="ElementShortName">s_axi_data_arready[0:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_data_arready[0:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_data_arsize">
+            <obj_property name="ElementShortName">s_axi_data_arsize[2:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_data_arsize[2:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_data_aruser">
+            <obj_property name="ElementShortName">s_axi_data_aruser[3:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_data_aruser[3:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_data_arvalid">
+            <obj_property name="ElementShortName">s_axi_data_arvalid[0:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_data_arvalid[0:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_data_awaddr">
+            <obj_property name="ElementShortName">s_axi_data_awaddr[63:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_data_awaddr[63:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_data_awburst">
+            <obj_property name="ElementShortName">s_axi_data_awburst[1:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_data_awburst[1:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_data_awcache">
+            <obj_property name="ElementShortName">s_axi_data_awcache[3:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_data_awcache[3:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_data_awid">
+            <obj_property name="ElementShortName">s_axi_data_awid[3:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_data_awid[3:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_data_awlen">
+            <obj_property name="ElementShortName">s_axi_data_awlen[7:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_data_awlen[7:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_data_awlock">
+            <obj_property name="ElementShortName">s_axi_data_awlock[0:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_data_awlock[0:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_data_awprot">
+            <obj_property name="ElementShortName">s_axi_data_awprot[2:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_data_awprot[2:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_data_awqos">
+            <obj_property name="ElementShortName">s_axi_data_awqos[3:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_data_awqos[3:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_data_awready">
+            <obj_property name="ElementShortName">s_axi_data_awready[0:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_data_awready[0:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_data_awsize">
+            <obj_property name="ElementShortName">s_axi_data_awsize[2:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_data_awsize[2:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_data_awuser">
+            <obj_property name="ElementShortName">s_axi_data_awuser[3:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_data_awuser[3:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_data_awvalid">
+            <obj_property name="ElementShortName">s_axi_data_awvalid[0:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_data_awvalid[0:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_data_bid">
+            <obj_property name="ElementShortName">s_axi_data_bid[3:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_data_bid[3:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_data_bready">
+            <obj_property name="ElementShortName">s_axi_data_bready[0:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_data_bready[0:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_data_bresp">
+            <obj_property name="ElementShortName">s_axi_data_bresp[1:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_data_bresp[1:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_data_bvalid">
+            <obj_property name="ElementShortName">s_axi_data_bvalid[0:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_data_bvalid[0:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_data_rdata">
+            <obj_property name="ElementShortName">s_axi_data_rdata[511:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_data_rdata[511:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_data_rid">
+            <obj_property name="ElementShortName">s_axi_data_rid[3:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_data_rid[3:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_data_rlast">
+            <obj_property name="ElementShortName">s_axi_data_rlast[0:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_data_rlast[0:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_data_rready">
+            <obj_property name="ElementShortName">s_axi_data_rready[0:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_data_rready[0:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_data_rresp">
+            <obj_property name="ElementShortName">s_axi_data_rresp[1:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_data_rresp[1:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_data_rvalid">
+            <obj_property name="ElementShortName">s_axi_data_rvalid[0:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_data_rvalid[0:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_data_wdata">
+            <obj_property name="ElementShortName">s_axi_data_wdata[511:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_data_wdata[511:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_data_wlast">
+            <obj_property name="ElementShortName">s_axi_data_wlast[0:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_data_wlast[0:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_data_wready">
+            <obj_property name="ElementShortName">s_axi_data_wready[0:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_data_wready[0:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_data_wstrb">
+            <obj_property name="ElementShortName">s_axi_data_wstrb[63:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_data_wstrb[63:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axi_data_wvalid">
+            <obj_property name="ElementShortName">s_axi_data_wvalid[0:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_data_wvalid[0:0]</obj_property>
+         </wvobject>
       </wvobject>
-      <wvobject type="array" fp_name="/ccl_offload/s_axi_control_awaddr">
-         <obj_property name="ElementShortName">s_axi_control_awaddr[12:0]</obj_property>
-         <obj_property name="ObjectShortName">s_axi_control_awaddr[12:0]</obj_property>
+      <wvobject type="vbus" fp_name="vbus405">
+         <obj_property name="label">M_AXIS_ETH_TX_DATA</obj_property>
+         <obj_property name="DisplayName">label</obj_property>
+         <wvobject type="logic" fp_name="/ccl_offload/ap_clk">
+            <obj_property name="ElementShortName">ap_clk</obj_property>
+            <obj_property name="ObjectShortName">ap_clk</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ap_rst_n">
+            <obj_property name="ElementShortName">ap_rst_n</obj_property>
+            <obj_property name="ObjectShortName">ap_rst_n</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/m_axis_eth_tx_data_tdata">
+            <obj_property name="ElementShortName">m_axis_eth_tx_data_tdata[511:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axis_eth_tx_data_tdata[511:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/m_axis_eth_tx_data_tdest">
+            <obj_property name="ElementShortName">m_axis_eth_tx_data_tdest[7:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axis_eth_tx_data_tdest[7:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/m_axis_eth_tx_data_tkeep">
+            <obj_property name="ElementShortName">m_axis_eth_tx_data_tkeep[63:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axis_eth_tx_data_tkeep[63:0]</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/m_axis_eth_tx_data_tlast">
+            <obj_property name="ElementShortName">m_axis_eth_tx_data_tlast</obj_property>
+            <obj_property name="ObjectShortName">m_axis_eth_tx_data_tlast</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/m_axis_eth_tx_data_tready">
+            <obj_property name="ElementShortName">m_axis_eth_tx_data_tready</obj_property>
+            <obj_property name="ObjectShortName">m_axis_eth_tx_data_tready</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/m_axis_eth_tx_data_tvalid">
+            <obj_property name="ElementShortName">m_axis_eth_tx_data_tvalid</obj_property>
+            <obj_property name="ObjectShortName">m_axis_eth_tx_data_tvalid</obj_property>
+         </wvobject>
       </wvobject>
-      <wvobject type="array" fp_name="/ccl_offload/s_axi_control_awprot">
-         <obj_property name="ElementShortName">s_axi_control_awprot[2:0]</obj_property>
-         <obj_property name="ObjectShortName">s_axi_control_awprot[2:0]</obj_property>
-      </wvobject>
-      <wvobject type="logic" fp_name="/ccl_offload/s_axi_control_awready">
-         <obj_property name="ElementShortName">s_axi_control_awready</obj_property>
-         <obj_property name="ObjectShortName">s_axi_control_awready</obj_property>
-      </wvobject>
-      <wvobject type="logic" fp_name="/ccl_offload/s_axi_control_awvalid">
-         <obj_property name="ElementShortName">s_axi_control_awvalid</obj_property>
-         <obj_property name="ObjectShortName">s_axi_control_awvalid</obj_property>
-      </wvobject>
-      <wvobject type="logic" fp_name="/ccl_offload/s_axi_control_bready">
-         <obj_property name="ElementShortName">s_axi_control_bready</obj_property>
-         <obj_property name="ObjectShortName">s_axi_control_bready</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/ccl_offload/s_axi_control_bresp">
-         <obj_property name="ElementShortName">s_axi_control_bresp[1:0]</obj_property>
-         <obj_property name="ObjectShortName">s_axi_control_bresp[1:0]</obj_property>
-      </wvobject>
-      <wvobject type="logic" fp_name="/ccl_offload/s_axi_control_bvalid">
-         <obj_property name="ElementShortName">s_axi_control_bvalid</obj_property>
-         <obj_property name="ObjectShortName">s_axi_control_bvalid</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/ccl_offload/s_axi_control_rdata">
-         <obj_property name="ElementShortName">s_axi_control_rdata[31:0]</obj_property>
-         <obj_property name="ObjectShortName">s_axi_control_rdata[31:0]</obj_property>
-      </wvobject>
-      <wvobject type="logic" fp_name="/ccl_offload/s_axi_control_rready">
-         <obj_property name="ElementShortName">s_axi_control_rready</obj_property>
-         <obj_property name="ObjectShortName">s_axi_control_rready</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/ccl_offload/s_axi_control_rresp">
-         <obj_property name="ElementShortName">s_axi_control_rresp[1:0]</obj_property>
-         <obj_property name="ObjectShortName">s_axi_control_rresp[1:0]</obj_property>
-      </wvobject>
-      <wvobject type="logic" fp_name="/ccl_offload/s_axi_control_rvalid">
-         <obj_property name="ElementShortName">s_axi_control_rvalid</obj_property>
-         <obj_property name="ObjectShortName">s_axi_control_rvalid</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/ccl_offload/s_axi_control_wdata">
-         <obj_property name="ElementShortName">s_axi_control_wdata[31:0]</obj_property>
-         <obj_property name="ObjectShortName">s_axi_control_wdata[31:0]</obj_property>
-      </wvobject>
-      <wvobject type="logic" fp_name="/ccl_offload/s_axi_control_wready">
-         <obj_property name="ElementShortName">s_axi_control_wready</obj_property>
-         <obj_property name="ObjectShortName">s_axi_control_wready</obj_property>
-      </wvobject>
-      <wvobject type="array" fp_name="/ccl_offload/s_axi_control_wstrb">
-         <obj_property name="ElementShortName">s_axi_control_wstrb[3:0]</obj_property>
-         <obj_property name="ObjectShortName">s_axi_control_wstrb[3:0]</obj_property>
-      </wvobject>
-      <wvobject type="logic" fp_name="/ccl_offload/s_axi_control_wvalid">
-         <obj_property name="ElementShortName">s_axi_control_wvalid</obj_property>
-         <obj_property name="ObjectShortName">s_axi_control_wvalid</obj_property>
+      <wvobject type="vbus" fp_name="vbus412">
+         <obj_property name="label">S_AXIS_ETH_RX_DATA</obj_property>
+         <obj_property name="DisplayName">label</obj_property>
+         <wvobject type="logic" fp_name="/ccl_offload/ap_clk">
+            <obj_property name="ElementShortName">ap_clk</obj_property>
+            <obj_property name="ObjectShortName">ap_clk</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ap_rst_n">
+            <obj_property name="ElementShortName">ap_rst_n</obj_property>
+            <obj_property name="ObjectShortName">ap_rst_n</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axis_eth_rx_data_tdata">
+            <obj_property name="ElementShortName">s_axis_eth_rx_data_tdata[511:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axis_eth_rx_data_tdata[511:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axis_eth_rx_data_tdest">
+            <obj_property name="ElementShortName">s_axis_eth_rx_data_tdest[7:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axis_eth_rx_data_tdest[7:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/s_axis_eth_rx_data_tkeep">
+            <obj_property name="ElementShortName">s_axis_eth_rx_data_tkeep[63:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axis_eth_rx_data_tkeep[63:0]</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/s_axis_eth_rx_data_tlast">
+            <obj_property name="ElementShortName">s_axis_eth_rx_data_tlast</obj_property>
+            <obj_property name="ObjectShortName">s_axis_eth_rx_data_tlast</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/s_axis_eth_rx_data_tready">
+            <obj_property name="ElementShortName">s_axis_eth_rx_data_tready</obj_property>
+            <obj_property name="ObjectShortName">s_axis_eth_rx_data_tready</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/s_axis_eth_rx_data_tvalid">
+            <obj_property name="ElementShortName">s_axis_eth_rx_data_tvalid</obj_property>
+            <obj_property name="ObjectShortName">s_axis_eth_rx_data_tvalid</obj_property>
+         </wvobject>
       </wvobject>
    </wvobject>
-   <wvobject type="vbus" fp_name="vbus271">
-      <obj_property name="label">S_AXIS_CALL_REQ</obj_property>
+   <wvobject type="group" fp_name="group242">
+      <obj_property name="label">RXBUF OFFLOAD</obj_property>
+      <obj_property name="DisplayName">label</obj_property>
+      <wvobject type="group" fp_name="group244">
+         <obj_property name="label">RXBUF ENQUEUE</obj_property>
+         <obj_property name="DisplayName">label</obj_property>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/s_axi_control_AWADDR">
+            <obj_property name="ElementShortName">s_axi_control_AWADDR[4:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_control_AWADDR[4:0]</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/s_axi_control_AWVALID">
+            <obj_property name="ElementShortName">s_axi_control_AWVALID</obj_property>
+            <obj_property name="ObjectShortName">s_axi_control_AWVALID</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/s_axi_control_AWREADY">
+            <obj_property name="ElementShortName">s_axi_control_AWREADY</obj_property>
+            <obj_property name="ObjectShortName">s_axi_control_AWREADY</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/s_axi_control_WDATA">
+            <obj_property name="ElementShortName">s_axi_control_WDATA[31:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_control_WDATA[31:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/s_axi_control_WSTRB">
+            <obj_property name="ElementShortName">s_axi_control_WSTRB[3:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_control_WSTRB[3:0]</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/s_axi_control_WVALID">
+            <obj_property name="ElementShortName">s_axi_control_WVALID</obj_property>
+            <obj_property name="ObjectShortName">s_axi_control_WVALID</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/s_axi_control_WREADY">
+            <obj_property name="ElementShortName">s_axi_control_WREADY</obj_property>
+            <obj_property name="ObjectShortName">s_axi_control_WREADY</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/s_axi_control_BRESP">
+            <obj_property name="ElementShortName">s_axi_control_BRESP[1:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_control_BRESP[1:0]</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/s_axi_control_BVALID">
+            <obj_property name="ElementShortName">s_axi_control_BVALID</obj_property>
+            <obj_property name="ObjectShortName">s_axi_control_BVALID</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/s_axi_control_BREADY">
+            <obj_property name="ElementShortName">s_axi_control_BREADY</obj_property>
+            <obj_property name="ObjectShortName">s_axi_control_BREADY</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/s_axi_control_ARADDR">
+            <obj_property name="ElementShortName">s_axi_control_ARADDR[4:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_control_ARADDR[4:0]</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/s_axi_control_ARVALID">
+            <obj_property name="ElementShortName">s_axi_control_ARVALID</obj_property>
+            <obj_property name="ObjectShortName">s_axi_control_ARVALID</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/s_axi_control_ARREADY">
+            <obj_property name="ElementShortName">s_axi_control_ARREADY</obj_property>
+            <obj_property name="ObjectShortName">s_axi_control_ARREADY</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/s_axi_control_RDATA">
+            <obj_property name="ElementShortName">s_axi_control_RDATA[31:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_control_RDATA[31:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/s_axi_control_RRESP">
+            <obj_property name="ElementShortName">s_axi_control_RRESP[1:0]</obj_property>
+            <obj_property name="ObjectShortName">s_axi_control_RRESP[1:0]</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/s_axi_control_RVALID">
+            <obj_property name="ElementShortName">s_axi_control_RVALID</obj_property>
+            <obj_property name="ObjectShortName">s_axi_control_RVALID</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/s_axi_control_RREADY">
+            <obj_property name="ElementShortName">s_axi_control_RREADY</obj_property>
+            <obj_property name="ObjectShortName">s_axi_control_RREADY</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/ap_clk">
+            <obj_property name="ElementShortName">ap_clk</obj_property>
+            <obj_property name="ObjectShortName">ap_clk</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/ap_rst_n">
+            <obj_property name="ElementShortName">ap_rst_n</obj_property>
+            <obj_property name="ObjectShortName">ap_rst_n</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/interrupt">
+            <obj_property name="ElementShortName">interrupt</obj_property>
+            <obj_property name="ObjectShortName">interrupt</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/m_axi_mem_AWADDR">
+            <obj_property name="ElementShortName">m_axi_mem_AWADDR[31:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_AWADDR[31:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/m_axi_mem_AWLEN">
+            <obj_property name="ElementShortName">m_axi_mem_AWLEN[7:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_AWLEN[7:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/m_axi_mem_AWSIZE">
+            <obj_property name="ElementShortName">m_axi_mem_AWSIZE[2:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_AWSIZE[2:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/m_axi_mem_AWBURST">
+            <obj_property name="ElementShortName">m_axi_mem_AWBURST[1:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_AWBURST[1:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/m_axi_mem_AWLOCK">
+            <obj_property name="ElementShortName">m_axi_mem_AWLOCK[1:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_AWLOCK[1:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/m_axi_mem_AWREGION">
+            <obj_property name="ElementShortName">m_axi_mem_AWREGION[3:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_AWREGION[3:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/m_axi_mem_AWCACHE">
+            <obj_property name="ElementShortName">m_axi_mem_AWCACHE[3:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_AWCACHE[3:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/m_axi_mem_AWPROT">
+            <obj_property name="ElementShortName">m_axi_mem_AWPROT[2:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_AWPROT[2:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/m_axi_mem_AWQOS">
+            <obj_property name="ElementShortName">m_axi_mem_AWQOS[3:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_AWQOS[3:0]</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/m_axi_mem_AWVALID">
+            <obj_property name="ElementShortName">m_axi_mem_AWVALID</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_AWVALID</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/m_axi_mem_AWREADY">
+            <obj_property name="ElementShortName">m_axi_mem_AWREADY</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_AWREADY</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/m_axi_mem_WDATA">
+            <obj_property name="ElementShortName">m_axi_mem_WDATA[31:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_WDATA[31:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/m_axi_mem_WSTRB">
+            <obj_property name="ElementShortName">m_axi_mem_WSTRB[3:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_WSTRB[3:0]</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/m_axi_mem_WLAST">
+            <obj_property name="ElementShortName">m_axi_mem_WLAST</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_WLAST</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/m_axi_mem_WVALID">
+            <obj_property name="ElementShortName">m_axi_mem_WVALID</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_WVALID</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/m_axi_mem_WREADY">
+            <obj_property name="ElementShortName">m_axi_mem_WREADY</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_WREADY</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/m_axi_mem_BRESP">
+            <obj_property name="ElementShortName">m_axi_mem_BRESP[1:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_BRESP[1:0]</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/m_axi_mem_BVALID">
+            <obj_property name="ElementShortName">m_axi_mem_BVALID</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_BVALID</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/m_axi_mem_BREADY">
+            <obj_property name="ElementShortName">m_axi_mem_BREADY</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_BREADY</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/m_axi_mem_ARLEN">
+            <obj_property name="ElementShortName">m_axi_mem_ARLEN[7:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_ARLEN[7:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/m_axi_mem_ARSIZE">
+            <obj_property name="ElementShortName">m_axi_mem_ARSIZE[2:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_ARSIZE[2:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/m_axi_mem_ARBURST">
+            <obj_property name="ElementShortName">m_axi_mem_ARBURST[1:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_ARBURST[1:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/m_axi_mem_ARLOCK">
+            <obj_property name="ElementShortName">m_axi_mem_ARLOCK[1:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_ARLOCK[1:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/m_axi_mem_ARREGION">
+            <obj_property name="ElementShortName">m_axi_mem_ARREGION[3:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_ARREGION[3:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/m_axi_mem_ARCACHE">
+            <obj_property name="ElementShortName">m_axi_mem_ARCACHE[3:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_ARCACHE[3:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/m_axi_mem_ARPROT">
+            <obj_property name="ElementShortName">m_axi_mem_ARPROT[2:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_ARPROT[2:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/m_axi_mem_ARQOS">
+            <obj_property name="ElementShortName">m_axi_mem_ARQOS[3:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_ARQOS[3:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/m_axi_mem_ARADDR">
+            <obj_property name="ElementShortName">m_axi_mem_ARADDR[31:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_ARADDR[31:0]</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/m_axi_mem_ARVALID">
+            <obj_property name="ElementShortName">m_axi_mem_ARVALID</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_ARVALID</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/m_axi_mem_ARREADY">
+            <obj_property name="ElementShortName">m_axi_mem_ARREADY</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_ARREADY</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/m_axi_mem_RDATA">
+            <obj_property name="ElementShortName">m_axi_mem_RDATA[31:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_RDATA[31:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/m_axi_mem_RRESP">
+            <obj_property name="ElementShortName">m_axi_mem_RRESP[1:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_RRESP[1:0]</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/m_axi_mem_RLAST">
+            <obj_property name="ElementShortName">m_axi_mem_RLAST</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_RLAST</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/m_axi_mem_RVALID">
+            <obj_property name="ElementShortName">m_axi_mem_RVALID</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_RVALID</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/m_axi_mem_RREADY">
+            <obj_property name="ElementShortName">m_axi_mem_RREADY</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_RREADY</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/dma_cmd_V_TVALID">
+            <obj_property name="ElementShortName">dma_cmd_V_TVALID</obj_property>
+            <obj_property name="ObjectShortName">dma_cmd_V_TVALID</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/dma_cmd_V_TREADY">
+            <obj_property name="ElementShortName">dma_cmd_V_TREADY</obj_property>
+            <obj_property name="ObjectShortName">dma_cmd_V_TREADY</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/dma_cmd_V_TDATA">
+            <obj_property name="ElementShortName">dma_cmd_V_TDATA[103:0]</obj_property>
+            <obj_property name="ObjectShortName">dma_cmd_V_TDATA[103:0]</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/inflight_queue_V_TVALID">
+            <obj_property name="ElementShortName">inflight_queue_V_TVALID</obj_property>
+            <obj_property name="ObjectShortName">inflight_queue_V_TVALID</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/inflight_queue_V_TREADY">
+            <obj_property name="ElementShortName">inflight_queue_V_TREADY</obj_property>
+            <obj_property name="ObjectShortName">inflight_queue_V_TREADY</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/rxbuf_offload/rxbuf_enqueue/inflight_queue_V_TDATA">
+            <obj_property name="ElementShortName">inflight_queue_V_TDATA[31:0]</obj_property>
+            <obj_property name="ObjectShortName">inflight_queue_V_TDATA[31:0]</obj_property>
+         </wvobject>
+      </wvobject>
+      <wvobject type="group" fp_name="group245">
+         <obj_property name="label">RXBUF DEQUEUE</obj_property>
+         <obj_property name="DisplayName">label</obj_property>
+      </wvobject>
+      <wvobject type="group" fp_name="group246">
+         <obj_property name="label">RXBUF SEEK</obj_property>
+         <obj_property name="DisplayName">label</obj_property>
+      </wvobject>
+   </wvobject>
+   <wvobject type="group" fp_name="group308">
+      <obj_property name="label">DMA OFFLOAD</obj_property>
       <obj_property name="DisplayName">label</obj_property>
       <obj_property name="isExpanded"></obj_property>
-      <wvobject type="logic" fp_name="/ccl_offload/ap_rst_n">
-         <obj_property name="ElementShortName">ap_rst_n</obj_property>
-         <obj_property name="ObjectShortName">ap_rst_n</obj_property>
+      <wvobject type="vbus" fp_name="vbus452">
+         <obj_property name="label">AXIMM</obj_property>
+         <obj_property name="DisplayName">label</obj_property>
+         <obj_property name="isExpanded"></obj_property>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/m_axi_mem_AWADDR">
+            <obj_property name="ElementShortName">m_axi_mem_AWADDR[31:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_AWADDR[31:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/m_axi_mem_AWLEN">
+            <obj_property name="ElementShortName">m_axi_mem_AWLEN[7:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_AWLEN[7:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/m_axi_mem_AWSIZE">
+            <obj_property name="ElementShortName">m_axi_mem_AWSIZE[2:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_AWSIZE[2:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/m_axi_mem_AWBURST">
+            <obj_property name="ElementShortName">m_axi_mem_AWBURST[1:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_AWBURST[1:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/m_axi_mem_AWLOCK">
+            <obj_property name="ElementShortName">m_axi_mem_AWLOCK[1:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_AWLOCK[1:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/m_axi_mem_AWREGION">
+            <obj_property name="ElementShortName">m_axi_mem_AWREGION[3:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_AWREGION[3:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/m_axi_mem_AWCACHE">
+            <obj_property name="ElementShortName">m_axi_mem_AWCACHE[3:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_AWCACHE[3:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/m_axi_mem_AWPROT">
+            <obj_property name="ElementShortName">m_axi_mem_AWPROT[2:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_AWPROT[2:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/m_axi_mem_AWQOS">
+            <obj_property name="ElementShortName">m_axi_mem_AWQOS[3:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_AWQOS[3:0]</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/m_axi_mem_AWVALID">
+            <obj_property name="ElementShortName">m_axi_mem_AWVALID</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_AWVALID</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/m_axi_mem_AWREADY">
+            <obj_property name="ElementShortName">m_axi_mem_AWREADY</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_AWREADY</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/m_axi_mem_WDATA">
+            <obj_property name="ElementShortName">m_axi_mem_WDATA[31:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_WDATA[31:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/m_axi_mem_WSTRB">
+            <obj_property name="ElementShortName">m_axi_mem_WSTRB[3:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_WSTRB[3:0]</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/m_axi_mem_WLAST">
+            <obj_property name="ElementShortName">m_axi_mem_WLAST</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_WLAST</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/m_axi_mem_WVALID">
+            <obj_property name="ElementShortName">m_axi_mem_WVALID</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_WVALID</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/m_axi_mem_WREADY">
+            <obj_property name="ElementShortName">m_axi_mem_WREADY</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_WREADY</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/m_axi_mem_BRESP">
+            <obj_property name="ElementShortName">m_axi_mem_BRESP[1:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_BRESP[1:0]</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/m_axi_mem_BVALID">
+            <obj_property name="ElementShortName">m_axi_mem_BVALID</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_BVALID</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/m_axi_mem_BREADY">
+            <obj_property name="ElementShortName">m_axi_mem_BREADY</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_BREADY</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/m_axi_mem_ARADDR">
+            <obj_property name="ElementShortName">m_axi_mem_ARADDR[31:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_ARADDR[31:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/m_axi_mem_ARLEN">
+            <obj_property name="ElementShortName">m_axi_mem_ARLEN[7:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_ARLEN[7:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/m_axi_mem_ARSIZE">
+            <obj_property name="ElementShortName">m_axi_mem_ARSIZE[2:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_ARSIZE[2:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/m_axi_mem_ARBURST">
+            <obj_property name="ElementShortName">m_axi_mem_ARBURST[1:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_ARBURST[1:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/m_axi_mem_ARLOCK">
+            <obj_property name="ElementShortName">m_axi_mem_ARLOCK[1:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_ARLOCK[1:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/m_axi_mem_ARREGION">
+            <obj_property name="ElementShortName">m_axi_mem_ARREGION[3:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_ARREGION[3:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/m_axi_mem_ARCACHE">
+            <obj_property name="ElementShortName">m_axi_mem_ARCACHE[3:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_ARCACHE[3:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/m_axi_mem_ARPROT">
+            <obj_property name="ElementShortName">m_axi_mem_ARPROT[2:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_ARPROT[2:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/m_axi_mem_ARQOS">
+            <obj_property name="ElementShortName">m_axi_mem_ARQOS[3:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_ARQOS[3:0]</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/m_axi_mem_ARVALID">
+            <obj_property name="ElementShortName">m_axi_mem_ARVALID</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_ARVALID</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/m_axi_mem_ARREADY">
+            <obj_property name="ElementShortName">m_axi_mem_ARREADY</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_ARREADY</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/m_axi_mem_RDATA">
+            <obj_property name="ElementShortName">m_axi_mem_RDATA[31:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_RDATA[31:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/m_axi_mem_RRESP">
+            <obj_property name="ElementShortName">m_axi_mem_RRESP[1:0]</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_RRESP[1:0]</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/m_axi_mem_RLAST">
+            <obj_property name="ElementShortName">m_axi_mem_RLAST</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_RLAST</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/m_axi_mem_RVALID">
+            <obj_property name="ElementShortName">m_axi_mem_RVALID</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_RVALID</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/m_axi_mem_RREADY">
+            <obj_property name="ElementShortName">m_axi_mem_RREADY</obj_property>
+            <obj_property name="ObjectShortName">m_axi_mem_RREADY</obj_property>
+         </wvobject>
       </wvobject>
-      <wvobject type="logic" fp_name="/ccl_offload/ap_clk">
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/ap_clk">
          <obj_property name="ElementShortName">ap_clk</obj_property>
          <obj_property name="ObjectShortName">ap_clk</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/ccl_offload/s_axis_call_req_tdata">
-         <obj_property name="ElementShortName">s_axis_call_req_tdata[31:0]</obj_property>
-         <obj_property name="ObjectShortName">s_axis_call_req_tdata[31:0]</obj_property>
-      </wvobject>
-      <wvobject type="logic" fp_name="/ccl_offload/s_axis_call_req_tlast">
-         <obj_property name="ElementShortName">s_axis_call_req_tlast</obj_property>
-         <obj_property name="ObjectShortName">s_axis_call_req_tlast</obj_property>
-      </wvobject>
-      <wvobject type="logic" fp_name="/ccl_offload/s_axis_call_req_tready">
-         <obj_property name="ElementShortName">s_axis_call_req_tready</obj_property>
-         <obj_property name="ObjectShortName">s_axis_call_req_tready</obj_property>
-      </wvobject>
-      <wvobject type="logic" fp_name="/ccl_offload/s_axis_call_req_tvalid">
-         <obj_property name="ElementShortName">s_axis_call_req_tvalid</obj_property>
-         <obj_property name="ObjectShortName">s_axis_call_req_tvalid</obj_property>
-      </wvobject>
-   </wvobject>
-   <wvobject type="vbus" fp_name="vbus276">
-      <obj_property name="label">M_AXIS_CALL_ACK</obj_property>
-      <obj_property name="DisplayName">label</obj_property>
-      <obj_property name="isExpanded"></obj_property>
-      <wvobject type="logic" fp_name="/ccl_offload/ap_clk">
-         <obj_property name="ElementShortName">ap_clk</obj_property>
-         <obj_property name="ObjectShortName">ap_clk</obj_property>
-      </wvobject>
-      <wvobject type="logic" fp_name="/ccl_offload/ap_rst_n">
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/ap_rst_n">
          <obj_property name="ElementShortName">ap_rst_n</obj_property>
          <obj_property name="ObjectShortName">ap_rst_n</obj_property>
       </wvobject>
-      <wvobject type="array" fp_name="/ccl_offload/m_axis_call_ack_tdata">
-         <obj_property name="ElementShortName">m_axis_call_ack_tdata[31:0]</obj_property>
-         <obj_property name="ObjectShortName">m_axis_call_ack_tdata[31:0]</obj_property>
+      <wvobject type="vbus" fp_name="vbus3470">
+         <obj_property name="label">COMMAND</obj_property>
+         <obj_property name="DisplayName">label</obj_property>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/command_TVALID">
+            <obj_property name="ElementShortName">command_TVALID</obj_property>
+            <obj_property name="ObjectShortName">command_TVALID</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/command_TREADY">
+            <obj_property name="ElementShortName">command_TREADY</obj_property>
+            <obj_property name="ObjectShortName">command_TREADY</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/command_TDATA">
+            <obj_property name="ElementShortName">command_TDATA[31:0]</obj_property>
+            <obj_property name="ObjectShortName">command_TDATA[31:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/command_TKEEP">
+            <obj_property name="ElementShortName">command_TKEEP[3:0]</obj_property>
+            <obj_property name="ObjectShortName">command_TKEEP[3:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/command_TSTRB">
+            <obj_property name="ElementShortName">command_TSTRB[3:0]</obj_property>
+            <obj_property name="ObjectShortName">command_TSTRB[3:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/command_TLAST">
+            <obj_property name="ElementShortName">command_TLAST[0:0]</obj_property>
+            <obj_property name="ObjectShortName">command_TLAST[0:0]</obj_property>
+         </wvobject>
       </wvobject>
-      <wvobject type="logic" fp_name="/ccl_offload/m_axis_call_ack_tlast">
-         <obj_property name="ElementShortName">m_axis_call_ack_tlast</obj_property>
-         <obj_property name="ObjectShortName">m_axis_call_ack_tlast</obj_property>
+      <wvobject type="vbus" fp_name="vbus3471">
+         <obj_property name="label">ERROR</obj_property>
+         <obj_property name="DisplayName">label</obj_property>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/error_TVALID">
+            <obj_property name="ElementShortName">error_TVALID</obj_property>
+            <obj_property name="ObjectShortName">error_TVALID</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/error_TREADY">
+            <obj_property name="ElementShortName">error_TREADY</obj_property>
+            <obj_property name="ObjectShortName">error_TREADY</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/error_TDATA">
+            <obj_property name="ElementShortName">error_TDATA[31:0]</obj_property>
+            <obj_property name="ObjectShortName">error_TDATA[31:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/error_TKEEP">
+            <obj_property name="ElementShortName">error_TKEEP[3:0]</obj_property>
+            <obj_property name="ObjectShortName">error_TKEEP[3:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/error_TSTRB">
+            <obj_property name="ElementShortName">error_TSTRB[3:0]</obj_property>
+            <obj_property name="ObjectShortName">error_TSTRB[3:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/error_TLAST">
+            <obj_property name="ElementShortName">error_TLAST[0:0]</obj_property>
+            <obj_property name="ObjectShortName">error_TLAST[0:0]</obj_property>
+         </wvobject>
       </wvobject>
-      <wvobject type="logic" fp_name="/ccl_offload/m_axis_call_ack_tready">
-         <obj_property name="ElementShortName">m_axis_call_ack_tready</obj_property>
-         <obj_property name="ObjectShortName">m_axis_call_ack_tready</obj_property>
+      <wvobject type="vbus" fp_name="vbus3472">
+         <obj_property name="label">RXBUF REQUEST</obj_property>
+         <obj_property name="DisplayName">label</obj_property>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/rxbuf_req_V_TVALID">
+            <obj_property name="ElementShortName">rxbuf_req_V_TVALID</obj_property>
+            <obj_property name="ObjectShortName">rxbuf_req_V_TVALID</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/rxbuf_req_V_TREADY">
+            <obj_property name="ElementShortName">rxbuf_req_V_TREADY</obj_property>
+            <obj_property name="ObjectShortName">rxbuf_req_V_TREADY</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/rxbuf_req_V_TDATA">
+            <obj_property name="ElementShortName">rxbuf_req_V_TDATA[127:0]</obj_property>
+            <obj_property name="ObjectShortName">rxbuf_req_V_TDATA[127:0]</obj_property>
+         </wvobject>
       </wvobject>
-      <wvobject type="logic" fp_name="/ccl_offload/m_axis_call_ack_tvalid">
-         <obj_property name="ElementShortName">m_axis_call_ack_tvalid</obj_property>
-         <obj_property name="ObjectShortName">m_axis_call_ack_tvalid</obj_property>
+      <wvobject type="vbus" fp_name="vbus3473">
+         <obj_property name="label">RXBUF ACKNOWLEDGE</obj_property>
+         <obj_property name="DisplayName">label</obj_property>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/rxbuf_ack_V_TVALID">
+            <obj_property name="ElementShortName">rxbuf_ack_V_TVALID</obj_property>
+            <obj_property name="ObjectShortName">rxbuf_ack_V_TVALID</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/rxbuf_ack_V_TREADY">
+            <obj_property name="ElementShortName">rxbuf_ack_V_TREADY</obj_property>
+            <obj_property name="ObjectShortName">rxbuf_ack_V_TREADY</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/rxbuf_ack_V_TDATA">
+            <obj_property name="ElementShortName">rxbuf_ack_V_TDATA[191:0]</obj_property>
+            <obj_property name="ObjectShortName">rxbuf_ack_V_TDATA[191:0]</obj_property>
+         </wvobject>
+      </wvobject>
+      <wvobject type="vbus" fp_name="vbus3474">
+         <obj_property name="label">RXBUF RELEASE</obj_property>
+         <obj_property name="DisplayName">label</obj_property>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/rxbuf_release_req_V_TVALID">
+            <obj_property name="ElementShortName">rxbuf_release_req_V_TVALID</obj_property>
+            <obj_property name="ObjectShortName">rxbuf_release_req_V_TVALID</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/rxbuf_release_req_V_TREADY">
+            <obj_property name="ElementShortName">rxbuf_release_req_V_TREADY</obj_property>
+            <obj_property name="ObjectShortName">rxbuf_release_req_V_TREADY</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/rxbuf_release_req_V_TDATA">
+            <obj_property name="ElementShortName">rxbuf_release_req_V_TDATA[31:0]</obj_property>
+            <obj_property name="ObjectShortName">rxbuf_release_req_V_TDATA[31:0]</obj_property>
+         </wvobject>
+      </wvobject>
+      <wvobject type="vbus" fp_name="vbus3475">
+         <obj_property name="label">DMA0 READ COMMAND</obj_property>
+         <obj_property name="DisplayName">label</obj_property>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/dma0_read_cmd_V_TVALID">
+            <obj_property name="ElementShortName">dma0_read_cmd_V_TVALID</obj_property>
+            <obj_property name="ObjectShortName">dma0_read_cmd_V_TVALID</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/dma0_read_cmd_V_TREADY">
+            <obj_property name="ElementShortName">dma0_read_cmd_V_TREADY</obj_property>
+            <obj_property name="ObjectShortName">dma0_read_cmd_V_TREADY</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/dma0_read_cmd_V_TDATA">
+            <obj_property name="ElementShortName">dma0_read_cmd_V_TDATA[103:0]</obj_property>
+            <obj_property name="ObjectShortName">dma0_read_cmd_V_TDATA[103:0]</obj_property>
+         </wvobject>
+      </wvobject>
+      <wvobject type="vbus" fp_name="vbus3476">
+         <obj_property name="label">DMA1 READ COMMAND</obj_property>
+         <obj_property name="DisplayName">label</obj_property>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/dma1_read_cmd_V_TVALID">
+            <obj_property name="ElementShortName">dma1_read_cmd_V_TVALID</obj_property>
+            <obj_property name="ObjectShortName">dma1_read_cmd_V_TVALID</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/dma1_read_cmd_V_TREADY">
+            <obj_property name="ElementShortName">dma1_read_cmd_V_TREADY</obj_property>
+            <obj_property name="ObjectShortName">dma1_read_cmd_V_TREADY</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/dma1_read_cmd_V_TDATA">
+            <obj_property name="ElementShortName">dma1_read_cmd_V_TDATA[103:0]</obj_property>
+            <obj_property name="ObjectShortName">dma1_read_cmd_V_TDATA[103:0]</obj_property>
+         </wvobject>
+      </wvobject>
+      <wvobject type="vbus" fp_name="vbus3477">
+         <obj_property name="label">DMA1 WRITE COMMAND</obj_property>
+         <obj_property name="DisplayName">label</obj_property>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/dma1_write_cmd_V_TVALID">
+            <obj_property name="ElementShortName">dma1_write_cmd_V_TVALID</obj_property>
+            <obj_property name="ObjectShortName">dma1_write_cmd_V_TVALID</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/dma1_write_cmd_V_TREADY">
+            <obj_property name="ElementShortName">dma1_write_cmd_V_TREADY</obj_property>
+            <obj_property name="ObjectShortName">dma1_write_cmd_V_TREADY</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/dma1_write_cmd_V_TDATA">
+            <obj_property name="ElementShortName">dma1_write_cmd_V_TDATA[103:0]</obj_property>
+            <obj_property name="ObjectShortName">dma1_write_cmd_V_TDATA[103:0]</obj_property>
+         </wvobject>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/dma0_read_sts_V_TVALID">
+         <obj_property name="ElementShortName">dma0_read_sts_V_TVALID</obj_property>
+         <obj_property name="ObjectShortName">dma0_read_sts_V_TVALID</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/dma0_read_sts_V_TREADY">
+         <obj_property name="ElementShortName">dma0_read_sts_V_TREADY</obj_property>
+         <obj_property name="ObjectShortName">dma0_read_sts_V_TREADY</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/dma0_read_sts_V_TDATA">
+         <obj_property name="ElementShortName">dma0_read_sts_V_TDATA[31:0]</obj_property>
+         <obj_property name="ObjectShortName">dma0_read_sts_V_TDATA[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/dma1_read_sts_V_TVALID">
+         <obj_property name="ElementShortName">dma1_read_sts_V_TVALID</obj_property>
+         <obj_property name="ObjectShortName">dma1_read_sts_V_TVALID</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/dma1_read_sts_V_TREADY">
+         <obj_property name="ElementShortName">dma1_read_sts_V_TREADY</obj_property>
+         <obj_property name="ObjectShortName">dma1_read_sts_V_TREADY</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/dma1_read_sts_V_TDATA">
+         <obj_property name="ElementShortName">dma1_read_sts_V_TDATA[31:0]</obj_property>
+         <obj_property name="ObjectShortName">dma1_read_sts_V_TDATA[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/dma1_write_sts_V_TVALID">
+         <obj_property name="ElementShortName">dma1_write_sts_V_TVALID</obj_property>
+         <obj_property name="ObjectShortName">dma1_write_sts_V_TVALID</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/dma1_write_sts_V_TREADY">
+         <obj_property name="ElementShortName">dma1_write_sts_V_TREADY</obj_property>
+         <obj_property name="ObjectShortName">dma1_write_sts_V_TREADY</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/dma1_write_sts_V_TDATA">
+         <obj_property name="ElementShortName">dma1_write_sts_V_TDATA[31:0]</obj_property>
+         <obj_property name="ObjectShortName">dma1_write_sts_V_TDATA[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/eth_cmd_V_TVALID">
+         <obj_property name="ElementShortName">eth_cmd_V_TVALID</obj_property>
+         <obj_property name="ObjectShortName">eth_cmd_V_TVALID</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/eth_cmd_V_TREADY">
+         <obj_property name="ElementShortName">eth_cmd_V_TREADY</obj_property>
+         <obj_property name="ObjectShortName">eth_cmd_V_TREADY</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/eth_cmd_V_TDATA">
+         <obj_property name="ElementShortName">eth_cmd_V_TDATA[191:0]</obj_property>
+         <obj_property name="ObjectShortName">eth_cmd_V_TDATA[191:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/eth_sts_V_TVALID">
+         <obj_property name="ElementShortName">eth_sts_V_TVALID</obj_property>
+         <obj_property name="ObjectShortName">eth_sts_V_TVALID</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/eth_sts_V_TREADY">
+         <obj_property name="ElementShortName">eth_sts_V_TREADY</obj_property>
+         <obj_property name="ObjectShortName">eth_sts_V_TREADY</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/eth_sts_V_TDATA">
+         <obj_property name="ElementShortName">eth_sts_V_TDATA[31:0]</obj_property>
+         <obj_property name="ObjectShortName">eth_sts_V_TDATA[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/dma0_read_seg_cmd_V_TVALID">
+         <obj_property name="ElementShortName">dma0_read_seg_cmd_V_TVALID</obj_property>
+         <obj_property name="ObjectShortName">dma0_read_seg_cmd_V_TVALID</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/dma0_read_seg_cmd_V_TREADY">
+         <obj_property name="ElementShortName">dma0_read_seg_cmd_V_TREADY</obj_property>
+         <obj_property name="ObjectShortName">dma0_read_seg_cmd_V_TREADY</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/dma0_read_seg_cmd_V_TDATA">
+         <obj_property name="ElementShortName">dma0_read_seg_cmd_V_TDATA[63:0]</obj_property>
+         <obj_property name="ObjectShortName">dma0_read_seg_cmd_V_TDATA[63:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/dma1_read_seg_cmd_V_TVALID">
+         <obj_property name="ElementShortName">dma1_read_seg_cmd_V_TVALID</obj_property>
+         <obj_property name="ObjectShortName">dma1_read_seg_cmd_V_TVALID</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/dma1_read_seg_cmd_V_TREADY">
+         <obj_property name="ElementShortName">dma1_read_seg_cmd_V_TREADY</obj_property>
+         <obj_property name="ObjectShortName">dma1_read_seg_cmd_V_TREADY</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/dma1_read_seg_cmd_V_TDATA">
+         <obj_property name="ElementShortName">dma1_read_seg_cmd_V_TDATA[63:0]</obj_property>
+         <obj_property name="ObjectShortName">dma1_read_seg_cmd_V_TDATA[63:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/krnl_in_seg_cmd_V_TVALID">
+         <obj_property name="ElementShortName">krnl_in_seg_cmd_V_TVALID</obj_property>
+         <obj_property name="ObjectShortName">krnl_in_seg_cmd_V_TVALID</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/krnl_in_seg_cmd_V_TREADY">
+         <obj_property name="ElementShortName">krnl_in_seg_cmd_V_TREADY</obj_property>
+         <obj_property name="ObjectShortName">krnl_in_seg_cmd_V_TREADY</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/krnl_in_seg_cmd_V_TDATA">
+         <obj_property name="ElementShortName">krnl_in_seg_cmd_V_TDATA[63:0]</obj_property>
+         <obj_property name="ObjectShortName">krnl_in_seg_cmd_V_TDATA[63:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/krnl_out_seg_cmd_V_TVALID">
+         <obj_property name="ElementShortName">krnl_out_seg_cmd_V_TVALID</obj_property>
+         <obj_property name="ObjectShortName">krnl_out_seg_cmd_V_TVALID</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/krnl_out_seg_cmd_V_TREADY">
+         <obj_property name="ElementShortName">krnl_out_seg_cmd_V_TREADY</obj_property>
+         <obj_property name="ObjectShortName">krnl_out_seg_cmd_V_TREADY</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/krnl_out_seg_cmd_V_TDATA">
+         <obj_property name="ElementShortName">krnl_out_seg_cmd_V_TDATA[63:0]</obj_property>
+         <obj_property name="ObjectShortName">krnl_out_seg_cmd_V_TDATA[63:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/arith_op0_seg_cmd_V_TVALID">
+         <obj_property name="ElementShortName">arith_op0_seg_cmd_V_TVALID</obj_property>
+         <obj_property name="ObjectShortName">arith_op0_seg_cmd_V_TVALID</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/arith_op0_seg_cmd_V_TREADY">
+         <obj_property name="ElementShortName">arith_op0_seg_cmd_V_TREADY</obj_property>
+         <obj_property name="ObjectShortName">arith_op0_seg_cmd_V_TREADY</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/arith_op0_seg_cmd_V_TDATA">
+         <obj_property name="ElementShortName">arith_op0_seg_cmd_V_TDATA[63:0]</obj_property>
+         <obj_property name="ObjectShortName">arith_op0_seg_cmd_V_TDATA[63:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/arith_op1_seg_cmd_V_TVALID">
+         <obj_property name="ElementShortName">arith_op1_seg_cmd_V_TVALID</obj_property>
+         <obj_property name="ObjectShortName">arith_op1_seg_cmd_V_TVALID</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/arith_op1_seg_cmd_V_TREADY">
+         <obj_property name="ElementShortName">arith_op1_seg_cmd_V_TREADY</obj_property>
+         <obj_property name="ObjectShortName">arith_op1_seg_cmd_V_TREADY</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/arith_op1_seg_cmd_V_TDATA">
+         <obj_property name="ElementShortName">arith_op1_seg_cmd_V_TDATA[63:0]</obj_property>
+         <obj_property name="ObjectShortName">arith_op1_seg_cmd_V_TDATA[63:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/arith_res_seg_cmd_V_TVALID">
+         <obj_property name="ElementShortName">arith_res_seg_cmd_V_TVALID</obj_property>
+         <obj_property name="ObjectShortName">arith_res_seg_cmd_V_TVALID</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/arith_res_seg_cmd_V_TREADY">
+         <obj_property name="ElementShortName">arith_res_seg_cmd_V_TREADY</obj_property>
+         <obj_property name="ObjectShortName">arith_res_seg_cmd_V_TREADY</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/arith_res_seg_cmd_V_TDATA">
+         <obj_property name="ElementShortName">arith_res_seg_cmd_V_TDATA[63:0]</obj_property>
+         <obj_property name="ObjectShortName">arith_res_seg_cmd_V_TDATA[63:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/clane0_op_seg_cmd_V_TVALID">
+         <obj_property name="ElementShortName">clane0_op_seg_cmd_V_TVALID</obj_property>
+         <obj_property name="ObjectShortName">clane0_op_seg_cmd_V_TVALID</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/clane0_op_seg_cmd_V_TREADY">
+         <obj_property name="ElementShortName">clane0_op_seg_cmd_V_TREADY</obj_property>
+         <obj_property name="ObjectShortName">clane0_op_seg_cmd_V_TREADY</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/clane0_op_seg_cmd_V_TDATA">
+         <obj_property name="ElementShortName">clane0_op_seg_cmd_V_TDATA[63:0]</obj_property>
+         <obj_property name="ObjectShortName">clane0_op_seg_cmd_V_TDATA[63:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/clane0_res_seg_cmd_V_TVALID">
+         <obj_property name="ElementShortName">clane0_res_seg_cmd_V_TVALID</obj_property>
+         <obj_property name="ObjectShortName">clane0_res_seg_cmd_V_TVALID</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/clane0_res_seg_cmd_V_TREADY">
+         <obj_property name="ElementShortName">clane0_res_seg_cmd_V_TREADY</obj_property>
+         <obj_property name="ObjectShortName">clane0_res_seg_cmd_V_TREADY</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/clane0_res_seg_cmd_V_TDATA">
+         <obj_property name="ElementShortName">clane0_res_seg_cmd_V_TDATA[63:0]</obj_property>
+         <obj_property name="ObjectShortName">clane0_res_seg_cmd_V_TDATA[63:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/clane1_op_seg_cmd_V_TVALID">
+         <obj_property name="ElementShortName">clane1_op_seg_cmd_V_TVALID</obj_property>
+         <obj_property name="ObjectShortName">clane1_op_seg_cmd_V_TVALID</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/clane1_op_seg_cmd_V_TREADY">
+         <obj_property name="ElementShortName">clane1_op_seg_cmd_V_TREADY</obj_property>
+         <obj_property name="ObjectShortName">clane1_op_seg_cmd_V_TREADY</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/clane1_op_seg_cmd_V_TDATA">
+         <obj_property name="ElementShortName">clane1_op_seg_cmd_V_TDATA[63:0]</obj_property>
+         <obj_property name="ObjectShortName">clane1_op_seg_cmd_V_TDATA[63:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/clane1_res_seg_cmd_V_TVALID">
+         <obj_property name="ElementShortName">clane1_res_seg_cmd_V_TVALID</obj_property>
+         <obj_property name="ObjectShortName">clane1_res_seg_cmd_V_TVALID</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/clane1_res_seg_cmd_V_TREADY">
+         <obj_property name="ElementShortName">clane1_res_seg_cmd_V_TREADY</obj_property>
+         <obj_property name="ObjectShortName">clane1_res_seg_cmd_V_TREADY</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/clane1_res_seg_cmd_V_TDATA">
+         <obj_property name="ElementShortName">clane1_res_seg_cmd_V_TDATA[63:0]</obj_property>
+         <obj_property name="ObjectShortName">clane1_res_seg_cmd_V_TDATA[63:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/clane2_op_seg_cmd_V_TVALID">
+         <obj_property name="ElementShortName">clane2_op_seg_cmd_V_TVALID</obj_property>
+         <obj_property name="ObjectShortName">clane2_op_seg_cmd_V_TVALID</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/clane2_op_seg_cmd_V_TREADY">
+         <obj_property name="ElementShortName">clane2_op_seg_cmd_V_TREADY</obj_property>
+         <obj_property name="ObjectShortName">clane2_op_seg_cmd_V_TREADY</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/clane2_op_seg_cmd_V_TDATA">
+         <obj_property name="ElementShortName">clane2_op_seg_cmd_V_TDATA[63:0]</obj_property>
+         <obj_property name="ObjectShortName">clane2_op_seg_cmd_V_TDATA[63:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/clane2_res_seg_cmd_V_TVALID">
+         <obj_property name="ElementShortName">clane2_res_seg_cmd_V_TVALID</obj_property>
+         <obj_property name="ObjectShortName">clane2_res_seg_cmd_V_TVALID</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/clane2_res_seg_cmd_V_TREADY">
+         <obj_property name="ElementShortName">clane2_res_seg_cmd_V_TREADY</obj_property>
+         <obj_property name="ObjectShortName">clane2_res_seg_cmd_V_TREADY</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/clane2_res_seg_cmd_V_TDATA">
+         <obj_property name="ElementShortName">clane2_res_seg_cmd_V_TDATA[63:0]</obj_property>
+         <obj_property name="ObjectShortName">clane2_res_seg_cmd_V_TDATA[63:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/krnl_out_seg_sts_V_TVALID">
+         <obj_property name="ElementShortName">krnl_out_seg_sts_V_TVALID</obj_property>
+         <obj_property name="ObjectShortName">krnl_out_seg_sts_V_TVALID</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/krnl_out_seg_sts_V_TREADY">
+         <obj_property name="ElementShortName">krnl_out_seg_sts_V_TREADY</obj_property>
+         <obj_property name="ObjectShortName">krnl_out_seg_sts_V_TREADY</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/dma_offload/dma_mover/krnl_out_seg_sts_V_TDATA">
+         <obj_property name="ElementShortName">krnl_out_seg_sts_V_TDATA[31:0]</obj_property>
+         <obj_property name="ObjectShortName">krnl_out_seg_sts_V_TDATA[31:0]</obj_property>
+      </wvobject>
+   </wvobject>
+   <wvobject type="group" fp_name="group528">
+      <obj_property name="label">MICROBLAZE</obj_property>
+      <obj_property name="DisplayName">label</obj_property>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/Clk">
+         <obj_property name="ElementShortName">Clk</obj_property>
+         <obj_property name="ObjectShortName">Clk</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/Reset">
+         <obj_property name="ElementShortName">Reset</obj_property>
+         <obj_property name="ObjectShortName">Reset</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/Interrupt">
+         <obj_property name="ElementShortName">Interrupt</obj_property>
+         <obj_property name="ObjectShortName">Interrupt</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/Interrupt_Address">
+         <obj_property name="ElementShortName">Interrupt_Address[0:31]</obj_property>
+         <obj_property name="ObjectShortName">Interrupt_Address[0:31]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/Interrupt_Ack">
+         <obj_property name="ElementShortName">Interrupt_Ack[0:1]</obj_property>
+         <obj_property name="ObjectShortName">Interrupt_Ack[0:1]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/Instr_Addr">
+         <obj_property name="ElementShortName">Instr_Addr[0:31]</obj_property>
+         <obj_property name="ObjectShortName">Instr_Addr[0:31]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/Instr">
+         <obj_property name="ElementShortName">Instr[0:31]</obj_property>
+         <obj_property name="ObjectShortName">Instr[0:31]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/IFetch">
+         <obj_property name="ElementShortName">IFetch</obj_property>
+         <obj_property name="ObjectShortName">IFetch</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/I_AS">
+         <obj_property name="ElementShortName">I_AS</obj_property>
+         <obj_property name="ObjectShortName">I_AS</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/IReady">
+         <obj_property name="ElementShortName">IReady</obj_property>
+         <obj_property name="ObjectShortName">IReady</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/IWAIT">
+         <obj_property name="ElementShortName">IWAIT</obj_property>
+         <obj_property name="ObjectShortName">IWAIT</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/ICE">
+         <obj_property name="ElementShortName">ICE</obj_property>
+         <obj_property name="ObjectShortName">ICE</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/IUE">
+         <obj_property name="ElementShortName">IUE</obj_property>
+         <obj_property name="ObjectShortName">IUE</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/Data_Addr">
+         <obj_property name="ElementShortName">Data_Addr[0:31]</obj_property>
+         <obj_property name="ObjectShortName">Data_Addr[0:31]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/Data_Read">
+         <obj_property name="ElementShortName">Data_Read[0:31]</obj_property>
+         <obj_property name="ObjectShortName">Data_Read[0:31]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/Data_Write">
+         <obj_property name="ElementShortName">Data_Write[0:31]</obj_property>
+         <obj_property name="ObjectShortName">Data_Write[0:31]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/D_AS">
+         <obj_property name="ElementShortName">D_AS</obj_property>
+         <obj_property name="ObjectShortName">D_AS</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/Read_Strobe">
+         <obj_property name="ElementShortName">Read_Strobe</obj_property>
+         <obj_property name="ObjectShortName">Read_Strobe</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/Write_Strobe">
+         <obj_property name="ElementShortName">Write_Strobe</obj_property>
+         <obj_property name="ObjectShortName">Write_Strobe</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/DReady">
+         <obj_property name="ElementShortName">DReady</obj_property>
+         <obj_property name="ObjectShortName">DReady</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/DWait">
+         <obj_property name="ElementShortName">DWait</obj_property>
+         <obj_property name="ObjectShortName">DWait</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/DCE">
+         <obj_property name="ElementShortName">DCE</obj_property>
+         <obj_property name="ObjectShortName">DCE</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/DUE">
+         <obj_property name="ElementShortName">DUE</obj_property>
+         <obj_property name="ObjectShortName">DUE</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/Byte_Enable">
+         <obj_property name="ElementShortName">Byte_Enable[0:3]</obj_property>
+         <obj_property name="ObjectShortName">Byte_Enable[0:3]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/M_AXI_DP_AWADDR">
+         <obj_property name="ElementShortName">M_AXI_DP_AWADDR[31:0]</obj_property>
+         <obj_property name="ObjectShortName">M_AXI_DP_AWADDR[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/M_AXI_DP_AWPROT">
+         <obj_property name="ElementShortName">M_AXI_DP_AWPROT[2:0]</obj_property>
+         <obj_property name="ObjectShortName">M_AXI_DP_AWPROT[2:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/M_AXI_DP_AWVALID">
+         <obj_property name="ElementShortName">M_AXI_DP_AWVALID</obj_property>
+         <obj_property name="ObjectShortName">M_AXI_DP_AWVALID</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/M_AXI_DP_AWREADY">
+         <obj_property name="ElementShortName">M_AXI_DP_AWREADY</obj_property>
+         <obj_property name="ObjectShortName">M_AXI_DP_AWREADY</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/M_AXI_DP_WDATA">
+         <obj_property name="ElementShortName">M_AXI_DP_WDATA[31:0]</obj_property>
+         <obj_property name="ObjectShortName">M_AXI_DP_WDATA[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/M_AXI_DP_WSTRB">
+         <obj_property name="ElementShortName">M_AXI_DP_WSTRB[3:0]</obj_property>
+         <obj_property name="ObjectShortName">M_AXI_DP_WSTRB[3:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/M_AXI_DP_WVALID">
+         <obj_property name="ElementShortName">M_AXI_DP_WVALID</obj_property>
+         <obj_property name="ObjectShortName">M_AXI_DP_WVALID</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/M_AXI_DP_WREADY">
+         <obj_property name="ElementShortName">M_AXI_DP_WREADY</obj_property>
+         <obj_property name="ObjectShortName">M_AXI_DP_WREADY</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/M_AXI_DP_BRESP">
+         <obj_property name="ElementShortName">M_AXI_DP_BRESP[1:0]</obj_property>
+         <obj_property name="ObjectShortName">M_AXI_DP_BRESP[1:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/M_AXI_DP_BVALID">
+         <obj_property name="ElementShortName">M_AXI_DP_BVALID</obj_property>
+         <obj_property name="ObjectShortName">M_AXI_DP_BVALID</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/M_AXI_DP_BREADY">
+         <obj_property name="ElementShortName">M_AXI_DP_BREADY</obj_property>
+         <obj_property name="ObjectShortName">M_AXI_DP_BREADY</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/M_AXI_DP_ARADDR">
+         <obj_property name="ElementShortName">M_AXI_DP_ARADDR[31:0]</obj_property>
+         <obj_property name="ObjectShortName">M_AXI_DP_ARADDR[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/M_AXI_DP_ARPROT">
+         <obj_property name="ElementShortName">M_AXI_DP_ARPROT[2:0]</obj_property>
+         <obj_property name="ObjectShortName">M_AXI_DP_ARPROT[2:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/M_AXI_DP_ARVALID">
+         <obj_property name="ElementShortName">M_AXI_DP_ARVALID</obj_property>
+         <obj_property name="ObjectShortName">M_AXI_DP_ARVALID</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/M_AXI_DP_ARREADY">
+         <obj_property name="ElementShortName">M_AXI_DP_ARREADY</obj_property>
+         <obj_property name="ObjectShortName">M_AXI_DP_ARREADY</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/M_AXI_DP_RDATA">
+         <obj_property name="ElementShortName">M_AXI_DP_RDATA[31:0]</obj_property>
+         <obj_property name="ObjectShortName">M_AXI_DP_RDATA[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/M_AXI_DP_RRESP">
+         <obj_property name="ElementShortName">M_AXI_DP_RRESP[1:0]</obj_property>
+         <obj_property name="ObjectShortName">M_AXI_DP_RRESP[1:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/M_AXI_DP_RVALID">
+         <obj_property name="ElementShortName">M_AXI_DP_RVALID</obj_property>
+         <obj_property name="ObjectShortName">M_AXI_DP_RVALID</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/M_AXI_DP_RREADY">
+         <obj_property name="ElementShortName">M_AXI_DP_RREADY</obj_property>
+         <obj_property name="ObjectShortName">M_AXI_DP_RREADY</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/M0_AXIS_TLAST">
+         <obj_property name="ElementShortName">M0_AXIS_TLAST</obj_property>
+         <obj_property name="ObjectShortName">M0_AXIS_TLAST</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/M0_AXIS_TDATA">
+         <obj_property name="ElementShortName">M0_AXIS_TDATA[31:0]</obj_property>
+         <obj_property name="ObjectShortName">M0_AXIS_TDATA[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/M0_AXIS_TVALID">
+         <obj_property name="ElementShortName">M0_AXIS_TVALID</obj_property>
+         <obj_property name="ObjectShortName">M0_AXIS_TVALID</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/M0_AXIS_TREADY">
+         <obj_property name="ElementShortName">M0_AXIS_TREADY</obj_property>
+         <obj_property name="ObjectShortName">M0_AXIS_TREADY</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/M1_AXIS_TLAST">
+         <obj_property name="ElementShortName">M1_AXIS_TLAST</obj_property>
+         <obj_property name="ObjectShortName">M1_AXIS_TLAST</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/M1_AXIS_TDATA">
+         <obj_property name="ElementShortName">M1_AXIS_TDATA[31:0]</obj_property>
+         <obj_property name="ObjectShortName">M1_AXIS_TDATA[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/M1_AXIS_TVALID">
+         <obj_property name="ElementShortName">M1_AXIS_TVALID</obj_property>
+         <obj_property name="ObjectShortName">M1_AXIS_TVALID</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/M1_AXIS_TREADY">
+         <obj_property name="ElementShortName">M1_AXIS_TREADY</obj_property>
+         <obj_property name="ObjectShortName">M1_AXIS_TREADY</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/M2_AXIS_TLAST">
+         <obj_property name="ElementShortName">M2_AXIS_TLAST</obj_property>
+         <obj_property name="ObjectShortName">M2_AXIS_TLAST</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/M2_AXIS_TDATA">
+         <obj_property name="ElementShortName">M2_AXIS_TDATA[31:0]</obj_property>
+         <obj_property name="ObjectShortName">M2_AXIS_TDATA[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/M2_AXIS_TVALID">
+         <obj_property name="ElementShortName">M2_AXIS_TVALID</obj_property>
+         <obj_property name="ObjectShortName">M2_AXIS_TVALID</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/M2_AXIS_TREADY">
+         <obj_property name="ElementShortName">M2_AXIS_TREADY</obj_property>
+         <obj_property name="ObjectShortName">M2_AXIS_TREADY</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/M3_AXIS_TLAST">
+         <obj_property name="ElementShortName">M3_AXIS_TLAST</obj_property>
+         <obj_property name="ObjectShortName">M3_AXIS_TLAST</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/M3_AXIS_TDATA">
+         <obj_property name="ElementShortName">M3_AXIS_TDATA[31:0]</obj_property>
+         <obj_property name="ObjectShortName">M3_AXIS_TDATA[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/M3_AXIS_TVALID">
+         <obj_property name="ElementShortName">M3_AXIS_TVALID</obj_property>
+         <obj_property name="ObjectShortName">M3_AXIS_TVALID</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/M3_AXIS_TREADY">
+         <obj_property name="ElementShortName">M3_AXIS_TREADY</obj_property>
+         <obj_property name="ObjectShortName">M3_AXIS_TREADY</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/S0_AXIS_TLAST">
+         <obj_property name="ElementShortName">S0_AXIS_TLAST</obj_property>
+         <obj_property name="ObjectShortName">S0_AXIS_TLAST</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/S0_AXIS_TDATA">
+         <obj_property name="ElementShortName">S0_AXIS_TDATA[31:0]</obj_property>
+         <obj_property name="ObjectShortName">S0_AXIS_TDATA[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/S0_AXIS_TVALID">
+         <obj_property name="ElementShortName">S0_AXIS_TVALID</obj_property>
+         <obj_property name="ObjectShortName">S0_AXIS_TVALID</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/S0_AXIS_TREADY">
+         <obj_property name="ElementShortName">S0_AXIS_TREADY</obj_property>
+         <obj_property name="ObjectShortName">S0_AXIS_TREADY</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/S1_AXIS_TLAST">
+         <obj_property name="ElementShortName">S1_AXIS_TLAST</obj_property>
+         <obj_property name="ObjectShortName">S1_AXIS_TLAST</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/S1_AXIS_TDATA">
+         <obj_property name="ElementShortName">S1_AXIS_TDATA[31:0]</obj_property>
+         <obj_property name="ObjectShortName">S1_AXIS_TDATA[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/S1_AXIS_TVALID">
+         <obj_property name="ElementShortName">S1_AXIS_TVALID</obj_property>
+         <obj_property name="ObjectShortName">S1_AXIS_TVALID</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/S1_AXIS_TREADY">
+         <obj_property name="ElementShortName">S1_AXIS_TREADY</obj_property>
+         <obj_property name="ObjectShortName">S1_AXIS_TREADY</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/S2_AXIS_TLAST">
+         <obj_property name="ElementShortName">S2_AXIS_TLAST</obj_property>
+         <obj_property name="ObjectShortName">S2_AXIS_TLAST</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/S2_AXIS_TDATA">
+         <obj_property name="ElementShortName">S2_AXIS_TDATA[31:0]</obj_property>
+         <obj_property name="ObjectShortName">S2_AXIS_TDATA[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/S2_AXIS_TVALID">
+         <obj_property name="ElementShortName">S2_AXIS_TVALID</obj_property>
+         <obj_property name="ObjectShortName">S2_AXIS_TVALID</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/S2_AXIS_TREADY">
+         <obj_property name="ElementShortName">S2_AXIS_TREADY</obj_property>
+         <obj_property name="ObjectShortName">S2_AXIS_TREADY</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/S3_AXIS_TLAST">
+         <obj_property name="ElementShortName">S3_AXIS_TLAST</obj_property>
+         <obj_property name="ObjectShortName">S3_AXIS_TLAST</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/S3_AXIS_TDATA">
+         <obj_property name="ElementShortName">S3_AXIS_TDATA[31:0]</obj_property>
+         <obj_property name="ObjectShortName">S3_AXIS_TDATA[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/S3_AXIS_TVALID">
+         <obj_property name="ElementShortName">S3_AXIS_TVALID</obj_property>
+         <obj_property name="ObjectShortName">S3_AXIS_TVALID</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/microblaze_0/S3_AXIS_TREADY">
+         <obj_property name="ElementShortName">S3_AXIS_TREADY</obj_property>
+         <obj_property name="ObjectShortName">S3_AXIS_TREADY</obj_property>
+      </wvobject>
+   </wvobject>
+   <wvobject type="group" fp_name="group914">
+      <obj_property name="label">EXCHANGE MEMORY</obj_property>
+      <obj_property name="DisplayName">label</obj_property>
+      <wvobject type="vbus" fp_name="vbus1158">
+         <obj_property name="label">S_AXI_BYP</obj_property>
+         <obj_property name="DisplayName">label</obj_property>
+         <obj_property name="isExpanded"></obj_property>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_araddr">
+            <obj_property name="ElementShortName">S_AXI_BYP_araddr[31:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_BYP_araddr[31:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_arburst">
+            <obj_property name="ElementShortName">S_AXI_BYP_arburst[1:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_BYP_arburst[1:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_arcache">
+            <obj_property name="ElementShortName">S_AXI_BYP_arcache[3:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_BYP_arcache[3:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_arid">
+            <obj_property name="ElementShortName">S_AXI_BYP_arid[1:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_BYP_arid[1:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_arlen">
+            <obj_property name="ElementShortName">S_AXI_BYP_arlen[7:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_BYP_arlen[7:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_arlock">
+            <obj_property name="ElementShortName">S_AXI_BYP_arlock[0:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_BYP_arlock[0:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_arprot">
+            <obj_property name="ElementShortName">S_AXI_BYP_arprot[2:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_BYP_arprot[2:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_arready">
+            <obj_property name="ElementShortName">S_AXI_BYP_arready[0:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_BYP_arready[0:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_arsize">
+            <obj_property name="ElementShortName">S_AXI_BYP_arsize[2:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_BYP_arsize[2:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_arvalid">
+            <obj_property name="ElementShortName">S_AXI_BYP_arvalid[0:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_BYP_arvalid[0:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_awaddr">
+            <obj_property name="ElementShortName">S_AXI_BYP_awaddr[31:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_BYP_awaddr[31:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_awburst">
+            <obj_property name="ElementShortName">S_AXI_BYP_awburst[1:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_BYP_awburst[1:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_awcache">
+            <obj_property name="ElementShortName">S_AXI_BYP_awcache[3:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_BYP_awcache[3:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_awid">
+            <obj_property name="ElementShortName">S_AXI_BYP_awid[1:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_BYP_awid[1:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_awlen">
+            <obj_property name="ElementShortName">S_AXI_BYP_awlen[7:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_BYP_awlen[7:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_awlock">
+            <obj_property name="ElementShortName">S_AXI_BYP_awlock[0:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_BYP_awlock[0:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_awprot">
+            <obj_property name="ElementShortName">S_AXI_BYP_awprot[2:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_BYP_awprot[2:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_awready">
+            <obj_property name="ElementShortName">S_AXI_BYP_awready[0:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_BYP_awready[0:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_awsize">
+            <obj_property name="ElementShortName">S_AXI_BYP_awsize[2:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_BYP_awsize[2:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_awvalid">
+            <obj_property name="ElementShortName">S_AXI_BYP_awvalid[0:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_BYP_awvalid[0:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_bid">
+            <obj_property name="ElementShortName">S_AXI_BYP_bid[1:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_BYP_bid[1:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_bready">
+            <obj_property name="ElementShortName">S_AXI_BYP_bready[0:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_BYP_bready[0:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_bresp">
+            <obj_property name="ElementShortName">S_AXI_BYP_bresp[1:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_BYP_bresp[1:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_bvalid">
+            <obj_property name="ElementShortName">S_AXI_BYP_bvalid[0:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_BYP_bvalid[0:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_rdata">
+            <obj_property name="ElementShortName">S_AXI_BYP_rdata[31:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_BYP_rdata[31:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_rid">
+            <obj_property name="ElementShortName">S_AXI_BYP_rid[1:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_BYP_rid[1:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_rlast">
+            <obj_property name="ElementShortName">S_AXI_BYP_rlast[0:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_BYP_rlast[0:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_rready">
+            <obj_property name="ElementShortName">S_AXI_BYP_rready[0:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_BYP_rready[0:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_rresp">
+            <obj_property name="ElementShortName">S_AXI_BYP_rresp[1:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_BYP_rresp[1:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_rvalid">
+            <obj_property name="ElementShortName">S_AXI_BYP_rvalid[0:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_BYP_rvalid[0:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_wdata">
+            <obj_property name="ElementShortName">S_AXI_BYP_wdata[31:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_BYP_wdata[31:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_wlast">
+            <obj_property name="ElementShortName">S_AXI_BYP_wlast[0:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_BYP_wlast[0:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_wready">
+            <obj_property name="ElementShortName">S_AXI_BYP_wready[0:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_BYP_wready[0:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_wstrb">
+            <obj_property name="ElementShortName">S_AXI_BYP_wstrb[3:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_BYP_wstrb[3:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_wvalid">
+            <obj_property name="ElementShortName">S_AXI_BYP_wvalid[0:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_BYP_wvalid[0:0]</obj_property>
+         </wvobject>
+      </wvobject>
+      <wvobject type="vbus" fp_name="vbus1159">
+         <obj_property name="label">S_AXI_HOST</obj_property>
+         <obj_property name="DisplayName">label</obj_property>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_HOST_araddr">
+            <obj_property name="ElementShortName">S_AXI_HOST_araddr[12:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_HOST_araddr[12:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_HOST_arprot">
+            <obj_property name="ElementShortName">S_AXI_HOST_arprot[2:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_HOST_arprot[2:0]</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_HOST_arready">
+            <obj_property name="ElementShortName">S_AXI_HOST_arready</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_HOST_arready</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_HOST_arvalid">
+            <obj_property name="ElementShortName">S_AXI_HOST_arvalid</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_HOST_arvalid</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_HOST_awaddr">
+            <obj_property name="ElementShortName">S_AXI_HOST_awaddr[12:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_HOST_awaddr[12:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_HOST_awprot">
+            <obj_property name="ElementShortName">S_AXI_HOST_awprot[2:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_HOST_awprot[2:0]</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_HOST_awready">
+            <obj_property name="ElementShortName">S_AXI_HOST_awready</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_HOST_awready</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_HOST_awvalid">
+            <obj_property name="ElementShortName">S_AXI_HOST_awvalid</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_HOST_awvalid</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_HOST_bready">
+            <obj_property name="ElementShortName">S_AXI_HOST_bready</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_HOST_bready</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_HOST_bresp">
+            <obj_property name="ElementShortName">S_AXI_HOST_bresp[1:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_HOST_bresp[1:0]</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_HOST_bvalid">
+            <obj_property name="ElementShortName">S_AXI_HOST_bvalid</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_HOST_bvalid</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_HOST_rdata">
+            <obj_property name="ElementShortName">S_AXI_HOST_rdata[31:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_HOST_rdata[31:0]</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_HOST_rready">
+            <obj_property name="ElementShortName">S_AXI_HOST_rready</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_HOST_rready</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_HOST_rresp">
+            <obj_property name="ElementShortName">S_AXI_HOST_rresp[1:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_HOST_rresp[1:0]</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_HOST_rvalid">
+            <obj_property name="ElementShortName">S_AXI_HOST_rvalid</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_HOST_rvalid</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_HOST_wdata">
+            <obj_property name="ElementShortName">S_AXI_HOST_wdata[31:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_HOST_wdata[31:0]</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_HOST_wready">
+            <obj_property name="ElementShortName">S_AXI_HOST_wready</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_HOST_wready</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_HOST_wstrb">
+            <obj_property name="ElementShortName">S_AXI_HOST_wstrb[3:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_HOST_wstrb[3:0]</obj_property>
+         </wvobject>
+         <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_HOST_wvalid">
+            <obj_property name="ElementShortName">S_AXI_HOST_wvalid</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_HOST_wvalid</obj_property>
+         </wvobject>
+      </wvobject>
+      <wvobject type="vbus" fp_name="vbus1160">
+         <obj_property name="label">S_AXI_MB</obj_property>
+         <obj_property name="DisplayName">label</obj_property>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_MB_araddr">
+            <obj_property name="ElementShortName">S_AXI_MB_araddr[31:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_MB_araddr[31:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_MB_arprot">
+            <obj_property name="ElementShortName">S_AXI_MB_arprot[2:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_MB_arprot[2:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_MB_arready">
+            <obj_property name="ElementShortName">S_AXI_MB_arready[0:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_MB_arready[0:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_MB_arvalid">
+            <obj_property name="ElementShortName">S_AXI_MB_arvalid[0:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_MB_arvalid[0:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_MB_awaddr">
+            <obj_property name="ElementShortName">S_AXI_MB_awaddr[31:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_MB_awaddr[31:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_MB_awprot">
+            <obj_property name="ElementShortName">S_AXI_MB_awprot[2:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_MB_awprot[2:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_MB_awready">
+            <obj_property name="ElementShortName">S_AXI_MB_awready[0:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_MB_awready[0:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_MB_awvalid">
+            <obj_property name="ElementShortName">S_AXI_MB_awvalid[0:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_MB_awvalid[0:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_MB_bready">
+            <obj_property name="ElementShortName">S_AXI_MB_bready[0:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_MB_bready[0:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_MB_bresp">
+            <obj_property name="ElementShortName">S_AXI_MB_bresp[1:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_MB_bresp[1:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_MB_bvalid">
+            <obj_property name="ElementShortName">S_AXI_MB_bvalid[0:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_MB_bvalid[0:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_MB_rdata">
+            <obj_property name="ElementShortName">S_AXI_MB_rdata[31:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_MB_rdata[31:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_MB_rready">
+            <obj_property name="ElementShortName">S_AXI_MB_rready[0:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_MB_rready[0:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_MB_rresp">
+            <obj_property name="ElementShortName">S_AXI_MB_rresp[1:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_MB_rresp[1:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_MB_rvalid">
+            <obj_property name="ElementShortName">S_AXI_MB_rvalid[0:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_MB_rvalid[0:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_MB_wdata">
+            <obj_property name="ElementShortName">S_AXI_MB_wdata[31:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_MB_wdata[31:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_MB_wready">
+            <obj_property name="ElementShortName">S_AXI_MB_wready[0:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_MB_wready[0:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_MB_wstrb">
+            <obj_property name="ElementShortName">S_AXI_MB_wstrb[3:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_MB_wstrb[3:0]</obj_property>
+         </wvobject>
+         <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_MB_wvalid">
+            <obj_property name="ElementShortName">S_AXI_MB_wvalid[0:0]</obj_property>
+            <obj_property name="ObjectShortName">S_AXI_MB_wvalid[0:0]</obj_property>
+         </wvobject>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/ap_rst_n">
+         <obj_property name="ElementShortName">ap_rst_n</obj_property>
+         <obj_property name="ObjectShortName">ap_rst_n</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/encore_aresetn">
+         <obj_property name="ElementShortName">encore_aresetn[0:0]</obj_property>
+         <obj_property name="ObjectShortName">encore_aresetn[0:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/s_axi_aclk">
+         <obj_property name="ElementShortName">s_axi_aclk</obj_property>
+         <obj_property name="ObjectShortName">s_axi_aclk</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S00_AXI_1_ARADDR">
+         <obj_property name="ElementShortName">S00_AXI_1_ARADDR[31:0]</obj_property>
+         <obj_property name="ObjectShortName">S00_AXI_1_ARADDR[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S00_AXI_1_ARPROT">
+         <obj_property name="ElementShortName">S00_AXI_1_ARPROT[2:0]</obj_property>
+         <obj_property name="ObjectShortName">S00_AXI_1_ARPROT[2:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S00_AXI_1_ARREADY">
+         <obj_property name="ElementShortName">S00_AXI_1_ARREADY[0:0]</obj_property>
+         <obj_property name="ObjectShortName">S00_AXI_1_ARREADY[0:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S00_AXI_1_ARVALID">
+         <obj_property name="ElementShortName">S00_AXI_1_ARVALID[0:0]</obj_property>
+         <obj_property name="ObjectShortName">S00_AXI_1_ARVALID[0:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S00_AXI_1_AWADDR">
+         <obj_property name="ElementShortName">S00_AXI_1_AWADDR[31:0]</obj_property>
+         <obj_property name="ObjectShortName">S00_AXI_1_AWADDR[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S00_AXI_1_AWPROT">
+         <obj_property name="ElementShortName">S00_AXI_1_AWPROT[2:0]</obj_property>
+         <obj_property name="ObjectShortName">S00_AXI_1_AWPROT[2:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S00_AXI_1_AWREADY">
+         <obj_property name="ElementShortName">S00_AXI_1_AWREADY[0:0]</obj_property>
+         <obj_property name="ObjectShortName">S00_AXI_1_AWREADY[0:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S00_AXI_1_AWVALID">
+         <obj_property name="ElementShortName">S00_AXI_1_AWVALID[0:0]</obj_property>
+         <obj_property name="ObjectShortName">S00_AXI_1_AWVALID[0:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S00_AXI_1_BREADY">
+         <obj_property name="ElementShortName">S00_AXI_1_BREADY[0:0]</obj_property>
+         <obj_property name="ObjectShortName">S00_AXI_1_BREADY[0:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S00_AXI_1_BRESP">
+         <obj_property name="ElementShortName">S00_AXI_1_BRESP[1:0]</obj_property>
+         <obj_property name="ObjectShortName">S00_AXI_1_BRESP[1:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S00_AXI_1_BVALID">
+         <obj_property name="ElementShortName">S00_AXI_1_BVALID[0:0]</obj_property>
+         <obj_property name="ObjectShortName">S00_AXI_1_BVALID[0:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S00_AXI_1_RDATA">
+         <obj_property name="ElementShortName">S00_AXI_1_RDATA[31:0]</obj_property>
+         <obj_property name="ObjectShortName">S00_AXI_1_RDATA[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S00_AXI_1_RREADY">
+         <obj_property name="ElementShortName">S00_AXI_1_RREADY[0:0]</obj_property>
+         <obj_property name="ObjectShortName">S00_AXI_1_RREADY[0:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S00_AXI_1_RRESP">
+         <obj_property name="ElementShortName">S00_AXI_1_RRESP[1:0]</obj_property>
+         <obj_property name="ObjectShortName">S00_AXI_1_RRESP[1:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S00_AXI_1_RVALID">
+         <obj_property name="ElementShortName">S00_AXI_1_RVALID[0:0]</obj_property>
+         <obj_property name="ObjectShortName">S00_AXI_1_RVALID[0:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S00_AXI_1_WDATA">
+         <obj_property name="ElementShortName">S00_AXI_1_WDATA[31:0]</obj_property>
+         <obj_property name="ObjectShortName">S00_AXI_1_WDATA[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S00_AXI_1_WREADY">
+         <obj_property name="ElementShortName">S00_AXI_1_WREADY[0:0]</obj_property>
+         <obj_property name="ObjectShortName">S00_AXI_1_WREADY[0:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S00_AXI_1_WSTRB">
+         <obj_property name="ElementShortName">S00_AXI_1_WSTRB[3:0]</obj_property>
+         <obj_property name="ObjectShortName">S00_AXI_1_WSTRB[3:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S00_AXI_1_WVALID">
+         <obj_property name="ElementShortName">S00_AXI_1_WVALID[0:0]</obj_property>
+         <obj_property name="ObjectShortName">S00_AXI_1_WVALID[0:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_1_ARADDR">
+         <obj_property name="ElementShortName">S_AXI_1_ARADDR[12:0]</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_1_ARADDR[12:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_1_ARPROT">
+         <obj_property name="ElementShortName">S_AXI_1_ARPROT[2:0]</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_1_ARPROT[2:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_1_ARREADY">
+         <obj_property name="ElementShortName">S_AXI_1_ARREADY</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_1_ARREADY</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_1_ARVALID">
+         <obj_property name="ElementShortName">S_AXI_1_ARVALID</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_1_ARVALID</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_1_AWADDR">
+         <obj_property name="ElementShortName">S_AXI_1_AWADDR[12:0]</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_1_AWADDR[12:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_1_AWPROT">
+         <obj_property name="ElementShortName">S_AXI_1_AWPROT[2:0]</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_1_AWPROT[2:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_1_AWREADY">
+         <obj_property name="ElementShortName">S_AXI_1_AWREADY</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_1_AWREADY</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_1_AWVALID">
+         <obj_property name="ElementShortName">S_AXI_1_AWVALID</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_1_AWVALID</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_1_BREADY">
+         <obj_property name="ElementShortName">S_AXI_1_BREADY</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_1_BREADY</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_1_BRESP">
+         <obj_property name="ElementShortName">S_AXI_1_BRESP[1:0]</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_1_BRESP[1:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_1_BVALID">
+         <obj_property name="ElementShortName">S_AXI_1_BVALID</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_1_BVALID</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_1_RDATA">
+         <obj_property name="ElementShortName">S_AXI_1_RDATA[31:0]</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_1_RDATA[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_1_RREADY">
+         <obj_property name="ElementShortName">S_AXI_1_RREADY</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_1_RREADY</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_1_RRESP">
+         <obj_property name="ElementShortName">S_AXI_1_RRESP[1:0]</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_1_RRESP[1:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_1_RVALID">
+         <obj_property name="ElementShortName">S_AXI_1_RVALID</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_1_RVALID</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_1_WDATA">
+         <obj_property name="ElementShortName">S_AXI_1_WDATA[31:0]</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_1_WDATA[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_1_WREADY">
+         <obj_property name="ElementShortName">S_AXI_1_WREADY</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_1_WREADY</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_1_WSTRB">
+         <obj_property name="ElementShortName">S_AXI_1_WSTRB[3:0]</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_1_WSTRB[3:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_1_WVALID">
+         <obj_property name="ElementShortName">S_AXI_1_WVALID</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_1_WVALID</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_1_ARADDR">
+         <obj_property name="ElementShortName">S_AXI_BYP_1_ARADDR[31:0]</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_BYP_1_ARADDR[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_1_ARBURST">
+         <obj_property name="ElementShortName">S_AXI_BYP_1_ARBURST[1:0]</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_BYP_1_ARBURST[1:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_1_ARCACHE">
+         <obj_property name="ElementShortName">S_AXI_BYP_1_ARCACHE[3:0]</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_BYP_1_ARCACHE[3:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_1_ARID">
+         <obj_property name="ElementShortName">S_AXI_BYP_1_ARID[1:0]</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_BYP_1_ARID[1:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_1_ARLEN">
+         <obj_property name="ElementShortName">S_AXI_BYP_1_ARLEN[7:0]</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_BYP_1_ARLEN[7:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_1_ARLOCK">
+         <obj_property name="ElementShortName">S_AXI_BYP_1_ARLOCK[0:0]</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_BYP_1_ARLOCK[0:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_1_ARPROT">
+         <obj_property name="ElementShortName">S_AXI_BYP_1_ARPROT[2:0]</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_BYP_1_ARPROT[2:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_1_ARREADY">
+         <obj_property name="ElementShortName">S_AXI_BYP_1_ARREADY</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_BYP_1_ARREADY</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_1_ARSIZE">
+         <obj_property name="ElementShortName">S_AXI_BYP_1_ARSIZE[2:0]</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_BYP_1_ARSIZE[2:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_1_ARVALID">
+         <obj_property name="ElementShortName">S_AXI_BYP_1_ARVALID[0:0]</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_BYP_1_ARVALID[0:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_1_AWADDR">
+         <obj_property name="ElementShortName">S_AXI_BYP_1_AWADDR[31:0]</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_BYP_1_AWADDR[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_1_AWBURST">
+         <obj_property name="ElementShortName">S_AXI_BYP_1_AWBURST[1:0]</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_BYP_1_AWBURST[1:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_1_AWCACHE">
+         <obj_property name="ElementShortName">S_AXI_BYP_1_AWCACHE[3:0]</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_BYP_1_AWCACHE[3:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_1_AWID">
+         <obj_property name="ElementShortName">S_AXI_BYP_1_AWID[1:0]</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_BYP_1_AWID[1:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_1_AWLEN">
+         <obj_property name="ElementShortName">S_AXI_BYP_1_AWLEN[7:0]</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_BYP_1_AWLEN[7:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_1_AWLOCK">
+         <obj_property name="ElementShortName">S_AXI_BYP_1_AWLOCK[0:0]</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_BYP_1_AWLOCK[0:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_1_AWPROT">
+         <obj_property name="ElementShortName">S_AXI_BYP_1_AWPROT[2:0]</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_BYP_1_AWPROT[2:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_1_AWREADY">
+         <obj_property name="ElementShortName">S_AXI_BYP_1_AWREADY</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_BYP_1_AWREADY</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_1_AWSIZE">
+         <obj_property name="ElementShortName">S_AXI_BYP_1_AWSIZE[2:0]</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_BYP_1_AWSIZE[2:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_1_AWVALID">
+         <obj_property name="ElementShortName">S_AXI_BYP_1_AWVALID[0:0]</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_BYP_1_AWVALID[0:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_1_BID">
+         <obj_property name="ElementShortName">S_AXI_BYP_1_BID[1:0]</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_BYP_1_BID[1:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_1_BREADY">
+         <obj_property name="ElementShortName">S_AXI_BYP_1_BREADY[0:0]</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_BYP_1_BREADY[0:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_1_BRESP">
+         <obj_property name="ElementShortName">S_AXI_BYP_1_BRESP[1:0]</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_BYP_1_BRESP[1:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_1_BVALID">
+         <obj_property name="ElementShortName">S_AXI_BYP_1_BVALID</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_BYP_1_BVALID</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_1_RDATA">
+         <obj_property name="ElementShortName">S_AXI_BYP_1_RDATA[31:0]</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_BYP_1_RDATA[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_1_RID">
+         <obj_property name="ElementShortName">S_AXI_BYP_1_RID[1:0]</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_BYP_1_RID[1:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_1_RLAST">
+         <obj_property name="ElementShortName">S_AXI_BYP_1_RLAST</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_BYP_1_RLAST</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_1_RREADY">
+         <obj_property name="ElementShortName">S_AXI_BYP_1_RREADY[0:0]</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_BYP_1_RREADY[0:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_1_RRESP">
+         <obj_property name="ElementShortName">S_AXI_BYP_1_RRESP[1:0]</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_BYP_1_RRESP[1:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_1_RVALID">
+         <obj_property name="ElementShortName">S_AXI_BYP_1_RVALID</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_BYP_1_RVALID</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_1_WDATA">
+         <obj_property name="ElementShortName">S_AXI_BYP_1_WDATA[31:0]</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_BYP_1_WDATA[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_1_WLAST">
+         <obj_property name="ElementShortName">S_AXI_BYP_1_WLAST[0:0]</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_BYP_1_WLAST[0:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_1_WREADY">
+         <obj_property name="ElementShortName">S_AXI_BYP_1_WREADY</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_BYP_1_WREADY</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_1_WSTRB">
+         <obj_property name="ElementShortName">S_AXI_BYP_1_WSTRB[3:0]</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_BYP_1_WSTRB[3:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/S_AXI_BYP_1_WVALID">
+         <obj_property name="ElementShortName">S_AXI_BYP_1_WVALID[0:0]</obj_property>
+         <obj_property name="ObjectShortName">S_AXI_BYP_1_WVALID[0:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/ap_rst_n_1">
+         <obj_property name="ElementShortName">ap_rst_n_1</obj_property>
+         <obj_property name="ObjectShortName">ap_rst_n_1</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_bram_ctrl_0_BRAM_PORTA_ADDR">
+         <obj_property name="ElementShortName">axi_bram_ctrl_0_BRAM_PORTA_ADDR[12:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_bram_ctrl_0_BRAM_PORTA_ADDR[12:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_bram_ctrl_0_BRAM_PORTA_CLK">
+         <obj_property name="ElementShortName">axi_bram_ctrl_0_BRAM_PORTA_CLK</obj_property>
+         <obj_property name="ObjectShortName">axi_bram_ctrl_0_BRAM_PORTA_CLK</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_bram_ctrl_0_BRAM_PORTA_DIN">
+         <obj_property name="ElementShortName">axi_bram_ctrl_0_BRAM_PORTA_DIN[31:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_bram_ctrl_0_BRAM_PORTA_DIN[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_bram_ctrl_0_BRAM_PORTA_DOUT">
+         <obj_property name="ElementShortName">axi_bram_ctrl_0_BRAM_PORTA_DOUT[31:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_bram_ctrl_0_BRAM_PORTA_DOUT[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_bram_ctrl_0_BRAM_PORTA_EN">
+         <obj_property name="ElementShortName">axi_bram_ctrl_0_BRAM_PORTA_EN</obj_property>
+         <obj_property name="ObjectShortName">axi_bram_ctrl_0_BRAM_PORTA_EN</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_bram_ctrl_0_BRAM_PORTA_RST">
+         <obj_property name="ElementShortName">axi_bram_ctrl_0_BRAM_PORTA_RST</obj_property>
+         <obj_property name="ObjectShortName">axi_bram_ctrl_0_BRAM_PORTA_RST</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_bram_ctrl_0_BRAM_PORTA_WE">
+         <obj_property name="ElementShortName">axi_bram_ctrl_0_BRAM_PORTA_WE[3:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_bram_ctrl_0_BRAM_PORTA_WE[3:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_bram_ctrl_bypass_BRAM_PORTA_ADDR">
+         <obj_property name="ElementShortName">axi_bram_ctrl_bypass_BRAM_PORTA_ADDR[12:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_bram_ctrl_bypass_BRAM_PORTA_ADDR[12:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_bram_ctrl_bypass_BRAM_PORTA_CLK">
+         <obj_property name="ElementShortName">axi_bram_ctrl_bypass_BRAM_PORTA_CLK</obj_property>
+         <obj_property name="ObjectShortName">axi_bram_ctrl_bypass_BRAM_PORTA_CLK</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_bram_ctrl_bypass_BRAM_PORTA_DIN">
+         <obj_property name="ElementShortName">axi_bram_ctrl_bypass_BRAM_PORTA_DIN[31:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_bram_ctrl_bypass_BRAM_PORTA_DIN[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_bram_ctrl_bypass_BRAM_PORTA_DOUT">
+         <obj_property name="ElementShortName">axi_bram_ctrl_bypass_BRAM_PORTA_DOUT[31:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_bram_ctrl_bypass_BRAM_PORTA_DOUT[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_bram_ctrl_bypass_BRAM_PORTA_EN">
+         <obj_property name="ElementShortName">axi_bram_ctrl_bypass_BRAM_PORTA_EN</obj_property>
+         <obj_property name="ObjectShortName">axi_bram_ctrl_bypass_BRAM_PORTA_EN</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_bram_ctrl_bypass_BRAM_PORTA_RST">
+         <obj_property name="ElementShortName">axi_bram_ctrl_bypass_BRAM_PORTA_RST</obj_property>
+         <obj_property name="ObjectShortName">axi_bram_ctrl_bypass_BRAM_PORTA_RST</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_bram_ctrl_bypass_BRAM_PORTA_WE">
+         <obj_property name="ElementShortName">axi_bram_ctrl_bypass_BRAM_PORTA_WE[3:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_bram_ctrl_bypass_BRAM_PORTA_WE[3:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_0_M00_AXI_ARADDR">
+         <obj_property name="ElementShortName">axi_crossbar_0_M00_AXI_ARADDR[31:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_0_M00_AXI_ARADDR[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_0_M00_AXI_ARPROT">
+         <obj_property name="ElementShortName">axi_crossbar_0_M00_AXI_ARPROT[2:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_0_M00_AXI_ARPROT[2:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_0_M00_AXI_ARREADY">
+         <obj_property name="ElementShortName">axi_crossbar_0_M00_AXI_ARREADY</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_0_M00_AXI_ARREADY</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_0_M00_AXI_ARVALID">
+         <obj_property name="ElementShortName">axi_crossbar_0_M00_AXI_ARVALID[0:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_0_M00_AXI_ARVALID[0:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_0_M00_AXI_AWADDR">
+         <obj_property name="ElementShortName">axi_crossbar_0_M00_AXI_AWADDR[31:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_0_M00_AXI_AWADDR[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_0_M00_AXI_AWPROT">
+         <obj_property name="ElementShortName">axi_crossbar_0_M00_AXI_AWPROT[2:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_0_M00_AXI_AWPROT[2:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_0_M00_AXI_AWREADY">
+         <obj_property name="ElementShortName">axi_crossbar_0_M00_AXI_AWREADY</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_0_M00_AXI_AWREADY</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_0_M00_AXI_AWVALID">
+         <obj_property name="ElementShortName">axi_crossbar_0_M00_AXI_AWVALID[0:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_0_M00_AXI_AWVALID[0:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_0_M00_AXI_BREADY">
+         <obj_property name="ElementShortName">axi_crossbar_0_M00_AXI_BREADY[0:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_0_M00_AXI_BREADY[0:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_0_M00_AXI_BRESP">
+         <obj_property name="ElementShortName">axi_crossbar_0_M00_AXI_BRESP[1:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_0_M00_AXI_BRESP[1:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_0_M00_AXI_BVALID">
+         <obj_property name="ElementShortName">axi_crossbar_0_M00_AXI_BVALID</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_0_M00_AXI_BVALID</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_0_M00_AXI_RDATA">
+         <obj_property name="ElementShortName">axi_crossbar_0_M00_AXI_RDATA[31:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_0_M00_AXI_RDATA[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_0_M00_AXI_RREADY">
+         <obj_property name="ElementShortName">axi_crossbar_0_M00_AXI_RREADY[0:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_0_M00_AXI_RREADY[0:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_0_M00_AXI_RRESP">
+         <obj_property name="ElementShortName">axi_crossbar_0_M00_AXI_RRESP[1:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_0_M00_AXI_RRESP[1:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_0_M00_AXI_RVALID">
+         <obj_property name="ElementShortName">axi_crossbar_0_M00_AXI_RVALID</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_0_M00_AXI_RVALID</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_0_M00_AXI_WDATA">
+         <obj_property name="ElementShortName">axi_crossbar_0_M00_AXI_WDATA[31:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_0_M00_AXI_WDATA[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_0_M00_AXI_WREADY">
+         <obj_property name="ElementShortName">axi_crossbar_0_M00_AXI_WREADY</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_0_M00_AXI_WREADY</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_0_M00_AXI_WSTRB">
+         <obj_property name="ElementShortName">axi_crossbar_0_M00_AXI_WSTRB[3:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_0_M00_AXI_WSTRB[3:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_0_M00_AXI_WVALID">
+         <obj_property name="ElementShortName">axi_crossbar_0_M00_AXI_WVALID[0:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_0_M00_AXI_WVALID[0:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_1_M00_AXI_ARADDR">
+         <obj_property name="ElementShortName">axi_crossbar_1_M00_AXI_ARADDR[31:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_1_M00_AXI_ARADDR[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_1_M00_AXI_ARPROT">
+         <obj_property name="ElementShortName">axi_crossbar_1_M00_AXI_ARPROT[2:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_1_M00_AXI_ARPROT[2:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_1_M00_AXI_ARREADY">
+         <obj_property name="ElementShortName">axi_crossbar_1_M00_AXI_ARREADY[0:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_1_M00_AXI_ARREADY[0:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_1_M00_AXI_ARVALID">
+         <obj_property name="ElementShortName">axi_crossbar_1_M00_AXI_ARVALID[0:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_1_M00_AXI_ARVALID[0:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_1_M00_AXI_AWADDR">
+         <obj_property name="ElementShortName">axi_crossbar_1_M00_AXI_AWADDR[31:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_1_M00_AXI_AWADDR[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_1_M00_AXI_AWPROT">
+         <obj_property name="ElementShortName">axi_crossbar_1_M00_AXI_AWPROT[2:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_1_M00_AXI_AWPROT[2:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_1_M00_AXI_AWREADY">
+         <obj_property name="ElementShortName">axi_crossbar_1_M00_AXI_AWREADY[0:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_1_M00_AXI_AWREADY[0:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_1_M00_AXI_AWVALID">
+         <obj_property name="ElementShortName">axi_crossbar_1_M00_AXI_AWVALID[0:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_1_M00_AXI_AWVALID[0:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_1_M00_AXI_BREADY">
+         <obj_property name="ElementShortName">axi_crossbar_1_M00_AXI_BREADY[0:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_1_M00_AXI_BREADY[0:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_1_M00_AXI_BRESP">
+         <obj_property name="ElementShortName">axi_crossbar_1_M00_AXI_BRESP[1:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_1_M00_AXI_BRESP[1:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_1_M00_AXI_BVALID">
+         <obj_property name="ElementShortName">axi_crossbar_1_M00_AXI_BVALID[0:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_1_M00_AXI_BVALID[0:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_1_M00_AXI_RDATA">
+         <obj_property name="ElementShortName">axi_crossbar_1_M00_AXI_RDATA[31:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_1_M00_AXI_RDATA[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_1_M00_AXI_RREADY">
+         <obj_property name="ElementShortName">axi_crossbar_1_M00_AXI_RREADY[0:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_1_M00_AXI_RREADY[0:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_1_M00_AXI_RRESP">
+         <obj_property name="ElementShortName">axi_crossbar_1_M00_AXI_RRESP[1:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_1_M00_AXI_RRESP[1:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_1_M00_AXI_RVALID">
+         <obj_property name="ElementShortName">axi_crossbar_1_M00_AXI_RVALID[0:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_1_M00_AXI_RVALID[0:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_1_M00_AXI_WDATA">
+         <obj_property name="ElementShortName">axi_crossbar_1_M00_AXI_WDATA[31:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_1_M00_AXI_WDATA[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_1_M00_AXI_WREADY">
+         <obj_property name="ElementShortName">axi_crossbar_1_M00_AXI_WREADY[0:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_1_M00_AXI_WREADY[0:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_1_M00_AXI_WSTRB">
+         <obj_property name="ElementShortName">axi_crossbar_1_M00_AXI_WSTRB[3:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_1_M00_AXI_WSTRB[3:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_1_M00_AXI_WVALID">
+         <obj_property name="ElementShortName">axi_crossbar_1_M00_AXI_WVALID[0:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_1_M00_AXI_WVALID[0:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_1_M01_AXI_ARADDR">
+         <obj_property name="ElementShortName">axi_crossbar_1_M01_AXI_ARADDR[63:32]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_1_M01_AXI_ARADDR[63:32]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_1_M01_AXI_ARREADY">
+         <obj_property name="ElementShortName">axi_crossbar_1_M01_AXI_ARREADY</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_1_M01_AXI_ARREADY</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_1_M01_AXI_ARVALID">
+         <obj_property name="ElementShortName">axi_crossbar_1_M01_AXI_ARVALID[1:1]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_1_M01_AXI_ARVALID[1:1]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_1_M01_AXI_AWADDR">
+         <obj_property name="ElementShortName">axi_crossbar_1_M01_AXI_AWADDR[63:32]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_1_M01_AXI_AWADDR[63:32]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_1_M01_AXI_AWREADY">
+         <obj_property name="ElementShortName">axi_crossbar_1_M01_AXI_AWREADY</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_1_M01_AXI_AWREADY</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_1_M01_AXI_AWVALID">
+         <obj_property name="ElementShortName">axi_crossbar_1_M01_AXI_AWVALID[1:1]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_1_M01_AXI_AWVALID[1:1]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_1_M01_AXI_BREADY">
+         <obj_property name="ElementShortName">axi_crossbar_1_M01_AXI_BREADY[1:1]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_1_M01_AXI_BREADY[1:1]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_1_M01_AXI_BRESP">
+         <obj_property name="ElementShortName">axi_crossbar_1_M01_AXI_BRESP[1:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_1_M01_AXI_BRESP[1:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_1_M01_AXI_BVALID">
+         <obj_property name="ElementShortName">axi_crossbar_1_M01_AXI_BVALID</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_1_M01_AXI_BVALID</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_1_M01_AXI_RDATA">
+         <obj_property name="ElementShortName">axi_crossbar_1_M01_AXI_RDATA[31:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_1_M01_AXI_RDATA[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_1_M01_AXI_RREADY">
+         <obj_property name="ElementShortName">axi_crossbar_1_M01_AXI_RREADY[1:1]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_1_M01_AXI_RREADY[1:1]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_1_M01_AXI_RRESP">
+         <obj_property name="ElementShortName">axi_crossbar_1_M01_AXI_RRESP[1:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_1_M01_AXI_RRESP[1:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_1_M01_AXI_RVALID">
+         <obj_property name="ElementShortName">axi_crossbar_1_M01_AXI_RVALID</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_1_M01_AXI_RVALID</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_1_M01_AXI_WDATA">
+         <obj_property name="ElementShortName">axi_crossbar_1_M01_AXI_WDATA[63:32]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_1_M01_AXI_WDATA[63:32]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_1_M01_AXI_WREADY">
+         <obj_property name="ElementShortName">axi_crossbar_1_M01_AXI_WREADY</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_1_M01_AXI_WREADY</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_1_M01_AXI_WSTRB">
+         <obj_property name="ElementShortName">axi_crossbar_1_M01_AXI_WSTRB[7:4]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_1_M01_AXI_WSTRB[7:4]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_crossbar_1_M01_AXI_WVALID">
+         <obj_property name="ElementShortName">axi_crossbar_1_M01_AXI_WVALID[1:1]</obj_property>
+         <obj_property name="ObjectShortName">axi_crossbar_1_M01_AXI_WVALID[1:1]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_gpio_0_gpio_io_o">
+         <obj_property name="ElementShortName">axi_gpio_0_gpio_io_o[1:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_gpio_0_gpio_io_o[1:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_register_slice_0_M_AXI_ARADDR">
+         <obj_property name="ElementShortName">axi_register_slice_0_M_AXI_ARADDR[12:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_register_slice_0_M_AXI_ARADDR[12:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_register_slice_0_M_AXI_ARPROT">
+         <obj_property name="ElementShortName">axi_register_slice_0_M_AXI_ARPROT[2:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_register_slice_0_M_AXI_ARPROT[2:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_register_slice_0_M_AXI_ARREADY">
+         <obj_property name="ElementShortName">axi_register_slice_0_M_AXI_ARREADY[1:1]</obj_property>
+         <obj_property name="ObjectShortName">axi_register_slice_0_M_AXI_ARREADY[1:1]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_register_slice_0_M_AXI_ARVALID">
+         <obj_property name="ElementShortName">axi_register_slice_0_M_AXI_ARVALID</obj_property>
+         <obj_property name="ObjectShortName">axi_register_slice_0_M_AXI_ARVALID</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_register_slice_0_M_AXI_AWADDR">
+         <obj_property name="ElementShortName">axi_register_slice_0_M_AXI_AWADDR[12:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_register_slice_0_M_AXI_AWADDR[12:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_register_slice_0_M_AXI_AWPROT">
+         <obj_property name="ElementShortName">axi_register_slice_0_M_AXI_AWPROT[2:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_register_slice_0_M_AXI_AWPROT[2:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_register_slice_0_M_AXI_AWREADY">
+         <obj_property name="ElementShortName">axi_register_slice_0_M_AXI_AWREADY[1:1]</obj_property>
+         <obj_property name="ObjectShortName">axi_register_slice_0_M_AXI_AWREADY[1:1]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_register_slice_0_M_AXI_AWVALID">
+         <obj_property name="ElementShortName">axi_register_slice_0_M_AXI_AWVALID</obj_property>
+         <obj_property name="ObjectShortName">axi_register_slice_0_M_AXI_AWVALID</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_register_slice_0_M_AXI_BREADY">
+         <obj_property name="ElementShortName">axi_register_slice_0_M_AXI_BREADY</obj_property>
+         <obj_property name="ObjectShortName">axi_register_slice_0_M_AXI_BREADY</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_register_slice_0_M_AXI_BRESP">
+         <obj_property name="ElementShortName">axi_register_slice_0_M_AXI_BRESP[3:2]</obj_property>
+         <obj_property name="ObjectShortName">axi_register_slice_0_M_AXI_BRESP[3:2]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_register_slice_0_M_AXI_BVALID">
+         <obj_property name="ElementShortName">axi_register_slice_0_M_AXI_BVALID[1:1]</obj_property>
+         <obj_property name="ObjectShortName">axi_register_slice_0_M_AXI_BVALID[1:1]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_register_slice_0_M_AXI_RDATA">
+         <obj_property name="ElementShortName">axi_register_slice_0_M_AXI_RDATA[63:32]</obj_property>
+         <obj_property name="ObjectShortName">axi_register_slice_0_M_AXI_RDATA[63:32]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_register_slice_0_M_AXI_RREADY">
+         <obj_property name="ElementShortName">axi_register_slice_0_M_AXI_RREADY</obj_property>
+         <obj_property name="ObjectShortName">axi_register_slice_0_M_AXI_RREADY</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_register_slice_0_M_AXI_RRESP">
+         <obj_property name="ElementShortName">axi_register_slice_0_M_AXI_RRESP[3:2]</obj_property>
+         <obj_property name="ObjectShortName">axi_register_slice_0_M_AXI_RRESP[3:2]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_register_slice_0_M_AXI_RVALID">
+         <obj_property name="ElementShortName">axi_register_slice_0_M_AXI_RVALID[1:1]</obj_property>
+         <obj_property name="ObjectShortName">axi_register_slice_0_M_AXI_RVALID[1:1]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_register_slice_0_M_AXI_WDATA">
+         <obj_property name="ElementShortName">axi_register_slice_0_M_AXI_WDATA[31:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_register_slice_0_M_AXI_WDATA[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_register_slice_0_M_AXI_WREADY">
+         <obj_property name="ElementShortName">axi_register_slice_0_M_AXI_WREADY[1:1]</obj_property>
+         <obj_property name="ObjectShortName">axi_register_slice_0_M_AXI_WREADY[1:1]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_register_slice_0_M_AXI_WSTRB">
+         <obj_property name="ElementShortName">axi_register_slice_0_M_AXI_WSTRB[3:0]</obj_property>
+         <obj_property name="ObjectShortName">axi_register_slice_0_M_AXI_WSTRB[3:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/axi_register_slice_0_M_AXI_WVALID">
+         <obj_property name="ElementShortName">axi_register_slice_0_M_AXI_WVALID</obj_property>
+         <obj_property name="ObjectShortName">axi_register_slice_0_M_AXI_WVALID</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/hwid">
+         <obj_property name="ElementShortName">hwid[31:0]</obj_property>
+         <obj_property name="ObjectShortName">hwid[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/s_axi_aclk_1">
+         <obj_property name="ElementShortName">s_axi_aclk_1</obj_property>
+         <obj_property name="ObjectShortName">s_axi_aclk_1</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/xlslice_encore_rstn_Dout">
+         <obj_property name="ElementShortName">xlslice_encore_rstn_Dout[0:0]</obj_property>
+         <obj_property name="ObjectShortName">xlslice_encore_rstn_Dout[0:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/control/exchange_mem/\^xlslice_init_done ">
+         <obj_property name="ElementShortName">\^xlslice_init_done [0:0]</obj_property>
+         <obj_property name="ObjectShortName">\^xlslice_init_done [0:0]</obj_property>
       </wvobject>
    </wvobject>
 </wave_config>

@@ -9,10 +9,10 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${fileDirname}/${fileBasenameNoExtension}",
-            "args": [1, 0, 5500, "udp", "2>/dev/null"],
+            "args": ["udp", 5500, "${fileDirname}/xsim.dir/ccl_offload_behav/xsimk.so", "2>/dev/null"],
             "stopAtEntry": true,
             "cwd": "${fileDirname}",
-            "environment": [],
+            "environment": [{"name":"LD_LIBRARY_PATH","value":"${env:XILINX_VIVADO}/lib/lnx64.o"}],
             "externalConsole": false,
             "MIMode": "gdb",
             "setupCommands": [

@@ -156,8 +156,12 @@ public:
     void close();
     void run(XSI_INT64 step);
     void restart();
+    int get_num_ports();
+    float get_time_precision();
     int get_value(int port_number, void* value);
     int get_port_number(const char* port_name);
+    int get_port_bits(int port_number);
+    bool port_is_input(int port_number);
     const char *get_port_name(int port_number);
     void put_value(int port_number, const void* value);
     int get_status();
@@ -185,6 +189,8 @@ private:
     t_fp_xsi_get_port_number _xsi_get_port_number;
     t_fp_xsi_get_port_name _xsi_get_port_name;
     t_fp_xsi_trace_all _xsi_trace_all;
+    t_fp_xsi_get_int _get_int_property;
+    t_fp_xsi_get_int_port _get_int_port_property;
 
 }; // class Loader
 

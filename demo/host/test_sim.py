@@ -148,6 +148,7 @@ if __name__ == "__main__":
     parser.add_argument('--nruns',      type=int,            default=1,     help='How many times to run each test')
     parser.add_argument('--start_port', type=int,            default=5500,  help='Start of range of ports usable for sim')
     parser.add_argument('--count',      type=int,            default=16,    help='How many B per buffer')
+    parser.add_argument('--rxbuf_size', type=int,            default=1,     help='How many KB per RX buffer')
     parser.add_argument('--debug',      action='store_true', default=False, help='enable debug mode')
     parser.add_argument('--all',        action='store_true', default=False, help='Select all collectives')
     parser.add_argument('--nop',        action='store_true', default=False, help='Run nop test')
@@ -160,6 +161,7 @@ if __name__ == "__main__":
     parser.add_argument('--tcp',        action='store_true', default=False, help='Run test using TCP')
 
     args = parser.parse_args()
+    args.rxbuf_size = 1024*args.rxbuf_size #convert from KB to B
     if args.all:
         args.sndrcv  = True
         args.combine = True
@@ -178,37 +180,29 @@ if __name__ == "__main__":
 
     ranks = []
     for i in range(world_size):
-        ranks.append({"ip": "127.0.0.1", "port": args.start_port+world_size+i, "session_id":i})
+        ranks.append({"ip": "127.0.0.1", "port": args.start_port+world_size+i, "session_id":i, "max_segment_size": args.rxbuf_size})
 
-    #configure FPGA and CCLO cores with the default 16 RX buffers of bsize KB each
-    cclo_inst = accl(ranks, local_rank, protocol=("TCP" if args.tcp else "UDP"), sim_sock="tcp://localhost:"+str(args.start_port+local_rank))
+    #configure FPGA and CCLO cores with the default 16 RX buffers of size given by args.rxbuf_size
+    cclo_inst = accl(ranks, local_rank, bufsize=args.rxbuf_size, protocol=("TCP" if args.tcp else "UDP"), sim_sock="tcp://localhost:"+str(args.start_port+local_rank))
     cclo_inst.set_timeout(10**8)
     #barrier here to make sure all the devices are configured before testing
     comm.barrier()
 
     try:
-        if args.combine:
-            for i in range(args.nruns):
+        for i in range(args.nruns):
+            if args.nop:
+                cclo_inst.nop()
+            if args.combine:
                 test_combine(cclo_inst, args.count)
-
-        if args.copy:
-            for i in range(args.nruns):
+            if args.copy:
                 test_copy(cclo_inst, args.count)
-        
-        if args.sndrcv:
-            for i in range(args.nruns):
+            if args.sndrcv:
                 test_sendrecv(cclo_inst, world_size, local_rank, args.count)
-
-        if args.sndrcv_strm:
-            for i in range(args.nruns):  
+            if args.sndrcv_strm:
                 test_sendrecv_plkernel(cclo_inst, world_size, local_rank, args.count)
-
-        if args.bcast:
-            for i in range(args.nruns):
+            if args.bcast:
                 test_bcast(cclo_inst, local_rank, i, args.count)
-
-        if args.scatter:
-            for i in range(args.nruns):
+            if args.scatter:
                 test_scatter(cclo_inst, world_size, local_rank, i, args.count)
 
     except KeyboardInterrupt:

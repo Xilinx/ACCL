@@ -6,18 +6,6 @@
 #include "ccl_offload_control.h"
 #include "eth_intf.h"
 
-#define STATUS_OFFSET           0
-#define ADDRL_OFFSET            1
-#define ADDRH_OFFSET            2
-#define MAX_LEN_OFFSET          3
-#define DMA_TAG_OFFSET          4
-#define RX_TAG_OFFSET           5
-#define RX_LEN_OFFSET           6
-#define RX_SRC_OFFSET           7
-#define SEQUENCE_NUMBER_OFFSET  8   
-#define SPARE_BUFFER_SIZE       36
-#define SPARE_BUFFER_FIELDS     9       
-
 typedef struct {
     unsigned int tag;
     unsigned int len;

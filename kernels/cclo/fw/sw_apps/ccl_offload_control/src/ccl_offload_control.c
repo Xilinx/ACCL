@@ -42,7 +42,8 @@ static datapath_arith_config arcfg;
 static communicator world;
 
 #ifdef MB_FW_EMULATION
-uint32_t sim_cfgmem[END_OF_EXCHMEM/4];
+//uint32_t sim_cfgmem[END_OF_EXCHMEM/4];
+uint32_t sim_cfgmem[(GPIO_BASEADDR+0x1000)/4];
 uint32_t *cfgmem = sim_cfgmem;
 hlslib::Stream<ap_axiu<32,0,0,0>, 512> cmd_fifos[4];
 hlslib::Stream<ap_axiu<32,0,0,0>, 512> sts_fifos[4];
@@ -106,15 +107,27 @@ static inline communicator find_comm(unsigned int adr){
 }
 
 //Packetizer/Depacketizer
-static inline void start_packetizer(unsigned int base_addr,unsigned int max_pktsize) {
+static inline void start_packetizer(unsigned int max_pktsize) {
     //get number of DATAPATH_WIDTH_BYTES transfers corresponding to max_pktsize
     unsigned int max_pkt_transfers = (max_pktsize+DATAPATH_WIDTH_BYTES-1)/DATAPATH_WIDTH_BYTES;
-    Xil_Out32(base_addr+0x10, max_pkt_transfers);
-    SET(base_addr, CONTROL_REPEAT_MASK | CONTROL_START_MASK);
+    Xil_Out32(NET_TXPKT_BASEADDR+0x10, max_pkt_transfers);
+    SET(NET_TXPKT_BASEADDR, CONTROL_REPEAT_MASK | CONTROL_START_MASK);
 }
 
-static inline void start_depacketizer(unsigned int base_addr) {
-    SET(base_addr, CONTROL_REPEAT_MASK | CONTROL_START_MASK );
+static inline void start_depacketizer() {
+    SET(NET_RXPKT_BASEADDR, CONTROL_REPEAT_MASK | CONTROL_START_MASK );
+}
+
+static inline void start_offload_engines(){
+    //start rxbuf enqueue
+    Xil_Out32(RX_ENQUEUE_BASEADDR+0x10, EXCHMEM_BASEADDR);
+    SET(RX_ENQUEUE_BASEADDR, CONTROL_REPEAT_MASK | CONTROL_START_MASK);
+    //start rxbuf dequeue
+    Xil_Out32(RX_DEQUEUE_BASEADDR+0x10, EXCHMEM_BASEADDR);
+    SET(RX_DEQUEUE_BASEADDR, CONTROL_REPEAT_MASK | CONTROL_START_MASK);
+    //start rxbuf seek
+    Xil_Out32(RX_SEEK_BASEADDR+0x10, EXCHMEM_BASEADDR);
+    SET(RX_SEEK_BASEADDR, CONTROL_REPEAT_MASK | CONTROL_START_MASK);
 }
 
 //connection management
@@ -1232,8 +1245,9 @@ int run_accl() {
                         encore_soft_reset();
                         break;
                     case HOUSEKEEP_PKTEN:
-                        start_depacketizer(NET_RXPKT_BASEADDR);
-                        start_packetizer(NET_TXPKT_BASEADDR, MAX_PACKETSIZE);
+                        start_depacketizer();
+                        start_packetizer(MAX_PACKETSIZE);
+                        start_offload_engines();
                         break;
                     case HOUSEKEEP_TIMEOUT:
                         timeout = count;
@@ -1304,7 +1318,6 @@ int run_accl() {
                 retval = NO_ERROR;
                 break;
         }
-
         finalize_call(retval);
     }
     return 0;

@@ -17,6 +17,7 @@
 
 #include <iostream>
 #include "xsi_loader.h"
+#include<cmath>
 
 using namespace Xsi;
 
@@ -36,11 +37,9 @@ Loader::Loader(const std::string& design_libname, const std::string& simkernel_l
     _xsi_get_port_name(NULL),
     _xsi_trace_all(NULL)
 {
-
     if (!initialize()) {
         throw LoaderException("Failed to Load up XSI.");
     }
-   
 }
 
 Loader::~Loader()
@@ -123,6 +122,30 @@ Loader::trace_all()
     _xsi_trace_all(_design_handle);
 }
 
+int
+Loader::get_num_ports()
+{
+    return _get_int_property(_design_handle, xsiNumTopPorts);
+}
+
+float
+Loader::get_time_precision()
+{
+    return std::pow(10.0, _get_int_property(_design_handle, xsiTimePrecisionKernel));
+}
+
+int
+Loader::get_port_bits(int port_number)
+{
+    return _get_int_port_property(_design_handle, port_number, xsiHDLValueSize);
+}
+
+bool
+Loader::port_is_input(int port_number)
+{
+    return (_get_int_port_property(_design_handle, port_number, xsiDirectionTopPort) == xsiInputPort);
+}
+
 bool
 Loader::initialize()
 {
@@ -203,6 +226,18 @@ Loader::initialize()
     // Get function pointer for tracing all signals to WDB
     _xsi_trace_all = (t_fp_xsi_trace_all) _simkernel_lib.getfunction("xsi_trace_all");
     if (!_xsi_trace_all) {
+        return false;
+    }
+
+    // Get function pointer for querying design properties
+    _get_int_property = (t_fp_xsi_get_int) _simkernel_lib.getfunction("xsi_get_int");
+    if (!_get_int_property) {
+        return false;
+    }
+
+    // Get function pointer for querying port properties
+    _get_int_port_property = (t_fp_xsi_get_int_port) _simkernel_lib.getfunction("xsi_get_int_port");
+    if (!_get_int_property) {
         return false;
     }
 

@@ -16,7 +16,7 @@
 #
 # *******************************************************************************/
 
-PERIPHERAL_IPS = loopback reduce_sum fp_hp_stream_conv hp_fp_stream_conv 
+PERIPHERAL_IPS = loopback reduce_sum fp_hp_stream_conv hp_fp_stream_conv dummy_tcp_stack
 TARGET=ip
 PLATFORM ?= xilinx_u280_xdma_201920_3
 DEBUG ?= none
@@ -31,7 +31,7 @@ endif
 
 all: $(PERIPHERAL_IPS) cclo
 
-.PHONY: loopback cclo reduce_sum fp_hp_stream_conv hp_fp_stream_conv
+.PHONY: loopback cclo reduce_sum fp_hp_stream_conv hp_fp_stream_conv dummy_tcp_stack
 
 $(PERIPHERAL_IPS):
 	$(MAKE) -C $@ DEVICE=$(FPGAPART) TARGET=$(TARGET)

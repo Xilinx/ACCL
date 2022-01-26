@@ -225,12 +225,11 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
   assign_bd_address -offset 0x00010000 -range 0x00008000 -target_address_space [get_bd_addr_spaces control/microblaze_0/Instruction] [get_bd_addr_segs control/microblaze_0_local_memory/ilmb_bram_if_cntlr/SLMB/Mem] -force
   assign_bd_address -offset 0x40000000 -range 0x00001000 -target_address_space [get_bd_addr_spaces control/microblaze_0/Data] [get_bd_addr_segs control/exchange_mem/axi_gpio_0/S_AXI/Reg] -force
 
-  assign_bd_address -offset 0x00020000 -range 0x00010000 -target_address_space [get_bd_addr_spaces control/microblaze_0/Data] [get_bd_addr_segs control/dma_offload/dma_mover/s_axi_control/Reg]
   assign_bd_address -offset 0x00050000 -range 0x00010000 -target_address_space [get_bd_addr_spaces control/microblaze_0/Data] [get_bd_addr_segs control/rxbuf_offload/rxbuf_dequeue/s_axi_control/Reg]
   assign_bd_address -offset 0x00060000 -range 0x00010000 -target_address_space [get_bd_addr_spaces control/microblaze_0/Data] [get_bd_addr_segs control/rxbuf_offload/rxbuf_enqueue/s_axi_control/Reg]
   assign_bd_address -offset 0x00070000 -range 0x00010000 -target_address_space [get_bd_addr_spaces control/microblaze_0/Data] [get_bd_addr_segs control/rxbuf_offload/rxbuf_seek/s_axi_control/Reg]
 
-  assign_bd_address -offset 0x00000000 -range 0x00002000 -target_address_space [get_bd_addr_spaces control/dma_offload/dma_mover/Data_m_axi_gmem] [get_bd_addr_segs control/exchange_mem/axi_bram_ctrl_bypass/S_AXI/Mem0]
+  assign_bd_address -offset 0x00000000 -range 0x00002000 -target_address_space [get_bd_addr_spaces control/dma_offload/dma_mover/Data_m_axi_mem] [get_bd_addr_segs control/exchange_mem/axi_bram_ctrl_bypass/S_AXI/Mem0]
   assign_bd_address -offset 0x00000000 -range 0x00002000 -target_address_space [get_bd_addr_spaces control/rxbuf_offload/rxbuf_dequeue/Data_m_axi_mem] [get_bd_addr_segs control/exchange_mem/axi_bram_ctrl_bypass/S_AXI/Mem0]
   assign_bd_address -offset 0x00000000 -range 0x00002000 -target_address_space [get_bd_addr_spaces control/rxbuf_offload/rxbuf_enqueue/Data_m_axi_mem] [get_bd_addr_segs control/exchange_mem/axi_bram_ctrl_bypass/S_AXI/Mem0]
   assign_bd_address -offset 0x00000000 -range 0x00002000 -target_address_space [get_bd_addr_spaces control/rxbuf_offload/rxbuf_seek/Data_m_axi_mem] [get_bd_addr_segs control/exchange_mem/axi_bram_ctrl_bypass/S_AXI/Mem0]

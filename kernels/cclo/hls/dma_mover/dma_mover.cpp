@@ -280,8 +280,7 @@ void dma_ack_execute(
 void eth_cmd_execute(
     STREAM<packetizer_instruction> &instruction,
     STREAM<eth_header> &eth_cmd_channel,
-    STREAM<packetizer_ack_instruction> &ack_instruction,
-    unsigned int max_segment_len
+    STREAM<packetizer_ack_instruction> &ack_instruction
 ) {
 #pragma HLS PIPELINE II=1 style=flp
     unsigned int seg_len, sequence_number;
@@ -292,7 +291,7 @@ void eth_cmd_execute(
             //NOTE: to make sure we don't get into trouble with ragged ends on streams,
             //max_segment_len should be a multiple of the datapath width (64B)
             //this shouldn't be a problem in practice
-            seg_len = (insn.len > max_segment_len) ? max_segment_len : insn.len;
+            seg_len = (insn.len > insn.max_seg_len) ? insn.max_seg_len : insn.len;
             insn.len -= seg_len;
             // prepare header arguments
             eth_header pkt_cmd;
@@ -349,66 +348,66 @@ void instruction_fetch(
     ap_uint<32> tmp;
     move_instruction ret;
 
-    tmp = (STREAM_READ(cmd)).data;
-    ret.op0_opcode = tmp(2,0);
-    ret.op1_opcode = tmp(5,3);
-    ret.res_opcode = tmp(8,6);
-    ap_uint<1> remote_flags = tmp(9,9);
-    ret.res_is_remote = (remote_flags == RES_REMOTE);
-    ap_uint<3> compression_flags = tmp(12,10);
-    ret.op0_is_compressed = (compression_flags & OP0_COMPRESSED) != 0;
-    ret.op1_is_compressed = (compression_flags & OP1_COMPRESSED) != 0;
-    ret.res_is_compressed = (compression_flags & RES_COMPRESSED) != 0;
-    ret.func_id = tmp(16,13);
-    
-    ret.count = (STREAM_READ(cmd)).data;
+    if(!STREAM_IS_EMPTY(cmd)){
+        tmp = (STREAM_READ(cmd)).data;
+        ret.op0_opcode = tmp(2,0);
+        ret.op1_opcode = tmp(5,3);
+        ret.res_opcode = tmp(8,6);
+        ap_uint<1> remote_flags = tmp(9,9);
+        ret.res_is_remote = (remote_flags == RES_REMOTE);
+        ap_uint<3> compression_flags = tmp(12,10);
+        ret.op0_is_compressed = (compression_flags & OP0_COMPRESSED) != 0;
+        ret.op1_is_compressed = (compression_flags & OP1_COMPRESSED) != 0;
+        ret.res_is_compressed = (compression_flags & RES_COMPRESSED) != 0;
+        ret.func_id = tmp(16,13);
+        
+        ret.count = (STREAM_READ(cmd)).data;
 
-    //get arith config offset
-    ret.arcfg_offset = (STREAM_READ(cmd)).data;
+        //get arith config offset
+        ret.arcfg_offset = (STREAM_READ(cmd)).data;
 
-    //get addr for op0, or equivalents
-    if(ret.op0_opcode == MOVE_IMMEDIATE){
-        ret.op0_addr(31,0) = (STREAM_READ(cmd)).data;
-        ret.op0_addr(63,32) = (STREAM_READ(cmd)).data;
-    } else if(ret.op0_opcode == MOVE_STRIDE){
-        ret.op0_stride = (STREAM_READ(cmd)).data;
+        //get addr for op0, or equivalents
+        if(ret.op0_opcode == MOVE_IMMEDIATE){
+            ret.op0_addr(31,0) = (STREAM_READ(cmd)).data;
+            ret.op0_addr(63,32) = (STREAM_READ(cmd)).data;
+        } else if(ret.op0_opcode == MOVE_STRIDE){
+            ret.op0_stride = (STREAM_READ(cmd)).data;
+        }
+        //get addr for op1, or equivalents
+        if(ret.op1_opcode == MOVE_IMMEDIATE){
+            ret.op1_addr(31,0) = (STREAM_READ(cmd)).data;
+            ret.op1_addr(63,32) = (STREAM_READ(cmd)).data;
+        } else if(ret.op1_opcode == MOVE_ON_RECV){
+            ret.rx_src = (STREAM_READ(cmd)).data;
+            ret.rx_tag = (STREAM_READ(cmd)).data;
+        } else if(ret.op1_opcode == MOVE_STRIDE){
+            ret.op1_stride = (STREAM_READ(cmd)).data;
+        }
+        //get addr for res, or equivalents
+        if(ret.res_opcode == MOVE_IMMEDIATE){
+            ret.res_addr(31,0) = (STREAM_READ(cmd)).data;
+            ret.res_addr(63,32) = (STREAM_READ(cmd)).data;
+        } else if(ret.res_opcode == MOVE_STRIDE){
+            ret.res_stride = (STREAM_READ(cmd)).data;
+        }
+        //get send related stuff, if result is remote or stream
+        if(ret.res_is_remote || ret.res_opcode == MOVE_STREAM){
+            ret.mpi_tag = (STREAM_READ(cmd)).data;
+        }
+        if(ret.res_is_remote || ret.op1_opcode == MOVE_ON_RECV){
+            ret.comm_offset = (STREAM_READ(cmd)).data;
+        }
+        if(ret.res_is_remote){
+            ret.dst_rank = (STREAM_READ(cmd)).data;
+        }
+        STREAM_WRITE(instruction, ret);
     }
-    //get addr for op1, or equivalents
-    if(ret.op1_opcode == MOVE_IMMEDIATE){
-        ret.op1_addr(31,0) = (STREAM_READ(cmd)).data;
-        ret.op1_addr(63,32) = (STREAM_READ(cmd)).data;
-    } else if(ret.op1_opcode == MOVE_ON_RECV){
-        ret.rx_src = (STREAM_READ(cmd)).data;
-        ret.rx_tag = (STREAM_READ(cmd)).data;
-    } else if(ret.op1_opcode == MOVE_STRIDE){
-        ret.op1_stride = (STREAM_READ(cmd)).data;
-    }
-    //get addr for res, or equivalents
-    if(ret.res_opcode == MOVE_IMMEDIATE){
-        ret.res_addr(31,0) = (STREAM_READ(cmd)).data;
-        ret.res_addr(63,32) = (STREAM_READ(cmd)).data;
-    } else if(ret.res_opcode == MOVE_STRIDE){
-        ret.res_stride = (STREAM_READ(cmd)).data;
-    }
-    //get send related stuff, if result is remote or stream
-    if(ret.res_is_remote || ret.res_opcode == MOVE_STREAM){
-        ret.mpi_tag = (STREAM_READ(cmd)).data;
-    }
-    if(ret.res_is_remote || ret.op1_opcode == MOVE_ON_RECV){
-        ret.comm_offset = (STREAM_READ(cmd)).data;
-    }
-    if(ret.res_is_remote){
-        ret.dst_rank = (STREAM_READ(cmd)).data;
-    }
-
-    STREAM_WRITE(instruction, ret);
 }
 
 unsigned int get_len(unsigned int count, unsigned int elem_ratio_log, unsigned int elem_bytes){
 #pragma HLS INLINE
     return (count >> elem_ratio_log) * elem_bytes;
 }
-
 
 void instruction_decode(
     STREAM<move_instruction> &instruction,
@@ -421,10 +420,12 @@ void instruction_decode(
     STREAM<rxbuf_signature> &rxbuf_req,
     STREAM<rxbuf_seek_result> &rxbuf_ack,
     STREAM<ap_uint<32> > &rxbuf_release_idx,
-    unsigned int * exchange_mem,
-    unsigned int max_segment_len
+    unsigned int * exchange_mem
 ){
 #pragma HLS PIPELINE II=1 style=flp
+
+    if(STREAM_IS_EMPTY(instruction)) return;
+
     move_instruction insn = STREAM_READ(instruction);
     unsigned int src, seqn, session, nsegments;
     datamover_instruction dm0_rd, dm1_rd, dm1_wr;
@@ -598,13 +599,14 @@ void instruction_decode(
     }
     //get communicator if targeting a remote node
     if(insn.res_is_remote && !dry_run){
-        pkt_wr.src_rank = *(exchange_mem + insn.comm_offset + COMM_LOCAL_RANK_OFFSET);
-        pkt_wr.seqn = *(exchange_mem + insn.comm_offset + COMM_RANKS_OFFSET + (insn.dst_rank * RANK_SIZE) + RANK_OUTBOUND_SEQ_OFFSET);
-        pkt_wr.dst_sess_id = *(exchange_mem + insn.comm_offset + COMM_RANKS_OFFSET + (insn.dst_rank * RANK_SIZE) + RANK_SESSION_OFFSET);
+        pkt_wr.src_rank = exchange_mem[insn.comm_offset + COMM_LOCAL_RANK_OFFSET];
+        pkt_wr.seqn = exchange_mem[insn.comm_offset + COMM_RANKS_OFFSET + (insn.dst_rank * RANK_SIZE) + RANK_OUTBOUND_SEQ_OFFSET];
+        pkt_wr.dst_sess_id = exchange_mem[insn.comm_offset + COMM_RANKS_OFFSET + (insn.dst_rank * RANK_SIZE) + RANK_SESSION_OFFSET];
+        pkt_wr.max_seg_len = exchange_mem[insn.comm_offset + COMM_RANKS_OFFSET + (insn.dst_rank * RANK_SIZE) + RANK_SEGLEN_OFFSET];
         pkt_wr.len = insn.res_is_compressed ? total_bytes_compressed : total_bytes_uncompressed;
         pkt_wr.mpi_tag = insn.mpi_tag;
         pkt_wr.to_stream = (insn.res_opcode == MOVE_STREAM);
-        nsegments = ((pkt_wr.len+max_segment_len-1)/max_segment_len);
+        nsegments = ((pkt_wr.len+pkt_wr.max_seg_len-1)/pkt_wr.max_seg_len);
         *(exchange_mem + insn.comm_offset + COMM_RANKS_OFFSET + (insn.dst_rank * RANK_SIZE) + RANK_OUTBOUND_SEQ_OFFSET) = pkt_wr.seqn+nsegments;
     }
     //DM1 write channel corresponding to RES
@@ -671,6 +673,9 @@ void instruction_retire(
     STREAM<ap_axiu<32,0,0,0> > &error
 ){
 #pragma HLS PIPELINE II=1 style=flp
+
+    if(STREAM_IS_EMPTY(instruction)) return;
+    
     move_ack_instruction insn = STREAM_READ(instruction);
     ap_axiu<32,0,0,0> err;
     err.last = 1;
@@ -699,7 +704,6 @@ void instruction_retire(
 void dma_mover(
     //interfaces to processor
     unsigned int * exchange_mem,
-    unsigned int max_segment_len,
     STREAM<ap_axiu<32,0,0,0> > &command,
     STREAM<ap_axiu<32,0,0,0> > &error,
     //interfaces to rx buffer seek offload
@@ -758,40 +762,68 @@ void dma_mover(
 #pragma HLS INTERFACE axis port=clane2_op_seg_cmd
 #pragma HLS INTERFACE axis port=clane2_res_seg_cmd
 #pragma HLS INTERFACE axis port=krnl_out_seg_sts
-#pragma HLS INTERFACE m_axi port=echange_mem offset=slave
-#pragma HLS INTERFACE s_axilite port=max_segment_len
-#pragma HLS INTERFACE s_axilite port=return
+#pragma HLS INTERFACE m_axi port=exchange_mem offset=off bundle=mem
+#pragma HLS INTERFACE ap_ctrl_none port=return
 #pragma HLS DATAFLOW disable_start_propagation
-    STREAM<move_instruction> instruction;
 
-    STREAM<datamover_instruction> dma0_read_insn;
-    STREAM<datamover_instruction> dma1_read_insn;
-    STREAM<datamover_instruction> dma1_write_insn;
-    STREAM<packetizer_instruction> eth_insn;
-    STREAM<router_instruction> router_insn;
-    STREAM<move_ack_instruction> err_instruction;
-
-    STREAM<datamover_ack_instruction> dma0_read_ack_insn;
-    STREAM<datamover_ack_instruction> dma1_read_ack_insn;
-    STREAM<datamover_ack_instruction> dma1_write_ack_insn;
-
-    STREAM<ap_uint<32> > dma0_read_error;
-    STREAM<ap_uint<32> > dma1_read_error;
-    STREAM<ap_uint<32> > dma1_write_error;
-
-    STREAM<packetizer_ack_instruction> eth_tx_ack_instruction;
-    STREAM<ap_uint<32> > eth_tx_error;
-
-    STREAM<ap_uint<32> > strm_tx_ack_instruction;
-    STREAM<ap_uint<32> > strm_tx_error;
-
-    //NOTE: we implement a 64-deep fifo for release indexes
+    //NOTE: we implement 16-deep in general and a 64-deep fifo for release indexes
     //which implies the maximum message size is 64 segments,
     //and each segment is up to the size of the RX spares
 #ifdef ACCL_SYNTHESIS
+    static hls::stream<move_instruction> instruction;
+    #pragma HLS STREAM variable=instruction depth=16
+    static hls::stream<datamover_instruction> dma0_read_insn;
+    #pragma HLS STREAM variable=dma0_read_insn depth=16
+    static hls::stream<datamover_instruction> dma1_read_insn;
+    #pragma HLS STREAM variable=dma1_read_insn depth=16
+    static hls::stream<datamover_instruction> dma1_write_insn;
+    #pragma HLS STREAM variable=dma1_write_insn depth=16
+    static hls::stream<packetizer_instruction> eth_insn;
+    #pragma HLS STREAM variable=eth_insn depth=16
+    static hls::stream<router_instruction> router_insn;
+    #pragma HLS STREAM variable=router_insn depth=16
+    static hls::stream<move_ack_instruction> err_instruction;
+    #pragma HLS STREAM variable=err_instruction depth=16
+    static hls::stream<datamover_ack_instruction> dma0_read_ack_insn;
+    #pragma HLS STREAM variable=dma0_read_ack_insn depth=16
+    static hls::stream<datamover_ack_instruction> dma1_read_ack_insn;
+    #pragma HLS STREAM variable=dma1_read_ack_insn depth=16
+    static hls::stream<datamover_ack_instruction> dma1_write_ack_insn;
+    #pragma HLS STREAM variable=dma1_write_ack_insn depth=16
+    static hls::stream<ap_uint<32> > dma0_read_error;
+    #pragma HLS STREAM variable=dma0_read_error depth=16
+    static hls::stream<ap_uint<32> > dma1_read_error;
+    #pragma HLS STREAM variable=dma1_read_error depth=16
+    static hls::stream<ap_uint<32> > dma1_write_error;
+    #pragma HLS STREAM variable=dma1_write_error depth=16
+    static hls::stream<packetizer_ack_instruction> eth_tx_ack_instruction;
+    #pragma HLS STREAM variable=eth_tx_ack_instruction depth=16
+    static hls::stream<ap_uint<32> > eth_tx_error;
+    #pragma HLS STREAM variable=eth_tx_error depth=16
+    static hls::stream<ap_uint<32> > strm_tx_ack_instruction;
+    #pragma HLS STREAM variable=strm_tx_ack_instruction depth=16
+    static hls::stream<ap_uint<32> > strm_tx_error;
+    #pragma HLS STREAM variable=strm_tx_error depth=16
     static hls::stream<ap_uint<32> > rxbuf_release_idx;
     #pragma HLS STREAM variable=rxbuf_release_idx depth=64
 #else
+    static hlslib::Stream<move_instruction, 16> instruction;
+    static hlslib::Stream<datamover_instruction, 16> dma0_read_insn;
+    static hlslib::Stream<datamover_instruction, 16> dma1_read_insn;
+    static hlslib::Stream<datamover_instruction, 16> dma1_write_insn;
+    static hlslib::Stream<packetizer_instruction, 16> eth_insn;
+    static hlslib::Stream<router_instruction, 16> router_insn;
+    static hlslib::Stream<move_ack_instruction, 16> err_instruction;
+    static hlslib::Stream<datamover_ack_instruction, 16> dma0_read_ack_insn;
+    static hlslib::Stream<datamover_ack_instruction, 16> dma1_read_ack_insn;
+    static hlslib::Stream<datamover_ack_instruction, 16> dma1_write_ack_insn;
+    static hlslib::Stream<ap_uint<32>, 16> dma0_read_error;
+    static hlslib::Stream<ap_uint<32>, 16> dma1_read_error;
+    static hlslib::Stream<ap_uint<32>, 16> dma1_write_error;
+    static hlslib::Stream<packetizer_ack_instruction, 16> eth_tx_ack_instruction;
+    static hlslib::Stream<ap_uint<32>, 16> eth_tx_error;
+    static hlslib::Stream<ap_uint<32>, 16> strm_tx_ack_instruction;
+    static hlslib::Stream<ap_uint<32>, 16> strm_tx_error;
     static hlslib::Stream<ap_uint<32>, 64> rxbuf_release_idx;
 #endif
 
@@ -808,14 +840,13 @@ void dma_mover(
         rxbuf_req,
         rxbuf_ack,
         rxbuf_release_idx,
-        exchange_mem,
-        max_segment_len
+        exchange_mem
     );
 
     dma_cmd_execute(dma0_read_insn, dma0_read_cmd, dma0_read_ack_insn);
     dma_cmd_execute(dma1_read_insn, dma1_read_cmd, dma1_read_ack_insn);
     dma_cmd_execute(dma1_write_insn, dma1_write_cmd, dma1_write_ack_insn);
-    eth_cmd_execute(eth_insn, eth_cmd, eth_tx_ack_instruction, max_segment_len);
+    eth_cmd_execute(eth_insn, eth_cmd, eth_tx_ack_instruction);
     router_cmd_execute(
         router_insn, 
         dma0_read_seg_cmd,

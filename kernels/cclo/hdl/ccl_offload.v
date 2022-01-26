@@ -280,14 +280,14 @@ module ccl_offload
 `endif
 
   output [511:0] m_axis_eth_tx_data_tdata,
-  output [8:0] m_axis_eth_tx_data_tdest,
+  output [7:0] m_axis_eth_tx_data_tdest,
   output [63:0] m_axis_eth_tx_data_tkeep,
   output m_axis_eth_tx_data_tlast,
   input m_axis_eth_tx_data_tready,
   output m_axis_eth_tx_data_tvalid,
 
   input [511:0] s_axis_eth_rx_data_tdata,
-  input [8:0] s_axis_eth_rx_data_tdest,
+  input [7:0] s_axis_eth_rx_data_tdest,
   input [63:0] s_axis_eth_rx_data_tkeep,
   input s_axis_eth_rx_data_tlast,
   output s_axis_eth_rx_data_tready,

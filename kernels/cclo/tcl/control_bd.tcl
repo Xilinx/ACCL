@@ -402,7 +402,7 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
 
   # Create instance: microblaze_0_axi_periph, and set properties
   set microblaze_0_axi_periph [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_interconnect:2.1 microblaze_0_axi_periph ]
-  set_property -dict [ list CONFIG.NUM_MI {6} ] $microblaze_0_axi_periph
+  set_property -dict [ list CONFIG.NUM_MI {5} ] $microblaze_0_axi_periph
 
   # Create instance: exchange_mem
   create_hier_cell_exchange_mem $hier_obj exchange_mem
@@ -425,8 +425,9 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
   set rxbuf_dequeue [create_bd_cell -type ip -vlnv xilinx.com:hls:rxbuf_dequeue:1.0 rxbuf_dequeue]
   set rxbuf_seek [create_bd_cell -type ip -vlnv xilinx.com:hls:rxbuf_seek:1.0 rxbuf_seek]
   create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 fifo_seek
+  create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 fifo_inflight
   set_property -dict [ list CONFIG.HAS_TLAST {0} CONFIG.TDATA_NUM_BYTES {20} CONFIG.FIFO_DEPTH {32} CONFIG.FIFO_MEMORY_TYPE {distributed}] [get_bd_cells fifo_seek]
-  connect_bd_intf_net [get_bd_intf_pins rxbuf_enqueue/inflight_queue_V] [get_bd_intf_pins rxbuf_dequeue/inflight_queue_V]
+  set_property -dict [ list CONFIG.HAS_TLAST {0} CONFIG.TDATA_NUM_BYTES {4} CONFIG.FIFO_DEPTH {32} CONFIG.FIFO_MEMORY_TYPE {distributed}] [get_bd_cells fifo_inflight]
   connect_bd_intf_net [get_bd_intf_pins rxbuf_enqueue/s_axi_control] [get_bd_intf_pins microblaze_0_axi_periph/M02_AXI]
   connect_bd_intf_net [get_bd_intf_pins rxbuf_dequeue/s_axi_control] [get_bd_intf_pins microblaze_0_axi_periph/M03_AXI]
   connect_bd_intf_net [get_bd_intf_pins rxbuf_seek/s_axi_control] [get_bd_intf_pins microblaze_0_axi_periph/M04_AXI]
@@ -435,10 +436,11 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
   connect_bd_intf_net [get_bd_intf_pins fifo_dma0_s2mm_sts/M_AXIS] [get_bd_intf_pins rxbuf_dequeue/dma_sts_V]
   connect_bd_intf_net [get_bd_intf_pins rxbuf_dequeue/notification_queue_V] [get_bd_intf_pins fifo_seek/S_AXIS]
   connect_bd_intf_net [get_bd_intf_pins fifo_seek/M_AXIS] [get_bd_intf_pins rxbuf_seek/rx_notify_V]
+  connect_bd_intf_net [get_bd_intf_pins rxbuf_enqueue/inflight_queue_V] [get_bd_intf_pins fifo_inflight/S_AXIS]
+  connect_bd_intf_net [get_bd_intf_pins fifo_inflight/M_AXIS] [get_bd_intf_pins rxbuf_dequeue/inflight_queue_V]
 
   # Create DMA segmentation processor
   set dma_mover [ create_bd_cell -type ip -vlnv xilinx.com:hls:dma_mover:1.0 dma_mover ]
-  connect_bd_intf_net [get_bd_intf_pins dma_mover/s_axi_control] [get_bd_intf_pins microblaze_0_axi_periph/M05_AXI]
   connect_bd_intf_net [get_bd_intf_pins fifo_dma0_mm2s_cmd/S_AXIS] [get_bd_intf_pins dma_mover/dma0_read_cmd_V]
   connect_bd_intf_net [get_bd_intf_pins fifo_dma0_mm2s_sts/M_AXIS] [get_bd_intf_pins dma_mover/dma0_read_sts_V]
   connect_bd_intf_net [get_bd_intf_pins fifo_dma1_mm2s_cmd/S_AXIS] [get_bd_intf_pins dma_mover/dma1_read_cmd_V]
@@ -456,7 +458,7 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
   connect_bd_intf_net [get_bd_intf_pins rxbuf_enqueue/m_axi_mem] [get_bd_intf_pins dma_memory_ic/S00_AXI]
   connect_bd_intf_net [get_bd_intf_pins rxbuf_dequeue/m_axi_mem] [get_bd_intf_pins dma_memory_ic/S01_AXI]
   connect_bd_intf_net [get_bd_intf_pins rxbuf_seek/m_axi_mem] [get_bd_intf_pins dma_memory_ic/S02_AXI]
-  connect_bd_intf_net [get_bd_intf_pins dma_mover/m_axi_gmem] [get_bd_intf_pins dma_memory_ic/S03_AXI]
+  connect_bd_intf_net [get_bd_intf_pins dma_mover/m_axi_mem] [get_bd_intf_pins dma_memory_ic/S03_AXI]
   connect_bd_intf_net [get_bd_intf_pins exchange_mem/S_AXI_BYP] [get_bd_intf_pins dma_memory_ic/M00_AXI]
   
   # Create interface connections
@@ -516,6 +518,7 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
                                       [get_bd_pins fifo_eth_packetizer_cmd/s_axis_aclk] \
                                       [get_bd_pins fifo_eth_packetizer_sts/s_axis_aclk] \
                                       [get_bd_pins fifo_seek/s_axis_aclk] \
+                                      [get_bd_pins fifo_inflight/s_axis_aclk] \
                                       [get_bd_pins microblaze_0/Clk] \
                                       [get_bd_pins microblaze_0_axi_periph/ACLK] \
                                       [get_bd_pins microblaze_0_axi_periph/M00_ACLK] \
@@ -558,6 +561,7 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
                                                                    [get_bd_pins fifo_eth_packetizer_sts/s_axis_aresetn] \
                                                                    [get_bd_pins tcp_session/ap_rst_n] \
                                                                    [get_bd_pins fifo_seek/s_axis_aresetn] \
+                                                                   [get_bd_pins fifo_inflight/s_axis_aresetn] \
                                                                    [get_bd_pins rxbuf_enqueue/ap_rst_n] \
                                                                    [get_bd_pins rxbuf_dequeue/ap_rst_n] \
                                                                    [get_bd_pins rxbuf_seek/ap_rst_n] \
@@ -569,6 +573,7 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
                                 [get_bd_cells rxbuf_seek] \
                                 [get_bd_cells rxbuf_enqueue] \
                                 [get_bd_cells fifo_seek] \
+                                [get_bd_cells fifo_inflight] \
                                 [get_bd_cells fifo_eth_depacketizer_sts] \
                                 [get_bd_cells fifo_dma0_s2mm_sts] \
                                 [get_bd_cells fifo_dma0_s2mm_cmd]

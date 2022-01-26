@@ -446,18 +446,17 @@ class accl():
             addr += 4
             self.cclo.write(addr, bufsize)
             # clear remaining fields
-            for _ in range(4,9):
+            for _ in range(4,8):
                 addr += 4
                 self.cclo.write(addr, 0)
         #NOTE: the buffer count HAS to be written last (offload checks for this) 
         self.cclo.write(self.rx_buffers_adr, nbufs)
 
         self.communicators_addr = addr+4
-        max_higher = 1
         if not self.sim_mode:
-            self.utility_spare = pynq.allocate((bufsize*max_higher,), dtype=np.int8, target=devicemem[0])
+            self.utility_spare = pynq.allocate((bufsize,), dtype=np.int8, target=devicemem[0])
         else:
-            self.utility_spare = SimBuffer(np.zeros((bufsize*max_higher,), dtype=np.int8), self.cclo.socket)
+            self.utility_spare = SimBuffer(np.zeros((bufsize,), dtype=np.int8), self.cclo.socket)
 
         #Start (de)packetizer
         self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.enable_pkt)
@@ -481,8 +480,6 @@ class accl():
             addr   += 4
             maxsize = self.cclo.read(addr)
             #assert self.cclo.read(addr) == self.rx_buffer_size
-            addr   += 4
-            dmatag  = self.cclo.read(addr)
             addr   += 4
             rxtag   = self.cclo.read(addr)
             addr   += 4
@@ -665,7 +662,7 @@ class accl():
             addr = self.communicators_addr
         else:
             addr = self.communicators[-1]["addr"]
-        communicator = {"local_rank": local_rank, "addr": addr, "ranks": ranks, "in_seqn":[0 for _ in ranks], "out_seqn":[0 for _ in ranks], "session_id":[0 for _ in ranks]}
+        communicator = {"local_rank": local_rank, "addr": addr, "ranks": ranks}
         self.cclo.write(addr,len(ranks))
         addr += 4
         self.cclo.write(addr,local_rank)
@@ -679,17 +676,16 @@ class accl():
             #leave 2 32 bit space for inbound/outbound_seq_number
             addr += 4
             self.cclo.write(addr,0)
-            communicator["in_seqn"][i]  = 0
             addr +=4
             self.cclo.write(addr,0)
-            communicator["out_seqn"][i] = 0
             addr += 4
             if "session_id" in ranks[i]:
                 sess_id = ranks[i]["session_id"]
             else:
                 sess_id = 0xFFFFFFFF
             self.cclo.write(addr, sess_id)
-            communicator["session_id"][i] = sess_id
+            addr += 4
+            self.cclo.write(addr, ranks[i]["max_segment_size"])
         self.communicators.append(communicator)
         self.arithcfg_addr = addr + 4
         
@@ -707,7 +703,7 @@ class accl():
             addr += 4
             #when using the UDP stack, write the rank number into the port register
             #the actual port is programmed into the stack itself
-            port                = self.cclo.read(addr)
+            port = self.cclo.read(addr)
             #leave 2 32 bit space for inbound/outbound_seq_number
             addr += 4
             inbound_seq_number  = self.cclo.read(addr)
@@ -716,7 +712,9 @@ class accl():
             #a 32 bit integer is dedicated to session id 
             addr += 4
             session = self.cclo.read(addr)
-            print(f"> rank {i} (ip {ip_addr_rank}:{port} ; session {session}) : <- inbound_seq_number {inbound_seq_number}, -> outbound_seq_number {outbound_seq_number}")
+            addr += 4
+            max_seg_size = self.cclo.read(addr)
+            print(f"> rank {i} (ip {ip_addr_rank}:{port} ; session {session} ; max segment size {max_seg_size}) : <- inbound_seq_number {inbound_seq_number}, -> outbound_seq_number {outbound_seq_number}")
    
 
     @self_check_return_value

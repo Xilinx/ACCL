@@ -36,14 +36,15 @@
 //AXIS interfaces to/from MB 
 
 #define CMD_CALL     0
-#define CMD_NET_PORT 1
-#define CMD_NET_CON  2
-#define CMD_DMA_MOVE 3
+#define CMD_DMA_MOVE 1
+#define CMD_NET_PORT 2
+#define CMD_NET_CON  3
 
 #define STS_CALL     0
-#define STS_NET_PORT 1
-#define STS_NET_CON  2
-#define STS_DMA_MOVE 3
+#define STS_DMA_MOVE 1
+#define STS_NET_PORT 2
+#define STS_NET_CON  3
+
 
 //PACKT CONST
 #define MAX_PACKETSIZE 1536
@@ -89,16 +90,14 @@
 
 #ifndef MB_FW_EMULATION  
 #define EXCHMEM_BASEADDR      0x0
-#define DMA_MOVER_BASEADDR    0x2000
-#define NET_RXPKT_BASEADDR    0x3000
-#define NET_TXPKT_BASEADDR    0x4000
-#define RX_DEQUEUE_BASEADDR   0x5000
-#define RX_ENQUEUE_BASEADDR   0x6000
-#define RX_SEEK_BASEADDR      0x7000
+#define NET_RXPKT_BASEADDR    0x30000
+#define NET_TXPKT_BASEADDR    0x40000
+#define RX_DEQUEUE_BASEADDR   0x50000
+#define RX_ENQUEUE_BASEADDR   0x60000
+#define RX_SEEK_BASEADDR      0x70000
 #define GPIO_BASEADDR         0x40000000
 #else       
 #define EXCHMEM_BASEADDR      0x0000
-#define DMA_MOVER_BASEADDR    0x2000
 #define NET_RXPKT_BASEADDR    0x3000
 #define NET_TXPKT_BASEADDR    0x4000
 #define RX_DEQUEUE_BASEADDR   0x5000
@@ -239,22 +238,34 @@ extern sem_t mb_irq_mutex;
 #endif
 
 typedef struct {
+    unsigned int status;
     unsigned int addrl;
     unsigned int addrh;
     unsigned int max_len;
-    unsigned int status;
     unsigned int rx_tag;
     unsigned int rx_len;
     unsigned int rx_src;
     unsigned int sequence_number;
 } rx_buffer;
+
+#define STATUS_OFFSET           0
+#define ADDRL_OFFSET            1
+#define ADDRH_OFFSET            2
+#define MAX_LEN_OFFSET          3
+#define RX_TAG_OFFSET           4
+#define RX_LEN_OFFSET           5
+#define RX_SRC_OFFSET           6
+#define SEQUENCE_NUMBER_OFFSET  7   
+#define SPARE_BUFFER_SIZE       32
+#define SPARE_BUFFER_FIELDS     8       
+
 #define STATUS_IDLE     0x00
 #define STATUS_ENQUEUED 0x01
 #define STATUS_RESERVED 0x02
 #define STATUS_ERROR    0x04
 
 #define RX_BUFFER_COUNT_OFFSET 0x0
-#define COMM_OFFSET (RX_BUFFER_COUNT_OFFSET+4*(1 + Xil_In32(RX_BUFFER_COUNT_OFFSET)*9))
+#define COMM_OFFSET (RX_BUFFER_COUNT_OFFSET+4*(1 + Xil_In32(RX_BUFFER_COUNT_OFFSET)*SPARE_BUFFER_FIELDS))
 
 typedef struct {
     unsigned int ip;
@@ -262,6 +273,7 @@ typedef struct {
     unsigned int inbound_seq;
     unsigned int outbound_seq;
     unsigned int session;
+    unsigned int max_seg_size;
 } comm_rank;
 
 typedef struct {
@@ -269,6 +281,20 @@ typedef struct {
     unsigned int local_rank;
     comm_rank* ranks;
 } communicator;
+
+//COMMUNICATOR OFFSETS
+#define COMM_SIZE_OFFSET                 0
+#define COMM_LOCAL_RANK_OFFSET           1
+#define COMM_RANKS_OFFSET                2
+//RANK OFFSET
+#define RANK_IP_OFFSET                   0
+#define RANK_PORT_OFFSET                 1
+#define RANK_INBOUND_SEQ_OFFSET          2
+#define RANK_OUTBOUND_SEQ_OFFSET         3
+#define RANK_SESSION_OFFSET              4
+#define RANK_SEGLEN_OFFSET               5
+#define RANK_SIZE                        6
+
 
 //structure defining arithmetic config parameters
 //TODO: make unsigned char to save on space

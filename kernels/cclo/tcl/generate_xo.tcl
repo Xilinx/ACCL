@@ -15,12 +15,12 @@
 #
 # *******************************************************************************/
 
-set stacktype [lindex $::argv 1]
-set en_dma [lindex $::argv 2]
-set en_arith [lindex $::argv 3]
-set en_compress [lindex $::argv 4]
-set en_extkrnl [lindex $::argv 5]
-set mb_debug_level [lindex $::argv 6]
+set stacktype [lindex $::argv 0]
+set en_dma [lindex $::argv 1]
+set en_arith [lindex $::argv 2]
+set en_compress [lindex $::argv 3]
+set en_extkrnl [lindex $::argv 4]
+set mb_debug_level [lindex $::argv 5]
 
 set kernel_name    "ccl_offload"
 set kernel_vendor  "Xilinx"

@@ -25,18 +25,6 @@
 #include "rxbuf_offload.h"
 #include "ccl_offload_control.h"
 
-//COMMUNICATOR OFFSET
-#define COMM_SIZE_OFFSET                 0
-#define COMM_LOCAL_RANK_OFFSET           1
-#define COMM_RANKS_OFFSET                2
-//RANK OFFSET
-#define RANK_IP_OFFSET                   0
-#define RANK_PORT_OFFSET                 1
-#define RANK_INBOUND_SEQ_OFFSET          2
-#define RANK_OUTBOUND_SEQ_OFFSET         3
-#define RANK_SESSION_OFFSET              4
-#define RANK_SIZE                        5
-
 typedef struct {
     //13+4 bits indicating what we're doing
     ap_uint<3> op0_opcode;
@@ -116,6 +104,7 @@ typedef struct{
     unsigned int seqn;
     unsigned int len;
     unsigned int mpi_tag;
+    unsigned int max_seg_len;
     bool to_stream;
 } packetizer_instruction;
 
@@ -127,7 +116,6 @@ typedef struct{
 void dma_mover(
     //interfaces to processor
     unsigned int * exchange_mem,
-    unsigned int max_segment_len,
     STREAM<ap_axiu<32,0,0,0> > &command,
     STREAM<ap_axiu<32,0,0,0> > &error,
     //interfaces to rx buffer seek offload

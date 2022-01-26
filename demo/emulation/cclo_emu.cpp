@@ -20,6 +20,7 @@
 #include "Simulation.h"
 #include "Axi.h"
 #include <pthread.h>
+#include <thread>
 #include <iostream>
 #include <sstream>
 #include <fstream>
@@ -38,6 +39,7 @@
 #include <chrono>
 #include <numeric>
 #include <mpi.h>
+#include "zmq_intf.h"
 
 using namespace std;
 using namespace hlslib;
@@ -238,214 +240,6 @@ void axis_switch( Stream<stream_word> s[NSLAVES], Stream<stream_word> m[NMASTERS
     }
 }
 
-void serve_zmq(zmqpp::socket &socket, uint32_t *cfgmem, vector<char> &devicemem, Stream<ap_axiu<32,0,0,0> > &cmd, Stream<ap_axiu<32,0,0,0> > &sts){
-
-    Json::Reader reader;
-    Json::StreamWriterBuilder builder;
-
-    // receive the message
-    zmqpp::message message;
-    // decompose the message 
-    socket.receive(message);
-    string msg_text;
-    message >> msg_text;//message now is in a string
-
-#ifdef ZMQ_CALL_VERBOSE
-    cout << "Received: " << msg_text << endl;
-#endif
-
-    //parse msg_text as json
-    Json::Value request;
-    reader.parse(msg_text, request); // reader can also read strings
-
-    //parse message and reply
-    Json::Value response;
-    response["status"] = 0;
-    int adr, val, len;
-    uint64_t dma_addr;
-    Json::Value dma_wdata;
-    switch(request["type"].asUInt()){
-        // MMIO read request  {"type": 0, "addr": <uint>}
-        // MMIO read response {"status": OK|ERR, "rdata": <uint>}
-        case 0:
-            adr = request["addr"].asUInt();
-#ifdef ZMQ_CALL_VERBOSE
-            cout << "MMIO read " << adr << endl;
-#endif
-            if(adr >= END_OF_EXCHMEM){
-                response["status"] = 1;
-                response["rdata"] = 0;
-            } else {
-                response["rdata"] = cfgmem[adr/4];
-            }
-            break;
-        // MMIO write request  {"type": 1, "addr": <uint>, "wdata": <uint>}
-        // MMIO write response {"status": OK|ERR}
-        case 1:
-            adr = request["addr"].asUInt();
-#ifdef ZMQ_CALL_VERBOSE
-            cout << "MMIO write " << adr << endl;
-#endif
-            if(adr >= END_OF_EXCHMEM){
-                response["status"] = 1;
-            } else {
-                cfgmem[adr/4] = request["wdata"].asUInt();
-            }
-            break;
-        // Devicemem read request  {"type": 2, "addr": <uint>, "len": <uint>}
-        // Devicemem read response {"status": OK|ERR, "rdata": <array of uint>}
-        case 2:
-            adr = request["addr"].asUInt();
-            len = request["len"].asUInt();
-#ifdef ZMQ_CALL_VERBOSE
-            cout << "Mem read " << adr << " len: " << len << endl;
-#endif
-            if((adr+len) > devicemem.size()){
-                response["status"] = 1;
-                response["rdata"][0] = 0;
-            } else {
-                for (int i=0; i<len; i++) 
-                { 
-                    response["rdata"][i] = devicemem.at(adr+i);
-                }
-            }
-            break;
-        // Devicemem write request  {"type": 3, "addr": <uint>, "wdata": <array of uint>}
-        // Devicemem write response {"status": OK|ERR}
-        case 3:
-            adr = request["addr"].asUInt();
-            dma_wdata = request["wdata"];
-            len = dma_wdata.size();
-#ifdef ZMQ_CALL_VERBOSE
-            cout << "Mem write " << adr << " len: " << len << endl;
-#endif
-            if((adr+len) > devicemem.size()){
-                devicemem.resize(adr+len);
-            }
-            for(int i=0; i<len; i++){
-                devicemem.at(adr+i) = dma_wdata[i].asUInt();
-            }
-            break;
-        // Call request  {"type": 4, arg names and values}
-        // Call response {"status": OK|ERR}
-        case 4:
-#ifdef ZMQ_CALL_VERBOSE
-            cout << "Call with scenario " << request["scenario"].asUInt() << endl;
-#endif
-            cmd.Push((ap_axiu<32,0,0,0>){.data=request["scenario"].asUInt(), .last=0});
-            cmd.Push((ap_axiu<32,0,0,0>){.data=request["count"].asUInt(), .last=0});
-            cmd.Push((ap_axiu<32,0,0,0>){.data=request["comm"].asUInt(), .last=0});
-            cmd.Push((ap_axiu<32,0,0,0>){.data=request["root_src_dst"].asUInt(), .last=0});
-            cmd.Push((ap_axiu<32,0,0,0>){.data=request["function"].asUInt(), .last=0});
-            cmd.Push((ap_axiu<32,0,0,0>){.data=request["tag"].asUInt(), .last=0});
-            cmd.Push((ap_axiu<32,0,0,0>){.data=request["arithcfg"].asUInt(), .last=0});
-            cmd.Push((ap_axiu<32,0,0,0>){.data=request["compression_flags"].asUInt(), .last=0});
-            cmd.Push((ap_axiu<32,0,0,0>){.data=request["stream_flags"].asUInt(), .last=0});
-            dma_addr = request["addr_0"].asUInt64();
-            cmd.Push((ap_axiu<32,0,0,0>){.data=(uint32_t)(dma_addr & 0xffffffff), .last=0});
-            cmd.Push((ap_axiu<32,0,0,0>){.data=(uint32_t)(dma_addr >> 32), .last=0});
-            dma_addr = request["addr_1"].asUInt64();
-            cmd.Push((ap_axiu<32,0,0,0>){.data=(uint32_t)(dma_addr & 0xffffffff), .last=0});
-            cmd.Push((ap_axiu<32,0,0,0>){.data=(uint32_t)(dma_addr >> 32), .last=0});
-            dma_addr = request["addr_2"].asUInt64();
-            cmd.Push((ap_axiu<32,0,0,0>){.data=(uint32_t)(dma_addr & 0xffffffff), .last=0});
-            cmd.Push((ap_axiu<32,0,0,0>){.data=(uint32_t)(dma_addr >> 32), .last=1});
-            //pop the status queue to wait for call completion
-            sts.Pop();
-            break;
-        default:
-#ifdef ZMQ_CALL_VERBOSE
-            cout << "Unrecognized message" << endl;
-#endif
-            response["status"] = 1;
-    }
-    //return message to client
-    string str = Json::writeString(builder, response);
-    socket.send(str);
-}
-
-void eth_endpoint_egress_port(zmqpp::socket &socket, Stream<stream_word > &in, unsigned int local_rank, bool remap_dest){
-
-    zmqpp::message message;
-    Json::Value packet;
-    Json::StreamWriterBuilder builder;
-
-    //pop first word in packet
-    stringstream ss;
-    unsigned int dest;
-    stream_word tmp;
-    //get the data (bytes valid from tkeep)
-    unsigned int idx=0;
-    do{
-        tmp = in.Pop();
-        for(int i=0; i<64; i++){ 
-            if(tmp.keep(i,i) == 1){
-                packet["data"][idx++] = (unsigned int)tmp.data(8*(i+1)-1,8*i);
-            }
-        }
-    }while(tmp.last == 0);
-    dest = tmp.dest;
-    //do a bit of dest translation, because
-    //dest is actually a local session number, and sessions are allocated
-    //sequentially to ranks, skipping the local rank
-    //therefore ranks  0, 1, ... , local_rank, local_rank+1, ... , N-2, N-1
-    //map to sesssions 0, 1, ... ,        N/A, local_rank  , ... , N-3, N-2
-    if(remap_dest){
-        if(dest >= local_rank){
-            dest++;
-        }
-    }
-    //first part of the message is the destination port ID
-    message << to_string(dest);
-    //second part of the message is the local rank of the sender
-    message << to_string(local_rank);
-    //finally package the data
-    string str = Json::writeString(builder, packet);
-    message << str;
-    cout << "ETH Send to " << dest << endl;
-    socket.send(message);
-}
-
-void eth_endpoint_ingress_port(zmqpp::socket &socket, Stream<stream_word > &out){
-    
-    Json::Reader reader;
-
-    // receive the message
-    zmqpp::message message;
-    // decompose the message 
-    socket.receive(message);
-    string msg_text, dst_text, src_text, sender_rank_text;
-
-    //get and check destination ID
-    message >> dst_text;
-    message >> sender_rank_text;
-    message >> msg_text;
-    cout << "ETH Receive from " << sender_rank_text << endl;
-
-    //parse msg_text as json
-    Json::Value packet, data;
-    reader.parse(msg_text, packet);
-
-    data = packet["data"];
-    unsigned int len = data.size();
-
-    stream_word tmp;
-    int idx = 0;
-    while(idx<len){
-        for(int i=0; i<64; i++){
-            if(idx<len){
-                tmp.data(8*(i+1)-1,8*i) = data[idx++].asUInt();
-                tmp.keep(i,i) = 1;
-            } else{
-                tmp.keep(i,i) = 0;
-            }
-        }
-        tmp.last = (idx == len);
-        tmp.dest = stoi(sender_rank_text);
-        out.Push(tmp);
-    }
-}
-
 void dummy_external_kernel(Stream<stream_word> &in, Stream<stream_word> &out){
     stream_word tmp, tmp_no_tdest;
     tmp = in.Pop();
@@ -456,13 +250,8 @@ void dummy_external_kernel(Stream<stream_word> &in, Stream<stream_word> &out){
     out.Push(tmp_no_tdest);
 }
 
-void sim_bd(zmqpp::socket &cmd_socket, 
-            zmqpp::socket &eth_tx_socket, 
-            zmqpp::socket &eth_rx_socket, 
-            vector<char> &devicemem, 
-            uint32_t *cfgmem,
-            bool use_tcp,
-            unsigned int local_rank) {
+void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank) {
+    vector<char> devicemem;
 
     Stream<ap_uint<32>, 32> host_cmd("host_cmd");
     Stream<ap_uint<32>, 32> host_sts("host_sts");
@@ -541,7 +330,7 @@ void sim_bd(zmqpp::socket &cmd_socket,
     HLSLIB_FREERUNNING_FUNCTION(rxbuf_seek, eth_rx_notif, eth_rx_seek_req, eth_rx_seek_ack, rxbuf_release_req, cfgmem);
     //move offload
     HLSLIB_FREERUNNING_FUNCTION(
-        dma_mover, cfgmem, 1024/*MAX_SEG_SIZE*/, cmd_fifos[CMD_DMA_MOVE], sts_fifos[STS_DMA_MOVE],
+        dma_mover, cfgmem, cmd_fifos[CMD_DMA_MOVE], sts_fifos[STS_DMA_MOVE],
         eth_rx_seek_req, eth_rx_seek_ack, rxbuf_release_req,
         dma_read_cmd_int[0], dma_read_cmd_int[1], dma_write_cmd_int[1], 
         dma_read_sts_int[0], dma_read_sts_int[1], dma_write_sts_int[1], 
@@ -601,18 +390,16 @@ void sim_bd(zmqpp::socket &cmd_socket,
     //emulated external kernel
     HLSLIB_FREERUNNING_FUNCTION(dummy_external_kernel, accl_to_krnl_data, krnl_to_accl_data);
     //ZMQ to host process
-    HLSLIB_FREERUNNING_FUNCTION(serve_zmq, cmd_socket, cfgmem, devicemem, sts_fifos[CMD_CALL], cmd_fifos[STS_CALL]);
+    HLSLIB_FREERUNNING_FUNCTION(serve_zmq, ctx, cfgmem, devicemem, sts_fifos[CMD_CALL], cmd_fifos[STS_CALL]);
     //ZMQ to other nodes process(es)
-    HLSLIB_FREERUNNING_FUNCTION(eth_endpoint_egress_port, eth_tx_socket, eth_tx_data, local_rank, use_tcp);
-    HLSLIB_FREERUNNING_FUNCTION(eth_endpoint_ingress_port, eth_rx_socket, eth_rx_data);
+    HLSLIB_FREERUNNING_FUNCTION(eth_endpoint_egress_port, ctx, eth_tx_data, local_rank, use_tcp);
+    HLSLIB_FREERUNNING_FUNCTION(eth_endpoint_ingress_port, ctx, eth_rx_data);
     //MICROBLAZE
     HLSLIB_DATAFLOW_FUNCTION(run_accl);
     HLSLIB_DATAFLOW_FINALIZE();
 }
 
 int main(int argc, char** argv){
-    vector<char> devicemem;
-
     MPI_Init(NULL, NULL);      // initialize MPI environment
     int world_size; // number of processes
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
@@ -622,42 +409,7 @@ int main(int argc, char** argv){
 
     string eth_type = argv[1];
     unsigned int starting_port = atoi(argv[2]);
-    const string endpoint_base = "tcp://127.0.0.1:";
 
-    string cmd_endpoint = endpoint_base + to_string(starting_port + local_rank);
-    cout << cmd_endpoint << endl;
-    vector<string> eth_endpoints;
-
-    for(int i=0; i<world_size; i++){
-        eth_endpoints.emplace_back(endpoint_base + to_string(starting_port+world_size+i));
-        cout << eth_endpoints.at(i) << endl;
-    }
-    
-    //ZMQ for commands
-    // initialize the 0MQ context
-    zmqpp::context context;
-    zmqpp::socket cmd_socket(context, zmqpp::socket_type::reply);
-    zmqpp::socket eth_tx_socket(context, zmqpp::socket_type::pub);
-    zmqpp::socket eth_rx_socket(context, zmqpp::socket_type::sub);
-    // bind to the socket(s)
-    cout << "Rank " << local_rank << " binding to " << cmd_endpoint << " and " << eth_endpoints.at(local_rank) << endl;
-    cmd_socket.bind(cmd_endpoint);
-    eth_tx_socket.bind(eth_endpoints.at(local_rank));
-
-    this_thread::sleep_for(chrono::milliseconds(1000));
-
-    // connect to the sockets
-    for(int i=0; i<world_size; i++){
-        cout << "Rank " << local_rank << " connecting to " << eth_endpoints.at(i) << endl;
-        eth_rx_socket.connect(eth_endpoints.at(i));
-    }
-
-    this_thread::sleep_for(chrono::milliseconds(1000));
-
-    cout << "Rank " << local_rank << " subscribing to " << local_rank << endl;
-    eth_rx_socket.subscribe(to_string(local_rank));
-
-    this_thread::sleep_for(chrono::milliseconds(1000));
-
-    sim_bd(cmd_socket, eth_tx_socket, eth_rx_socket, devicemem, cfgmem, eth_type == "tcp", local_rank);
+    zmq_intf_context ctx = zmq_intf(starting_port, local_rank, world_size);
+    sim_bd(&ctx, eth_type == "tcp", local_rank);
 }
