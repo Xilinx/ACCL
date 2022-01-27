@@ -381,9 +381,16 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
    CONFIG.C_TRACE {0} \
    CONFIG.C_USE_EXTENDED_FSL_INSTR {1} \
    CONFIG.C_USE_MSR_INSTR {1} \
-   CONFIG.C_USE_PCMP_INSTR {0} \
+   CONFIG.C_USE_PCMP_INSTR {1} \
    CONFIG.C_DEBUG_EXTERNAL_TRACE.VALUE_SRC PROPAGATED \
    CONFIG.C_DEBUG_ENABLED {0} \
+   CONFIG.C_USE_BARREL {1} \
+   CONFIG.C_USE_DIV {1} \
+   CONFIG.C_USE_HW_MUL {1} \
+   CONFIG.C_ADDR_TAG_BITS {0} \
+   CONFIG.C_DCACHE_ADDR_TAG {0} \
+   CONFIG.C_USE_BRANCH_TARGET_CACHE {1} \
+   CONFIG.C_BRANCH_TARGET_CACHE_SIZE {5} \
  ] $microblaze_0
 
  if { $mbDebugLevel != 0 } {
@@ -441,6 +448,10 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
 
   # Create DMA segmentation processor
   set dma_mover [ create_bd_cell -type ip -vlnv xilinx.com:hls:dma_mover:1.0 dma_mover ]
+  create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 fifo_dma_mover_command
+  set_property -dict [ list CONFIG.HAS_TLAST {0} CONFIG.TDATA_NUM_BYTES {4} CONFIG.FIFO_DEPTH {32} CONFIG.FIFO_MEMORY_TYPE {distributed}] [get_bd_cells fifo_dma_mover_command]
+  create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 fifo_dma_mover_error
+  set_property -dict [ list CONFIG.HAS_TLAST {0} CONFIG.TDATA_NUM_BYTES {4} CONFIG.FIFO_DEPTH {32} CONFIG.FIFO_MEMORY_TYPE {distributed}] [get_bd_cells fifo_dma_mover_error]
   connect_bd_intf_net [get_bd_intf_pins fifo_dma0_mm2s_cmd/S_AXIS] [get_bd_intf_pins dma_mover/dma0_read_cmd_V]
   connect_bd_intf_net [get_bd_intf_pins fifo_dma0_mm2s_sts/M_AXIS] [get_bd_intf_pins dma_mover/dma0_read_sts_V]
   connect_bd_intf_net [get_bd_intf_pins fifo_dma1_mm2s_cmd/S_AXIS] [get_bd_intf_pins dma_mover/dma1_read_cmd_V]
@@ -453,8 +464,6 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
   #interconnect to access exchange memory
   set dma_memory_ic [create_bd_cell -type ip -vlnv xilinx.com:ip:axi_crossbar:2.1 dma_memory_ic]
   set_property -dict [list CONFIG.NUM_SI {4} CONFIG.NUM_MI {1}] $dma_memory_ic
-  # set_property -dict [list CONFIG.ADDR_WIDTH.VALUE_SRC USER CONFIG.PROTOCOL.VALUE_SRC USER CONFIG.DATA_WIDTH.VALUE_SRC USER] $dma_memory_ic
-  # set_property -dict [list CONFIG.DATA_WIDTH {32}] $dma_memory_ic
   connect_bd_intf_net [get_bd_intf_pins rxbuf_enqueue/m_axi_mem] [get_bd_intf_pins dma_memory_ic/S00_AXI]
   connect_bd_intf_net [get_bd_intf_pins rxbuf_dequeue/m_axi_mem] [get_bd_intf_pins dma_memory_ic/S01_AXI]
   connect_bd_intf_net [get_bd_intf_pins rxbuf_seek/m_axi_mem] [get_bd_intf_pins dma_memory_ic/S02_AXI]
@@ -489,8 +498,10 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
   connect_bd_intf_net [get_bd_intf_pins call_req] [get_bd_intf_pins microblaze_0/S0_AXIS]
   connect_bd_intf_net [get_bd_intf_pins call_ack] [get_bd_intf_pins microblaze_0/M0_AXIS]
 
-  connect_bd_intf_net [get_bd_intf_pins dma_mover/error] [get_bd_intf_pins microblaze_0/S1_AXIS]
-  connect_bd_intf_net [get_bd_intf_pins dma_mover/command] [get_bd_intf_pins microblaze_0/M1_AXIS]
+  connect_bd_intf_net [get_bd_intf_pins dma_mover/error] [get_bd_intf_pins fifo_dma_mover_error/S_AXIS]
+  connect_bd_intf_net [get_bd_intf_pins fifo_dma_mover_error/M_AXIS] [get_bd_intf_pins microblaze_0/S1_AXIS]
+  connect_bd_intf_net [get_bd_intf_pins microblaze_0/M1_AXIS] [get_bd_intf_pins fifo_dma_mover_command/S_AXIS]
+  connect_bd_intf_net [get_bd_intf_pins fifo_dma_mover_command/M_AXIS] [get_bd_intf_pins dma_mover/command]
 
   connect_bd_intf_net [get_bd_intf_pins dma_mover/rxbuf_req_V] [get_bd_intf_pins rxbuf_seek/rx_seek_request_V]
   connect_bd_intf_net [get_bd_intf_pins dma_mover/rxbuf_release_req_V] [get_bd_intf_pins rxbuf_seek/rx_release_request_V]
@@ -536,6 +547,8 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
                                       [get_bd_pins rxbuf_dequeue/ap_clk] \
                                       [get_bd_pins rxbuf_seek/ap_clk] \
                                       [get_bd_pins dma_mover/ap_clk] \
+                                      [get_bd_pins fifo_dma_mover_command/s_axis_aclk] \
+                                      [get_bd_pins fifo_dma_mover_error/s_axis_aclk] \
                                       [get_bd_pins dma_memory_ic/aclk]
                                       
   connect_bd_net [get_bd_pins ap_rst_n] [get_bd_pins proc_sys_reset_0/ext_reset_in]
@@ -566,6 +579,8 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
                                                                    [get_bd_pins rxbuf_dequeue/ap_rst_n] \
                                                                    [get_bd_pins rxbuf_seek/ap_rst_n] \
                                                                    [get_bd_pins dma_mover/ap_rst_n] \
+                                                                   [get_bd_pins fifo_dma_mover_command/s_axis_aresetn] \
+                                                                   [get_bd_pins fifo_dma_mover_error/s_axis_aresetn] \
                                                                    [get_bd_pins dma_memory_ic/aresetn]
 
   # Create some hierarchies to keep things organized
@@ -582,6 +597,8 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
                               [get_bd_cells fifo_dma1_mm2s_sts] \
                               [get_bd_cells fifo_dma1_mm2s_cmd] \
                               [get_bd_cells dma_mover] \
+                              [get_bd_cells fifo_dma_mover_command] \
+                              [get_bd_cells fifo_dma_mover_error] \
                               [get_bd_cells fifo_dma0_mm2s_cmd] \
                               [get_bd_cells fifo_eth_packetizer_cmd] \
                               [get_bd_cells fifo_dma1_s2mm_sts] \

@@ -310,7 +310,11 @@ void eth_ingress_fsm(XSI_DUT *dut, Stream<stream_word> &val){
                 dut->write(eth_rx.tlast(), tmp.last);
                 dut->set(eth_rx.tvalid());
                 if(dut->test(eth_rx.tready())){
-                    state = CLEAR_DATA;
+                    if(!val.IsEmpty()){
+                        state = VALID_DATA;
+                    } else{
+                        state = CLEAR_DATA;
+                    }
                 } else{
                     state = READY_DATA;
                 }
@@ -318,7 +322,12 @@ void eth_ingress_fsm(XSI_DUT *dut, Stream<stream_word> &val){
             return;
         case READY_DATA:
             if(dut->test(eth_rx.tready())){
-                state = CLEAR_DATA;
+                if(!val.IsEmpty()){
+                    state = VALID_DATA;
+                } else{
+                    state = CLEAR_DATA;
+                }
+
             }
             return;
         case CLEAR_DATA:

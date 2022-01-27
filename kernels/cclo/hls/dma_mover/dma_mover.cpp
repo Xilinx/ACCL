@@ -599,23 +599,27 @@ void instruction_decode(
     }
     //get communicator if targeting a remote node
     if(insn.res_is_remote && !dry_run){
-        pkt_wr.src_rank = exchange_mem[insn.comm_offset + COMM_LOCAL_RANK_OFFSET];
-        pkt_wr.seqn = exchange_mem[insn.comm_offset + COMM_RANKS_OFFSET + (insn.dst_rank * RANK_SIZE) + RANK_OUTBOUND_SEQ_OFFSET];
-        pkt_wr.dst_sess_id = exchange_mem[insn.comm_offset + COMM_RANKS_OFFSET + (insn.dst_rank * RANK_SIZE) + RANK_SESSION_OFFSET];
-        pkt_wr.max_seg_len = exchange_mem[insn.comm_offset + COMM_RANKS_OFFSET + (insn.dst_rank * RANK_SIZE) + RANK_SEGLEN_OFFSET];
-        pkt_wr.len = insn.res_is_compressed ? total_bytes_compressed : total_bytes_uncompressed;
-        pkt_wr.mpi_tag = insn.mpi_tag;
-        pkt_wr.to_stream = (insn.res_opcode == MOVE_STREAM);
-        nsegments = ((pkt_wr.len+pkt_wr.max_seg_len-1)/pkt_wr.max_seg_len);
-        *(exchange_mem + insn.comm_offset + COMM_RANKS_OFFSET + (insn.dst_rank * RANK_SIZE) + RANK_OUTBOUND_SEQ_OFFSET) = pkt_wr.seqn+nsegments;
-    }
+}
     //DM1 write channel corresponding to RES
     static datamover_instruction prev_dm1_wr;
     if(insn.res_opcode != MOVE_NONE){
         if(insn.res_is_remote){
             if(!dry_run){
+                pkt_wr.src_rank = exchange_mem[insn.comm_offset + COMM_LOCAL_RANK_OFFSET];
+                pkt_wr.seqn = exchange_mem[insn.comm_offset + COMM_RANKS_OFFSET + (insn.dst_rank * RANK_SIZE) + RANK_OUTBOUND_SEQ_OFFSET];
+                pkt_wr.dst_sess_id = exchange_mem[insn.comm_offset + COMM_RANKS_OFFSET + (insn.dst_rank * RANK_SIZE) + RANK_SESSION_OFFSET];
+                pkt_wr.max_seg_len = exchange_mem[insn.comm_offset + COMM_RANKS_OFFSET + (insn.dst_rank * RANK_SIZE) + RANK_SEGLEN_OFFSET];
+                pkt_wr.len = insn.res_is_compressed ? total_bytes_compressed : total_bytes_uncompressed;
+                pkt_wr.mpi_tag = insn.mpi_tag;
+                pkt_wr.to_stream = (insn.res_opcode == MOVE_STREAM);
                 STREAM_WRITE(eth_insn, pkt_wr);
                 ack_insn.check_eth_tx = true;
+                if(pkt_wr.len <= pkt_wr.max_seg_len){
+                    nsegments = 1;
+                } else{
+                    nsegments = ((pkt_wr.len+pkt_wr.max_seg_len-1)/pkt_wr.max_seg_len);
+                }
+                exchange_mem[insn.comm_offset + COMM_RANKS_OFFSET + (insn.dst_rank * RANK_SIZE) + RANK_OUTBOUND_SEQ_OFFSET] = pkt_wr.seqn+nsegments;
 #ifndef ACCL_SYNTHESIS
                 std::stringstream ss;
                 ss << "DMA MOVE Offload: Send dst=" << pkt_wr.dst_sess_id << " len=" << pkt_wr.len << " tag=" << pkt_wr.mpi_tag << "\n";
@@ -762,7 +766,7 @@ void dma_mover(
 #pragma HLS INTERFACE axis port=clane2_op_seg_cmd
 #pragma HLS INTERFACE axis port=clane2_res_seg_cmd
 #pragma HLS INTERFACE axis port=krnl_out_seg_sts
-#pragma HLS INTERFACE m_axi port=exchange_mem offset=off bundle=mem
+#pragma HLS INTERFACE m_axi port=exchange_mem offset=off num_read_outstanding=4 num_write_outstanding=4 bundle=mem
 #pragma HLS INTERFACE ap_ctrl_none port=return
 #pragma HLS DATAFLOW disable_start_propagation
 

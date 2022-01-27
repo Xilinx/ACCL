@@ -96,13 +96,7 @@ static inline communicator find_comm(unsigned int adr){
     communicator ret;
     ret.size 		= Xil_In32(adr);
     ret.local_rank 	= Xil_In32(adr+4);
-    if(ret.size != 0 && ret.local_rank < ret.size){
-        ret.ranks = (comm_rank*)(cfgmem+(adr+8)/4);
-    } else {
-        ret.size = 0;
-        ret.local_rank = 0;
-        ret.ranks = NULL;
-    }
+    //we don't need the rest of the communicator here.
     return ret;
 }
 
@@ -306,7 +300,7 @@ static inline void ack_move(
 //configure datapath before calling this method
 //instructs the data plane to move data
 //use MOVE_IMMEDIATE
-int move(
+void start_move(
     uint32_t op0_opcode,
     uint32_t op1_opcode,
     uint32_t res_opcode,
@@ -375,8 +369,47 @@ int move(
     if(res_is_remote){
         putd(CMD_DMA_MOVE, tx_dst_rank);
     }
+}
+
+inline int end_move(){
     return getd(STS_DMA_MOVE);
 }
+
+int move(
+    uint32_t op0_opcode,
+    uint32_t op1_opcode,
+    uint32_t res_opcode,
+    uint32_t compression_flags,
+    uint32_t remote_flags,
+    uint32_t func_id,
+    uint32_t count,
+    uint32_t comm_offset,
+    uint32_t arcfg_offset,
+    uint64_t op0_addr,
+    uint64_t op1_addr,
+    uint64_t res_addr,
+    uint32_t op0_stride,
+    uint32_t op1_stride,
+    uint32_t res_stride,
+    uint32_t rx_src_rank,
+    uint32_t rx_tag,
+    uint32_t tx_dst_rank,
+    uint32_t tx_tag
+){
+    start_move(
+        op0_opcode, op1_opcode, res_opcode,
+        compression_flags, remote_flags,
+        func_id, count,
+        comm_offset, arcfg_offset,
+        op0_addr, op1_addr, res_addr,
+        op0_stride, op1_stride, res_stride,
+        rx_src_rank, rx_tag,
+        tx_dst_rank, tx_tag
+    );
+    return end_move();
+}
+
+
 /*
 //segment a logical move into multiple MOVE_IMMEDIATEs
 int move_segmented(
@@ -822,7 +855,7 @@ int broadcast(  unsigned int count,
 
             //send a segment to each of the ranks (excluding self)
             for(int i=0; i < world.size; i++){
-                err |= move(
+                start_move(
                     (i==0) ? ((elems_remaining == count) ? MOVE_IMMEDIATE : MOVE_INCREMENT) : MOVE_REPEAT, 
                     MOVE_NONE, 
                     MOVE_IMMEDIATE, 
@@ -832,6 +865,9 @@ int broadcast(  unsigned int count,
                     buf_addr, 0, 0, 0, 0, 0,
                     0, 0, i, TAG_ANY
                 );
+            }
+            for(int i=0; i < world.size; i++){
+                err |= end_move();
             }
         } else{
             //on non-root odes we only care about ETH_COMPRESSED and RES_COMPRESSED
@@ -1232,8 +1268,9 @@ int run_accl() {
         //initialize arithmetic/compression config and communicator
         //NOTE: these are global because they're used in a lot of places but don't change during a call
         //TODO: determine if they can remain global in hierarchical collectives
-        arcfg = *((datapath_arith_config *)(cfgmem+datapath_cfg/4));
-        world = find_comm(comm);
+        if(scenario != ACCL_CONFIG && scenario != ACCL_COPY && scenario != ACCL_COMBINE){
+            world = find_comm(comm);
+        }
         
         switch (scenario)
         {
