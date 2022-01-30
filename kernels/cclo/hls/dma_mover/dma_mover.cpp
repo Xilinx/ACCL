@@ -300,7 +300,7 @@ void eth_cmd_execute(
             pkt_cmd.tag = insn.mpi_tag;
             pkt_cmd.src = insn.src_rank;
             pkt_cmd.seqn = sequence_number;
-            pkt_cmd.strm = insn.to_stream ? insn.mpi_tag : 0;
+            pkt_cmd.strm = insn.to_stream ? (insn.mpi_tag + SWITCH_M_BYPASS) : 0;
             pkt_cmd.dst = insn.dst_sess_id;
             STREAM_WRITE(eth_cmd_channel, pkt_cmd);
             packetizer_ack_instruction ack_insn;
@@ -471,7 +471,7 @@ void instruction_decode(
     rtr.c_nwords = (total_bytes_compressed+63) / 64;
     rtr.u_nwords = (total_bytes_uncompressed+63) / 64;
     rtr.stream_in = (insn.op0_opcode == MOVE_STREAM);
-    rtr.stream_out = (insn.res_opcode == MOVE_STREAM);
+    rtr.stream_out = (insn.res_opcode == MOVE_STREAM) && !insn.res_is_remote;
     rtr.eth_out = (insn.res_opcode != MOVE_NONE) && insn.res_is_remote;
     rtr.op0_compressed = insn.op0_is_compressed;
     rtr.op1_compressed = insn.op1_is_compressed;
@@ -614,12 +614,15 @@ void instruction_decode(
                 pkt_wr.to_stream = (insn.res_opcode == MOVE_STREAM);
                 STREAM_WRITE(eth_insn, pkt_wr);
                 ack_insn.check_eth_tx = true;
-                if(pkt_wr.len <= pkt_wr.max_seg_len){
-                    nsegments = 1;
-                } else{
-                    nsegments = ((pkt_wr.len+pkt_wr.max_seg_len-1)/pkt_wr.max_seg_len);
+                //if we're not sending to a remote stream, update sequence number
+                if(!pkt_wr.to_stream){
+                    if(pkt_wr.len <= pkt_wr.max_seg_len){
+                        nsegments = 1;
+                    } else{
+                        nsegments = ((pkt_wr.len+pkt_wr.max_seg_len-1)/pkt_wr.max_seg_len);
+                    }
+                    exchange_mem[insn.comm_offset + COMM_RANKS_OFFSET + (insn.dst_rank * RANK_SIZE) + RANK_OUTBOUND_SEQ_OFFSET] = pkt_wr.seqn+nsegments;
                 }
-                exchange_mem[insn.comm_offset + COMM_RANKS_OFFSET + (insn.dst_rank * RANK_SIZE) + RANK_OUTBOUND_SEQ_OFFSET] = pkt_wr.seqn+nsegments;
 #ifndef ACCL_SYNTHESIS
                 std::stringstream ss;
                 ss << "DMA MOVE Offload: Send dst=" << pkt_wr.dst_sess_id << " len=" << pkt_wr.len << " tag=" << pkt_wr.mpi_tag << "\n";

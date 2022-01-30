@@ -501,10 +501,14 @@ int send(
     unsigned int compression,
     unsigned int stream
 ){
+    //TODO: when doing a one-sided send to a remote stream, check:
+    //dst_tag is > 8 (for correct routing on remote side)
+    //destination compression == Ethernet compression
+    //(since data can't be decompressed on remote side)
     return move(
         (stream & OP0_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE, 
         MOVE_NONE,
-        MOVE_IMMEDIATE, 
+        (stream & RES_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE, 
         compression, RES_REMOTE, 0,
         count, comm_offset, arcfg_offset, src_addr, 0, 0, 0, 0, 0,
         0, 0, dst_rank, dst_tag
@@ -888,7 +892,7 @@ int broadcast(  unsigned int count,
     }
     return err;
 }
-/*
+
 //scatter segment at a time. root sends each rank a segment in a round robin fashion 
 //use MOVE_IMMEDIATE and MOVE_INCREMENTING and MOVE_STRIDE in sequence 
 int scatter(unsigned int count,
@@ -897,75 +901,10 @@ int scatter(unsigned int count,
             uint64_t dst_buf_addr,
             unsigned int compression){
 
-    unsigned int curr_count, i;
-    unsigned int dma_tag_tmp = dma_tag;
-
-    //determine if we're sending or receiving
-    if(src_rank == world.local_rank){
-        
-        //on the root we only care about ETH_COMPRESSED and OP0_COMPRESSED
-        //so mask out RES_COMPRESSED
-        compression &= ~(RES_COMPRESSED);
-
-        //configure datapath
-        configure_datapath(DATAPATH_OFFCHIP_TX, 0, compression, 0);
-
-        //send to all members of the communicator 1 segment of the buffer at the time
-        dm_config cfg = dm_config_init(count, src_buf_addr, 0, 0, USE_OP0_DM | USE_RES_DM, RES_REMOTE, compression, NO_STREAM);
-
-        int emit_dst_rank, ack_dst_rank;
-        while(cfg.elems_remaining > 0){
-            dm_config stride_emit_cfg = cfg;
-            dm_config stride_ack_cfg = cfg;
-            //1. issue at most max_dma_in_flight transfers to consecutive ranks
-            for (i = 0, emit_dst_rank=0; emit_dst_rank < world.size && i < max_dma_in_flight ; i++, emit_dst_rank++){
-                if(emit_dst_rank != src_rank){
-                    //start DMAs
-                    dma_tag_tmp = start_move(&stride_emit_cfg, dma_tag_tmp, emit_dst_rank, TAG_ANY);
-                }
-                dm_config_stride(&stride_emit_cfg, count);
-            }
-            //2.ack 1 and issue another dma transfer up until there's no more dma move to issue
-            for(ack_dst_rank = 0; emit_dst_rank < world.size; ack_dst_rank++, emit_dst_rank++){
-                if(ack_dst_rank != src_rank){
-                    //wait for DMAs to finish
-                    ack_move(&stride_ack_cfg, ack_dst_rank);
-                }
-                dm_config_stride(&stride_ack_cfg, count);
-                //enqueue other DMA movement
-                if(emit_dst_rank != src_rank){
-                    //start DMAs
-                    dma_tag_tmp = start_move(&stride_emit_cfg, dma_tag_tmp, emit_dst_rank, TAG_ANY);
-                }
-                dm_config_stride(&stride_emit_cfg, count);
-            }
-            //3. finish ack the remaining
-            for(; ack_dst_rank < world.size; ack_dst_rank++){
-                if(ack_dst_rank != src_rank){
-                    //wait for DMAs to finish
-                    ack_move(&stride_ack_cfg, ack_dst_rank);
-                }
-                dm_config_stride(&stride_ack_cfg, count);
-            }
-            //advance config
-            //TODO: this can be interleaved with command issuing to avoid pausing
-            dm_config_update(&cfg);
-        }
-        //do copy to self last (it requires reconfiguring the datapath)
-        uint64_t copy_addr = phys_addr_offset(src_buf_addr, count*src_rank, (compression & OP0_COMPRESSED) ? true : false);
-        copy(count, copy_addr, dst_buf_addr, compression, NO_STREAM);
-        //done
-        return NO_ERROR;
-    }else{
-        //on non-root odes we only care about ETH_COMPRESSED and RES_COMPRESSED
-        //so mask out OP0_COMPRESSED
-        //NOTE: recv currently ignores OP0_COMPRESSED anyway, but this is safer and better for documentation
-        compression &= ~(OP0_COMPRESSED);
-        return recv(src_rank, count, dst_buf_addr, TAG_ANY, compression);
-    }
-
+    int err = NO_ERROR;
+    return err;
 }
-
+/*
 //naive gather: non root relay data to the root. root copy segments in dst buffer as they come.
 //on root, SEND_ON_RECV
 //elsewhere MOVE_STRIDE then SEND_ON_RECV for relay
@@ -1183,18 +1122,22 @@ void check_hwid(void){
 
 //initialize the system
 void init(void) {
-    // initialize exchange memory to zero.
-    int myoffset;
-    for ( myoffset = EXCHMEM_BASEADDR; myoffset < END_OF_EXCHMEM; myoffset +=4) {
-        Xil_Out32(myoffset, 0);
-    }
-    // Check hardware ID
+    // write a zero into CFGRDY SFR, indicating the config is not valid
+    // indicating to the driver it needs to configure the CCLO
+    Xil_Out32(CFGRDY_OFFSET, 0);
+    // Wipe and re-fetch hardware ID
+    Xil_Out32(HWID_OFFSET, 0);
     check_hwid();
     //deactivate reset of all peripherals
     SET(GPIO_DATA_REG, GPIO_SWRST_MASK);
     //enable access from host to exchange memory by removing reset of interface
     SET(GPIO_DATA_REG, GPIO_READY_MASK);
-
+    //poll CFGRDY until it is set (by the driver, following configuration)
+    volatile bool rdy = false;
+    do{
+        rdy = *((volatile bool *)(cfgmem+CFGRDY_OFFSET/4));
+    }
+    while(!rdy);
 }
 
 //reset the control module
@@ -1203,8 +1146,6 @@ void init(void) {
 void encore_soft_reset(void){
     //1. activate reset pin  
     CLR(GPIO_DATA_REG, GPIO_SWRST_MASK);
-    //2. re-initialize
-    init();
 }
 
 //poll for a call from the host
@@ -1224,7 +1165,7 @@ void finalize_call(unsigned int retval) {
     putd(STS_CALL, retval);
 }
 
-int run_accl() {
+void run_accl() {
     unsigned int retval;
     unsigned int scenario, count, comm, root_src_dst, function, msg_tag;
     unsigned int datapath_cfg, compression_flags, stream_flags;
@@ -1280,7 +1221,8 @@ int run_accl() {
                 {
                     case HOUSEKEEP_SWRST:
                         encore_soft_reset();
-                        break;
+                        finalize_call(retval);
+                        return;
                     case HOUSEKEEP_PKTEN:
                         start_depacketizer();
                         start_packetizer(MAX_PACKETSIZE);
@@ -1357,11 +1299,12 @@ int run_accl() {
         }
         finalize_call(retval);
     }
-    return 0;
 }
 
 #ifndef MB_FW_EMULATION
 int main(int argc, char **argv){
-    return run_accl();
+    while(true){
+        run_accl();
+    }
 }
 #endif

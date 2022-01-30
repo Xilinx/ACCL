@@ -103,7 +103,7 @@ void rx_handler(
 #pragma HLS INLINE off
 
 #ifdef ACCL_SYNTHESIS
-static stream<hlslib::axi::Stream<ap_uint<DATA_WIDTH>, DEST_WIDTH> > rxDataBuffer;
+static hls::stream<hlslib::axi::Stream<ap_uint<DATA_WIDTH>, DEST_WIDTH> > rxDataBuffer;
 #pragma HLS STREAM variable=rxDataBuffer depth=512
 #else
 static hlslib::Stream<hlslib::axi::Stream<ap_uint<DATA_WIDTH>, DEST_WIDTH>, 512> rxDataBuffer;

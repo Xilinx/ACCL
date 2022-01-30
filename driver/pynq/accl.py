@@ -284,6 +284,7 @@ EXCHANGE_MEM_OFFSET_ADDRESS= 0x0
 EXCHANGE_MEM_ADDRESS_RANGE = 0x2000
 RETCODE_OFFSET = 0x1FFC
 IDCODE_OFFSET = 0x1FF8
+CFGRDY_OFFSET = 0x1FF4
 
 class accl():
     """
@@ -314,6 +315,8 @@ class accl():
         self.segment_size = None
         #protocol being used
         self.protocol = protocol
+        #flag to indicate whether we've finished config
+        self.config_rdy = False
 
         # do initial config of alveo or connect to pipes if in sim mode
         self.sim_mode = False if sim_sock is None else True
@@ -349,6 +352,30 @@ class accl():
 
         print("CCLO HWID: {} at {}".format(hex(self.get_hwid()), hex(self.cclo.mmio.base_addr)))
         
+        # check if the CCLO is configured
+        assert self.cclo.read(CFGRDY_OFFSET) == 0, "CCLO appears configured, might be in use. Please reset the CCLO and retry"
+
+        print("Configuring RX Buffers")
+        self.setup_rx_buffers(nbufs, bufsize, self.rxbufmem)
+        print("Configuring a communicator")
+        self.configure_communicator(ranks, local_rank)
+        print("Configuring arithmetic")
+        self.configure_arithmetic(configs=arith_config)
+
+        # mark CCLO as configured (config memory written)
+        self.cclo.write(CFGRDY_OFFSET, 1)
+        self.config_rdy = True
+
+        # set error timeout
+        self.set_timeout(1_000_000)
+
+        # start Ethernet infrastructure
+        #Start (de)packetizer
+        self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.enable_pkt)
+        #set segmentation size equal to buffer size
+        self.set_max_segment_size(bufsize)
+
+        # set stack type
         if self.protocol == "UDP":
             self.use_udp()
         elif self.protocol == "TCP":
@@ -363,20 +390,10 @@ class accl():
         else:
             raise ArgumentError("Unrecognized Protocol")
 
-        print("Configuring RX Buffers")
-        self.setup_rx_buffers(nbufs, bufsize, self.rxbufmem)
-        print("Configuring a communicator")
-        self.configure_communicator(ranks, local_rank)
-        print("Configuring arithmetic")
-        self.configure_arithmetic(configs=arith_config)
-
         # start connections if using TCP
         if self.protocol == "TCP":
             print("Starting connections to communicator ranks")
             self.init_connection(comm_id=0)
-
-        # set error timeout
-        self.set_timeout(1_000_000)
 
         print("Accelerator ready!")
 
@@ -457,11 +474,6 @@ class accl():
             self.utility_spare = pynq.allocate((bufsize,), dtype=np.int8, target=devicemem[0])
         else:
             self.utility_spare = SimBuffer(np.zeros((bufsize,), dtype=np.int8), self.cclo.socket)
-
-        #Start (de)packetizer
-        self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.enable_pkt)
-        #set segmentation size equal to buffer size
-        self.set_max_segment_size(bufsize)
     
     def dump_rx_buffers(self, nbufs=None):
         addr = self.rx_buffers_adr
@@ -576,10 +588,12 @@ class accl():
         return arithcfg.addr, compression_flags, addr_0, addr_1, addr_2
 
     def call_async(self, scenario=CCLOp.nop, count=1, comm=0, root_src_dst=0, function=0, tag=TAG_ANY, compress_dtype=None, stream_flags=ACCLStreamFlags.NO_STREAM, addr_0=None, addr_1=None, addr_2=None, waitfor=[]):
+        assert self.config_rdy, "CCLO not configured, cannot call"
         arithcfg, compression_flags, addr_0, addr_1, addr_2 = self.prepare_call(addr_0, addr_1, addr_2, compress_dtype)
         return self.cclo.start(scenario, count, comm, root_src_dst, function, tag, arithcfg, compression_flags, stream_flags, addr_0, addr_1, addr_2, waitfor=waitfor)        
 
     def call_sync(self, scenario=CCLOp.nop, count=1, comm=0, root_src_dst=0, function=0, tag=TAG_ANY, compress_dtype=None, stream_flags=ACCLStreamFlags.NO_STREAM, addr_0=None, addr_1=None, addr_2=None):
+        assert self.config_rdy, "CCLO not configured, cannot call"
         arithcfg, compression_flags, addr_0, addr_1, addr_2 = self.prepare_call(addr_0, addr_1, addr_2, compress_dtype)
         return self.cclo.call(scenario, count, comm, root_src_dst, function, tag, arithcfg, compression_flags, stream_flags, addr_0, addr_1, addr_2)        
 

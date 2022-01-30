@@ -60,7 +60,7 @@ add_files -tb tb_dummy_tcp_stack.cpp -cflags "-std=c++14 -I../../cclo/hls/ -I../
 set_top network_krnl
 
 open_solution sol1
-config_export -format xo
+config_export -format xo -library ACCL -output [pwd]/dummy_tcp_stack.xo
 
 if {$do_sim} {
     csim_design -clean

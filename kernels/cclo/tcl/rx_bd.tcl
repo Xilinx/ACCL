@@ -76,7 +76,7 @@ proc create_udp_rx_subsystem { parentCell nameHier } {
   connect_bd_intf_net -intf_net in2fifo [get_bd_intf_pins s_axis_data] [get_bd_intf_pins rx_fifo/S_AXIS]
   connect_bd_intf_net -intf_net fifo2dpkt [get_bd_intf_pins rx_fifo/M_AXIS] [get_bd_intf_pins udp_depacketizer_0/in_r]
   connect_bd_intf_net -intf_net dpkt2out [get_bd_intf_pins m_axis_data] [get_bd_intf_pins udp_depacketizer_0/out_r]
-  connect_bd_intf_net -intf_net status [get_bd_intf_pins m_axis_status] [get_bd_intf_pins udp_depacketizer_0/sts_V]
+  connect_bd_intf_net -intf_net status [get_bd_intf_pins m_axis_status] [get_bd_intf_pins udp_depacketizer_0/sts]
 
   # Create port connections
   connect_bd_net -net ap_clk [get_bd_pins ap_clk]  [get_bd_pins rx_fifo/s_axis_aclk] [get_bd_pins udp_depacketizer_0/ap_clk]
@@ -151,7 +151,7 @@ proc create_tcp_rx_subsystem { parentCell nameHier } {
   # various metadata
   connect_bd_intf_net -intf_net notif [get_bd_intf_pins s_axis_notification] [get_bd_intf_pins tcp_rxHandler_0/s_axis_tcp_notification]
   connect_bd_intf_net -intf_net meta [get_bd_intf_pins s_axis_rx_meta] [get_bd_intf_pins tcp_rxHandler_0/s_axis_tcp_rx_meta]
-  connect_bd_intf_net -intf_net dpktsts [get_bd_intf_pins m_axis_pktsts] [get_bd_intf_pins tcp_depacketizer_0/sts_V]
+  connect_bd_intf_net -intf_net dpktsts [get_bd_intf_pins m_axis_pktsts] [get_bd_intf_pins tcp_depacketizer_0/sts]
   connect_bd_intf_net -intf_net rpkg [get_bd_intf_pins m_axis_read_pkg] [get_bd_intf_pins tcp_rxHandler_0/m_axis_tcp_read_pkg]
 
   # main data path through FIFO, RX handler, RX depacketizer

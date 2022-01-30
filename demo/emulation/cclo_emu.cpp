@@ -240,6 +240,29 @@ void axis_switch( Stream<stream_word> s[NSLAVES], Stream<stream_word> m[NMASTERS
     }
 }
 
+//emulate an 2:1 AXI Stream Switch i.e. a AXIS multiplexer
+void axis_mux(Stream<stream_word> &s0, Stream<stream_word> &s1, Stream<stream_word> &m){
+    stream_word word;
+    if(!s0.IsEmpty()){
+        do{
+            word = s0.Pop();
+            m.Push(word);
+            stringstream ss;
+            ss << "Switch mux: S0 -> M (" << (unsigned int)word.dest << ")" << "\n";
+            cout << ss.str();
+        } while(word.last == 0);
+    }
+    if(!s1.IsEmpty()){
+        do{
+            word = s1.Pop();
+            m.Push(word);
+            stringstream ss;
+            ss << "Switch mux: S1 -> M (" << (unsigned int)word.dest << ")" << "\n";
+            cout << ss.str();
+        } while(word.last == 0);
+    }
+}
+
 void dummy_external_kernel(Stream<stream_word> &in, Stream<stream_word> &out){
     stream_word tmp, tmp_no_tdest;
     tmp = in.Pop();
@@ -282,9 +305,10 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank) {
     Stream<stream_word > dma_read_data[2];
 
     Stream<stream_word > switch_s[8];
-    Stream<stream_word > switch_m[9];
+    Stream<stream_word > switch_m[10];
     Stream<segmenter_cmd> seg_cmd[13];
     Stream<ap_uint<32> > seg_sts[13];
+    Stream<stream_word > accl_to_krnl_seg;
 
     Stream<eth_header > eth_tx_cmd;
     Stream<ap_uint<32> > eth_tx_sts;
@@ -340,11 +364,11 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank) {
         seg_cmd[10], seg_cmd[11], seg_cmd[12], seg_sts[3]
     );
     //SWITCH and segmenters
-    HLSLIB_FREERUNNING_FUNCTION(axis_switch<8, 9>, switch_s, switch_m);
+    HLSLIB_FREERUNNING_FUNCTION(axis_switch<8, 10>, switch_s, switch_m);
     HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, dma_read_data[0],             switch_s[SWITCH_S_DMA0_READ], seg_cmd[0],  seg_sts[0] );   //DMA0 read
     HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, dma_read_data[1],             switch_s[SWITCH_S_DMA1_READ], seg_cmd[1],  seg_sts[1] );   //DMA1 read
     HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, krnl_to_accl_data,            switch_s[SWITCH_S_EXT_KRNL],  seg_cmd[2],  seg_sts[2] );   //ext kernel in
-    HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, switch_m[SWITCH_M_EXT_KRNL],  accl_to_krnl_data,            seg_cmd[3],  seg_sts[3] );   //ext kernel out
+    HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, switch_m[SWITCH_M_EXT_KRNL],  accl_to_krnl_seg,             seg_cmd[3],  seg_sts[3] );   //ext kernel out
     HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, switch_m[SWITCH_M_ARITH_OP0], arith_op0,                    seg_cmd[4],  seg_sts[4] );   //arith op0
     HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, switch_m[SWITCH_M_ARITH_OP1], arith_op1,                    seg_cmd[5],  seg_sts[5] );   //arith op1
     HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, arith_res,                    switch_s[SWITCH_S_ARITH_RES], seg_cmd[6],  seg_sts[6] );   //arith result 
@@ -354,6 +378,7 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank) {
     HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, clane1_res,                   switch_s[SWITCH_S_CLANE1], seg_cmd[10], seg_sts[10]);   //clane1 result
     HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, switch_m[SWITCH_M_CLANE2], clane2_op,                    seg_cmd[11], seg_sts[11]);   //clane2 op    
     HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, clane2_res,                   switch_s[SWITCH_S_CLANE2], seg_cmd[12], seg_sts[12]);   //clane2 result
+    HLSLIB_FREERUNNING_FUNCTION(axis_mux, accl_to_krnl_seg, switch_m[SWITCH_M_BYPASS], accl_to_krnl_data);
     //ARITH
     HLSLIB_FREERUNNING_FUNCTION(arithmetic, arith_op0, arith_op1, arith_res);
     //COMPRESS 0, 1, 2

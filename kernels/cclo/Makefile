@@ -79,6 +79,7 @@ $(XCCL_ELF): tcl/generate_sw.tcl tcl/associate_elf.tcl $(FW_SOURCES) $(XCCL_XSA)
 simdll: $(XCCL_SIMDLL)
 
 $(XCCL_SIMDLL): tcl/generate_sim.tcl elf
+	$(MAKE) -C ../plugins PLATFORM=$(PLATFORM)
 	vivado -mode batch -source $< -tclargs $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) $(SIM_MEMSIZE)
 	cd ccl_offload_ex/ccl_offload_ex.sim/sim_1/behav/xsim/ && ./compile.sh && ./elaborate.sh
 

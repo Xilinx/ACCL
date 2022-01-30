@@ -15,7 +15,7 @@
 #
 # *******************************************************************************/
 DEVICE=xcu280-fsvh2892-2L-e
-TCP_STACK_IP=build_tcp_stack/sol1/impl/export.xo
+TCP_STACK_IP=dummy_tcp_stack.xo
 
 TARGET=ip
 

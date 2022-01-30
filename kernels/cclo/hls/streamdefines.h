@@ -36,6 +36,7 @@ typedef ap_axiu<DATA_WIDTH, 0, 0, DEST_WIDTH> stream_word;
 #define SWITCH_M_CLANE0     6
 #define SWITCH_M_CLANE1     7
 #define SWITCH_M_CLANE2     8
+#define SWITCH_M_BYPASS     9
 
 #define SWITCH_S_DMA0_READ  0
 #define SWITCH_S_DMA1_READ  1

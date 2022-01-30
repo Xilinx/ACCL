@@ -59,6 +59,7 @@ add_files -tb tb_hostctrl.cpp -cflags "-std=c++14"
 set_top hostctrl
 
 open_solution sol1
+config_export -format xo -library ACCL -output [pwd]/hostctrl.xo
 
 if {$do_sim} {
     csim_design -clean
@@ -71,7 +72,6 @@ if {$do_syn} {
 }
 
 if {$do_export} {
-    config_export -format ip_catalog
     export_design
 }
 

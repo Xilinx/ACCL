@@ -23,11 +23,11 @@ MB_FW_DIR=$(ACCL_REPO_ROOT)/kernels/cclo/fw/sw_apps/ccl_offload_control/src
 CCLO_HLS_ROOT=$(ACCL_REPO_ROOT)/kernels/cclo/hls
 ZMQ_DIR=$(ACCL_REPO_ROOT)/demo/zmq
 
-INCLUDES = -I$(XILINX_VIVADO)/include/ -I. -I${XILINX_VIVADO}/data/xsim/include/ -I${HLSLIB_INCLUDE} -I${MPI_INCLUDES} -I${MB_FW_DIR} -I${ZMQ_DIR} -I${CCLO_HLS_ROOT}
+INCLUDES = -I$(XILINX_HLS)/include/ -I. -I${XILINX_VIVADO}/data/xsim/include/ -I${HLSLIB_INCLUDE} -I${MPI_INCLUDES} -I${MB_FW_DIR} -I${ZMQ_DIR} -I${CCLO_HLS_ROOT}
 XSIMK_PATH_TAIL = xsim.dir/ccl_offload_behav/xsimk.so
 XSIM_COMPILE_FOLDER ?= $(ACCL_REPO_ROOT)/kernels/cclo/ccl_offload_ex/ccl_offload_ex.sim/sim_1/behav/xsim/
 
-SYMLINKS = ccl_offload_bd_axi_bram_ctrl_0_bram_0.mem ccl_offload_bd_dlmb_bram_if_cntlr_bram_0.mem xsim.dir
+SYMLINKS = ccl_offload_bd_axi_bram_ctrl_0_bram_0.mem ccl_offload_bd_dlmb_bram_if_cntlr_bram_0.mem dma_mover_instruction_decode_arcfg_6_RAM_AUTO_1R1W.dat xsim.dir
 
 STACKTYPE ?= "udp"
 NRANKS ?= 1

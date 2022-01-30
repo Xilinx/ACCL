@@ -81,16 +81,22 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
   set interfaces "s_axi_control:s_axis_call_req:m_axis_call_ack:m_axis_eth_tx_data:s_axis_eth_rx_data"
 
   # Create instance: axis_switch_0, and set properties
+  # We route anything with TDEST > 9 to M9 which will go to external kernels bypassing the segmenter
   set axis_switch_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:axis_switch:1.1 axis_switch_0 ]
   set_property -dict [ list \
    CONFIG.DECODER_REG {1} \
+   CONFIG.HAS_TSTRB.VALUE_SRC USER \
+   CONFIG.HAS_TSTRB {0} \
    CONFIG.HAS_TKEEP {1} \
    CONFIG.HAS_TLAST {1} \
-   CONFIG.NUM_MI {9} \
+   CONFIG.NUM_MI {10} \
    CONFIG.NUM_SI {8} \
    CONFIG.TDATA_NUM_BYTES {64} \
    CONFIG.TDEST_WIDTH.VALUE_SRC USER \
-   CONFIG.ROUTING_MODE {0} CONFIG.TDEST_WIDTH {8} CONFIG.ARB_ON_TLAST {1}
+   CONFIG.ROUTING_MODE {0} \
+   CONFIG.TDEST_WIDTH {8} \
+   CONFIG.ARB_ON_TLAST {1} \
+   CONFIG.M09_AXIS_HIGHTDEST {0x000000ff} \
  ] $axis_switch_0
 
   set control_xbar [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_interconnect:2.1 control_xbar ]
@@ -177,8 +183,8 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
     connect_bd_intf_net [get_bd_intf_pins dma_1/M_AXIS_MM2S] [get_bd_intf_pins sseg_dma1_rd/in_r]
     connect_bd_intf_net [get_bd_intf_pins sseg_dma0_rd/out_r] [get_bd_intf_pins axis_switch_0/S00_AXIS]
     connect_bd_intf_net [get_bd_intf_pins sseg_dma1_rd/out_r] [get_bd_intf_pins axis_switch_0/S01_AXIS]
-    connect_bd_intf_net [get_bd_intf_pins sseg_dma0_rd/cmd_V] [get_bd_intf_pins control/dma0_rd_seg_cmd]
-    connect_bd_intf_net [get_bd_intf_pins sseg_dma1_rd/cmd_V] [get_bd_intf_pins control/dma1_rd_seg_cmd]
+    connect_bd_intf_net [get_bd_intf_pins sseg_dma0_rd/cmd] [get_bd_intf_pins control/dma0_rd_seg_cmd]
+    connect_bd_intf_net [get_bd_intf_pins sseg_dma1_rd/cmd] [get_bd_intf_pins control/dma1_rd_seg_cmd]
     connect_bd_intf_net [get_bd_intf_pins dma_1/S_AXIS_S2MM] [get_bd_intf_pins axis_switch_0/M01_AXIS]
     connect_bd_intf_net [get_bd_intf_pins dma_0/S_AXIS_S2MM] [get_bd_intf_pins axis_switch_0/M00_AXIS]
     
@@ -366,13 +372,13 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
     # Arithmetic-specific connections
     connect_bd_intf_net [get_bd_intf_pins axis_switch_0/M03_AXIS] [get_bd_intf_pins sseg_arith_op0/in_r]
     connect_bd_intf_net [get_bd_intf_pins sseg_arith_op0/out_r] [get_bd_intf_pins ext_arith_comb/S00_AXIS]
-    connect_bd_intf_net [get_bd_intf_pins sseg_arith_op0/cmd_V] [get_bd_intf_pins control/arith_op0_seg_cmd]
+    connect_bd_intf_net [get_bd_intf_pins sseg_arith_op0/cmd] [get_bd_intf_pins control/arith_op0_seg_cmd]
     connect_bd_intf_net [get_bd_intf_pins axis_switch_0/M04_AXIS] [get_bd_intf_pins sseg_arith_op1/in_r]
     connect_bd_intf_net [get_bd_intf_pins sseg_arith_op1/out_r] [get_bd_intf_pins ext_arith_comb/S01_AXIS]
-    connect_bd_intf_net [get_bd_intf_pins sseg_arith_op1/cmd_V] [get_bd_intf_pins control/arith_op1_seg_cmd]
+    connect_bd_intf_net [get_bd_intf_pins sseg_arith_op1/cmd] [get_bd_intf_pins control/arith_op1_seg_cmd]
     connect_bd_intf_net [get_bd_intf_ports s_axis_arith_res] [get_bd_intf_pins sseg_arith_res/in_r]
     connect_bd_intf_net [get_bd_intf_pins sseg_arith_res/out_r] [get_bd_intf_pins axis_switch_0/S03_AXIS]
-    connect_bd_intf_net [get_bd_intf_pins sseg_arith_res/cmd_V] [get_bd_intf_pins control/arith_res_seg_cmd]
+    connect_bd_intf_net [get_bd_intf_pins sseg_arith_res/cmd] [get_bd_intf_pins control/arith_res_seg_cmd]
     connect_bd_intf_net [get_bd_intf_pins ext_arith_comb/M_AXIS] [get_bd_intf_ports m_axis_arith_op]
 
     connect_bd_net [get_bd_ports ap_clk] \
@@ -441,13 +447,13 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
     connect_bd_intf_net [get_bd_intf_pins axis_switch_0/M08_AXIS] [get_bd_intf_pins sseg_c2_op/in_r]
     connect_bd_intf_net [get_bd_intf_pins sseg_c2_op/out_r] [get_bd_intf_ports m_axis_compression2]
 
-    connect_bd_intf_net [get_bd_intf_pins sseg_c0_op/cmd_V] [get_bd_intf_pins control/clane0_op_seg_cmd]
-    connect_bd_intf_net [get_bd_intf_pins sseg_c1_op/cmd_V] [get_bd_intf_pins control/clane1_op_seg_cmd]
-    connect_bd_intf_net [get_bd_intf_pins sseg_c2_op/cmd_V] [get_bd_intf_pins control/clane2_op_seg_cmd]
+    connect_bd_intf_net [get_bd_intf_pins sseg_c0_op/cmd] [get_bd_intf_pins control/clane0_op_seg_cmd]
+    connect_bd_intf_net [get_bd_intf_pins sseg_c1_op/cmd] [get_bd_intf_pins control/clane1_op_seg_cmd]
+    connect_bd_intf_net [get_bd_intf_pins sseg_c2_op/cmd] [get_bd_intf_pins control/clane2_op_seg_cmd]
 
-    connect_bd_intf_net [get_bd_intf_pins sseg_c0_res/cmd_V] [get_bd_intf_pins control/clane0_res_seg_cmd]
-    connect_bd_intf_net [get_bd_intf_pins sseg_c1_res/cmd_V] [get_bd_intf_pins control/clane1_res_seg_cmd]
-    connect_bd_intf_net [get_bd_intf_pins sseg_c2_res/cmd_V] [get_bd_intf_pins control/clane2_res_seg_cmd] 
+    connect_bd_intf_net [get_bd_intf_pins sseg_c0_res/cmd] [get_bd_intf_pins control/clane0_res_seg_cmd]
+    connect_bd_intf_net [get_bd_intf_pins sseg_c1_res/cmd] [get_bd_intf_pins control/clane1_res_seg_cmd]
+    connect_bd_intf_net [get_bd_intf_pins sseg_c2_res/cmd] [get_bd_intf_pins control/clane2_res_seg_cmd] 
 
     connect_bd_net [get_bd_ports ap_clk] \
                    [get_bd_pins sseg_c0_res/ap_clk] \
@@ -493,14 +499,26 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
     connect_bd_intf_net [get_bd_intf_pins s_axis_krnl] [get_bd_intf_pins sseg_krnl_in/in_r]
     connect_bd_intf_net [get_bd_intf_pins sseg_krnl_in/out_r] [get_bd_intf_pins axis_switch_0/S04_AXIS]
 
-    connect_bd_intf_net [get_bd_intf_pins sseg_krnl_in/cmd_V] [get_bd_intf_pins control/krnl_in_seg_cmd]
-    connect_bd_intf_net [get_bd_intf_pins sseg_krnl_out/cmd_V] [get_bd_intf_pins control/krnl_out_seg_cmd]
+    connect_bd_intf_net [get_bd_intf_pins sseg_krnl_in/cmd] [get_bd_intf_pins control/krnl_in_seg_cmd]
+    connect_bd_intf_net [get_bd_intf_pins sseg_krnl_out/cmd] [get_bd_intf_pins control/krnl_out_seg_cmd]
 
     connect_bd_intf_net [get_bd_intf_pins axis_switch_0/M05_AXIS] [get_bd_intf_pins sseg_krnl_out/in_r]
-    connect_bd_intf_net [get_bd_intf_ports m_axis_krnl] [get_bd_intf_pins sseg_krnl_out/out_r]
+    connect_bd_intf_net [get_bd_intf_pins control/krnl_out_seg_sts] [get_bd_intf_pins sseg_krnl_out/sts]
 
-    connect_bd_intf_net [get_bd_intf_pins control/krnl_out_seg_sts] [get_bd_intf_pins sseg_krnl_out/sts_V]
-
+    # create bypass switch, for any ETH ingress data targeting the external kernels directly
+    create_bd_cell -type ip -vlnv xilinx.com:ip:axis_switch:1.1 axis_switch_1
+    set_property -dict [list  CONFIG.HAS_TLAST.VALUE_SRC USER \
+                              CONFIG.HAS_TLAST {1} \
+                              CONFIG.ARB_ON_TLAST {1}\
+                              CONFIG.HAS_TSTRB.VALUE_SRC USER \
+                              CONFIG.HAS_TSTRB {0} \
+                              CONFIG.M00_AXIS_HIGHTDEST {0x000000ff} \
+    ] [get_bd_cells axis_switch_1]
+    connect_bd_intf_net [get_bd_intf_pins sseg_krnl_out/out_r] [get_bd_intf_pins axis_switch_1/S00_AXIS]
+    connect_bd_intf_net [get_bd_intf_pins axis_switch_0/M09_AXIS] [get_bd_intf_pins axis_switch_1/S01_AXIS]
+    connect_bd_intf_net [get_bd_intf_pins m_axis_krnl] [get_bd_intf_pins axis_switch_1/M00_AXIS]
+    connect_bd_net [get_bd_pins ap_clk] [get_bd_pins axis_switch_1/aclk]
+    connect_bd_net [get_bd_pins control/encore_aresetn] [get_bd_pins axis_switch_1/aresetn]
   }
 
   # Create control interface connections
@@ -541,7 +559,7 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
   # put everything into proper hierarchy
   create_bd_cell -type hier routing_subsystem
   move_bd_cells [get_bd_cells routing_subsystem] [get_bd_cells sseg*] 
-  move_bd_cells [get_bd_cells routing_subsystem] [get_bd_cells axis_switch_0] 
+  move_bd_cells [get_bd_cells routing_subsystem] [get_bd_cells axis_switch*] 
   move_bd_cells [get_bd_cells routing_subsystem] [get_bd_cells ext_arith_comb]
 
   create_bd_cell -type hier cclo

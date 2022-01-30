@@ -29,12 +29,9 @@ else
 	$(error Unsupported PLATFORM)
 endif
 
-all: $(PERIPHERAL_IPS) cclo
+all: $(PERIPHERAL_IPS)
 
-.PHONY: loopback cclo reduce_sum fp_hp_stream_conv hp_fp_stream_conv dummy_tcp_stack
+.PHONY: loopback reduce_sum fp_hp_stream_conv hp_fp_stream_conv dummy_tcp_stack
 
 $(PERIPHERAL_IPS):
 	$(MAKE) -C $@ DEVICE=$(FPGAPART) TARGET=$(TARGET)
-
-cclo:
-	$(MAKE) -C $@ PLATFORM=$(FPGAPART) DEBUG=$(DEBUG)

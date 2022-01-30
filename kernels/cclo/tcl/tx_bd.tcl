@@ -72,9 +72,9 @@ proc create_udp_tx_subsystem { parentCell nameHier } {
   set udp_packetizer_0 [ create_bd_cell -type ip -vlnv xilinx.com:hls:udp_packetizer:1.0 udp_packetizer_0 ]
 
   # Create interface connections
-  connect_bd_intf_net -intf_net status [get_bd_intf_pins m_axis_sts] [get_bd_intf_pins udp_packetizer_0/sts_V]
+  connect_bd_intf_net -intf_net status [get_bd_intf_pins m_axis_sts] [get_bd_intf_pins udp_packetizer_0/sts]
   connect_bd_intf_net -intf_net control [get_bd_intf_pins s_axi_control] [get_bd_intf_pins udp_packetizer_0/s_axi_control]
-  connect_bd_intf_net -intf_net command [get_bd_intf_pins s_axis_command] [get_bd_intf_pins udp_packetizer_0/cmd_V]
+  connect_bd_intf_net -intf_net command [get_bd_intf_pins s_axis_command] [get_bd_intf_pins udp_packetizer_0/cmd]
   connect_bd_intf_net -intf_net pkt2fifo [get_bd_intf_pins m_axis_data] [get_bd_intf_pins tx_fifo/M_AXIS]
   connect_bd_intf_net -intf_net in2pkt [get_bd_intf_pins s_axis_data] [get_bd_intf_pins udp_packetizer_0/in_r]
   connect_bd_intf_net -intf_net fifo2out [get_bd_intf_pins tx_fifo/S_AXIS] [get_bd_intf_pins udp_packetizer_0/out_r]
@@ -152,11 +152,11 @@ proc create_tcp_tx_subsystem { parentCell nameHier } {
   # Create interface connections
   connect_bd_intf_net -intf_net control [get_bd_intf_pins s_axi_control] [get_bd_intf_pins tcp_packetizer_0/s_axi_control]
   connect_bd_intf_net -intf_net Conn3 [get_bd_intf_pins m_axis_tx_data] [get_bd_intf_pins tx_fifo/M_AXIS]
-  connect_bd_intf_net -intf_net cmd_V_1 [get_bd_intf_pins s_axis_pktcmd] [get_bd_intf_pins tcp_packetizer_0/cmd_V]
+  connect_bd_intf_net -intf_net cmd_V_1 [get_bd_intf_pins s_axis_pktcmd] [get_bd_intf_pins tcp_packetizer_0/cmd]
   connect_bd_intf_net -intf_net in_r_1 [get_bd_intf_pins s_axis_tx_data] [get_bd_intf_pins tcp_packetizer_0/in_r]
-  connect_bd_intf_net -intf_net status [get_bd_intf_pins m_axis_packetizer_sts] [get_bd_intf_pins tcp_packetizer_0/sts_V]
+  connect_bd_intf_net -intf_net status [get_bd_intf_pins m_axis_packetizer_sts] [get_bd_intf_pins tcp_packetizer_0/sts]
   connect_bd_intf_net -intf_net s_axis_tx_status_1 [get_bd_intf_pins s_axis_tx_status] [get_bd_intf_pins tcp_txHandler_0/s_axis_tcp_tx_status]
-  connect_bd_intf_net -intf_net tcp_packetizer_0_cmd_txHandler_V [get_bd_intf_pins tcp_packetizer_0/cmd_txHandler_V] [get_bd_intf_pins tcp_txHandler_0/cmd_txHandler_V]
+  connect_bd_intf_net -intf_net tcp_packetizer_0_cmd_txHandler [get_bd_intf_pins tcp_packetizer_0/cmd_txHandler] [get_bd_intf_pins tcp_txHandler_0/cmd_txHandler]
   connect_bd_intf_net -intf_net tcp_packetizer_0_out_r [get_bd_intf_pins tcp_packetizer_0/out_r] [get_bd_intf_pins tcp_txHandler_0/s_data_in]
   connect_bd_intf_net -intf_net tcp_txHandler_0_m_axis_tx_data [get_bd_intf_pins tcp_txHandler_0/m_axis_tcp_tx_data] [get_bd_intf_pins tx_fifo/S_AXIS]
   connect_bd_intf_net -intf_net tcp_txHandler_0_m_axis_tx_meta [get_bd_intf_pins m_axis_tx_meta] [get_bd_intf_pins tcp_txHandler_0/m_axis_tcp_tx_meta]

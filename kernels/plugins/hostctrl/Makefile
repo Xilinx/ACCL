@@ -17,10 +17,10 @@
 
 TARGET=ip
 DEVICE=xcu250-figd2104-2L-e
-HOSTCTRL_IP=build_hostctrl/sol1/impl/ip/xilinx_com_hls_hostctrl_1_0.zip
+HOSTCTRL_IP=hostctrl.xo
 
 all: $(HOSTCTRL_IP)
 
-$(HOSTCTRL_IP): build_hostctrl.tcl hostctrl.cpp 
+$(HOSTCTRL_IP): build_hostctrl.tcl hostctrl.cpp
 	vitis_hls $< -tclargs $(TARGET) $(DEVICE)
 

@@ -449,7 +449,7 @@ int main(int argc, char **argv)
         dut.reset_design();
         cout << "Reset done" << endl;
         cout << "Initializing design" << endl;
-        dut.run_ncycles(40000);
+        dut.run_ncycles(1000);
         cout << "Initialization done" << endl;
 
         HLSLIB_DATAFLOW_INIT();

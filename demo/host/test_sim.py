@@ -98,7 +98,7 @@ def test_sendrecv_plkernel(cclo_inst, world_size, local_rank, count):
         next_rank = (local_rank+1)%world_size
         prev_rank = (local_rank+world_size-1)%world_size
         print("Sending from memory on ",local_rank," to stream on ",next_rank)
-        cclo_inst.send(0, op_buf, count, next_rank, stream_flags=ACCLStreamFlags.RES_STREAM, tag=1)
+        cclo_inst.send(0, op_buf, count, next_rank, stream_flags=ACCLStreamFlags.RES_STREAM, tag=0)
         # recv is direct, no call required
         print("Sending from stream on ",local_rank," to memory on ",prev_rank)
         cclo_inst.send(0, res_buf, count, prev_rank, stream_flags=ACCLStreamFlags.OP0_STREAM, tag=5)

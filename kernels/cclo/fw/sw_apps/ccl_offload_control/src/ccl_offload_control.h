@@ -84,6 +84,7 @@
 #define HOUSEKEEP_SET_MAX_SEGMENT_SIZE 6
 
 //AXI MMAP address
+#define CFGRDY_OFFSET     0x1FF4
 #define HWID_OFFSET       0x1FF8
 #define RETVAL_OFFSET     0x1FFC
 #define END_OF_EXCHMEM    0x2000
@@ -333,7 +334,7 @@ void finalize_call(unsigned int);
 #endif
 
 #ifdef __cplusplus
-extern "C" int run_accl();
+extern "C" void run_accl();
 extern "C" void stream_isr();
 #endif
 
