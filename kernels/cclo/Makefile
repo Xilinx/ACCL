@@ -85,7 +85,10 @@ $(XCCL_SIMDLL): tcl/generate_sim.tcl elf
 
 xo: $(XCCL_XO)
 
-$(XCCL_XO): tcl/generate_xo.tcl $(XCCL_XSA) $(XCCL_ELF)
+cclo.xml:
+	python gen_xml.py $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) 
+
+$(XCCL_XO): tcl/generate_xo.tcl $(XCCL_XSA) $(XCCL_ELF) cclo.xml
 	vivado -mode batch -source $< -tclargs $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) $(MB_DEBUG_LEVEL)
 
 distclean:
