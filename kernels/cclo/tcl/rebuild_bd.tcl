@@ -24,11 +24,16 @@
 # enableCompression - 0/1 - enables compression feature
 # enableExtKrnlStream - 0/1 - enables PL stream attachments, providing support for non-memory send/recv
 # debugLevel - 0/1/2 - enables DEBUG/TRACE support for the control microblaze
-proc create_root_design { netStackType enableDMA enableArithmetic enableCompression enableExtKrnlStream debugLevel } {
+proc create_root_design { netStackType enableDMA enableArithmetic enableCompression enableExtKrnlStream debugLevel enableFanIn } {
 
   if { ( $enableDMA == 0 ) && ( $enableExtKrnlStream == 0) } {
       catch {common::send_gid_msg -severity "ERROR" "No data sources and sinks enabled, please enable either DMAs or Streams"}
       return
+  }
+
+  if { ( $enableFanIn == 1 ) && ( $netStackType != "TCP" ) } {
+      catch {common::send_gid_msg -severity "ERROR" "Fan-In only supported for TCP"}
+      return   
   }
 
   # Create interface ports
@@ -96,6 +101,8 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
    CONFIG.ROUTING_MODE {0} \
    CONFIG.TDEST_WIDTH {8} \
    CONFIG.ARB_ON_TLAST {1} \
+   CONFIG.ARB_ALGORITHM {3} \
+   CONFIG.ARB_ON_MAX_XFERS {0} \
    CONFIG.M09_AXIS_HIGHTDEST {0x000000ff} \
  ] $axis_switch_0
 
@@ -103,7 +110,7 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
   set_property -dict [ list CONFIG.NUM_MI {2} ] $control_xbar
 
   source -notrace ./tcl/control_bd.tcl
-  create_hier_cell_control [current_bd_instance .] control $debugLevel
+  create_hier_cell_control [current_bd_instance .] control $debugLevel $enableFanIn
 
   if { $enableDMA == 1 } {
 
@@ -284,6 +291,10 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
     connect_bd_intf_net [get_bd_intf_pins eth_tx_subsystem/s_axis_pktcmd] [get_bd_intf_pins control/eth_packetizer_cmd]
     connect_bd_intf_net [get_bd_intf_pins eth_tx_subsystem/m_axis_packetizer_sts] [get_bd_intf_pins control/eth_packetizer_sts]
   
+    if { $enableFanIn == 1 } {
+      connect_bd_intf_net [get_bd_intf_pins eth_rx_subsystem/m_axis_notification] [get_bd_intf_pins control/eth_depacketizer_notif]
+    }
+
     connect_bd_intf_net [get_bd_intf_ports s_axis_eth_rx_data] [get_bd_intf_pins eth_rx_subsystem/s_axis_rx_data]
     connect_bd_intf_net [get_bd_intf_ports m_axis_eth_read_pkg] [get_bd_intf_pins eth_rx_subsystem/m_axis_read_pkg]
     connect_bd_intf_net [get_bd_intf_ports s_axis_eth_rx_meta] [get_bd_intf_pins eth_rx_subsystem/s_axis_rx_meta]
@@ -510,6 +521,8 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
     set_property -dict [list  CONFIG.HAS_TLAST.VALUE_SRC USER \
                               CONFIG.HAS_TLAST {1} \
                               CONFIG.ARB_ON_TLAST {1}\
+                              CONFIG.ARB_ALGORITHM {3} \
+                              CONFIG.ARB_ON_MAX_XFERS {0} \
                               CONFIG.HAS_TSTRB.VALUE_SRC USER \
                               CONFIG.HAS_TSTRB {0} \
                               CONFIG.M00_AXIS_HIGHTDEST {0x000000ff} \

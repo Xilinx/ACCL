@@ -110,7 +110,9 @@ void udp_depacketizer(
 void tcp_depacketizer(
 	STREAM<stream_word > & in,
 	STREAM<stream_word > & out,
-	STREAM<eth_header> & sts
+	STREAM<eth_header> & sts,
+    STREAM<eth_notification> &notif_in,
+    STREAM<eth_notification> &notif_out
 );
 
 void tcp_sessionHandler(

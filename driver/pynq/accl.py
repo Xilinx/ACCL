@@ -20,6 +20,7 @@ import pynq
 from pynq import DefaultIP
 import os
 import sys
+import math
 import numpy as np
 import struct
 import warnings
@@ -56,7 +57,10 @@ class SimBuffer():
         self.buf = buf
         if physical_address is None:
             self.physical_address = SimBuffer.next_free_address
-            SimBuffer.next_free_address += buf.nbytes
+            # allocate on 4K boundaries
+            # not sure how realistic this is, but it does help
+            # work around some addressing limitations in RTLsim
+            SimBuffer.next_free_address += math.ceil(buf.nbytes/4096)*4096
         else:
             self.physical_address = physical_address
     

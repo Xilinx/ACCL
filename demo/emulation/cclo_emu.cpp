@@ -273,7 +273,7 @@ void dummy_external_kernel(Stream<stream_word> &in, Stream<stream_word> &out){
     out.Push(tmp_no_tdest);
 }
 
-void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank) {
+void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsigned int world_size) {
     vector<char> devicemem;
 
     Stream<ap_uint<32>, 32> host_cmd("host_cmd");
@@ -313,8 +313,13 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank) {
     Stream<eth_header > eth_tx_cmd;
     Stream<ap_uint<32> > eth_tx_sts;
     Stream<eth_header > eth_rx_sts;
+    Stream<eth_header > eth_rx_sts_sess;
 
     Stream<ap_uint<32>, 32> inflight_rxbuf;
+    Stream<ap_uint<32>, 32> inflight_rxbuf_sess;
+    
+    Stream<ap_uint<104>, 32> enq2sess_dma_cmd;
+    Stream<ap_uint<32>, 32> sess2deq_dma_sts;
 
     Stream<rxbuf_notification> eth_rx_notif;
     Stream<rxbuf_signature> eth_rx_seek_req;
@@ -334,11 +339,14 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank) {
     Stream<pkt32> eth_read_pkg;
     Stream<pkt16> eth_rx_meta;
     Stream<eth_notification> eth_notif_out;
+    Stream<eth_notification> eth_notif_out_dpkt;
 
     Stream<stream_word, 1024> eth_tx_data_int;
     Stream<stream_word, 1024> eth_rx_data_int;
     Stream<stream_word> eth_tx_data_stack;
     Stream<stream_word> eth_rx_data_stack;
+
+    unsigned int max_words_per_pkt = MAX_PACKETSIZE/DATAPATH_WIDTH_BYTES;
 
     // Dataflow functions running in parallel
     HLSLIB_DATAFLOW_INIT();
@@ -349,9 +357,23 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank) {
     HLSLIB_FREERUNNING_FUNCTION(dma_write, devicemem, dma_write_cmd_int[1], dma_write_sts_int[1], switch_m[SWITCH_M_DMA1_WRITE]);
     HLSLIB_FREERUNNING_FUNCTION(dma_read, devicemem, dma_read_cmd_int[1], dma_read_sts_int[1], dma_read_data[1]);
     //RX buffer handling offload
-    HLSLIB_FREERUNNING_FUNCTION(rxbuf_enqueue, dma_write_cmd_int[0], inflight_rxbuf, cfgmem);
-    HLSLIB_FREERUNNING_FUNCTION(rxbuf_dequeue, dma_write_sts_int[0], eth_rx_sts, inflight_rxbuf, eth_rx_notif, cfgmem);
-    HLSLIB_FREERUNNING_FUNCTION(rxbuf_seek, eth_rx_notif, eth_rx_seek_req, eth_rx_seek_ack, rxbuf_release_req, cfgmem);
+    if(!use_tcp){
+        HLSLIB_FREERUNNING_FUNCTION(rxbuf_enqueue, dma_write_cmd_int[0], inflight_rxbuf, cfgmem);
+        HLSLIB_FREERUNNING_FUNCTION(rxbuf_dequeue, dma_write_sts_int[0], eth_rx_sts, inflight_rxbuf, eth_rx_notif, cfgmem);
+        HLSLIB_FREERUNNING_FUNCTION(rxbuf_seek, eth_rx_notif, eth_rx_seek_req, eth_rx_seek_ack, rxbuf_release_req, cfgmem);
+    } else{
+        HLSLIB_FREERUNNING_FUNCTION(rxbuf_enqueue, enq2sess_dma_cmd, inflight_rxbuf, cfgmem);
+        HLSLIB_FREERUNNING_FUNCTION(rxbuf_dequeue, sess2deq_dma_sts, eth_rx_sts_sess, inflight_rxbuf_sess, eth_rx_notif, cfgmem);
+        HLSLIB_FREERUNNING_FUNCTION(rxbuf_seek, eth_rx_notif, eth_rx_seek_req, eth_rx_seek_ack, rxbuf_release_req, cfgmem);
+        HLSLIB_FREERUNNING_FUNCTION(
+            rxbuf_session, 
+            enq2sess_dma_cmd, sess2deq_dma_sts,
+            inflight_rxbuf, inflight_rxbuf_sess,
+            dma_write_cmd_int[0], dma_write_sts_int[0],
+            eth_notif_out_dpkt,
+            eth_rx_sts, eth_rx_sts_sess
+        );
+    }
     //move offload
     HLSLIB_FREERUNNING_FUNCTION(
         dma_mover, cfgmem, cmd_fifos[CMD_DMA_MOVE], sts_fifos[STS_DMA_MOVE],
@@ -387,8 +409,8 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank) {
     HLSLIB_FREERUNNING_FUNCTION(compression, clane2_op, clane2_res);
     //network PACK/DEPACK
     if(use_tcp){
-        HLSLIB_FREERUNNING_FUNCTION(tcp_packetizer, switch_m[SWITCH_M_ETH_TX], eth_tx_data_int, eth_tx_cmd, cmd_txHandler, eth_tx_sts, MAX_PACKETSIZE);
-        HLSLIB_FREERUNNING_FUNCTION(tcp_depacketizer, eth_rx_data_int, switch_s[SWITCH_S_ETH_RX], eth_rx_sts);
+        HLSLIB_FREERUNNING_FUNCTION(tcp_packetizer, switch_m[SWITCH_M_ETH_TX], eth_tx_data_int, eth_tx_cmd, cmd_txHandler, eth_tx_sts, max_words_per_pkt);
+        HLSLIB_FREERUNNING_FUNCTION(tcp_depacketizer, eth_rx_data_int, switch_s[SWITCH_S_ETH_RX], eth_rx_sts, eth_notif_out, eth_notif_out_dpkt);
         HLSLIB_FREERUNNING_FUNCTION(tcp_rxHandler, eth_notif,  eth_read_pkg, eth_rx_meta,  eth_rx_data_stack, eth_rx_data_int, eth_notif_out);
         HLSLIB_FREERUNNING_FUNCTION(tcp_txHandler, eth_tx_data_int, cmd_txHandler, eth_tx_meta,  eth_tx_data_stack,  eth_tx_status);
         HLSLIB_FREERUNNING_FUNCTION(
@@ -409,7 +431,7 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank) {
             eth_rx_data, eth_tx_data
         );
     } else{
-        HLSLIB_FREERUNNING_FUNCTION(udp_packetizer, switch_m[SWITCH_M_ETH_TX], eth_tx_data, eth_tx_cmd, eth_tx_sts, MAX_PACKETSIZE);
+        HLSLIB_FREERUNNING_FUNCTION(udp_packetizer, switch_m[SWITCH_M_ETH_TX], eth_tx_data, eth_tx_cmd, eth_tx_sts, max_words_per_pkt);
         HLSLIB_FREERUNNING_FUNCTION(udp_depacketizer, eth_rx_data, switch_s[SWITCH_S_ETH_RX], eth_rx_sts);
     }
     //emulated external kernel
@@ -417,15 +439,19 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank) {
     //ZMQ to host process
     HLSLIB_FREERUNNING_FUNCTION(serve_zmq, ctx, cfgmem, devicemem, sts_fifos[CMD_CALL], cmd_fifos[STS_CALL]);
     //ZMQ to other nodes process(es)
-    HLSLIB_FREERUNNING_FUNCTION(eth_endpoint_egress_port, ctx, eth_tx_data, local_rank, use_tcp);
+    HLSLIB_FREERUNNING_FUNCTION(eth_endpoint_egress_port, ctx, eth_tx_data, local_rank, use_tcp && world_size > 1);
     HLSLIB_FREERUNNING_FUNCTION(eth_endpoint_ingress_port, ctx, eth_rx_data);
     //MICROBLAZE
     HLSLIB_DATAFLOW_FUNCTION(run_accl);
     HLSLIB_DATAFLOW_FINALIZE();
+
+    this_thread::sleep_for(chrono::milliseconds(1000));
+    cout << "Rank " << local_rank << " finished" << endl;
 }
 
 int main(int argc, char** argv){
     MPI_Init(NULL, NULL);      // initialize MPI environment
+
     int world_size; // number of processes
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
@@ -436,5 +462,5 @@ int main(int argc, char** argv){
     unsigned int starting_port = atoi(argv[2]);
 
     zmq_intf_context ctx = zmq_intf(starting_port, local_rank, world_size);
-    sim_bd(&ctx, eth_type == "tcp", local_rank);
+    sim_bd(&ctx, eth_type == "tcp", local_rank, world_size);
 }

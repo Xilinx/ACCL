@@ -40,6 +40,8 @@ static volatile	unsigned int max_segment_size = DMA_MAX_BTT;
 
 static datapath_arith_config arcfg;
 static communicator world;
+static bool comm_cached = false;
+static bool comm_cache_adr;
 
 #ifdef MB_FW_EMULATION
 //uint32_t sim_cfgmem[END_OF_EXCHMEM/4];
@@ -91,19 +93,25 @@ bool cb_full(circular_buffer *cb){
     return (cb->occupancy == cb->capacity);
 }
 
-//retrieves the communicator
+//retrieves all the communicator
 static inline communicator find_comm(unsigned int adr){
-    communicator ret;
-    ret.size 		= Xil_In32(adr);
-    ret.local_rank 	= Xil_In32(adr+4);
-    //we don't need the rest of the communicator here.
-    return ret;
+	communicator ret;
+	ret.size 		= Xil_In32(adr);
+	ret.local_rank 	= Xil_In32(adr+4);
+	if(ret.size != 0 && ret.local_rank < ret.size){
+		ret.ranks = (comm_rank*)(cfgmem+adr/4+2);
+	} else {
+		ret.size = 0;
+		ret.local_rank = 0;
+		ret.ranks = NULL;
+	}
+	return ret;
 }
 
 //Packetizer/Depacketizer
 static inline void start_packetizer(unsigned int max_pktsize) {
-    //get number of DATAPATH_WIDTH_BYTES transfers corresponding to max_pktsize
-    unsigned int max_pkt_transfers = (max_pktsize+DATAPATH_WIDTH_BYTES-1)/DATAPATH_WIDTH_BYTES;
+    //get number of DATAPATH_WIDTH_BYTES transfers corresponding to max_pktsize (rounded down)
+    unsigned int max_pkt_transfers = max_pktsize/DATAPATH_WIDTH_BYTES;
     Xil_Out32(NET_TXPKT_BASEADDR+0x10, max_pkt_transfers);
     SET(NET_TXPKT_BASEADDR, CONTROL_REPEAT_MASK | CONTROL_START_MASK);
 }
@@ -184,6 +192,7 @@ int openCon()
     }
     return ret;
 }
+
 //open local port for listening
 int openPort()
 {
@@ -1165,7 +1174,7 @@ void finalize_call(unsigned int retval) {
     putd(STS_CALL, retval);
 }
 
-void run_accl() {
+void run() {
     unsigned int retval;
     unsigned int scenario, count, comm, root_src_dst, function, msg_tag;
     unsigned int datapath_cfg, compression_flags, stream_flags;
@@ -1209,12 +1218,47 @@ void run_accl() {
         //initialize arithmetic/compression config and communicator
         //NOTE: these are global because they're used in a lot of places but don't change during a call
         //TODO: determine if they can remain global in hierarchical collectives
-        if(scenario != ACCL_CONFIG && scenario != ACCL_COPY && scenario != ACCL_COMBINE){
+        if(!comm_cached || (comm != comm_cache_adr)){
             world = find_comm(comm);
+            comm_cached = true;
+            comm_cache_adr = comm;
         }
         
         switch (scenario)
         {
+            case ACCL_COPY:
+                retval = copy(count, op0_addr, res_addr, datapath_cfg, compression_flags, stream_flags);
+                break;
+            case ACCL_COMBINE:
+                retval = combine(count, function, op0_addr, op1_addr, res_addr, datapath_cfg, compression_flags, stream_flags);
+                break;
+            case ACCL_SEND:
+                retval = send(root_src_dst, count, op0_addr, comm, datapath_cfg, msg_tag, compression_flags, stream_flags);
+                break;
+            case ACCL_RECV:
+                retval = recv(root_src_dst, count, res_addr, comm, datapath_cfg, msg_tag, compression_flags);
+                break;
+            case ACCL_BCAST:
+                retval = broadcast(count, root_src_dst, op0_addr, comm, datapath_cfg, compression_flags, stream_flags);
+                break;
+            // case ACCL_SCATTER:
+            //     retval = scatter(count, root_src_dst, op0_addr, res_addr, compression_flags);
+            //     break;
+            // case ACCL_GATHER:
+            //     retval = gather(count, root_src_dst, op0_addr, res_addr, compression_flags);
+            //     break;
+            // case ACCL_REDUCE:
+            //     retval = reduce(count, function, root_src_dst, op0_addr, res_addr, compression_flags);
+            //     break;
+            // case ACCL_ALLGATHER:
+            //     retval = allgather(count, op0_addr, res_addr, compression_flags);
+            //     break;
+            // case ACCL_ALLREDUCE:
+            //     retval = allreduce(count, function, op0_addr, res_addr, compression_flags);
+            //     break;
+            // case ACCL_REDUCE_SCATTER:
+            //     retval = scatter_reduce(count, function, op0_addr, res_addr, compression_flags);
+            //     break;
             case ACCL_CONFIG:
                 retval = 0;
                 switch (function)
@@ -1258,41 +1302,7 @@ void run_accl() {
                     default:
                         break;
                 }
-                
                 break;
-            case ACCL_COPY:
-                retval = copy(count, op0_addr, res_addr, datapath_cfg, compression_flags, stream_flags);
-                break;
-            case ACCL_COMBINE:
-                retval = combine(count, function, op0_addr, op1_addr, res_addr, datapath_cfg, compression_flags, stream_flags);
-                break;
-            case ACCL_SEND:
-                retval = send(root_src_dst, count, op0_addr, comm, datapath_cfg, msg_tag, compression_flags, stream_flags);
-                break;
-            case ACCL_RECV:
-                retval = recv(root_src_dst, count, res_addr, comm, datapath_cfg, msg_tag, compression_flags);
-                break;
-            case ACCL_BCAST:
-                retval = broadcast(count, root_src_dst, op0_addr, comm, datapath_cfg, compression_flags, stream_flags);
-                break;
-            // case ACCL_SCATTER:
-            //     retval = scatter(count, root_src_dst, op0_addr, res_addr, compression_flags);
-            //     break;
-            // case ACCL_GATHER:
-            //     retval = gather(count, root_src_dst, op0_addr, res_addr, compression_flags);
-            //     break;
-            // case ACCL_REDUCE:
-            //     retval = reduce(count, function, root_src_dst, op0_addr, res_addr, compression_flags);
-            //     break;
-            // case ACCL_ALLGATHER:
-            //     retval = allgather(count, op0_addr, res_addr, compression_flags);
-            //     break;
-            // case ACCL_ALLREDUCE:
-            //     retval = allreduce(count, function, op0_addr, res_addr, compression_flags);
-            //     break;
-            // case ACCL_REDUCE_SCATTER:
-            //     retval = scatter_reduce(count, function, op0_addr, res_addr, compression_flags);
-            //     break;
             default:
                 retval = NO_ERROR;
                 break;
@@ -1301,10 +1311,14 @@ void run_accl() {
     }
 }
 
+void run_accl() {
+    while(true){
+        run();
+    }
+}
+
 #ifndef MB_FW_EMULATION
 int main(int argc, char **argv){
-    while(true){
-        run_accl();
-    }
+    run_accl();
 }
 #endif

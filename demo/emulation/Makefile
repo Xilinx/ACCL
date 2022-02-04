@@ -21,7 +21,7 @@ EXTRA_DEFINES:=
 MPI_INCLUDES=-I/usr/lib/x86_64-linux-gnu/openmpi/include/openmpi -I/usr/lib/x86_64-linux-gnu/openmpi/include
 MPI_LIBPATHS=-L/usr/lib/x86_64-linux-gnu/openmpi/lib
 
-INCLUDES=$(MPI_INCLUDES) -I$(HLSLIB_INCLUDE) -I$(XILINX_VIVADO)/include/ -I$(REDUCTION_DIR) -I$(CCLO_ETH_DIR) -I$(SEGMENTER_DIR) -I$(MB_FW_DIR) -I$(CCLO_HLS_ROOT) -I$(DMA_MOVER_DIR) -I$(RXBUF_OFFLOAD_DIR) -I$(DUMMY_TCP_DIR) -I$(ZMQ_INTF_DIR)
+INCLUDES=$(MPI_INCLUDES) -I$(HLSLIB_INCLUDE) -I$(XILINX_HLS)/include/ -I$(REDUCTION_DIR) -I$(CCLO_ETH_DIR) -I$(SEGMENTER_DIR) -I$(MB_FW_DIR) -I$(CCLO_HLS_ROOT) -I$(DMA_MOVER_DIR) -I$(RXBUF_OFFLOAD_DIR) -I$(DUMMY_TCP_DIR) -I$(ZMQ_INTF_DIR)
 SOURCES=cclo_emu.cpp $(MB_FW_DIR)/ccl_offload_control.c $(REDUCTION_DIR)/reduce_sum.cpp $(CCLO_ETH_DIR)/*.cpp $(SEGMENTER_DIR)/*.cpp $(RXBUF_OFFLOAD_DIR)/*.cpp $(DMA_MOVER_DIR)/*.cpp $(DUMMY_TCP_DIR)/*.cpp $(ZMQ_INTF_DIR)/*.cpp
 
 all: cclo_emu

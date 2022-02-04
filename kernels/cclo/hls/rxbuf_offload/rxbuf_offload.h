@@ -69,7 +69,6 @@ void rxbuf_session(
     STREAM<ap_uint<104> > &fragment_dma_cmd, //outgoing DMA command for a partial message write to a RX buffer
 	STREAM<ap_uint<32> > &fragment_dma_sts, //status of a fragment write
     STREAM<eth_notification> &session_notification, //get notified when there is data for a session
-	STREAM<stream_word> &data_in, //incoming data from the PoE
-    STREAM<stream_word> &data_out, //outgoing data to datamover
+    STREAM<eth_header> &eth_hdr_in, //input header of from depacketizer
     STREAM<eth_header> &eth_hdr_out //forward header of message in completed RX buffer
 );

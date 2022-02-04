@@ -20,49 +20,112 @@
 
 using namespace std;
 
+//how this works:
+//read a notification from notif_in which says we'll get B bytes for session S
+//check how many bytes remaining for any ongoing messages on session S
+//if remaining[S] == 0
+//    it means we're getting the start of a new message, so
+//        get the header from the input data stream, indicating how many bytes M are in the message, and destination stream strm
+//        check strm in header; if strm is zero:
+//            copy the notification to the notif_out stream
+//            copy the header to sts
+//            subtract 64 from B
+//        copy all B remaining bytes from in to out, with dest = strm, decrementing M along the way
+//else
+//    it means we're continuing a previous message on this session, so
+//    copy min(remaining[S], B) from in to out, with dest = strm, decrementing remaining[S] along the way
+//    if strm is zero:
+//        copy the notification to the notif_out stream
+//remaining[S] = {M, strm}
+//if bytes still remaining for this notification, start over without reading notif (keep old notif, with adjusted B)
+
 void tcp_depacketizer(
 	STREAM<stream_word > & in,
 	STREAM<stream_word > & out,
-	STREAM<eth_header > & sts
+	STREAM<eth_header > & sts,
+    STREAM<eth_notification> &notif_in,
+    STREAM<eth_notification> &notif_out
 ) {
-
 #pragma HLS INTERFACE axis register both port=in
 #pragma HLS INTERFACE axis register both port=out
 #pragma HLS INTERFACE axis register both port=sts
+#pragma HLS INTERFACE axis register both port=notif_in
+#pragma HLS INTERFACE axis register both port=notif_out
 #pragma HLS INTERFACE s_axilite port=return
+#pragma HLS PIPELINE II=1 style=flp
 	
-	unsigned const bytes_per_word = DATA_WIDTH/8;
+	unsigned constexpr bytes_per_word = DATA_WIDTH/8;
+	static unsigned int remaining[1024] = {0};//one RAMB36 for max 1024 sessions
+	static ap_uint<DEST_WIDTH> target_strm[1024] = {0};//one RAMB18 for max 1024 sessions
 
-	//copy count from header into sts stream
-	stream_word inword = STREAM_READ(in);
-	eth_header hdr = eth_header(inword.data(HEADER_LENGTH-1,0));
-	stream_word outword;
-	//read header and put in sts stream
-	int count = hdr.count;
+	static eth_notification notif;
+	static bool continue_notif = false;
+
+	static unsigned int message_rem = 0;
+	static ap_uint<DEST_WIDTH> strm = 0;
+	static unsigned int prev_session_id = 0;
+
+	stream_word inword;
+	eth_header hdr;
+
+	if(STREAM_IS_EMPTY(notif_in) && STREAM_IS_EMPTY(in)) return;
+
+	//get new notification unless we're continuing an old one
+	if(!continue_notif){
+		notif = STREAM_READ(notif_in);
+	}
 
 #ifndef ACCL_SYNTHESIS
 	std::stringstream ss;
-	ss << "TCP Depacketizer: Processing incoming message count=" << count << "\n";
+	ss << "TCP Depacketizer: Processing incoming fragment count=" << notif.length << " for session " << notif.session_id << "\n";
 	std::cout << ss.str();
 #endif
 
-	if(hdr.strm == 0){
-		STREAM_WRITE(sts, hdr);
+	//get remaining message bytes, from local storage
+	//TODO: cache latest accessed value
+	if(prev_session_id != notif.session_id){
+		message_rem = remaining[notif.session_id];
 	}
 	
-	while(count > 0){
-	#pragma HLS PIPELINE II=1
+	if(message_rem == 0){//if remaining bytes is zero, then this is the start of a new message
+		//get header and some important info from it
 		inword = STREAM_READ(in);
-		outword.data = inword.data;
-		outword.keep = inword.keep;
-		outword.dest = hdr.strm;
-		count -= bytes_per_word;
-		if(count <= 0){
-			outword.last = 1;
-		}else{
-			outword.last = 0;
+		hdr = eth_header(inword.data(HEADER_LENGTH-1,0));
+		message_rem = hdr.count;//length of upcoming message (excluding the header itself)
+		strm = hdr.strm;//target of message (0 is targeting memory so managed, everything else is  stream so unmanaged)
+		if(strm == 0){
+			//decrement the length to reflect the fact that we have removed the 64B header
+			//Note: the rxHandler must make sure to not give us fragments less than 64B
+			notif.length -= bytes_per_word;
+			//put notification, header in output streams
+			STREAM_WRITE(sts, hdr);
 		}
-		STREAM_WRITE(out, outword);
+		target_strm[notif.session_id] = strm;
+	} else{//if remaining bytes is not zero, then this is a continuation of an old message
+		strm = target_strm[notif.session_id];
 	}
-
+	//write out notification
+	//in case the fragment spans the end of the current message and beginning of another,
+	//only notify for the part up to the end of the current message
+	if(strm == 0){
+		eth_notification downstream_notif;
+		downstream_notif.session_id = notif.session_id;
+		downstream_notif.length = (message_rem < notif.length) ? message_rem : (unsigned int)notif.length;
+		STREAM_WRITE(notif_out, downstream_notif);
+	}
+	//copy data in -> out
+	do{
+		#pragma HLS PIPELINE II=1
+		inword = STREAM_READ(in);
+		inword.dest = strm;
+		STREAM_WRITE(out, inword);
+		notif.length = (notif.length < bytes_per_word) ? 0u : (unsigned int)notif.length-bytes_per_word;//floor at zero
+		message_rem = (message_rem < bytes_per_word) ? 0u : message_rem-bytes_per_word;//slight problem here if the message doesnt end on a 64B boundary...
+	} while(notif.length > 0 && message_rem > 0);
+	//update session info (remaining bytes and target of currently processing message)
+	remaining[notif.session_id] = message_rem;
+	//if we're not finished with this fragment, skip notification read on the next run
+	continue_notif = (notif.length > 0);
+	//update session id for caching
+	prev_session_id = notif.session_id;
 }

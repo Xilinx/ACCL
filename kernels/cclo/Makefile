@@ -22,6 +22,7 @@ EN_DMA ?= 1
 EN_ARITH ?= 1
 EN_COMPRESS ?= 1
 EN_EXT_KRNL ?= 1
+EN_FANIN ?= 0
 MB_DEBUG_LEVEL ?= 0
 SIM_MEMSIZE ?= 256K
 XCCL_ELF=vitis_ws/ccl_offload_control/Debug/ccl_offload_control.elf
@@ -51,7 +52,7 @@ xsa: $(XCCL_XSA)
 
 $(XCCL_XSA): $(GEN_KERNEL_TCL) $(REBUILD_BD_TCL)
 	$(MAKE) -C hls/ DEVICE=$(FPGAPART)
-	vivado -mode batch -source $< -tclargs $(FPGAPART) $(BOARDPART) $(HW_DEBUG) $(XCCL_XSA) $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) $(MB_DEBUG_LEVEL)
+	vivado -mode batch -source $< -tclargs $(FPGAPART) $(BOARDPART) $(HW_DEBUG) $(XCCL_XSA) $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) $(MB_DEBUG_LEVEL) $(EN_FANIN)
 
 OPTIMIZATION=s
 #valid values 0,1,2,3,s,g

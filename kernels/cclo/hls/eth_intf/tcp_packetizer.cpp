@@ -65,7 +65,7 @@ void tcp_packetizer(
 		//signal ragged tail
 		int bytes_left = (bytes_to_process - bytes_processed);
 		if(bytes_left < bytes_per_word){
-			outword.keep = (1 << bytes_left)-1;
+			outword.keep = (ap_uint<64>(1) << bytes_left)-1;
 			bytes_processed += bytes_left;
 		}else{
 			outword.keep = -1;

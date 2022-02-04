@@ -90,7 +90,7 @@ if { $en_dma != 0 } {
 }
 
 if { $stacktype == "TCP" } {
-    create_bd_cell -type ip -vlnv xilinx.com:hls:network_krnl:1.0 dummy_tcp_stack
+    create_bd_cell -type ip -vlnv xilinx.com:ACCL:network_krnl:1.0 dummy_tcp_stack
     connect_bd_net [get_bd_ports ap_clk] [get_bd_pins dummy_tcp_stack/ap_clk]
     connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins dummy_tcp_stack/ap_rst_n]
     #replace direct connections to ports with connections via dummy tcp stack
@@ -140,8 +140,11 @@ if { $en_arith != 0 } {
     create_bd_cell -type ip -vlnv xilinx.com:ACCL:reduce_sum_half:1.0 reduce_sum_half_0
     create_bd_cell -type ip -vlnv xilinx.com:ACCL:reduce_sum_int32_t:1.0 reduce_sum_int32_t_0
     create_bd_cell -type ip -vlnv xilinx.com:ACCL:reduce_sum_int64_t:1.0 reduce_sum_int64_t_0
-    create_bd_cell -type ip -vlnv xilinx.com:ip:axis_interconnect:2.1 axis_ic_arith_op
-    set_property -dict [list CONFIG.NUM_SI {1} CONFIG.NUM_MI {5} CONFIG.ARB_ON_TLAST {0}] [get_bd_cells axis_ic_arith_op]
+    create_bd_cell -type ip -vlnv xilinx.com:ip:axis_switch:1.1 axis_ic_arith_op
+    set_property -dict [list \
+        CONFIG.NUM_SI {1} \
+        CONFIG.NUM_MI {5} \
+    ] [get_bd_cells axis_ic_arith_op]
 
     connect_bd_intf_net [get_bd_intf_pins axis_ic_arith_op/S00_AXIS] [get_bd_intf_pins cclo/m_axis_arith_op]
     connect_bd_intf_net [get_bd_intf_pins axis_ic_arith_op/M00_AXIS] [get_bd_intf_pins reduce_sum_float_0/in_r]
@@ -149,20 +152,8 @@ if { $en_arith != 0 } {
     connect_bd_intf_net [get_bd_intf_pins axis_ic_arith_op/M02_AXIS] [get_bd_intf_pins reduce_sum_half_0/in_r]
     connect_bd_intf_net [get_bd_intf_pins axis_ic_arith_op/M03_AXIS] [get_bd_intf_pins reduce_sum_int32_t_0/in_r]
     connect_bd_intf_net [get_bd_intf_pins axis_ic_arith_op/M04_AXIS] [get_bd_intf_pins reduce_sum_int64_t_0/in_r]
-    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins axis_ic_arith_op/ACLK]
-    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins axis_ic_arith_op/ARESETN]
-    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins axis_ic_arith_op/S00_AXIS_ACLK]
-    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins axis_ic_arith_op/M00_AXIS_ACLK]
-    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins axis_ic_arith_op/M01_AXIS_ACLK]
-    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins axis_ic_arith_op/M02_AXIS_ACLK]
-    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins axis_ic_arith_op/M03_AXIS_ACLK]
-    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins axis_ic_arith_op/M04_AXIS_ACLK]
-    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins axis_ic_arith_op/M04_AXIS_ARESETN]
-    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins axis_ic_arith_op/M03_AXIS_ARESETN]
-    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins axis_ic_arith_op/M02_AXIS_ARESETN]
-    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins axis_ic_arith_op/M01_AXIS_ARESETN]
-    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins axis_ic_arith_op/M00_AXIS_ARESETN]
-    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins axis_ic_arith_op/S00_AXIS_ARESETN]
+    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins axis_ic_arith_op/aclk]
+    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins axis_ic_arith_op/aresetn]
     connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins reduce_sum_float_0/ap_rst_n]
     connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins reduce_sum_double_0/ap_rst_n]
     connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins reduce_sum_int32_t_0/ap_rst_n]
@@ -174,70 +165,66 @@ if { $en_arith != 0 } {
     connect_bd_net [get_bd_ports ap_clk] [get_bd_pins reduce_sum_double_0/ap_clk]
     connect_bd_net [get_bd_ports ap_clk] [get_bd_pins reduce_sum_half_0/ap_clk]
 
-    create_bd_cell -type ip -vlnv xilinx.com:ip:axis_interconnect:2.1 axis_ic_arith_res
-    set_property -dict [list CONFIG.NUM_SI {5} CONFIG.NUM_MI {1} CONFIG.ARB_ON_TLAST {1}] [get_bd_cells axis_ic_arith_res]
+    create_bd_cell -type ip -vlnv xilinx.com:ip:axis_switch:1.1 axis_ic_arith_res
+    set_property -dict [list \
+        CONFIG.NUM_SI {5} \
+        CONFIG.NUM_MI {1} \
+        CONFIG.HAS_TLAST.VALUE_SRC USER \
+        CONFIG.HAS_TLAST {1} \
+        CONFIG.ARB_ON_TLAST {1} \
+        CONFIG.ARB_ALGORITHM {3} \
+        CONFIG.ARB_ON_MAX_XFERS {0} \
+    ] [get_bd_cells axis_ic_arith_res]
     connect_bd_intf_net [get_bd_intf_pins axis_ic_arith_res/M00_AXIS] [get_bd_intf_pins cclo/s_axis_arith_res]
     connect_bd_intf_net [get_bd_intf_pins axis_ic_arith_res/S00_AXIS] [get_bd_intf_pins reduce_sum_float_0/out_r]
     connect_bd_intf_net [get_bd_intf_pins axis_ic_arith_res/S01_AXIS] [get_bd_intf_pins reduce_sum_double_0/out_r]
     connect_bd_intf_net [get_bd_intf_pins axis_ic_arith_res/S02_AXIS] [get_bd_intf_pins reduce_sum_half_0/out_r]
     connect_bd_intf_net [get_bd_intf_pins axis_ic_arith_res/S03_AXIS] [get_bd_intf_pins reduce_sum_int32_t_0/out_r]
     connect_bd_intf_net [get_bd_intf_pins axis_ic_arith_res/S04_AXIS] [get_bd_intf_pins reduce_sum_int64_t_0/out_r]
-    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins axis_ic_arith_res/ACLK]
-    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins axis_ic_arith_res/ARESETN]
-    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins axis_ic_arith_res/M00_AXIS_ACLK]
-    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins axis_ic_arith_res/S00_AXIS_ACLK]
-    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins axis_ic_arith_res/S01_AXIS_ACLK]
-    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins axis_ic_arith_res/S02_AXIS_ACLK]
-    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins axis_ic_arith_res/S03_AXIS_ACLK]
-    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins axis_ic_arith_res/S04_AXIS_ACLK]
-    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins axis_ic_arith_res/S04_AXIS_ARESETN]
-    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins axis_ic_arith_res/S03_AXIS_ARESETN]
-    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins axis_ic_arith_res/S02_AXIS_ARESETN]
-    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins axis_ic_arith_res/S01_AXIS_ARESETN]
-    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins axis_ic_arith_res/S00_AXIS_ARESETN]
-    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins axis_ic_arith_res/M00_AXIS_ARESETN]
+    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins axis_ic_arith_res/aclk]
+    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins axis_ic_arith_res/aresetn]
 
     group_bd_cells reduce_arith [get_bd_cells reduce_sum_double_0] \
                                 [get_bd_cells reduce_sum_int32_t_0] \
                                 [get_bd_cells reduce_sum_half_0] \
                                 [get_bd_cells reduce_sum_float_0] \
                                 [get_bd_cells reduce_sum_int64_t_0] \
-                                [get_bd_cells axis_interconnect_0] \
                                 [get_bd_cells axis_ic_arith_res] \
                                 [get_bd_cells axis_ic_arith_op]
 }
 
 # implement compression lanes
 proc assemble_clane { idx } {
-    create_bd_cell -type ip -vlnv xilinx.com:ip:axis_interconnect:2.1 axis_ic_clane${idx}_op
-    set_property -dict [list CONFIG.NUM_SI {1} CONFIG.NUM_MI {2} CONFIG.ARB_ON_TLAST {0}] [get_bd_cells axis_ic_clane${idx}_op]
-    create_bd_cell -type ip -vlnv xilinx.com:ip:axis_interconnect:2.1 axis_ic_clane${idx}_res
-    set_property -dict [list CONFIG.NUM_SI {2} CONFIG.NUM_MI {1} CONFIG.ARB_ON_TLAST {1}] [get_bd_cells axis_ic_clane${idx}_res]
+    create_bd_cell -type ip -vlnv xilinx.com:ip:axis_switch:1.1 axis_ic_clane${idx}_op
+    set_property -dict [list \
+        CONFIG.NUM_SI {1} \
+        CONFIG.NUM_MI {2} \
+        CONFIG.HAS_TLAST.VALUE_SRC USER \
+        CONFIG.HAS_TLAST {1} \
+    ] [get_bd_cells axis_ic_clane${idx}_op]
+    create_bd_cell -type ip -vlnv xilinx.com:ip:axis_switch:1.1 axis_ic_clane${idx}_res
+    set_property -dict [list \
+        CONFIG.NUM_SI {2} \
+        CONFIG.NUM_MI {1} \
+        CONFIG.HAS_TLAST.VALUE_SRC USER \
+        CONFIG.HAS_TLAST {1} \
+        CONFIG.ARB_ON_TLAST {1} \
+        CONFIG.ARB_ALGORITHM {3} \
+        CONFIG.ARB_ON_MAX_XFERS {0} \
+    ] [get_bd_cells axis_ic_clane${idx}_res]
     create_bd_cell -type ip -vlnv xilinx.com:ACCL:fp_hp_stream_conv:1.0 fp_hp_stream_conv_${idx}
     create_bd_cell -type ip -vlnv xilinx.com:ACCL:hp_fp_stream_conv:1.0 hp_fp_stream_conv_${idx}
     connect_bd_intf_net [get_bd_intf_pins axis_ic_clane${idx}_res/M00_AXIS] [get_bd_intf_pins cclo/s_axis_compression${idx}]
     connect_bd_intf_net [get_bd_intf_pins axis_ic_clane${idx}_res/S00_AXIS] [get_bd_intf_pins fp_hp_stream_conv_${idx}/out_r]
     connect_bd_intf_net [get_bd_intf_pins axis_ic_clane${idx}_res/S01_AXIS] [get_bd_intf_pins hp_fp_stream_conv_${idx}/out_r]
-    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins axis_ic_clane${idx}_res/ACLK]
-    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins axis_ic_clane${idx}_res/ARESETN]
-    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins axis_ic_clane${idx}_res/M00_AXIS_ACLK]
-    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins axis_ic_clane${idx}_res/S00_AXIS_ACLK]
-    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins axis_ic_clane${idx}_res/S01_AXIS_ACLK]
-    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins axis_ic_clane${idx}_res/M00_AXIS_ARESETN]
-    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins axis_ic_clane${idx}_res/S00_AXIS_ARESETN]
-    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins axis_ic_clane${idx}_res/S01_AXIS_ARESETN]
+    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins axis_ic_clane${idx}_res/aclk]
+    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins axis_ic_clane${idx}_res/aresetn]
 
     connect_bd_intf_net [get_bd_intf_pins axis_ic_clane${idx}_op/S00_AXIS] [get_bd_intf_pins cclo/m_axis_compression${idx}]
     connect_bd_intf_net [get_bd_intf_pins axis_ic_clane${idx}_op/M00_AXIS] [get_bd_intf_pins fp_hp_stream_conv_${idx}/in_r]
     connect_bd_intf_net [get_bd_intf_pins axis_ic_clane${idx}_op/M01_AXIS] [get_bd_intf_pins hp_fp_stream_conv_${idx}/in_r]
-    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins axis_ic_clane${idx}_op/ACLK]
-    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins axis_ic_clane${idx}_op/ARESETN]
-    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins axis_ic_clane${idx}_op/S00_AXIS_ACLK]
-    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins axis_ic_clane${idx}_op/M00_AXIS_ACLK]
-    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins axis_ic_clane${idx}_op/M01_AXIS_ACLK]
-    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins axis_ic_clane${idx}_op/S00_AXIS_ARESETN]
-    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins axis_ic_clane${idx}_op/M00_AXIS_ARESETN]
-    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins axis_ic_clane${idx}_op/M01_AXIS_ARESETN]
+    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins axis_ic_clane${idx}_op/aclk]
+    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins axis_ic_clane${idx}_op/aresetn]
 
     connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins hp_fp_stream_conv_${idx}/ap_rst_n]
     connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins fp_hp_stream_conv_${idx}/ap_rst_n]

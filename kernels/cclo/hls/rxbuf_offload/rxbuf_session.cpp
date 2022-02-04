@@ -25,7 +25,7 @@ void rxbuf_session_status(
     STREAM<ap_uint<32> > &sts_in,
     STREAM<ap_uint<32> > &sts_out
 ){
-#pragma HLS PIPELINE II=1
+#pragma HLS PIPELINE II=1 style=flp
 #pragma HLS INLINE off
     static ap_uint<32> mem[512];//TODO make depth compile-time configurable
     hlslib::axi::Status tmp_sts, stored_sts;
@@ -33,7 +33,9 @@ void rxbuf_session_status(
     if(!STREAM_IS_EMPTY(cmd_in)){
         cmd = STREAM_READ(cmd_in);
         tmp_sts = hlslib::axi::Status(STREAM_READ(sts_in));
-        if(cmd.first){
+        if(cmd.first && cmd.last){
+            STREAM_WRITE(sts_out, tmp_sts);
+        } else if(cmd.first){
             mem[cmd.index] = tmp_sts;
         } else {
             stored_sts = hlslib::axi::Status(mem[cmd.index]);
@@ -57,12 +59,11 @@ void rxbuf_session_command(
     STREAM<ap_uint<32> > &rxbuf_idx_out,
     STREAM<ap_uint<104> > &fragment_dma_cmd,
     STREAM<eth_notification> &session_notification,
-	STREAM<stream_word> &data_in,
-    STREAM<stream_word> &data_out,
+    STREAM<eth_header> &eth_hdr_in,
     STREAM<eth_header> &eth_hdr_out,
     STREAM<rxbuf_status_control> &status_instruction
 ){
-#pragma HLS PIPELINE II=1
+#pragma HLS PIPELINE II=1 style=flp
 #pragma HLS INLINE off
     static rxbuf_session_descriptor mem[512];//TODO make depth compile-time configurable
     eth_notification notif;
@@ -91,17 +92,11 @@ void rxbuf_session_command(
             //issue a command to the datamover for this fragment
             //(we can reuse the input command since it's indeterminate BTT and address is the same right now)
             STREAM_WRITE(fragment_dma_cmd, cmd);
-            //copy data, storing header
-            stream_word inword = STREAM_READ(data_in);
-	        desc.header = eth_header(inword.data(HEADER_LENGTH-1,0));
-            notif.length -= 64;
+            //store header
+	        desc.header = STREAM_READ(eth_hdr_in);
             desc.remaining = desc.header.count;
             //prime the command to status parser
             sts_command.first = true;
-        }
-        //copy data from input to output
-        for(int i=0; i<notif.length; i+=64){
-            STREAM_WRITE(data_out, STREAM_READ(data_in));
         }
         //update address
         desc.address += notif.length;
@@ -122,15 +117,18 @@ void rxbuf_session_command(
 }
 
 void rxbuf_session(
+    //interface to enqueue/dequeue engines; we intercept the DMA and inflight streams
 	STREAM<ap_uint<104> > &rxbuf_dma_cmd, //incoming command for a full DMA transfer targeting a RX buffer
     STREAM<ap_uint<32> > &rxbuf_dma_sts, //status of a rxbuf write (assembled from statuses of fragments)
 	STREAM<ap_uint<32> > &rxbuf_idx_in, //indicates RX buffer index corresponding to DMA command on rxbuf_dma_cmd
     STREAM<ap_uint<32> > &rxbuf_idx_out, //forward index of completed RX buffer
+    //interface to Datamover
     STREAM<ap_uint<104> > &fragment_dma_cmd, //outgoing DMA command for a partial message write to a RX buffer
 	STREAM<ap_uint<32> > &fragment_dma_sts, //status of a fragment write
+    //interface to depacketizer
     STREAM<eth_notification> &session_notification, //get notified when there is data for a session
-	STREAM<stream_word> &data_in, //incoming data from the PoE
-    STREAM<stream_word> &data_out, //outgoing data to datamover
+    STREAM<eth_header> &eth_hdr_in,
+    //status to dequeuer
     STREAM<eth_header> &eth_hdr_out //forward header of message in completed RX buffer
 ){
 #pragma HLS INTERFACE axis register both port=rxbuf_dma_cmd
@@ -140,8 +138,7 @@ void rxbuf_session(
 #pragma HLS INTERFACE axis register both port=fragment_dma_cmd
 #pragma HLS INTERFACE axis register both port=fragment_dma_sts
 #pragma HLS INTERFACE axis register both port=session_notification
-#pragma HLS INTERFACE axis register both port=data_in
-#pragma HLS INTERFACE axis register both port=data_out
+#pragma HLS INTERFACE axis register both port=eth_hdr_in
 #pragma HLS INTERFACE axis register both port=eth_hdr_out
 #pragma HLS INTERFACE ap_ctrl_none port=return
 #pragma HLS DATAFLOW disable_start_propagation
@@ -179,15 +176,20 @@ void rxbuf_session(
     //to the buffer id; on receipt of a flush status notification, the function will, on receipt of the next
     //corresponding status, flush the accumulated status on rxbuf_dma_sts and clear it in storage
 
-    STREAM<rxbuf_status_control> status_instruction;
+#ifdef ACCL_SYNTHESIS
+    hls::stream<rxbuf_status_control> status_instruction;
+    #pragma HLS STREAM variable=status_instruction depth=32
+#else
+    hlslib::Stream<rxbuf_status_control, 32> status_instruction;
+#endif
+
     rxbuf_session_command(
         rxbuf_dma_cmd, 
         rxbuf_idx_in, 
         rxbuf_idx_out, 
         fragment_dma_cmd, 
         session_notification, 
-        data_in, 
-        data_out, 
+        eth_hdr_in,
         eth_hdr_out, 
         status_instruction
     );

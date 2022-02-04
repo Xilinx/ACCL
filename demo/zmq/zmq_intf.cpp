@@ -74,7 +74,6 @@ void eth_endpoint_egress_port(zmq_intf_context *ctx, Stream<stream_word > &in, u
     Json::StreamWriterBuilder builder;
 
     if(in.IsEmpty()) return;
-    cout << "sending" << endl;
     //pop first word in packet
     stringstream ss;
     unsigned int dest;
@@ -107,8 +106,11 @@ void eth_endpoint_egress_port(zmq_intf_context *ctx, Stream<stream_word > &in, u
     //finally package the data
     string str = Json::writeString(builder, packet);
     message << str;
-    cout << "ETH Send to " << dest << endl;
+    cout << "ETH Send " << idx << " bytes to " << dest << endl;
     ctx->eth_tx_socket->send(message);
+    //add some spacing to encourage realistic
+    //interleaving between messsages in fabric
+    this_thread::sleep_for(chrono::milliseconds(10));
 }
 
 void eth_endpoint_ingress_port(zmq_intf_context *ctx, Stream<stream_word > &out){
@@ -126,7 +128,6 @@ void eth_endpoint_ingress_port(zmq_intf_context *ctx, Stream<stream_word > &out)
     message >> dst_text;
     message >> sender_rank_text;
     message >> msg_text;
-    cout << "ETH Receive from " << sender_rank_text << endl;
 
     //parse msg_text as json
     Json::Value packet, data;
@@ -150,6 +151,9 @@ void eth_endpoint_ingress_port(zmq_intf_context *ctx, Stream<stream_word > &out)
         tmp.dest = stoi(sender_rank_text);
         out.Push(tmp);
     }
+
+    cout << "ETH Receive " << len << " bytes from " << sender_rank_text << endl;
+
 }
 
 void serve_zmq(zmq_intf_context *ctx, uint32_t *cfgmem, vector<char> &devicemem, Stream<ap_axiu<32,0,0,0> > &cmd, Stream<ap_axiu<32,0,0,0> > &sts){

@@ -23,6 +23,7 @@ from accl import accl, ACCLReduceFunctions, ACCLStreamFlags
 from accl import SimBuffer
 import argparse
 import itertools
+import math
 from mpi4py import MPI
 
 def get_buffers(count, op0_dt, op1_dt, res_dt, accl_inst):
@@ -112,6 +113,35 @@ def test_sendrecv_plkernel(cclo_inst, world_size, local_rank, count):
     if err_count == 0:
         print("Send/recv succeeded")
 
+def test_sendrecv_fanin(cclo_inst, world_size, local_rank, count):
+    err_count = 0
+    dt = [np.float32]#[np.float32, np.half]
+    for op_dt, res_dt in itertools.product(dt, repeat=2):
+        op_buf, _, res_buf = get_buffers(count, op_dt, op_dt, res_dt, cclo_inst)
+        # send to next rank; receive from previous rank; send back data to previous rank; receive from next rank; compare
+        if local_rank != 0:
+            for i in range(len(op_buf.buf)):
+                op_buf.buf[i] = i+local_rank
+            print("Sending on ", local_rank, " to 0")
+            cclo_inst.send(0, op_buf, count, 0, tag=0)
+        else:
+            for i in range(world_size):
+                if i == local_rank:
+                    continue
+                print("Receiving on 0 from ", i)
+                cclo_inst.recv(0, res_buf, count, i, tag=0)
+                for j in range(len(op_buf.buf)):
+                    op_buf.buf[j] = j+i
+                if not np.isclose(op_buf.buf, res_buf.buf).all():
+                    err_count += 1
+                    print("Fan-in send/recv failed for sender rank", i)
+                    print(op_buf.buf)
+                    print(res_buf.buf)
+                else:
+                    print("Fan-in send/recv succeeded for sender rank ", i)
+    if err_count == 0:
+        print("Fan-in send/recv succeeded")
+
 def test_bcast(cclo_inst, local_rank, root, count):
     err_count = 0
     dt = [np.float32]#[np.float32, np.half]
@@ -155,7 +185,8 @@ if __name__ == "__main__":
     parser.add_argument('--combine',    action='store_true', default=False, help='Run fp/dp/i32/i64 test')
     parser.add_argument('--copy',       action='store_true', default=False, help='Run copy test')
     parser.add_argument('--sndrcv',     action='store_true', default=False, help='Run send/receive test')
-    parser.add_argument('--sndrcv_strm', action='store_true', default=False, help='Run send/receive test')
+    parser.add_argument('--sndrcv_strm', action='store_true', default=False, help='Run send/receive stream test')
+    parser.add_argument('--sndrcv_fanin', action='store_true', default=False, help='Run send/receive fan-in test')
     parser.add_argument('--bcast',      action='store_true', default=False, help='Run bcast test')
     parser.add_argument('--scatter',    action='store_true', default=False, help='Run scatter test')
     parser.add_argument('--tcp',        action='store_true', default=False, help='Run test using TCP')
@@ -200,6 +231,8 @@ if __name__ == "__main__":
                 test_sendrecv(cclo_inst, world_size, local_rank, args.count)
             if args.sndrcv_strm:
                 test_sendrecv_plkernel(cclo_inst, world_size, local_rank, args.count)
+            if args.sndrcv_fanin:
+                test_sendrecv_fanin(cclo_inst, world_size, local_rank, args.count)
             if args.bcast:
                 test_bcast(cclo_inst, local_rank, i, args.count)
             if args.scatter:

@@ -286,7 +286,7 @@ proc create_dma_infrastructure { dmaIndex } {
 }
 
 # Hierarchical cell: control
-proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
+proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} {fanInSupport 0} } {
 
   variable script_folder
 
@@ -432,19 +432,78 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
   set rxbuf_dequeue [create_bd_cell -type ip -vlnv xilinx.com:hls:rxbuf_dequeue:1.0 rxbuf_dequeue]
   set rxbuf_seek [create_bd_cell -type ip -vlnv xilinx.com:hls:rxbuf_seek:1.0 rxbuf_seek]
   create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 fifo_seek
-  create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 fifo_inflight
   set_property -dict [ list CONFIG.HAS_TLAST {0} CONFIG.TDATA_NUM_BYTES {20} CONFIG.FIFO_DEPTH {32} CONFIG.FIFO_MEMORY_TYPE {distributed}] [get_bd_cells fifo_seek]
+  create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 fifo_inflight
   set_property -dict [ list CONFIG.HAS_TLAST {0} CONFIG.TDATA_NUM_BYTES {4} CONFIG.FIFO_DEPTH {32} CONFIG.FIFO_MEMORY_TYPE {distributed}] [get_bd_cells fifo_inflight]
+
   connect_bd_intf_net [get_bd_intf_pins rxbuf_enqueue/s_axi_control] [get_bd_intf_pins microblaze_0_axi_periph/M02_AXI]
   connect_bd_intf_net [get_bd_intf_pins rxbuf_dequeue/s_axi_control] [get_bd_intf_pins microblaze_0_axi_periph/M03_AXI]
   connect_bd_intf_net [get_bd_intf_pins rxbuf_seek/s_axi_control] [get_bd_intf_pins microblaze_0_axi_periph/M04_AXI]
-  connect_bd_intf_net [get_bd_intf_pins fifo_eth_depacketizer_sts/M_AXIS] [get_bd_intf_pins rxbuf_dequeue/eth_hdr]
-  connect_bd_intf_net [get_bd_intf_pins fifo_dma0_s2mm_cmd/S_AXIS] [get_bd_intf_pins rxbuf_enqueue/dma_cmd]
-  connect_bd_intf_net [get_bd_intf_pins fifo_dma0_s2mm_sts/M_AXIS] [get_bd_intf_pins rxbuf_dequeue/dma_sts]
   connect_bd_intf_net [get_bd_intf_pins rxbuf_dequeue/notification_queue] [get_bd_intf_pins fifo_seek/S_AXIS]
   connect_bd_intf_net [get_bd_intf_pins fifo_seek/M_AXIS] [get_bd_intf_pins rxbuf_seek/rx_notify]
-  connect_bd_intf_net [get_bd_intf_pins rxbuf_enqueue/inflight_queue] [get_bd_intf_pins fifo_inflight/S_AXIS]
-  connect_bd_intf_net [get_bd_intf_pins fifo_inflight/M_AXIS] [get_bd_intf_pins rxbuf_dequeue/inflight_queue]
+
+  if { $fanInSupport == 1 } {
+
+    create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 eth_depacketizer_notif
+
+    create_bd_cell -type ip -vlnv xilinx.com:hls:rxbuf_session:1.0 rxbuf_session
+    create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 fifo_inflight_session
+    set_property -dict [ list CONFIG.HAS_TLAST {0} CONFIG.TDATA_NUM_BYTES {4} CONFIG.FIFO_DEPTH {32} CONFIG.FIFO_MEMORY_TYPE {distributed}] [get_bd_cells fifo_inflight_session]
+
+    create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 fifo_dmacmd_session
+    set_property -dict [ list CONFIG.HAS_TLAST {0} CONFIG.TDATA_NUM_BYTES {13} CONFIG.FIFO_DEPTH {32} CONFIG.FIFO_MEMORY_TYPE {distributed}] [get_bd_cells fifo_dmacmd_session]
+    create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 fifo_dmasts_session
+    set_property -dict [ list CONFIG.HAS_TLAST {1} CONFIG.TDATA_NUM_BYTES {4} CONFIG.FIFO_DEPTH {32} CONFIG.FIFO_MEMORY_TYPE {distributed}] [get_bd_cells fifo_dmasts_session]
+
+    create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 fifo_hdr_session
+    set_property -dict [ list CONFIG.HAS_TLAST {1} CONFIG.TDATA_NUM_BYTES {24} CONFIG.FIFO_DEPTH {32} CONFIG.FIFO_MEMORY_TYPE {distributed}] [get_bd_cells fifo_hdr_session]
+  
+
+    connect_bd_intf_net [get_bd_intf_pins rxbuf_enqueue/dma_cmd] [get_bd_intf_pins fifo_dmacmd_session/S_AXIS] 
+    connect_bd_intf_net [get_bd_intf_pins fifo_dmacmd_session/M_AXIS] [get_bd_intf_pins rxbuf_session/rxbuf_dma_cmd]
+
+    connect_bd_intf_net [get_bd_intf_pins rxbuf_session/rxbuf_dma_sts] [get_bd_intf_pins fifo_dmasts_session/S_AXIS]
+    connect_bd_intf_net [get_bd_intf_pins fifo_dmasts_session/M_AXIS] [get_bd_intf_pins rxbuf_dequeue/dma_sts]
+
+    connect_bd_intf_net [get_bd_intf_pins rxbuf_session/fragment_dma_cmd] [get_bd_intf_pins fifo_dma0_s2mm_cmd/S_AXIS]
+    connect_bd_intf_net [get_bd_intf_pins fifo_dma0_s2mm_sts/M_AXIS] [get_bd_intf_pins rxbuf_session/fragment_dma_sts]
+
+    connect_bd_intf_net [get_bd_intf_pins rxbuf_enqueue/inflight_queue] [get_bd_intf_pins fifo_inflight_session/S_AXIS]
+    connect_bd_intf_net [get_bd_intf_pins fifo_inflight_session/M_AXIS] [get_bd_intf_pins rxbuf_session/rxbuf_idx_in]
+
+    connect_bd_intf_net [get_bd_intf_pins rxbuf_session/rxbuf_idx_out] [get_bd_intf_pins fifo_inflight/S_AXIS]
+    connect_bd_intf_net [get_bd_intf_pins fifo_inflight/M_AXIS] [get_bd_intf_pins rxbuf_dequeue/inflight_queue]
+
+    connect_bd_intf_net [get_bd_intf_pins fifo_eth_depacketizer_sts/M_AXIS] [get_bd_intf_pins rxbuf_session/eth_hdr_in]
+
+    connect_bd_intf_net [get_bd_intf_pins rxbuf_session/eth_hdr_out] [get_bd_intf_pins fifo_hdr_session/S_AXIS]
+    connect_bd_intf_net [get_bd_intf_pins fifo_hdr_session/M_AXIS] [get_bd_intf_pins rxbuf_dequeue/eth_hdr]
+
+    connect_bd_intf_net [get_bd_intf_pins eth_depacketizer_notif] [get_bd_intf_pins rxbuf_session/session_notification]
+
+    connect_bd_net [get_bd_pins ap_clk] [get_bd_pins fifo_inflight_session/s_axis_aclk] \
+                                        [get_bd_pins fifo_dmacmd_session/s_axis_aclk] \
+                                        [get_bd_pins fifo_dmasts_session/s_axis_aclk] \
+                                        [get_bd_pins fifo_hdr_session/s_axis_aclk] \
+                                        [get_bd_pins rxbuf_session/ap_clk]
+
+    connect_bd_net [get_bd_pins proc_sys_reset_1/peripheral_aresetn] \
+                    [get_bd_pins fifo_inflight_session/s_axis_aresetn] \
+                    [get_bd_pins fifo_dmacmd_session/s_axis_aresetn] \
+                    [get_bd_pins fifo_dmasts_session/s_axis_aresetn] \
+                    [get_bd_pins fifo_hdr_session/s_axis_aresetn] \
+                    [get_bd_pins rxbuf_session/ap_rst_n]
+
+  } else {
+
+    connect_bd_intf_net [get_bd_intf_pins fifo_eth_depacketizer_sts/M_AXIS] [get_bd_intf_pins rxbuf_dequeue/eth_hdr]
+    connect_bd_intf_net [get_bd_intf_pins fifo_dma0_s2mm_cmd/S_AXIS] [get_bd_intf_pins rxbuf_enqueue/dma_cmd]
+    connect_bd_intf_net [get_bd_intf_pins fifo_dma0_s2mm_sts/M_AXIS] [get_bd_intf_pins rxbuf_dequeue/dma_sts]
+    connect_bd_intf_net [get_bd_intf_pins rxbuf_enqueue/inflight_queue] [get_bd_intf_pins fifo_inflight/S_AXIS]
+    connect_bd_intf_net [get_bd_intf_pins fifo_inflight/M_AXIS] [get_bd_intf_pins rxbuf_dequeue/inflight_queue]
+
+  }
+
 
   # Create DMA segmentation processor
   set dma_mover [ create_bd_cell -type ip -vlnv xilinx.com:hls:dma_mover:1.0 dma_mover ]
@@ -584,11 +643,10 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
                                                                    [get_bd_pins dma_memory_ic/aresetn]
 
   # Create some hierarchies to keep things organized
-  group_bd_cells rxbuf_offload  [get_bd_cells rxbuf_dequeue] \
-                                [get_bd_cells rxbuf_seek] \
-                                [get_bd_cells rxbuf_enqueue] \
+  group_bd_cells rxbuf_offload  [get_bd_cells rxbuf_*] \
                                 [get_bd_cells fifo_seek] \
                                 [get_bd_cells fifo_inflight] \
+                                [get_bd_cells fifo_*_session] \
                                 [get_bd_cells fifo_eth_depacketizer_sts] \
                                 [get_bd_cells fifo_dma0_s2mm_sts] \
                                 [get_bd_cells fifo_dma0_s2mm_cmd]

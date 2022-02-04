@@ -197,6 +197,7 @@ void tcp_rxHandler(
 #pragma HLS INTERFACE axis register both port=s_axis_tcp_rx_meta
 #pragma HLS INTERFACE axis register both port=s_axis_tcp_rx_data
 #pragma HLS INTERFACE axis register both port=m_data_out
+#pragma HLS INTERFACE axis register both port=m_notif_out
 #pragma HLS INTERFACE ap_ctrl_none port=return
 #pragma HLS DATAFLOW disable_start_propagation
 
@@ -249,8 +250,8 @@ void tcp_rxHandler(
 #pragma HLS INTERFACE axis register both port=s_axis_tcp_rx_meta
 #pragma HLS INTERFACE axis register both port=s_axis_tcp_rx_data
 #pragma HLS INTERFACE axis register both port=m_data_out
+#pragma HLS INTERFACE axis register both port=m_notif_out
 #pragma HLS INTERFACE ap_ctrl_none port=return
-
 #pragma HLS PIPELINE II=1
 #pragma HLS INLINE off
 

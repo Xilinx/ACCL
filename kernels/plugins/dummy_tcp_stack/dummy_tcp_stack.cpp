@@ -121,6 +121,7 @@ static hlslib::Stream<hlslib::axi::Stream<ap_uint<DATA_WIDTH>, DEST_WIDTH>, 512>
     case BUFFER_DATA:
         if (!STREAM_IS_EMPTY(in)){
             do {
+                #pragma HLS PIPELINE II=1
                 currWord = STREAM_READ(in);
                 STREAM_WRITE(rxDataBuffer, (hlslib::axi::Stream<ap_uint<DATA_WIDTH>, DEST_WIDTH>(currWord)));
                 for(int i=0; i<DATA_WIDTH/8; i++){
@@ -160,6 +161,7 @@ static hlslib::Stream<hlslib::axi::Stream<ap_uint<DATA_WIDTH>, DEST_WIDTH>, 512>
         if (!STREAM_IS_EMPTY(rxDataBuffer))
         {
             do{
+                #pragma HLS PIPELINE II=1
                 currWord = STREAM_READ(rxDataBuffer);
                 STREAM_WRITE(m_axis_tcp_rx_data, currWord);
             }while(currWord.last == 0);

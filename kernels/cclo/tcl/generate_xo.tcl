@@ -80,40 +80,58 @@ proc config_axilite_reg {addr_block name offset size intf} {
 
 proc edit_core {core} {
 
-    config_axi_if $core "m_axi_0" 64 32 32
-    config_axi_if $core "m_axi_1" 64 32 32
+    global stacktype
+    global en_arith
+    global en_compress
+    global en_dma
+    global en_extkrnl
+    global mb_debug_level
 
-    ::ipx::associate_bus_interfaces -busif "m_axi_0" -clock "ap_clk" $core
-    ::ipx::associate_bus_interfaces -busif "m_axi_1" -clock "ap_clk" $core
     ::ipx::associate_bus_interfaces -busif "s_axi_control" -clock "ap_clk" $core
 
-    config_axis_if $core "s_axis_udp_rx_data" "ap_clk" 64 0 0 16 1 0 1 1
-    config_axis_if $core "m_axis_udp_tx_data" "ap_clk" 64 0 0 16 1 0 1 1
+    config_axis_if $core "s_axis_call_req" "ap_clk" 4 0 0 0 1 0 1 1
+    config_axis_if $core "m_axis_call_ack" "ap_clk" 4 0 0 0 1 0 1 1
 
-    config_axis_if $core "s_axis_tcp_notification" "ap_clk" 16 0 0 0 1 0 1 1
-    config_axis_if $core "m_axis_tcp_read_pkg" "ap_clk" 4 0 0 0 1 0 1 1
-    config_axis_if $core "s_axis_tcp_rx_meta" "ap_clk" 2 0 0 0 1 0 1 1
-    config_axis_if $core "s_axis_tcp_rx_data" "ap_clk" 64 0 0 0 1 0 1 1
-    config_axis_if $core "m_axis_tcp_tx_meta" "ap_clk" 4 0 0 0 1 0 1 1
-    config_axis_if $core "m_axis_tcp_tx_data" "ap_clk" 64 0 0 0 1 0 1 1
-    config_axis_if $core "s_axis_tcp_tx_status" "ap_clk" 8 0 0 0 1 0 1 1
-    config_axis_if $core "m_axis_tcp_open_connection" "ap_clk" 8 0 0 0 1 0 1 1
-    config_axis_if $core "s_axis_tcp_open_status" "ap_clk" 16 0 0 0 1 0 1 1
-    config_axis_if $core "m_axis_tcp_listen_port" "ap_clk" 2 0 0 0 1 0 1 1
-    config_axis_if $core "s_axis_tcp_port_status" "ap_clk" 1 0 0 0 1 0 1 1
+    config_axis_if $core "s_axis_eth_rx_data" "ap_clk" 64 0 0 8 1 0 1 1
+    config_axis_if $core "m_axis_eth_tx_data" "ap_clk" 64 0 0 8 1 0 1 1
 
-    config_axis_if $core "s_axis_krnl" "ap_clk" 64 0 0 0 1 0 1 1
-    config_axis_if $core "m_axis_krnl" "ap_clk" 64 0 0 4 1 0 1 1
+    if { $en_dma == 1 } {
+        config_axi_if $core "m_axi_0" 64 32 32
+        config_axi_if $core "m_axi_1" 64 32 32
+        ::ipx::associate_bus_interfaces -busif "m_axi_0" -clock "ap_clk" $core
+        ::ipx::associate_bus_interfaces -busif "m_axi_1" -clock "ap_clk" $core
+    }
 
-    config_axis_if $core "s_axis_compression0" "ap_clk" 64 0 0 0 1 0 1 1
-    config_axis_if $core "m_axis_compression0" "ap_clk" 64 0 0 4 1 0 1 1
-    config_axis_if $core "s_axis_compression1" "ap_clk" 64 0 0 0 1 0 1 1
-    config_axis_if $core "m_axis_compression1" "ap_clk" 64 0 0 4 1 0 1 1
-    config_axis_if $core "s_axis_compression2" "ap_clk" 64 0 0 0 1 0 1 1
-    config_axis_if $core "m_axis_compression2" "ap_clk" 64 0 0 4 1 0 1 1
+    if { $stacktype == "TCP" } {
+        config_axis_if $core "s_axis_eth_notification" "ap_clk" 16 0 0 0 1 0 1 1
+        config_axis_if $core "m_axis_eth_read_pkg" "ap_clk" 4 0 0 0 1 0 1 1
+        config_axis_if $core "s_axis_eth_rx_meta" "ap_clk" 2 0 0 0 1 0 1 1
+        config_axis_if $core "m_axis_eth_tx_meta" "ap_clk" 4 0 0 0 1 0 1 1
+        config_axis_if $core "s_axis_eth_tx_status" "ap_clk" 8 0 0 0 1 0 1 1
+        config_axis_if $core "m_axis_eth_open_connection" "ap_clk" 8 0 0 0 1 0 1 1
+        config_axis_if $core "s_axis_eth_open_status" "ap_clk" 16 0 0 0 1 0 1 1
+        config_axis_if $core "m_axis_eth_listen_port" "ap_clk" 2 0 0 0 1 0 1 1
+        config_axis_if $core "s_axis_eth_port_status" "ap_clk" 1 0 0 0 1 0 1 1
+    }
 
-    config_axis_if $core "s_axis_arith_res" "ap_clk" 64 0 0 0 1 0 1 1
-    config_axis_if $core "m_axis_arith_op" "ap_clk" 128 0 0 4 1 0 1 1
+    if { $en_extkrnl == 1 } {
+        config_axis_if $core "s_axis_krnl" "ap_clk" 64 0 0 0 1 0 1 1
+        config_axis_if $core "m_axis_krnl" "ap_clk" 64 0 0 8 1 0 1 1
+    }
+
+    if { $en_compress == 1 } {
+        config_axis_if $core "s_axis_compression0" "ap_clk" 64 0 0 0 1 0 1 1
+        config_axis_if $core "m_axis_compression0" "ap_clk" 64 0 0 8 1 0 1 1
+        config_axis_if $core "s_axis_compression1" "ap_clk" 64 0 0 0 1 0 1 1
+        config_axis_if $core "m_axis_compression1" "ap_clk" 64 0 0 8 1 0 1 1
+        config_axis_if $core "s_axis_compression2" "ap_clk" 64 0 0 0 1 0 1 1
+        config_axis_if $core "m_axis_compression2" "ap_clk" 64 0 0 8 1 0 1 1
+    }
+
+    if { $en_arith == 1 } {
+        config_axis_if $core "s_axis_arith_res" "ap_clk" 64 0 0 0 1 0 1 1
+        config_axis_if $core "m_axis_arith_op" "ap_clk" 128 0 0 8 1 0 1 1
+    }
 
     # Specify the freq_hz parameter 
     set clkbif      [::ipx::get_bus_interfaces -of $core "ap_clk"]
@@ -128,66 +146,6 @@ proc edit_core {core} {
     ::ipx::remove_bus_interface bscan_0_reset $core
     set mem_map    [::ipx::add_memory_map -quiet "s_axi_control" $core]
     set addr_block [::ipx::add_address_block -quiet "reg0" $mem_map]
-
-    set reg      [::ipx::add_register "CTRL" $addr_block]
-    set_property description    "Control signals"    $reg
-    set_property address_offset 0x000 $reg
-    set_property size           32    $reg
-    set field [ipx::add_field AP_START $reg]
-        set_property ACCESS {read-write} $field
-        set_property BIT_OFFSET {0} $field
-        set_property BIT_WIDTH {1} $field
-        set_property DESCRIPTION {Control signal Register for 'ap_start'.} $field
-        set_property MODIFIED_WRITE_VALUE {modify} $field
-    set field [ipx::add_field AP_DONE $reg]
-        set_property ACCESS {read-only} $field
-        set_property BIT_OFFSET {1} $field
-        set_property BIT_WIDTH {1} $field
-        set_property DESCRIPTION {Control signal Register for 'ap_done'.} $field
-        set_property READ_ACTION {modify} $field
-    set field [ipx::add_field AP_IDLE $reg]
-        set_property ACCESS {read-only} $field
-        set_property BIT_OFFSET {2} $field
-        set_property BIT_WIDTH {1} $field
-        set_property DESCRIPTION {Control signal Register for 'ap_idle'.} $field
-        set_property READ_ACTION {modify} $field
-    set field [ipx::add_field AP_READY $reg]
-        set_property ACCESS {read-only} $field
-        set_property BIT_OFFSET {3} $field
-        set_property BIT_WIDTH {1} $field
-        set_property DESCRIPTION {Control signal Register for 'ap_ready'.} $field
-        set_property READ_ACTION {modify} $field
-    set field [ipx::add_field RESERVED_1 $reg]
-        set_property ACCESS {read-only} $field
-        set_property BIT_OFFSET {4} $field
-        set_property BIT_WIDTH {3} $field
-        set_property DESCRIPTION {Reserved.  0s on read.} $field
-        set_property READ_ACTION {modify} $field
-    set field [ipx::add_field AUTO_RESTART $reg]
-        set_property ACCESS {read-write} $field
-        set_property BIT_OFFSET {7} $field
-        set_property BIT_WIDTH {1} $field
-        set_property DESCRIPTION {Control signal Register for 'auto_restart'.} $field
-        set_property MODIFIED_WRITE_VALUE {modify} $field
-    set field [ipx::add_field RESERVED_2 $reg]
-        set_property ACCESS {read-only} $field
-        set_property BIT_OFFSET {8} $field
-        set_property BIT_WIDTH {24} $field
-        set_property DESCRIPTION {Reserved.  0s on read.} $field
-        set_property READ_ACTION {modify} $field
-
-    config_axilite_reg $addr_block "call_type"          0x10 32 ""
-    config_axilite_reg $addr_block "byte_count"         0x18 32 ""
-    config_axilite_reg $addr_block "comm"               0x20 32 ""
-    config_axilite_reg $addr_block "root_src_dst"       0x28 32 ""
-    config_axilite_reg $addr_block "reduce_op"          0x30 32 ""
-    config_axilite_reg $addr_block "tag"                0x38 32 ""
-    config_axilite_reg $addr_block "datapath_cfg"       0x40 32 ""
-    config_axilite_reg $addr_block "compression_flags"  0x48 32 ""
-    config_axilite_reg $addr_block "stream_flags"       0x50 32 ""
-    config_axilite_reg $addr_block "buf0_ptr"           0x58 64 "m_axi_0"
-    config_axilite_reg $addr_block "buf1_ptr"           0x64 64 "m_axi_1"
-    config_axilite_reg $addr_block "buf2_ptr"           0x70 64 "m_axi_2"
 
     set_property slave_memory_map_ref "s_axi_control" [::ipx::get_bus_interfaces -of $core "s_axi_control"]
 
