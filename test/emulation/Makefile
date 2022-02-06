@@ -9,7 +9,7 @@ SEGMENTER_DIR=$(CCLO_HLS_ROOT)/segmenter
 RXBUF_OFFLOAD_DIR=$(CCLO_HLS_ROOT)/rxbuf_offload
 DMA_MOVER_DIR=$(CCLO_HLS_ROOT)/dma_mover
 MB_FW_DIR=$(ACCL_REPO_ROOT)/kernels/cclo/fw/sw_apps/ccl_offload_control/src
-ZMQ_INTF_DIR=$(ACCL_REPO_ROOT)/demo/zmq
+ZMQ_INTF_DIR=$(ACCL_REPO_ROOT)/test/zmq
 
 STACKTYPE ?= "udp"
 NRANKS ?=1

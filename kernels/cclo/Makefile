@@ -28,6 +28,7 @@ SIM_MEMSIZE ?= 256K
 XCCL_ELF=vitis_ws/ccl_offload_control/Debug/ccl_offload_control.elf
 XCCL_SIMDLL=ccl_offload_ex/ccl_offload_ex.sim/sim_1/behav/xsim/xsim.dir/ccl_offload_behav/xsimk.so
 XCCL_XSA=ccl_offload_ex/ccl_offload.xsa
+XCCL_DCP=ccl_offload_ex/ccl_offload_ex.runs/synth_1/packaged.dcp
 XCCL_XO=ccl_offload.xo
 
 FW_SOURCES = $(shell find fw -name '*.c') $(shell find fw -name '*.h') $(shell find fw -name '*.tcl')
@@ -68,7 +69,7 @@ else ifeq ($(OPTIMIZATION),s)
    OPTIMIZATION_STRING = "Optimize for size (-Os)"
 endif
 
-.PHONY: elf simdll xo distclean
+.PHONY: elf simdll xo distclean dcp
 
 elf: $(XCCL_ELF)
 
@@ -84,12 +85,17 @@ $(XCCL_SIMDLL): tcl/generate_sim.tcl elf
 	vivado -mode batch -source $< -tclargs $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) $(SIM_MEMSIZE)
 	cd ccl_offload_ex/ccl_offload_ex.sim/sim_1/behav/xsim/ && ./compile.sh && ./elaborate.sh
 
+$(XCCL_DCP): tcl/generate_dcp.tcl $(XCCL_ELF)
+	vivado -mode batch -source $< -tclargs $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) $(MB_DEBUG_LEVEL)
+
+dcp: $(XCCL_DCP)
 xo: $(XCCL_XO)
 
-cclo.xml:
+ccl_offload.xml:
 	python gen_xml.py $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) 
 
-$(XCCL_XO): tcl/generate_xo.tcl $(XCCL_XSA) $(XCCL_ELF) cclo.xml
+$(XCCL_XO): tcl/generate_xo.tcl ccl_offload.xml $(XCCL_DCP)
+	rm -rf ccl_offload_ex/ccl_offload/*
 	vivado -mode batch -source $< -tclargs $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) $(MB_DEBUG_LEVEL)
 
 distclean:

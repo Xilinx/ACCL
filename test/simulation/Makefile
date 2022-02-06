@@ -21,7 +21,7 @@ MPI_INCLUDES=-I/usr/lib/x86_64-linux-gnu/openmpi/include/openmpi -I/usr/lib/x86_
 MPI_LIBPATHS=-L/usr/lib/x86_64-linux-gnu/openmpi/lib
 MB_FW_DIR=$(ACCL_REPO_ROOT)/kernels/cclo/fw/sw_apps/ccl_offload_control/src
 CCLO_HLS_ROOT=$(ACCL_REPO_ROOT)/kernels/cclo/hls
-ZMQ_DIR=$(ACCL_REPO_ROOT)/demo/zmq
+ZMQ_DIR=$(ACCL_REPO_ROOT)/test/zmq
 
 INCLUDES = -I$(XILINX_HLS)/include/ -I. -I${XILINX_VIVADO}/data/xsim/include/ -I${HLSLIB_INCLUDE} -I${MPI_INCLUDES} -I${MB_FW_DIR} -I${ZMQ_DIR} -I${CCLO_HLS_ROOT}
 XSIMK_PATH_TAIL = xsim.dir/ccl_offload_behav/xsimk.so

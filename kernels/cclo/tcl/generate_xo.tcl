@@ -27,6 +27,7 @@ set kernel_vendor  "Xilinx"
 set kernel_library "ACCL"
 
 proc config_axis_if {core ifname clkname data user id dest rdy strb keep last} {
+    puts "Setting AXI-Stream attributes for $ifname and associating with $clkname"
     ::ipx::associate_bus_interfaces -busif $ifname -clock $clkname $core
     set axis_bif      [::ipx::get_bus_interfaces -of $core $ifname] 
     set bifparam [::ipx::add_bus_parameter -quiet "TDATA_NUM_BYTES" $axis_bif]
@@ -55,7 +56,9 @@ proc config_axis_if {core ifname clkname data user id dest rdy strb keep last} {
     set_property value_source constant     $bifparam
 }
 
-proc config_axi_if {core ifname bsize maxr maxw} {
+proc config_axi_if {core ifname clkname bsize maxr maxw} {
+    puts "Setting AXI-MM attributes for $ifname and associating with $clkname"
+    ::ipx::associate_bus_interfaces -busif $ifname -clock $clkname $core
     set bif      [::ipx::get_bus_interfaces -of $core $ifname] 
     set bifparam [::ipx::add_bus_parameter -quiet "MAX_BURST_LENGTH" $bif]
     set_property value        $bsize           $bifparam
@@ -87,6 +90,8 @@ proc edit_core {core} {
     global en_extkrnl
     global mb_debug_level
 
+    puts "Configuring core interfaces"
+
     ::ipx::associate_bus_interfaces -busif "s_axi_control" -clock "ap_clk" $core
 
     config_axis_if $core "s_axis_call_req" "ap_clk" 4 0 0 0 1 0 1 1
@@ -96,10 +101,8 @@ proc edit_core {core} {
     config_axis_if $core "m_axis_eth_tx_data" "ap_clk" 64 0 0 8 1 0 1 1
 
     if { $en_dma == 1 } {
-        config_axi_if $core "m_axi_0" 64 32 32
-        config_axi_if $core "m_axi_1" 64 32 32
-        ::ipx::associate_bus_interfaces -busif "m_axi_0" -clock "ap_clk" $core
-        ::ipx::associate_bus_interfaces -busif "m_axi_1" -clock "ap_clk" $core
+        config_axi_if $core "m_axi_0" "ap_clk" 64 32 32
+        config_axi_if $core "m_axi_1" "ap_clk" 64 32 32
     }
 
     if { $stacktype == "TCP" } {
@@ -149,9 +152,13 @@ proc edit_core {core} {
 
     set_property slave_memory_map_ref "s_axi_control" [::ipx::get_bus_interfaces -of $core "s_axi_control"]
 
+    puts "Setting core attributes"
     set_property xpm_libraries {XPM_CDC XPM_MEMORY XPM_FIFO} $core
     set_property sdx_kernel true $core
     set_property sdx_kernel_type rtl $core
+    set_property vitis_drc {ctrl_protocol user_managed} $core
+    set_property ipi_drc {ignore_freq_hz true} $core
+    ::ipx::save_core $core
 }
 
 proc package_project_dcp_and_xdc {path_to_dcp path_to_xdc path_to_packaged kernel_vendor kernel_library kernel_name} {
@@ -166,7 +173,6 @@ proc package_project_dcp_and_xdc {path_to_dcp path_to_xdc path_to_packaged kerne
     set_property used_in [list "implementation"] $xdcfile
     ::ipx::update_checksums $core
     ::ipx::check_integrity -kernel $core
-    ::ipx::check_integrity -xrt $core
     ::ipx::save_core $core
     ::ipx::unload_core $core
     unset core
@@ -175,25 +181,8 @@ proc package_project_dcp_and_xdc {path_to_dcp path_to_xdc path_to_packaged kerne
 # open project
 open_project ./ccl_offload_ex/ccl_offload_ex.xpr
 
-#run kernel packaging
-reset_run synth_1
-set extra_synth_options "-mode out_of_context"
-if { $en_arith == 1 } { set extra_synth_options "$extra_synth_options -verilog_define ARITH_ENABLE " }
-if { $en_compress == 1 } { set extra_synth_options "$extra_synth_options -verilog_define COMPRESSION_ENABLE " }
-if { $en_dma == 1 } { set extra_synth_options "$extra_synth_options -verilog_define DMA_ENABLE " }
-if { $en_extkrnl == 1 } { set extra_synth_options "$extra_synth_options -verilog_define STREAM_ENABLE " }
-if { $stacktype == "TCP" } { set extra_synth_options "$extra_synth_options -verilog_define TCP_ENABLE " }
-if { $mb_debug_level > 0 } { set extra_synth_options "$extra_synth_options -verilog_define MB_DEBUG_ENABLE " }
-set_property -name {STEPS.SYNTH_DESIGN.ARGS.MORE OPTIONS} -value $extra_synth_options -objects [get_runs synth_1]
-launch_runs synth_1 -jobs 12
-wait_on_run [get_runs synth_1]
-open_run synth_1 -name synth_1
-rename_ref -prefix_all ccl_offload_
-write_checkpoint ./ccl_offload_ex/ccl_offload_ex.runs/synth_1/packaged.dcp
-write_xdc ./ccl_offload_ex/ccl_offload_ex.runs/synth_1/packaged.xdc
-close_design
 package_project_dcp_and_xdc ./ccl_offload_ex/ccl_offload_ex.runs/synth_1/packaged.dcp ./ccl_offload_ex/ccl_offload_ex.runs/synth_1/packaged.xdc ./ccl_offload_ex/ccl_offload $kernel_vendor $kernel_library $kernel_name
-package_xo  -xo_path [pwd]/ccl_offload.xo -kernel_name ccl_offload -ip_directory ./ccl_offload_ex/ccl_offload -kernel_xml ./ccl_offload.xml
+package_xo -f -xo_path [pwd]/ccl_offload.xo -kernel_name ccl_offload -ip_directory ./ccl_offload_ex/ccl_offload -kernel_xml ./ccl_offload.xml
 
 # close and exit
 close_project

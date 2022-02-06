@@ -16,10 +16,10 @@
 # *******************************************************************************/
 
 [submodule "demo/build/xup_vitis_network_example"]
-	path = demo/build/xup_vitis_network_example
+	path = test/build/xup_vitis_network_example
 	url = https://github.com/Xilinx/xup_vitis_network_example.git
 [submodule "demo/build/Vitis_with_100Gbps_TCP-IP"]
-	path = demo/build/Vitis_with_100Gbps_TCP-IP
+	path = test/build/Vitis_with_100Gbps_TCP-IP
 	url = https://github.com/fpgasystems/Vitis_with_100Gbps_TCP-IP.git
 [submodule "hlslib"]
 	path = hlslib
