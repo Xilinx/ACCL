@@ -34,15 +34,16 @@ FW_SOURCES = $(shell find fw -name '*.c') $(shell find fw -name '*.h') $(shell f
 ETH_IF=0
 CMAC_UDP_XO=$(VNX)/Ethernet/_x.$(PLATFORM)/cmac_$(ETH_IF).xo
 UDP_XO=$(VNX)/NetLayers/_x.$(PLATFORM)/networklayer.xo
-TCP_DUMMY_XO=hls/dummy_tcp_stack/build_tcp_stack/sol1/impl/export.xo
+TCP_DUMMY_XO=../../kernels/plugins/dummy_tcp_stack/dummy_tcp_stack.xo
 TCP_XO=Vitis_with_100Gbps_TCP-IP/_x.hw.$(XSA)/network_krnl.xo
 CMAC_TCP_XO=Vitis_with_100Gbps_TCP-IP/_x.hw.$(XSA)/cmac_krnl.xo
 XCLBIN=$(BUILD_DIR)/ccl_offload.xclbin
 
-SUM_XO=$(wildcard ../../kernels/reduce_sum/*.xo)
-HP_UPCAST_XO=../../kernels/hp_fp_stream_conv/hp_fp_stream_conv.xo
-HP_DOWNCAST_XO=../../kernels/fp_hp_stream_conv/fp_hp_stream_conv.xo
-LOOPBACK_XO=../../kernels/loopback/loopback.xo
+HOSTCTRL_XO=../../kernels/plugins/hostctrl/hostctrl.xo
+SUM_XO=$(wildcard ../../kernels/plugins/reduce_sum/*.xo)
+HP_UPCAST_XO=../../kernels/plugins/hp_fp_stream_conv/hp_fp_stream_conv.xo
+HP_DOWNCAST_XO=../../kernels/plugins/fp_hp_stream_conv/fp_hp_stream_conv.xo
+LOOPBACK_XO=../../kernels/plugins/loopback/loopback.xo
 
 ARITHMETIC_XO = $(SUM_XO) $(HP_UPCAST_XO) $(HP_DOWNCAST_XO)
 
@@ -149,7 +150,7 @@ tcp_stack_ips:
 
 $(XCLBIN): $(NET_XO) $(CONFIGFILE)
 	$(MAKE) -C ../../kernels PLATFORM=$(PLATFORM) DEBUG=$(DEBUG)
-	v++ --link --platform $(PLATFORM) --kernel_frequency $(FREQUENCY) --save-temps --temp_dir $(BUILD_DIR) $(CONFIG) -o $@ $(CCL_XO) $(ARITHMETIC_XO) $(NET_XO) $(OTHER_XO)
+	v++ --link --platform $(PLATFORM) --kernel_frequency $(FREQUENCY) --save-temps --temp_dir $(BUILD_DIR) $(CONFIG) -o $@ $(CCL_XO) $(HOSTCTRL_XO) $(ARITHMETIC_XO) $(NET_XO) $(OTHER_XO)
 
 distclean:
 	git clean -xfd
