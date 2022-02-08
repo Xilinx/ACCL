@@ -132,7 +132,7 @@ $(CMAC_TCP_XO):
 	$(MAKE) -C Vitis_with_100Gbps_TCP-IP/ cmac_krnl DEVICE=$(PLATFORM) TEMP_DIR=_x.hw.$(XSA)/ XSA=$(XSA)
 
 $(TCP_DUMMY_XO):
-	$(MAKE) -C hls/dummy_tcp_stack DEVICE=$(FPGAPART) all
+	$(MAKE) -C ../../kernels/plugins/dummy_tcp_stack DEVICE=$(FPGAPART) all
 
 .PHONY: network_krnl
 network_krnl: $(TCP_XO)
