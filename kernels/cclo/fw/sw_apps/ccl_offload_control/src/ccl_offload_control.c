@@ -908,9 +908,53 @@ int scatter(unsigned int count,
             unsigned int src_rank,
             uint64_t src_buf_addr,
             uint64_t dst_buf_addr,
-            unsigned int compression){
+            unsigned int comm_offset, 
+            unsigned int arcfg_offset,
+            unsigned int compression,
+            unsigned int stream){
+
+    //TODO: implement segmentation
+    //TODO: scattering from/to stream
 
     int err = NO_ERROR;
+
+    //determine if we're sending or receiving
+    if(src_rank == world.local_rank){
+        //on the root we only care about ETH_COMPRESSED and OP0_COMPRESSED
+        //so replace RES_COMPRESSED with ETH_COMPRESSED
+        compression = compression | (compression >> 1);
+
+        for(int i=0; i < world.size; i++){
+            start_move(
+                (i==0) ? MOVE_IMMEDIATE : MOVE_INCREMENT, 
+                MOVE_NONE,
+                MOVE_IMMEDIATE, 
+                compression, (i==src_rank) ? RES_LOCAL : RES_REMOTE, 0,
+                count, 
+                comm_offset, arcfg_offset, 
+                src_buf_addr, 0, dst_buf_addr, 0, 0, 0,
+                0, 0, i, TAG_ANY
+            );
+        }
+        for(int i=0; i < world.size; i++){
+            err |= end_move();
+        }
+    } else{
+        //on non-root odes we only care about ETH_COMPRESSED and RES_COMPRESSED
+        //so replace OP0_COMPRESSED with the value of ETH_COMPRESSED
+        compression = compression | (compression >> 3);
+        err |= move(
+            MOVE_NONE,
+            MOVE_ON_RECV, 
+            MOVE_IMMEDIATE, 
+            compression, RES_LOCAL, 0,
+            count,
+            comm_offset, arcfg_offset, 
+            0, 0, dst_buf_addr, 0, 0, 0,
+            src_rank, TAG_ANY, 0, 0
+        );
+    }
+
     return err;
 }
 /*
@@ -1241,9 +1285,9 @@ void run() {
             case ACCL_BCAST:
                 retval = broadcast(count, root_src_dst, op0_addr, comm, datapath_cfg, compression_flags, stream_flags);
                 break;
-            // case ACCL_SCATTER:
-            //     retval = scatter(count, root_src_dst, op0_addr, res_addr, compression_flags);
-            //     break;
+            case ACCL_SCATTER:
+                retval = scatter(count, root_src_dst, op0_addr, res_addr, comm, datapath_cfg, compression_flags, stream_flags);
+                break;
             // case ACCL_GATHER:
             //     retval = gather(count, root_src_dst, op0_addr, res_addr, compression_flags);
             //     break;

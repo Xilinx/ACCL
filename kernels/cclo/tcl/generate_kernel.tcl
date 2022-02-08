@@ -15,20 +15,18 @@
 #
 # *******************************************************************************/
 set fpgapart [lindex $::argv 0]
-set boardpart [lindex $::argv 1]
-set hw_debug_level [lindex $::argv 2]
-set xsafile [lindex $::argv 3]
-set stacktype [lindex $::argv 4]
-set en_dma [lindex $::argv 5]
-set en_arith [lindex $::argv 6]
-set en_compress [lindex $::argv 7]
-set en_extkrnl [lindex $::argv 8]
-set mb_debug_level [lindex $::argv 9]
-set en_fanin [lindex $::argv 10]
+set hw_debug_level [lindex $::argv 1]
+set xsafile [lindex $::argv 2]
+set stacktype [lindex $::argv 3]
+set en_dma [lindex $::argv 4]
+set en_arith [lindex $::argv 5]
+set en_compress [lindex $::argv 6]
+set en_extkrnl [lindex $::argv 7]
+set mb_debug_level [lindex $::argv 8]
+set en_fanin [lindex $::argv 9]
 
 # create project with correct target
-create_project -force ccl_offload_ex ./ccl_offload_ex -part $fpgapart -rtl_kernel
-set_property board_part $boardpart [current_project]
+create_project -force ccl_offload_ex ./ccl_offload_ex -part $fpgapart
 set_property target_language verilog [current_project]
 set_property simulator_language MIXED [current_project]
 set_property coreContainer.enable false [current_project]

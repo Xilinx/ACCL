@@ -35,10 +35,8 @@ FW_SOURCES = $(shell find fw -name '*.c') $(shell find fw -name '*.h') $(shell f
 
 ifeq (u250,$(findstring u250, $(PLATFORM)))
 	FPGAPART=xcu250-figd2104-2L-e
-	BOARDPART=xilinx.com:au250:part0:1.3
 else ifeq (u280,$(findstring u280, $(PLATFORM)))
 	FPGAPART=xcu280-fsvh2892-2L-e
-	BOARDPART=xilinx.com:au280:part0:1.1
 else
 	$(error Unsupported PLATFORM)
 endif
@@ -53,9 +51,9 @@ xsa: $(XCCL_XSA)
 
 $(XCCL_XSA): $(GEN_KERNEL_TCL) $(REBUILD_BD_TCL)
 	$(MAKE) -C hls/ DEVICE=$(FPGAPART)
-	vivado -mode batch -source $< -tclargs $(FPGAPART) $(BOARDPART) $(HW_DEBUG) $(XCCL_XSA) $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) $(MB_DEBUG_LEVEL) $(EN_FANIN)
+	vivado -mode batch -source $< -tclargs $(FPGAPART) $(HW_DEBUG) $(XCCL_XSA) $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) $(MB_DEBUG_LEVEL) $(EN_FANIN)
 
-OPTIMIZATION=s
+OPTIMIZATION=3
 #valid values 0,1,2,3,s,g
 ifeq ($(OPTIMIZATION),0)
    OPTIMIZATION_STRING = "None (-O0)"
@@ -85,17 +83,18 @@ $(XCCL_SIMDLL): tcl/generate_sim.tcl elf
 	vivado -mode batch -source $< -tclargs $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) $(SIM_MEMSIZE)
 	cd ccl_offload_ex/ccl_offload_ex.sim/sim_1/behav/xsim/ && ./compile.sh && ./elaborate.sh
 
+dcp: $(XCCL_DCP)
+
 $(XCCL_DCP): tcl/generate_dcp.tcl $(XCCL_ELF)
 	vivado -mode batch -source $< -tclargs $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) $(MB_DEBUG_LEVEL)
 
-dcp: $(XCCL_DCP)
 xo: $(XCCL_XO)
 
 ccl_offload.xml:
 	python gen_xml.py $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) 
 
 $(XCCL_XO): tcl/generate_xo.tcl ccl_offload.xml $(XCCL_DCP)
-	rm -rf ccl_offload_ex/ccl_offload/*
+	rm -rf ccl_offload_ex/ccl_offload
 	vivado -mode batch -source $< -tclargs $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) $(MB_DEBUG_LEVEL)
 
 distclean:

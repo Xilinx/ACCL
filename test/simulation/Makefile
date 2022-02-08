@@ -27,7 +27,7 @@ INCLUDES = -I$(XILINX_HLS)/include/ -I. -I${XILINX_VIVADO}/data/xsim/include/ -I
 XSIMK_PATH_TAIL = xsim.dir/ccl_offload_behav/xsimk.so
 XSIM_COMPILE_FOLDER ?= $(ACCL_REPO_ROOT)/kernels/cclo/ccl_offload_ex/ccl_offload_ex.sim/sim_1/behav/xsim/
 
-SYMLINKS := $(shell ls $(XSIM_COMPILE_FOLDER) | grep -E '\.mem') $(shell ls $(XSIM_COMPILE_FOLDER) | grep -E '\.dat')
+SYMLINKS := xsim.dir $(shell ls $(XSIM_COMPILE_FOLDER) | grep -E '\.mem') $(shell ls $(XSIM_COMPILE_FOLDER) | grep -E '\.dat')
 
 STACKTYPE ?= "udp"
 NRANKS ?= 1
@@ -49,7 +49,7 @@ run: cclo_sim $(SYMLINKS)
 	LD_LIBRARY_PATH=${XILINX_VIVADO}/lib/lnx64.o mpirun -np ${NRANKS} ./cclo_sim ${STACKTYPE} ${START_PORT} ${XSIMK_PATH_TAIL}
 
 clean:
-	-rm $(SYMLINKS) cclo_sim *.wdb vivado*
+	-rm -rf $(SYMLINKS) cclo_sim *.log *.wdb vivado*
 
 distclean:
 	git clean -xfd
