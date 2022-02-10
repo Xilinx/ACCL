@@ -924,8 +924,6 @@ class accl():
         if count == 0:
             warnings.warn("zero size buffer")
             return
-        # TODO: check datatype support
-        assert count % sbuf.itemsize == 0, "Count not a multiple of input element size"
 
         comm        = self.communicators[comm_id]
         p           = len(comm["ranks"])

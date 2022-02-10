@@ -492,7 +492,7 @@ int combine(unsigned int count,
         (stream & OP0_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE, 
         MOVE_IMMEDIATE,
         (stream & RES_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE, 
-        compression, RES_LOCAL, 0,
+        compression, RES_LOCAL, function,
         count, 0, arcfg_offset, op0_addr, op1_addr, res_addr, 0, 0, 0,
         0, 0, 0, 0
     );
@@ -611,7 +611,6 @@ int wait_on_rx(	unsigned int src_rank,
 }
 */
 
-/*
 //1) receives from a rank
 //2) sums with a a buffer 
 //3) the result is saved in (possibly another) local buffer
@@ -622,69 +621,26 @@ int fused_recv_reduce(
         unsigned int func,
         uint64_t op0_addr,
         uint64_t dst_addr,
+        unsigned int comm_offset,
+        unsigned int arcfg_offset,
         unsigned int src_tag,
-        unsigned int compression)
+        unsigned int compression,
+        unsigned int stream)
     {
-    unsigned int buf_idx;
-    unsigned int dma_tag_tmp = dma_tag, i;
-    rx_buffer *rx_buf_list = (rx_buffer*)(cfgmem+RX_BUFFER_COUNT_OFFSET/4+1);
+    unsigned int err = NO_ERROR;
 
-    circular_buffer spare_buffer_queue;
-    cb_init(&spare_buffer_queue, max_dma_in_flight);
+    err |= move(
+        (stream & OP0_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE, 
+        MOVE_ON_RECV,
+        (stream & RES_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE, 
+        compression, RES_LOCAL, func,
+        count,
+        comm_offset, arcfg_offset, 
+        op0_addr, 0, dst_addr, 0, 0, 0,
+        src_rank, src_tag, 0, 0
+    );
 
-    //figure out compression; essentially what we do here is a reduction where op1 is from the network
-    //therefore OP1_COMPRESSED should be equal to ETH_COMPRESSED;
-    compression = (compression & ETH_COMPRESSED) ? (compression | OP1_COMPRESSED) : compression;
-
-    configure_datapath(DATAPATH_DMA_REDUCTION, func, compression, 0);
-
-    //set up datamover configs for emitting and retiring transfers
-    //we need two, because we emit and retire in separate processes which are offset
-    dm_config emit_dm_config = dm_config_init(count, op0_addr, 0, dst_addr, USE_OP0_DM | USE_OP1_DM | USE_RES_DM, NO_REMOTE, compression, NO_STREAM);
-    dm_config ack_dm_config = dm_config_init(count, 0, 0, 0, USE_OP0_DM | USE_OP1_DM | USE_RES_DM, NO_REMOTE, compression, NO_STREAM);
-
-    //1. issue at most max_dma_in_flight of dma_transaction_size
-    for (i = 0; emit_dm_config.elems_remaining > 0 && i < max_dma_in_flight ; i++){
-        //wait for segment to come
-        buf_idx = wait_on_rx(src_rank, emit_dm_config.op1_len, src_tag);
-        if  (buf_idx < 0 ) return RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID;
-        emit_dm_config.op1_addr.ptr = ((uint64_t) rx_buf_list[buf_idx].addrh << 32) | rx_buf_list[buf_idx].addrl;
-        //start DMAs
-        dma_tag_tmp  = start_move(&emit_dm_config, dma_tag_tmp, 0, 0);
-        //save spare buffer id
-        cb_push(&spare_buffer_queue, buf_idx);
-    }
-    //2.ack 1 and issue another dma transfer up until there's no more dma move to issue
-    while(emit_dm_config.elems_remaining > 0){
-        //wait for DMAs to finish
-        ack_move(&ack_dm_config, 0);
-        //set spare buffer as free
-        buf_idx = cb_pop(&spare_buffer_queue);
-        microblaze_disable_interrupts();
-        rx_buf_list[buf_idx].status = STATUS_IDLE;
-        microblaze_enable_interrupts();
-        //enqueue other DMA movement
-        //wait for segment to come
-        buf_idx = wait_on_rx(src_rank, emit_dm_config.op1_len, src_tag);
-        if  (buf_idx < 0 ) return RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID;
-        emit_dm_config.op1_addr.ptr = ((uint64_t) rx_buf_list[buf_idx].addrh << 32) | rx_buf_list[buf_idx].addrl;
-        //start DMAs
-        dma_tag_tmp  = start_move(&emit_dm_config, dma_tag_tmp, 0, 0);
-        //save spare buffer id
-        cb_push(&spare_buffer_queue, buf_idx);
-    }
-    //3. finish ack the remaining
-    while(ack_dm_config.elems_remaining > 0){
-        //wait for DMAs to finish
-        ack_move(&ack_dm_config, 0);
-        //set spare buffer as free
-        buf_idx = cb_pop(&spare_buffer_queue);
-        microblaze_disable_interrupts();
-        rx_buf_list[buf_idx].status = STATUS_IDLE;
-        microblaze_enable_interrupts();
-    }
-
-    return NO_ERROR;
+    return err;
 }
 
 //1) receives from a rank 
@@ -697,71 +653,29 @@ int fused_recv_reduce_send(
         unsigned int count,
         unsigned int func,
         uint64_t op0_addr,
+        unsigned int comm_offset,
+        unsigned int arcfg_offset,
         unsigned int mpi_tag,
-        unsigned int compression)
+        unsigned int compression,
+        unsigned int stream)
     {
-    unsigned int buf_idx;
-    unsigned int dma_tag_tmp = dma_tag, i;
-    rx_buffer *rx_buf_list = (rx_buffer*)(cfgmem+RX_BUFFER_COUNT_OFFSET/4+1);
 
-    circular_buffer spare_buffer_queue;
-    cb_init(&spare_buffer_queue, max_dma_in_flight);
+    unsigned int err = NO_ERROR;
 
-    //figure out compression; essentially what we do here is a reduction where op1 is from the network
-    //therefore OP1_COMPRESSED should be equal to ETH_COMPRESSED;
-    compression = (compression & ETH_COMPRESSED) ? (compression | OP1_COMPRESSED) : compression;
+    err |= move(
+        (stream & OP0_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE, 
+        MOVE_ON_RECV,
+        MOVE_IMMEDIATE, 
+        compression, RES_REMOTE, func,
+        count,
+        comm_offset, arcfg_offset, 
+        op0_addr, 0, 0, 0, 0, 0,
+        src_rank, mpi_tag, dst_rank, mpi_tag
+    );
 
-    configure_datapath(DATAPATH_OFFCHIP_REDUCTION, func, compression, 0);
-
-    //set up datamover configs for emitting and retiring transfers
-    //we need two, because we emit and retire in separate processes which are offset
-    dm_config emit_dm_config = dm_config_init(count, op0_addr, 0, 0, USE_OP0_DM | USE_OP1_DM, NO_REMOTE, compression, NO_STREAM);
-    dm_config ack_dm_config = dm_config_init(count, 0, 0, 0, USE_OP0_DM | USE_OP1_DM, NO_REMOTE, compression, NO_STREAM);
-
-    //1. issue at most max_dma_in_flight of dma_transaction_size
-    for (i = 0; emit_dm_config.elems_remaining > 0 && i < max_dma_in_flight ; i++){
-        //wait for segment to come
-        buf_idx = wait_on_rx(src_rank, emit_dm_config.op1_len, mpi_tag);
-        if  (buf_idx < 0 ) return RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID;
-        emit_dm_config.op1_addr.ptr = ((uint64_t) rx_buf_list[buf_idx].addrh << 32) | rx_buf_list[buf_idx].addrl;
-        //start DMAs
-        dma_tag_tmp = start_move(&emit_dm_config, dma_tag_tmp, dst_rank, mpi_tag);
-        //save spare buffer id
-        cb_push(&spare_buffer_queue, buf_idx);
-    }
-    //2.ack 1 and issue another dma transfer up until there's no more dma move to issue
-    while(emit_dm_config.elems_remaining > 0){
-        //wait for DMAs to finish
-        ack_move(&ack_dm_config, dst_rank);
-        //set spare buffer as free
-        buf_idx = cb_pop(&spare_buffer_queue);
-        microblaze_disable_interrupts();
-        rx_buf_list[buf_idx].status = STATUS_IDLE;
-        microblaze_enable_interrupts();
-        //enqueue other DMA movement
-        //wait for segment to come
-        buf_idx = wait_on_rx(src_rank, emit_dm_config.op1_len, mpi_tag);
-        if  (buf_idx < 0 ) return RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID;
-        emit_dm_config.op1_addr.ptr = ((uint64_t) rx_buf_list[buf_idx].addrh << 32) | rx_buf_list[buf_idx].addrl;
-        //start DMAs
-        dma_tag_tmp = start_move(&emit_dm_config, dma_tag_tmp, dst_rank, mpi_tag);
-        //save spare buffer id
-        cb_push(&spare_buffer_queue, buf_idx);
-    }
-    //3. finish ack the remaining
-    while(ack_dm_config.elems_remaining > 0){
-        //wait for DMAs to finish
-        ack_move(&ack_dm_config, dst_rank);
-        //set spare buffer as free
-        buf_idx = cb_pop(&spare_buffer_queue);
-        microblaze_disable_interrupts();
-        rx_buf_list[buf_idx].status = STATUS_IDLE;
-        microblaze_enable_interrupts();
-    }
-
-    return NO_ERROR;
+    return err;
 }
-
+/*
 //receives from a rank and forwards to another rank 
 //use MOVE_ON_RECV
 int relay(
@@ -1092,6 +1006,7 @@ int allgather(  unsigned int count,
 
     return ret;
 }
+*/
 
 //every rank receives a buffer it reduces its own buffer and forwards to next rank in the ring
 int reduce( unsigned int count,
@@ -1099,25 +1014,28 @@ int reduce( unsigned int count,
             unsigned int root_rank,
             uint64_t src_addr,
             uint64_t dst_addr,
-            unsigned int compression){
-    int ret;
+            unsigned int comm_offset,
+            unsigned int arcfg_offset,
+            unsigned int compression,
+            unsigned int stream){
 
-    unsigned int next_in_ring = (world.local_rank+1			   ) % world.size	;
-    unsigned int prev_in_ring = (world.local_rank+world.size-1 ) % world.size	;
+    unsigned int next_in_ring = (world.local_rank + 1) % world.size;
+    unsigned int prev_in_ring = (world.local_rank + world.size-1) % world.size;
+
     //determine if we're sending or receiving
     if( prev_in_ring == root_rank){ 
         //non root ranks immediately after the root sends
-        ret = send(next_in_ring, count, src_addr, TAG_ANY, compression & ~(RES_COMPRESSED), NO_STREAM);
+        return send(next_in_ring, count, src_addr, comm_offset, arcfg_offset, TAG_ANY, compression, stream);
     }else if (world.local_rank != root_rank){
         //non root ranks sends their data + data received from previous rank to the next rank in sequence as a daisy chain
-        ret = fused_recv_reduce_send(prev_in_ring, next_in_ring, count, func, src_addr,  TAG_ANY, compression & ~(RES_COMPRESSED));
+        return fused_recv_reduce_send(prev_in_ring, next_in_ring, count, func, src_addr, comm_offset, arcfg_offset, TAG_ANY, compression, stream);
     }else{	
         //root only receive from previous node in the ring, add its local buffer and save in destination buffer 
-        ret = fused_recv_reduce(prev_in_ring, count, func, src_addr, dst_addr, TAG_ANY, compression);
+        return fused_recv_reduce(prev_in_ring, count, func, src_addr, dst_addr, comm_offset, arcfg_offset, TAG_ANY, compression,stream);
     }
-    return ret;
 }
 
+/*
 //scatter_reduce: (a,b,c), (1,2,3), (X,Y,Z) -> (a+1+X,,) (,b+2+Y,) (,,c+3+Z)
 //count == size of chunks
 int scatter_reduce( unsigned int count,
@@ -1336,9 +1254,9 @@ void run() {
             case ACCL_GATHER:
                 retval = gather(count, root_src_dst, op0_addr, res_addr, comm, datapath_cfg, compression_flags, stream_flags);
                 break;
-            // case ACCL_REDUCE:
-            //     retval = reduce(count, function, root_src_dst, op0_addr, res_addr, compression_flags);
-            //     break;
+            case ACCL_REDUCE:
+                retval = reduce(count, function, root_src_dst, op0_addr, res_addr, comm, datapath_cfg, compression_flags, stream_flags);
+                break;
             // case ACCL_ALLGATHER:
             //     retval = allgather(count, op0_addr, res_addr, compression_flags);
             //     break;
