@@ -46,7 +46,7 @@ $(SYMLINKS):
 	ln -s ${XSIM_COMPILE_FOLDER}/$@ $@
 
 run: cclo_sim $(SYMLINKS)
-	LD_LIBRARY_PATH=${XILINX_VIVADO}/lib/lnx64.o mpirun -np ${NRANKS} ./cclo_sim ${STACKTYPE} ${START_PORT} ${XSIMK_PATH_TAIL}
+	LD_LIBRARY_PATH=${XILINX_VIVADO}/lib/lnx64.o mpirun -np ${NRANKS} --tag-output ./cclo_sim ${STACKTYPE} ${START_PORT} ${XSIMK_PATH_TAIL}
 
 clean:
 	-rm -rf $(SYMLINKS) cclo_sim *.log *.wdb vivado*

@@ -107,6 +107,9 @@ void eth_endpoint_egress_port(zmq_intf_context *ctx, Stream<stream_word > &in, u
     string str = Json::writeString(builder, packet);
     message << str;
     cout << "ETH Send " << idx << " bytes to " << dest << endl;
+#ifdef ZMQ_ETH_VERBOSE
+    cout << str << endl;
+#endif
     ctx->eth_tx_socket->send(message);
     //add some spacing to encourage realistic
     //interleaving between messsages in fabric
@@ -153,6 +156,10 @@ void eth_endpoint_ingress_port(zmq_intf_context *ctx, Stream<stream_word > &out)
     }
 
     cout << "ETH Receive " << len << " bytes from " << sender_rank_text << endl;
+
+#ifdef ZMQ_ETH_VERBOSE
+    cout << msg_text << endl;
+#endif
 
 }
 

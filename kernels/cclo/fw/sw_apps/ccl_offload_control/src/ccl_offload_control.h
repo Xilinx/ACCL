@@ -178,6 +178,7 @@
 #define RES_REMOTE 1
 
 //flags as sent by the host indicating streaming operands
+#define NO_STREAM  0
 #define OP0_STREAM 1
 #define RES_STREAM 2
 

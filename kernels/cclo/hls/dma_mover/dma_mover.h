@@ -48,9 +48,9 @@ typedef struct {
     ap_uint<64> op1_addr;
     ap_uint<64> res_addr;
 
-    unsigned int op0_stride;
-    unsigned int op1_stride;
-    unsigned int res_stride;
+    int op0_stride;
+    int op1_stride;
+    int res_stride;
 
     unsigned int rx_tag;
     unsigned int rx_src;

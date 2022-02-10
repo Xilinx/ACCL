@@ -409,6 +409,11 @@ unsigned int get_len(unsigned int count, unsigned int elem_ratio_log, unsigned i
     return (count >> elem_ratio_log) * elem_bytes;
 }
 
+int get_stride(int count, unsigned int elem_ratio_log, unsigned int elem_bytes){
+#pragma HLS INLINE
+    return (count >> elem_ratio_log) * elem_bytes;
+}
+
 void instruction_decode(
     STREAM<move_instruction> &instruction,
     STREAM<datamover_instruction> &op0_dm_insn,
@@ -506,8 +511,8 @@ void instruction_decode(
             case MOVE_STRIDE:
                 dm0_rd.addr = prev_dm0_rd.addr + 
                     (insn.op0_is_compressed ? 
-                        get_len(insn.op0_stride, arcfg.elem_ratio_log, arcfg.compressed_elem_bytes) : 
-                        get_len(insn.op0_stride, 0, arcfg.uncompressed_elem_bytes)    );
+                        get_stride(insn.op0_stride, arcfg.elem_ratio_log, arcfg.compressed_elem_bytes) : 
+                        get_stride(insn.op0_stride, 0, arcfg.uncompressed_elem_bytes)    );
                 break;
             default:
                 dm0_rd.addr = insn.op0_addr;
@@ -545,8 +550,8 @@ void instruction_decode(
             case MOVE_STRIDE:
                 dm1_rd.addr = prev_dm1_rd.addr + 
                     (insn.op1_is_compressed ? 
-                        get_len(insn.op1_stride, arcfg.elem_ratio_log, arcfg.compressed_elem_bytes) : 
-                        get_len(insn.op1_stride, 0, arcfg.uncompressed_elem_bytes)    );
+                        get_stride(insn.op1_stride, arcfg.elem_ratio_log, arcfg.compressed_elem_bytes) : 
+                        get_stride(insn.op1_stride, 0, arcfg.uncompressed_elem_bytes)    );
                 break;
             case MOVE_ON_RECV:
                 //get expected sequence number for the source rank by incrementing previous sequence number
@@ -644,8 +649,8 @@ void instruction_decode(
                 case MOVE_STRIDE:
                     dm1_wr.addr = prev_dm1_wr.addr + 
                         (insn.res_is_compressed ? 
-                            get_len(insn.res_stride, arcfg.elem_ratio_log, arcfg.compressed_elem_bytes) : 
-                            get_len(insn.res_stride, 0, arcfg.uncompressed_elem_bytes)    );
+                            get_stride(insn.res_stride, arcfg.elem_ratio_log, arcfg.compressed_elem_bytes) : 
+                            get_stride(insn.res_stride, 0, arcfg.uncompressed_elem_bytes)    );
                     break;
                 default:
                     dm1_wr.addr = insn.res_addr;

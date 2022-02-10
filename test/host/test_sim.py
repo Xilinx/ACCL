@@ -173,6 +173,22 @@ def test_scatter(cclo_inst, world_size, local_rank, root, count):
     if err_count == 0:
         print("Scatter succeeded")
 
+def test_gather(cclo_inst, world_size, local_rank, root, count):
+    err_count = 0
+    dt = [np.float32]#[np.float32, np.half]
+    for op_dt, res_dt in itertools.product(dt, repeat=2):
+        op_buf, _, res_buf = get_buffers(count*world_size, op_dt, op_dt, res_dt, cclo_inst)
+        op_buf[:] = [1.0*(local_rank+i) for i in range(op_buf.size)]
+        cclo_inst.gather(0, op_buf, res_buf, count, root=root)
+
+        if local_rank == root:
+            for i in range(world_size):
+                if not np.isclose(res_buf.buf[i*count:(i+1)*count], [1.0*(i+j) for j in range(count)]).all():
+                    err_count += 1
+                    print("Gather failed for src rank", i, "on pair ", op_dt, res_dt)
+    if err_count == 0:
+        print("Gather succeeded")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Tests for ACCL (emulation mode)')
     parser.add_argument('--nruns',      type=int,            default=1,     help='How many times to run each test')
@@ -189,6 +205,7 @@ if __name__ == "__main__":
     parser.add_argument('--sndrcv_fanin', action='store_true', default=False, help='Run send/receive fan-in test')
     parser.add_argument('--bcast',      action='store_true', default=False, help='Run bcast test')
     parser.add_argument('--scatter',    action='store_true', default=False, help='Run scatter test')
+    parser.add_argument('--gather',     action='store_true', default=False, help='Run gather test')
     parser.add_argument('--tcp',        action='store_true', default=False, help='Run test using TCP')
 
     args = parser.parse_args()
@@ -237,6 +254,8 @@ if __name__ == "__main__":
                 test_bcast(cclo_inst, local_rank, i, args.count)
             if args.scatter:
                 test_scatter(cclo_inst, world_size, local_rank, i, args.count)
+            if args.gather:
+                test_gather(cclo_inst, world_size, local_rank, i, args.count)
 
     except KeyboardInterrupt:
         print("CTR^C")

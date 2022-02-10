@@ -31,5 +31,5 @@ cclo_emu: cclo_emu.cpp $(MB_FW_DIR)/ccl_offload_control.c
 
 .PHONY: run
 run: cclo_emu
-	mpirun -np ${NRANKS} ./cclo_emu ${STACKTYPE} ${START_PORT} 2>/dev/null
+	mpirun -np ${NRANKS} --tag-output ./cclo_emu ${STACKTYPE} ${START_PORT} 2>/dev/null
 
