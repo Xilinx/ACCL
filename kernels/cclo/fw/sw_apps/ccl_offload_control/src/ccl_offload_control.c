@@ -968,15 +968,19 @@ int gather( unsigned int count,
     }
     return err;
 }
-/*
+
 //naive fused: 1) receive a segment 2) move in the dest buffer 3) relay to next rank 
-int allgather(  unsigned int count,
-                uint64_t src_buf_addr,
-                uint64_t dst_buf_addr,
-                unsigned int compression){
-    uint64_t tmp_buf_addr;
-    unsigned int i,curr_pos, next_in_ring, prev_in_ring;
-    int ret = NO_ERROR;
+int allgather(
+    unsigned int count,
+    uint64_t src_buf_addr,
+    uint64_t dst_buf_addr,
+    unsigned int comm_offset, 
+    unsigned int arcfg_offset,
+    unsigned int compression,
+    unsigned int stream
+){
+    int i, curr_pos, rel_stride, abs_stride, next_in_ring, prev_in_ring;
+    int err = NO_ERROR;
 
     //compression is tricky for the relay: we've already received into the destination buffer 
     //with associated flag RES_COMPRESSED; this buffer becomes the source for a send
@@ -984,29 +988,85 @@ int allgather(  unsigned int count,
     unsigned int relay_compression = (compression & RES_COMPRESSED) ? (compression | OP0_COMPRESSED) : compression;
     relay_compression &= ~(RES_COMPRESSED);
 
-    next_in_ring = (world.local_rank+1			   ) % world.size	;
-    prev_in_ring = (world.local_rank+world.size-1 ) % world.size	;
+    next_in_ring = (world.local_rank + 1) % world.size;
+    prev_in_ring = (world.local_rank + world.size - 1) % world.size;
 
-    //send our data to next in ring
-    ret += send(next_in_ring, count, src_buf_addr, TAG_ANY, compression & ~(RES_COMPRESSED), NO_STREAM);
-    //receive from all members of the communicator
-    for(i=0, curr_pos = world.local_rank; i<world.size && ret == NO_ERROR; i++, curr_pos = (curr_pos + world.size - 1 ) % world.size){
-        tmp_buf_addr = phys_addr_offset(dst_buf_addr, count*curr_pos, (compression & RES_COMPRESSED) ? true : false);
-        if(curr_pos==world.local_rank){
-            ret	= copy(count, src_buf_addr, tmp_buf_addr, compression & ~(ETH_COMPRESSED), NO_STREAM);
-        }else{
-            ret = recv(prev_in_ring, count, tmp_buf_addr, TAG_ANY, compression & ~(OP0_COMPRESSED));
-            //TODO: use the same stream to move data both to dst_buf_addr and tx_subsystem 
-            //todo: use DMA1 RX to forward to next and DMA0/2 RX and DMA1 TX to copy ~ at the same time! 
-            if(i+1 < world.size){ //if not the last data needed relay to the next in the sequence
-                ret = send(next_in_ring, count, tmp_buf_addr, TAG_ANY, relay_compression, NO_STREAM);
-            }
-        }		
+    //prime the address slot for the destination, so we can subsequently stride against it
+    start_move(
+        MOVE_NONE, MOVE_NONE, MOVE_IMMEDIATE, 
+        compression, RES_LOCAL, 0,
+        0,
+        0, arcfg_offset, 
+        src_buf_addr, 0, dst_buf_addr, 0, 0, 0,
+        0, 0, 0, 0
+    );
+
+    //copy our local data into the appropriate destination slot
+    start_move(
+        MOVE_IMMEDIATE, MOVE_NONE, MOVE_STRIDE, 
+        compression, RES_LOCAL, 0,
+        count,
+        0, arcfg_offset, 
+        src_buf_addr, 0, 0, 0, 0, count*world.local_rank,
+        0, 0, 0, 0
+    );
+
+    //send to next in ring
+    start_move(
+        MOVE_IMMEDIATE, MOVE_NONE, MOVE_IMMEDIATE, 
+        compression & ~(RES_COMPRESSED), RES_REMOTE, 0,
+        count, 
+        comm_offset, arcfg_offset, 
+        src_buf_addr, 0, 0, 0, 0, 0,
+        0, 0, next_in_ring, TAG_ANY
+    );
+
+    //receive and forward from all other members of the communicator
+    curr_pos = world.local_rank;
+    for(i=0; i<world.size-1; i++){
+        rel_stride = count*((curr_pos == 0) ? (world.size-1) : -1);
+        abs_stride = count*((curr_pos == 0) ? (world.size-1) : curr_pos-1);
+        start_move(
+            MOVE_NONE, MOVE_ON_RECV, MOVE_STRIDE, 
+            compression & ~(OP0_COMPRESSED), RES_LOCAL, 0,
+            count, 
+            comm_offset, arcfg_offset, 
+            0, 0, 0, 0, 0, rel_stride,
+            prev_in_ring, TAG_ANY, 0, 0
+        ); 
+
+        if(i < world.size-2){ //if not the last data, relay to the next in ring
+            //use OP1 as a source, because we want to avoid a race condition with the recv above
+            //first prime the address 
+            //TODO: avoid this; we either need a barrier or a way to share addresses between lanes
+            start_move(
+                MOVE_NONE, MOVE_IMMEDIATE, MOVE_NONE, 
+                relay_compression, RES_REMOTE, 0,
+                0, 
+                comm_offset, arcfg_offset, 
+                0, dst_buf_addr, 0, 0, 0, 0,
+                0, 0, next_in_ring, TAG_ANY
+            );
+            //send
+            start_move(
+                MOVE_NONE, MOVE_STRIDE, MOVE_IMMEDIATE, 
+                relay_compression, RES_REMOTE, 0,
+                count, 
+                comm_offset, arcfg_offset, 
+                0, 0, 0, 0, abs_stride, 0,
+                0, 0, next_in_ring, TAG_ANY
+            );
+        }
+        curr_pos = (curr_pos + world.size - 1) % world.size;
     }
 
-    return ret;
+    for(i=0; i<(3*world.size-2); i++){
+        err |= end_move();
+    }
+
+    return err;
 }
-*/
+
 
 //every rank receives a buffer it reduces its own buffer and forwards to next rank in the ring
 int reduce( unsigned int count,
@@ -1257,9 +1317,9 @@ void run() {
             case ACCL_REDUCE:
                 retval = reduce(count, function, root_src_dst, op0_addr, res_addr, comm, datapath_cfg, compression_flags, stream_flags);
                 break;
-            // case ACCL_ALLGATHER:
-            //     retval = allgather(count, op0_addr, res_addr, compression_flags);
-            //     break;
+            case ACCL_ALLGATHER:
+                retval = allgather(count, op0_addr, res_addr, comm, datapath_cfg, compression_flags, stream_flags);
+                break;
             // case ACCL_ALLREDUCE:
             //     retval = allreduce(count, function, op0_addr, res_addr, compression_flags);
             //     break;

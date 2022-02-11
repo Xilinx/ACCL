@@ -189,6 +189,21 @@ def test_gather(cclo_inst, world_size, local_rank, root, count):
     if err_count == 0:
         print("Gather succeeded")
 
+def test_allgather(cclo_inst, world_size, local_rank, count):
+    err_count = 0
+    dt = [np.float32]#[np.float32, np.half]
+    for op_dt, res_dt in itertools.product(dt, repeat=2):
+        op_buf, _, res_buf = get_buffers(count*world_size, op_dt, op_dt, res_dt, cclo_inst)
+        op_buf[:] = [1.0*(local_rank+i) for i in range(op_buf.size)]
+        cclo_inst.allgather(0, op_buf, res_buf, count)
+
+        for i in range(world_size):
+            if not np.isclose(res_buf.buf[i*count:(i+1)*count], [1.0*(i+j) for j in range(count)]).all():
+                err_count += 1
+                print("Allgather failed for src rank", i, "on pair ", op_dt, res_dt)
+    if err_count == 0:
+        print("Allgather succeeded")
+
 def test_reduce(cclo_inst, world_size, local_rank, root, count, func):
     err_count = 0
     dt = [np.float32]#[np.float32, np.half]
@@ -221,6 +236,7 @@ if __name__ == "__main__":
     parser.add_argument('--bcast',      action='store_true', default=False, help='Run bcast test')
     parser.add_argument('--scatter',    action='store_true', default=False, help='Run scatter test')
     parser.add_argument('--gather',     action='store_true', default=False, help='Run gather test')
+    parser.add_argument('--allgather',     action='store_true', default=False, help='Run allgather test')
     parser.add_argument('--reduce',     action='store_true', default=False, help='Run reduce test')
     parser.add_argument('--reduce_func', type=int,           default=0,     help='Function index for reduce')
     parser.add_argument('--tcp',        action='store_true', default=False, help='Run test using TCP')
@@ -273,6 +289,8 @@ if __name__ == "__main__":
                 test_scatter(cclo_inst, world_size, local_rank, i, args.count)
             if args.gather:
                 test_gather(cclo_inst, world_size, local_rank, i, args.count)
+            if args.allgather:
+                test_allgather(cclo_inst, world_size, local_rank, args.count)
             if args.reduce:
                 test_reduce(cclo_inst, world_size, local_rank, i, args.count, args.reduce_func)
 
