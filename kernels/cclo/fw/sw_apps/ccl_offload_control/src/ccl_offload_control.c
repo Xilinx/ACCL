@@ -1021,12 +1021,21 @@ int allgather(
         0, 0, next_in_ring, TAG_ANY
     );
 
+    err |= end_move();
+    err |= end_move();
+    err |= end_move();
+
     //receive and forward from all other members of the communicator
     curr_pos = world.local_rank;
     for(i=0; i<world.size-1; i++){
         rel_stride = count*((curr_pos == 0) ? (world.size-1) : -1);
         abs_stride = count*((curr_pos == 0) ? (world.size-1) : curr_pos-1);
-        start_move(
+
+        //we use a blocking move here, because we want to avoid a race condition with the relay below
+        //TODO: avoid this; we either need to solve the RAW dependency in hardware (the generic approach),
+        //or a way to reuse a rx buffer (solves this problem in particular but does not extend to e.g. reduces)
+        //e.g. MOVE_ON_RECV_KEEP which would keep the RX buffer in the pending state
+        err |= move(
             MOVE_NONE, MOVE_ON_RECV, MOVE_STRIDE, 
             compression & ~(OP0_COMPRESSED), RES_LOCAL, 0,
             count, 
@@ -1036,9 +1045,7 @@ int allgather(
         ); 
 
         if(i < world.size-2){ //if not the last data, relay to the next in ring
-            //use OP1 as a source, because we want to avoid a race condition with the recv above
             //first prime the address 
-            //TODO: avoid this; we either need a barrier or a way to share addresses between lanes
             start_move(
                 MOVE_NONE, MOVE_IMMEDIATE, MOVE_NONE, 
                 relay_compression, RES_REMOTE, 0,
@@ -1056,13 +1063,16 @@ int allgather(
                 0, 0, 0, 0, abs_stride, 0,
                 0, 0, next_in_ring, TAG_ANY
             );
+
+            err |= end_move();
+            err |= end_move();
         }
         curr_pos = (curr_pos + world.size - 1) % world.size;
     }
 
-    for(i=0; i<(3*world.size-2); i++){
-        err |= end_move();
-    }
+    // for(i=0; i<(3*world.size-2); i++){
+    //     err |= end_move();
+    // }
 
     return err;
 }
@@ -1095,17 +1105,20 @@ int reduce( unsigned int count,
     }
 }
 
-/*
 //scatter_reduce: (a,b,c), (1,2,3), (X,Y,Z) -> (a+1+X,,) (,b+2+Y,) (,,c+3+Z)
 //count == size of chunks
-int scatter_reduce( unsigned int count,
-                    unsigned int func,
-                    uint64_t src_addr,
-                    uint64_t dst_addr,
-                    unsigned int compression){
-    unsigned int ret,i;
-    uint64_t curr_recv_addr, curr_send_addr;
-
+int scatter_reduce(
+    unsigned int count,
+    unsigned int func,
+    uint64_t src_addr,
+    uint64_t dst_addr,
+    unsigned int comm_offset,
+    unsigned int arcfg_offset,
+    unsigned int compression,
+    unsigned int stream
+){
+    unsigned int err = NO_ERROR, i;
+/*
     //convert the full element count into a normal and tail count
     unsigned int curr_count, count_tail = (count % world.size == 0) ? (count/world.size) : (count%world.size);
     count = count / world.size;
@@ -1145,9 +1158,11 @@ int scatter_reduce( unsigned int count,
         ret = fused_recv_reduce(prev_in_ring, curr_count, func, curr_recv_addr, curr_send_addr, TAG_ANY, compression); 
         if(ret != NO_ERROR) return ret;
     }
-    return NO_ERROR;
+*/
+    return err;
 }
 
+/*
 //2 stage allreduce: distribute sums across the ranks. smaller bandwidth between ranks and use multiple arith at the same time. scatter_reduce+all_gather
 int allreduce(  unsigned int count,
                 unsigned int func,
@@ -1320,11 +1335,11 @@ void run() {
             case ACCL_ALLGATHER:
                 retval = allgather(count, op0_addr, res_addr, comm, datapath_cfg, compression_flags, stream_flags);
                 break;
+            case ACCL_REDUCE_SCATTER:
+                retval = scatter_reduce(count, function, op0_addr, res_addr, comm, datapath_cfg, compression_flags, stream_flags);
+                break;
             // case ACCL_ALLREDUCE:
             //     retval = allreduce(count, function, op0_addr, res_addr, compression_flags);
-            //     break;
-            // case ACCL_REDUCE_SCATTER:
-            //     retval = scatter_reduce(count, function, op0_addr, res_addr, compression_flags);
             //     break;
             case ACCL_CONFIG:
                 retval = 0;
