@@ -22,8 +22,13 @@ def fill_xml_stream_port_arg(ports, args, name, is_master, width, id):
     arg_spec = args + "<arg name=\"%s\" addressQualifier=\"4\" id=\"%d\" port=\"%s\" size=\"0x4\" offset=\"0x0\" hostOffset=\"0x0\" hostSize=\"0x4\" type=\"void*\" />\n" % (name, id, name)
     return port_spec, arg_spec, id + 1
 
-def fill_xml_addressable_port(name, is_master, range, width):
-    return "<port name=\"%s\" mode=\"%s\" range=\"%s\" dataWidth=\"%d\" portType=\"addressable\" base=\"0x0\"/>\n" % (name, "master" if is_master else "slave", "0xFFFFFFFFFFFFFFFF" if is_master else hex(range), width)
+def fill_xml_axilite_port(name, range):
+    return "<port name=\"%s\" mode=\"slave\" range=\"%s\" dataWidth=\"32\" portType=\"addressable\" base=\"0x0\"/>\n" % (name, hex(range))
+
+def fill_xml_aximm_port_arg(ports, args, name, width, offset, id):
+    port_spec = ports + "<port name=\"%s\" mode=\"master\" range=\"0xFFFFFFFFFFFFFFFF\" dataWidth=\"%d\" portType=\"addressable\" base=\"0x0\"/>\n" % (name, width)
+    arg_spec = args + "<arg name=\"%s\" addressQualifier=\"1\" id=\"%d\" port=\"%s\" size=\"0x8\" offset=\"%s\" hostOffset=\"0x0\" hostSize=\"0x8\" type=\"int*\" />\n" % (name, id, name, hex(offset))
+    return port_spec, arg_spec, id + 1
 
 xml_header = """<?xml version="1.0" encoding="UTF-8"?>
 <root versionMajor="1" versionMinor="9">
@@ -36,12 +41,12 @@ xml_args = "<args>\n"
 
 #$(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) 
 
-xml_ports += fill_xml_addressable_port("s_axi_control", False, 8*1024, 32)
-if int(sys.argv[2]) == 1:
-    xml_ports += fill_xml_addressable_port("m_axi_0", True, 0, 512)
-    xml_ports += fill_xml_addressable_port("m_axi_1", True, 0, 512)
+xml_ports += fill_xml_axilite_port("s_axi_control", 8*1024)
 
 id = 0
+if int(sys.argv[2]) == 1:
+    xml_ports, xml_args, id = fill_xml_aximm_port_arg(xml_ports, xml_args, "m_axi_0", 512, 16, id)
+    xml_ports, xml_args, id = fill_xml_aximm_port_arg(xml_ports, xml_args, "m_axi_1", 512, 32, id)
 xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "s_axis_call_req", False, 32, id)
 xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "m_axis_call_ack", True, 32, id)
 xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "s_axis_eth_rx_data", False, 512, id)

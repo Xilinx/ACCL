@@ -150,6 +150,8 @@ proc edit_core {core} {
     set mem_map    [::ipx::add_memory_map -quiet "s_axi_control" $core]
     set addr_block [::ipx::add_address_block -quiet "reg0" $mem_map]
 
+    config_axilite_reg $addr_block "buf0_ptr" 0x10 64 "m_axi_0"
+    config_axilite_reg $addr_block "buf1_ptr" 0x20 64 "m_axi_1"
     set_property slave_memory_map_ref "s_axi_control" [::ipx::get_bus_interfaces -of $core "s_axi_control"]
 
     puts "Setting core attributes"
