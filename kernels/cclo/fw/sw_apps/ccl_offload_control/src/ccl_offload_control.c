@@ -1105,65 +1105,90 @@ int reduce( unsigned int count,
     }
 }
 
-//scatter_reduce: (a,b,c), (1,2,3), (X,Y,Z) -> (a+1+X,,) (,b+2+Y,) (,,c+3+Z)
+//reduce_scatter: (a,b,c), (1,2,3), (X,Y,Z) -> (a+1+X,,) (,b+2+Y,) (,,c+3+Z)
 //count == size of chunks
-int scatter_reduce(
+int reduce_scatter(
     unsigned int count,
     unsigned int func,
-    uint64_t src_addr,
-    uint64_t dst_addr,
+    uint64_t src_buf_addr,
+    uint64_t dst_buf_addr,
     unsigned int comm_offset,
     unsigned int arcfg_offset,
     unsigned int compression,
     unsigned int stream
 ){
-    unsigned int err = NO_ERROR, i;
-/*
-    //convert the full element count into a normal and tail count
-    unsigned int curr_count, count_tail = (count % world.size == 0) ? (count/world.size) : (count%world.size);
-    count = count / world.size;
+    int i, curr_pos, rel_stride, abs_stride, next_in_ring, prev_in_ring;
+    int err = NO_ERROR;
 
-    unsigned int next_in_ring 	 = (world.local_rank + 1			) % world.size	;
-    unsigned int prev_in_ring 	 = (world.local_rank + world.size-1 ) % world.size	;
-    unsigned int curr_send_chunk = prev_in_ring;
-    unsigned int curr_recv_chunk = (prev_in_ring + world.size-1 ) % world.size	;
+    //compression is tricky for the relay: we've already received into the destination buffer 
+    //with associated flag RES_COMPRESSED; this buffer becomes the source for a send
+    //so if RES_COMPRESSED is set, OP0_COMPRESSED must be set for the send, and RES_COMPRESSED reset
+    unsigned int relay_compression = (compression & RES_COMPRESSED) ? (compression | OP0_COMPRESSED) : compression;
+    relay_compression &= ~(RES_COMPRESSED);
 
-    //figure out compression
-    //the fused_recv_reduce_send reduces op0 (from src_addr) with op1 (from the network) and sends the result to the network
-    //so keep OP0_COMPRESSED and ETH_COMPRESSED from the top level;
-    //the fused_recv_reduce reduces from src_addr with op1 from the network and puts in dst_addr
+    next_in_ring = (world.local_rank + 1) % world.size;
+    prev_in_ring = (world.local_rank + world.size - 1) % world.size;
 
-    //1. each rank send its own chunk to the next rank in the ring
-    curr_send_addr = phys_addr_offset(src_addr, count*curr_send_chunk, (compression & OP0_COMPRESSED) ? true : false);
-    curr_count = (curr_send_chunk == (world.local_rank-1)) ? count_tail : count;   
-    ret = send(next_in_ring, curr_count, curr_send_addr, TAG_ANY, compression & (ETH_COMPRESSED | OP0_COMPRESSED), NO_STREAM);
-    if(ret != NO_ERROR) return ret;
-    //2. for n-1 times sum the chunk that is coming from previous rank with your chunk at the same location. then forward the result to
-    // the next rank in the ring
-    for (i = 0; i < world.size-2; ++i, curr_recv_chunk=(curr_recv_chunk + world.size - 1) % world.size)
-    {
-        curr_recv_addr = phys_addr_offset(src_addr, count*curr_recv_chunk, (compression & OP0_COMPRESSED) ? true : false);
-        //2. receive part of data from previous in rank and accumulate to the part you have at the same address
-        //and forward to the next rank in the ring
-        //TODO: figure out compression
-        curr_count = (curr_recv_chunk == (world.local_rank-1)) ? count_tail : count;
-        ret = fused_recv_reduce_send(prev_in_ring, next_in_ring, curr_count, func, curr_recv_addr, TAG_ANY, compression & (ETH_COMPRESSED | OP0_COMPRESSED)); 
-        if(ret != NO_ERROR) return ret;
+    //preamble: send our data to next in ring
+    //prime the address slot for the source, so we can subsequently stride against it
+    start_move(
+        MOVE_IMMEDIATE, MOVE_NONE, MOVE_NONE, 
+        compression, RES_LOCAL, 0,
+        0,
+        0, arcfg_offset, 
+        src_buf_addr, 0, 0, 0, 0, 0,
+        0, 0, 0, 0
+    );
+
+    //send local chunk to next in ring
+    start_move(
+        MOVE_STRIDE, MOVE_NONE, MOVE_IMMEDIATE, 
+        compression & ~(RES_COMPRESSED), RES_REMOTE, 0,
+        count, 
+        comm_offset, arcfg_offset, 
+        0, 0, 0, count*world.local_rank, 0, 0,
+        0, 0, next_in_ring, TAG_ANY
+    );
+
+    //receive and reduce+forward from all other members of the communicator
+    curr_pos = world.local_rank;
+    for(i=0; i<world.size-1; i++){
+        rel_stride = count*((curr_pos == 0) ? (world.size-1) : -1);
+        abs_stride = count*((curr_pos == 0) ? (world.size-1) : curr_pos-1);
+
+        //simultaneous receive, reduce and send for the received chunk,
+        //unless it is the last step, in which case we don't send, but save locally
+        if(i < world.size-2){
+            start_move(
+                MOVE_STRIDE, MOVE_ON_RECV, MOVE_IMMEDIATE, 
+                compression & ~(OP0_COMPRESSED), RES_REMOTE, func,
+                count, 
+                comm_offset, arcfg_offset, 
+                0, 0, 0, rel_stride, 0, 0,
+                prev_in_ring, TAG_ANY, next_in_ring, TAG_ANY
+            ); 
+        } else{
+            start_move(
+                MOVE_STRIDE, MOVE_ON_RECV, MOVE_IMMEDIATE, 
+                compression & ~(OP0_COMPRESSED), RES_LOCAL, 0,
+                count, 
+                comm_offset, arcfg_offset, 
+                0, 0, dst_buf_addr, rel_stride, 0, 0,
+                prev_in_ring, TAG_ANY, 0, 0
+            ); 
+        }
+        curr_pos = (curr_pos + world.size - 1) % world.size;
     }
-    //at last iteration (n-1) you can sum and save the result at the same location (which is the right place to be)
-    if (world.size > 1){
-        curr_recv_addr = phys_addr_offset(src_addr, count*curr_recv_chunk, (compression & OP0_COMPRESSED) ? true : false);
-        curr_send_addr = phys_addr_offset(dst_addr, count*curr_recv_chunk, (compression & RES_COMPRESSED) ? true : false);
-        curr_count = (curr_recv_chunk == (world.local_rank-1)) ? count_tail : count;
-        ret = fused_recv_reduce(prev_in_ring, curr_count, func, curr_recv_addr, curr_send_addr, TAG_ANY, compression); 
-        if(ret != NO_ERROR) return ret;
+
+    for(i=0; i<(2+world.size-1); i++){
+        err |= end_move();
     }
-*/
+
     return err;
 }
 
 /*
-//2 stage allreduce: distribute sums across the ranks. smaller bandwidth between ranks and use multiple arith at the same time. scatter_reduce+all_gather
+//2 stage allreduce: distribute sums across the ranks. smaller bandwidth between ranks and use multiple arith at the same time. reduce_scatter+all_gather
 int allreduce(  unsigned int count,
                 unsigned int func,
                 uint64_t src_addr,
@@ -1179,7 +1204,7 @@ int allreduce(  unsigned int count,
     unsigned int next_in_ring = (world.local_rank+1)%world.size;
     unsigned int prev_in_ring = (world.local_rank+world.size-1)%world.size;
     //scatter reduce - use top-level compression flags directly
-    scatter_reduce(count, func, src_addr, dst_addr, compression);
+    reduce_scatter(count, func, src_addr, dst_addr, compression);
     //allgather in place on dst_buffer
     for (i = 0; i < world.size -1; ++i)
     {
@@ -1336,7 +1361,7 @@ void run() {
                 retval = allgather(count, op0_addr, res_addr, comm, datapath_cfg, compression_flags, stream_flags);
                 break;
             case ACCL_REDUCE_SCATTER:
-                retval = scatter_reduce(count, function, op0_addr, res_addr, comm, datapath_cfg, compression_flags, stream_flags);
+                retval = reduce_scatter(count, function, op0_addr, res_addr, comm, datapath_cfg, compression_flags, stream_flags);
                 break;
             // case ACCL_ALLREDUCE:
             //     retval = allreduce(count, function, op0_addr, res_addr, compression_flags);
