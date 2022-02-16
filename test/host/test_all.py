@@ -27,17 +27,23 @@ class Tests:
 
 @dataclass(frozen=True)
 class Config:
+    # configurable
     nranks: int
     type: str
     stacktype: str = 'tcp'
     start_port: int = 5000
+    debug: bool = False,
     log: Path = Path('log/')
+
+    #timeout settings
+    test_timeout: float = 20
+    wait_startup: float = 5
+    wait_terminate: float = 1
 
     # internals
     emulation: Path = field(init=False, default=Path('../emulation'))
     simulation: Path = field(init=False, default=Path('../simulation'))
     cclo: Path = field(init=False, default=Path('../../kernels/cclo'))
-    timeout: int = field(init=False, default=20)
     tests: list[str] = field(init=False, default_factory=lambda: [
         Tests.sendrecv, Tests.sendrecv_pl_kernel, Tests.sendrecv_fanin,
         Tests.bcast, Tests.scatter, Tests.gather, Tests.allgather,
@@ -66,13 +72,21 @@ def run_emulator(cfg: Config, test: str):
                                     f'{cfg.stacktype}', f'{cfg.start_port}'],
                                 cwd=cfg.emulation, stdout=subprocess.PIPE,
                                 stderr=subprocess.DEVNULL)
-        time.sleep(5)
+        if cfg.debug:
+            print("Waiting for emulator to startup...")
+        time.sleep(cfg.wait_startup)
+        if cfg.debug:
+            print("Emulator started!")
         try:
             yield process
         finally:
             process.terminate()
+            if cfg.debug:
+                print("Waiting for emulator to terminate...")
             process.wait()
-            time.sleep(2)
+            time.sleep(cfg.wait_terminate)
+            if cfg.debug:
+                print("Emulator finished!")
 
 
 def compile_simulator(cfg: Config):
@@ -108,13 +122,21 @@ def run_simulator(cfg: Config, test: str):
             as f:
         process = subprocess.Popen(args, env=env, cwd=cfg.simulation, stdout=f,
                                    stderr=subprocess.DEVNULL)
-        time.sleep(5)
+        if cfg.debug:
+            print("Waiting for simulator to startup...")
+        time.sleep(cfg.wait_startup)
+        if cfg.debug:
+            print("Simulator started!")
         try:
             yield process
         finally:
             process.terminate()
+            if cfg.debug:
+                print("Waiting for simulator to terminate...")
             process.wait()
-            time.sleep(1)
+            time.sleep(cfg.wait_terminate)
+            if cfg.debug:
+                print("Simulator finished!")
 
 
 def run_successfull(stdout: str):
@@ -135,7 +157,7 @@ def run_test(test: str, cfg: Config, reduce_func: int = None):
     process = subprocess.Popen(
         args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     try:
-        process.wait(timeout=cfg.timeout)
+        process.wait(timeout=cfg.test_timeout)
     except subprocess.TimeoutExpired:
         process.send_signal(signal.SIGINT)
         process.wait()
@@ -194,11 +216,28 @@ if __name__ == '__main__':
                         help='Type of test, use simulation or emulation')
     parser.add_argument('--udp', action='store_true', default=False,
                         help='Run tests using UDP')
-    parser.add_argument('--start_port', type=int, default=5500,
-                        help='Start of range of ports usable for sim')
+    parser.add_argument('--start-port', type=int, default=5500, metavar='PORT',
+                        help='Start of range of ports usable for sim, defaults '
+                             'to 5500')
+    parser.add_argument('--debug', action='store_true', default=False,
+                        help='Print debug messages')
+    parser.add_argument('--log', type=Path, default=Path('log/'), metavar='DIR',
+                        help="Directory to put logs in, defaults to 'log/'")
+    parser.add_argument('--timeout', type=float, default=20, metavar='SECONDS',
+                        help='Maximum amount of time to wait for tests to '
+                             'complete, defaults to 20s')
+    parser.add_argument('--wait-startup', type=float, default=5,
+                        metavar='SECONDS',
+                        help='Amount of time to wait for emulator/simulator '
+                             'to startup, defaults to 5s')
+    parser.add_argument('--wait-terminate', type=float, default=1,
+                        metavar='SECONDS',
+                        help='Amount of time to wait after emulator/'
+                             'simulator terminates, defaults to 1s')
 
     args = parser.parse_args()
-    cfg = Config(args.nranks, args.type,
-                 'udp' if args.udp else 'tcp', args.start_port)
+    cfg = Config(args.nranks, args.type, 'udp' if args.udp else 'tcp',
+                 args.start_port, args.debug, args.log, args.timeout,
+                 args.wait_startup, args.wait_terminate)
 
     run(cfg)
