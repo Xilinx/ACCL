@@ -23,6 +23,12 @@ class Tests:
     gather = 'gather'
     allgather = 'allgather'
     reduce = 'reduce'
+    allreduce = 'allreduce'
+    reduce_scatter = 'reduce_scatter'
+
+    @staticmethod
+    def is_reduce(test: str):
+        return test in (Tests.reduce, Tests.allreduce, Tests.reduce_scatter)
 
 
 @dataclass(frozen=True)
@@ -47,7 +53,7 @@ class Config:
     tests: list[str] = field(init=False, default_factory=lambda: [
         Tests.sendrecv, Tests.sendrecv_pl_kernel, Tests.sendrecv_fanin,
         Tests.bcast, Tests.scatter, Tests.gather, Tests.allgather,
-        Tests.reduce
+        Tests.reduce, Tests.allreduce, Tests.reduce_scatter
     ])
     reduce_func: list[int] = field(init=False, default_factory=lambda: [0])
 
@@ -144,7 +150,7 @@ def run_successfull(stdout: str):
 
 
 def run_test(test: str, cfg: Config, reduce_func: int = None):
-    if test == Tests.reduce:
+    if Tests.is_reduce(test):
         test_name = f'{test} ({reduce_func})'
     else:
         test_name = test
@@ -199,7 +205,7 @@ def run(cfg: Config):
             compile_cclo(cfg)
 
     for test in cfg.tests:
-        if test == Tests.reduce:
+        if Tests.is_reduce(test):
             for reduce_func in cfg.reduce_func:
                 start_test(test, cfg, reduce_func)
         else:
