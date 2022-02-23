@@ -219,6 +219,36 @@ def test_reduce(cclo_inst, world_size, local_rank, root, count, func):
     if err_count == 0:
         print("Reduce succeeded")
 
+def test_reduce_scatter(cclo_inst, world_size, local_rank, root, count, func):
+    err_count = 0
+    dt = [np.float32]#[np.float32, np.half]
+    for op_dt, res_dt in itertools.product(dt, repeat=2):
+        op_buf, _, res_buf = get_buffers(world_size*count, op_dt, op_dt, res_dt, cclo_inst)
+        op_buf[:] = [1.0*i for i in range(op_buf.size)]
+        cclo_inst.reduce_scatter(0, op_buf, res_buf, count, root, func)
+
+        full_reduce_result = world_size*op_buf.buf
+        offset = (local_rank + world_size + 1) % world_size
+        if not np.isclose(res_buf.buf[0:count], full_reduce_result[offset*count:(offset+1)*count]).all():
+            err_count += 1
+            print("Reduce-scatter failed on pair ", op_dt, res_dt)
+    if err_count == 0:
+        print("Reduce-scatter succeeded")
+
+def test_allreduce(cclo_inst, world_size, local_rank, root, count, func):
+    err_count = 0
+    dt = [np.float32]#[np.float32, np.half]
+    for op_dt, res_dt in itertools.product(dt, repeat=2):
+        op_buf, _, res_buf = get_buffers(count, op_dt, op_dt, res_dt, cclo_inst)
+        op_buf[:] = [1.0*i for i in range(op_buf.size)]
+        cclo_inst.allreduce(0, op_buf, res_buf, count, root, func)
+        full_reduce_result = world_size*op_buf.buf
+        if not np.isclose(res_buf.buf, full_reduce_result).all():
+            err_count += 1
+            print("Allreduce failed on pair ", op_dt, res_dt)
+    if err_count == 0:
+        print("Allreduce succeeded")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Tests for ACCL (emulation mode)')
     parser.add_argument('--nruns',      type=int,            default=1,     help='How many times to run each test')
@@ -238,6 +268,8 @@ if __name__ == "__main__":
     parser.add_argument('--gather',     action='store_true', default=False, help='Run gather test')
     parser.add_argument('--allgather',     action='store_true', default=False, help='Run allgather test')
     parser.add_argument('--reduce',     action='store_true', default=False, help='Run reduce test')
+    parser.add_argument('--reduce_scatter', action='store_true', default=False, help='Run reduce-scatter test')
+    parser.add_argument('--allreduce',  action='store_true', default=False, help='Run all-reduce test')
     parser.add_argument('--reduce_func', type=int,           default=0,     help='Function index for reduce')
     parser.add_argument('--tcp',        action='store_true', default=False, help='Run test using TCP')
 
@@ -293,6 +325,10 @@ if __name__ == "__main__":
                 test_allgather(cclo_inst, world_size, local_rank, args.count)
             if args.reduce:
                 test_reduce(cclo_inst, world_size, local_rank, i, args.count, args.reduce_func)
+            if args.reduce_scatter:
+                test_reduce_scatter(cclo_inst, world_size, local_rank, i, args.count, args.reduce_func)
+            if args.allreduce:
+                test_allreduce(cclo_inst, world_size, local_rank, i, args.count, args.reduce_func)
 
     except KeyboardInterrupt:
         print("CTR^C")
