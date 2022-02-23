@@ -64,35 +64,6 @@ inline int max(int x, int y){
     return x - ((x - y) & ((x - y) >> 31));
 }
 
-//circular buffer operation
-void cb_init(circular_buffer *cb, unsigned int capacity){
-    cb->write_idx=0;
-    cb->read_idx=0;
-    cb->occupancy=0;
-    cb->capacity= (capacity < MAX_CIRCULAR_BUFFER_SIZE) ? capacity : MAX_CIRCULAR_BUFFER_SIZE;
-}
-
-void cb_push(circular_buffer *cb, unsigned int item){
-    cb->buffer[cb->write_idx] = item;
-    cb->write_idx = (cb->write_idx + 1) % cb->capacity;
-    cb->occupancy++;
-}
-
-unsigned int cb_pop(circular_buffer *cb){
-    unsigned int item = cb->buffer[cb->read_idx];
-    cb->read_idx = (cb->read_idx + 1) % cb->capacity;
-    cb->occupancy--;
-    return item;
-}
-
-bool cb_empty(circular_buffer *cb){
-    return (cb->occupancy == 0);
-}
-
-bool cb_full(circular_buffer *cb){
-    return (cb->occupancy == cb->capacity);
-}
-
 //retrieves all the communicator
 static inline communicator find_comm(unsigned int adr){
 	communicator ret;
@@ -212,100 +183,7 @@ int openPort()
 static inline unsigned int segment(unsigned int number_of_bytes,unsigned int segment_size){
     return  (number_of_bytes + segment_size - 1) / segment_size;
 } 
-/*
-//configure datapath before calling this method
-//starts one or more datamovers (AXI-MM DMs or Ethernet Packetizer)
-//updates the config when done
-static inline int start_move(
-                    dm_config * cfg,
-                    unsigned int dma_tag,
-                    unsigned int dst_rank,
-                    unsigned int msg_tag) {
-    //BE CAREFUL!: if(count > DMA_MAX_BTT) return DMA_TRANSACTION_SIZE;
-    //NOTE: count is the number of uncompressed elements to be transferred, which we convert to bytes
 
-    //start DMAs 
-    //OP0 from stream or DMA
-    if( cfg->which_dm & USE_OP0_DM){
-        if(cfg->stream & OP0_STREAM){
-            start_krnl_message(cfg->op0_len);
-        } else{
-            dma_tag = (dma_tag + 1) & 0xf;
-            dma_cmd(CMD_DMA0_RX, cfg->op0_len, cfg->op0_addr.ptr, dma_tag);
-        }
-    }
-    //OP1 always from DMA
-    if( cfg->which_dm & USE_OP1_DM){
-        dma_tag = (dma_tag + 1) & 0xf;
-        dma_cmd(CMD_DMA1_RX, cfg->op1_len, cfg->op1_addr.ptr, dma_tag);
-    }
-    //RES to stream, DMA, or packetizer
-    if( cfg->which_dm & USE_RES_DM){
-        if(cfg->remote & RES_REMOTE){
-            start_packetizer_message(dst_rank, cfg->res_len, msg_tag, cfg->stream & RES_STREAM);
-        } else if(!(cfg->stream & RES_STREAM)){
-            dma_tag = (dma_tag + 1) & 0xf;
-            dma_cmd(CMD_DMA1_TX, cfg->res_len, cfg->res_addr.ptr, dma_tag);
-        }
-        //if RES is STREAM, then we don't need to do anything,
-        //data directly flows through the switch into the external kernel 
-        //TODO: implement TDEST inserter to be able to target specific external kernel
-    }
-    return dma_tag;
-}
-
-static inline void ack_move(
-    dm_config * cfg,
-    unsigned int dst_rank) {
-    unsigned int invalid, count, status;
-
-    //wait for DMAs to complete where appropriate
-    count = 0;
-    do {
-        if(timeout != 0 && count >= timeout )
-            longjmp(excp_handler, DMA_TIMEOUT_ERROR);
-        count ++;
-        invalid = 0;
-        if( cfg->which_dm & USE_OP0_DM){
-            if(!(cfg->stream & OP0_STREAM)){
-                invalid += tngetd(STS_DMA0_RX);
-            }
-        }
-        if( cfg->which_dm & USE_OP1_DM){
-            invalid += tngetd(STS_DMA1_RX);
-        }
-        if( cfg->which_dm & (USE_RES_DM)){
-            if(!(cfg->stream & RES_STREAM) && !(cfg->remote & RES_REMOTE)){
-                invalid += tngetd(STS_DMA1_TX);
-            }
-        }
-    } while(invalid);
-
-    if( cfg->which_dm & USE_OP0_DM){
-        if(cfg->stream & OP0_STREAM){
-            ack_krnl_message(cfg->op0_len);
-        } else {
-            status = getd(STS_DMA0_RX);
-            dma_tag = (dma_tag + 1) & 0xf;
-            check_DMA_status(status, cfg->op0_len, dma_tag, 0);
-        }
-    }
-    if( cfg->which_dm & USE_OP1_DM){
-        status = getd(STS_DMA1_RX);
-        dma_tag = (dma_tag + 1) & 0xf;
-        check_DMA_status(status, cfg->op1_len, dma_tag, 0);
-    }
-    if( cfg->which_dm & USE_RES_DM){
-        if(cfg->remote & RES_REMOTE){
-            ack_packetizer_message(dst_rank, !(cfg->stream & RES_STREAM));
-        } else if(!(cfg->stream & RES_STREAM)){
-            status = getd(STS_DMA1_TX);
-            dma_tag = (dma_tag + 1) & 0xf;
-            check_DMA_status(status, cfg->res_len, dma_tag, 0);
-        }      
-    }
-}
-*/
 //configure datapath before calling this method
 //instructs the data plane to move data
 //use MOVE_IMMEDIATE
@@ -418,48 +296,6 @@ int move(
     return end_move();
 }
 
-
-/*
-//segment a logical move into multiple MOVE_IMMEDIATEs
-int move_segmented(
-    dm_config * cfg,
-    unsigned dst_rank,
-    unsigned dst_tag
-) {
-    unsigned int dma_tag_tmp, i;
-    dma_tag_tmp = dma_tag;
-
-    //set up datamover configs for emitting and retiring transfers
-    //we need two, because we emit and retire in separate processes which are offset
-    dm_config emit_dm_config = *cfg;
-    dm_config ack_dm_config = *cfg;
-
-    //1. issue at most max_dma_in_flight of dma_transaction_size
-    for (i = 0; emit_dm_config.elems_remaining > 0 && i < max_dma_in_flight ; i++){
-        //start DMAs
-        dma_tag_tmp = start_move(&emit_dm_config, dma_tag_tmp, dst_rank, dst_tag);
-        dm_config_update(&emit_dm_config);
-    }
-    //2.ack 1 and issue another dma transfer up until there's no more dma move to issue
-    while(emit_dm_config.elems_remaining > 0){
-        //wait for DMAs to finish
-        ack_move(&ack_dm_config, dst_rank);
-        //start DMAs
-        dma_tag_tmp = start_move(&emit_dm_config, dma_tag_tmp, dst_rank, dst_tag);
-        //update configs
-        dm_config_update(&emit_dm_config);
-        dm_config_update(&ack_dm_config);
-    }
-    //3. finish ack the remaining
-    while(ack_dm_config.elems_remaining > 0){
-        //wait for DMAs to finish
-        ack_move(&ack_dm_config, dst_rank);
-        dm_config_update(&ack_dm_config);
-    }
-    return NO_ERROR;
-}
-*/
-
 //performs a copy using DMA0. DMA0 rx reads while DMA1 tx overwrites
 //use MOVE_IMMEDIATE
 static inline int copy(	unsigned int count,
@@ -543,29 +379,14 @@ int recv(	unsigned int src_rank,
     );
 }
 
-/*
-//performs a reduction using DMA0 and DMA1 and then sends the result 
-//through tx_subsystem to dst_rank
-static inline int fused_reduce_send(
-                    unsigned int dst_rank,
-                    unsigned int count,
-                    uint64_t op0_addr,
-                    uint64_t op1_addr,
-                    unsigned int dst_tag,
-                    unsigned int compression) {
-    configure_datapath(DATAPATH_OFFCHIP_REDUCTION, 0, compression, 0);
-    dm_config cfg = dm_config_init(count, op0_addr, op1_addr, 0, USE_OP0_DM | USE_OP1_DM | USE_RES_DM, RES_REMOTE, compression, NO_STREAM);
-    return move_segmented(&cfg, dst_rank, dst_tag);
-}
-
 //iterates over rx buffers until match is found or a timeout expires
 //matches count, src and tag if tag is not ANY
 //returns the index of the spare_buffer or -1 if not found
 int seek_rx_buffer(
-                        unsigned int src_rank,
-                        unsigned int count,
-                        unsigned int src_tag
-                    ){
+    unsigned int src_rank,
+    unsigned int count,
+    unsigned int src_tag
+){
     unsigned int seq_num; //src_port TODO: use this variable to choose depending on session id or port
     int i;
     seq_num = world.ranks[src_rank].inbound_seq + 1;
@@ -599,17 +420,19 @@ int seek_rx_buffer(
 //returns the index of the spare_buffer
 //timeout is jumps to exception handler
 //useful as infrastructure for [I]MProbe/[I]MRecv
-int wait_on_rx(	unsigned int src_rank,
-                    unsigned int count,
-                    unsigned int src_tag){
+int wait_on_rx(
+    unsigned int src_rank,
+    unsigned int count,
+    unsigned int src_tag
+){
     int idx, i;
     for(i = 0; timeout == 0 || i < timeout; i++){
         idx = seek_rx_buffer(src_rank, count, src_tag);
         if(idx >= 0) return idx;
     }
     longjmp(excp_handler, RECEIVE_TIMEOUT_ERROR);
+    return -1;
 }
-*/
 
 //1) receives from a rank
 //2) sums with a a buffer 
@@ -675,76 +498,7 @@ int fused_recv_reduce_send(
 
     return err;
 }
-/*
-//receives from a rank and forwards to another rank 
-//use MOVE_ON_RECV
-int relay(
-        unsigned int src_rank,
-        unsigned int dst_rank,
-        unsigned int count, 
-        unsigned int mpi_tag,
-        unsigned int compression){
-    unsigned int buf_idx;
-    unsigned int dma_tag_tmp = dma_tag, i;
-    rx_buffer *rx_buf_list = (rx_buffer*)(cfgmem+RX_BUFFER_COUNT_OFFSET/4+1);
 
-    circular_buffer spare_buffer_queue;
-    cb_init(&spare_buffer_queue, max_dma_in_flight);
-
-    //compression adjustment: if ETH_COMPRESSED, then we will use OP0_COMPRESSED and ETH_COMPRESSED
-    compression = (compression & ETH_COMPRESSED) ? (OP0_COMPRESSED | ETH_COMPRESSED) : NO_COMPRESSION;
-    //configure datapath
-    configure_datapath(DATAPATH_OFFCHIP_TX, 0, compression, 0);
-
-    //set up datamover configs for emitting and retiring transfers
-    //we need two, because we emit and retire in separate processes which are offset
-    dm_config emit_dm_config = dm_config_init(count, 0, 0, 0, USE_OP0_DM | USE_RES_DM, RES_REMOTE, compression, NO_STREAM);
-    dm_config ack_dm_config = dm_config_init(count, 0, 0, 0, USE_OP0_DM | USE_RES_DM, RES_REMOTE, compression, NO_STREAM);
-
-    //1. issue at most max_dma_in_flight of dma_transaction_size
-    for (i = 0; emit_dm_config.elems_remaining > 0 && i < max_dma_in_flight ; i++){
-        //wait for segment to come
-        buf_idx = wait_on_rx(src_rank, emit_dm_config.op0_len, mpi_tag);
-        if  (buf_idx < 0 ) return RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID;
-        emit_dm_config.op0_addr.ptr = ((uint64_t) rx_buf_list[buf_idx].addrh << 32) | rx_buf_list[buf_idx].addrl;
-        //start DMAs
-        dma_tag_tmp = start_move(&emit_dm_config, dma_tag_tmp, dst_rank, mpi_tag);
-        //save spare buffer id
-        cb_push(&spare_buffer_queue, buf_idx);
-    }
-    //2.ack 1 and issue another dma transfer up until there's no more dma move to issue
-    while(emit_dm_config.elems_remaining > 0){
-        //wait for DMAs to finish
-        ack_move(&ack_dm_config, dst_rank);
-        //set spare buffer as free
-        buf_idx = cb_pop(&spare_buffer_queue);
-        microblaze_disable_interrupts();
-        rx_buf_list[buf_idx].status = STATUS_IDLE;
-        microblaze_enable_interrupts();
-        //enqueue other DMA movement
-        //wait for segment to come
-        buf_idx = wait_on_rx(src_rank, emit_dm_config.op0_len, mpi_tag);
-        if  (buf_idx < 0 ) return RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID;
-        emit_dm_config.op0_addr.ptr = ((uint64_t) rx_buf_list[buf_idx].addrh << 32) | rx_buf_list[buf_idx].addrl;
-        //start DMAs
-        dma_tag_tmp = start_move(&emit_dm_config, dma_tag_tmp, dst_rank, mpi_tag);
-        //save spare buffer id
-        cb_push(&spare_buffer_queue, buf_idx);
-    }
-    //3. finish ack the remaining
-    while(ack_dm_config.elems_remaining > 0){
-        //wait for DMAs to finish
-        ack_move(&ack_dm_config, dst_rank);
-        //set spare buffer as free
-        buf_idx = cb_pop(&spare_buffer_queue);
-        microblaze_disable_interrupts();
-        rx_buf_list[buf_idx].status = STATUS_IDLE;
-        microblaze_enable_interrupts();
-    }
-
-    return NO_ERROR;
-}
-*/
 //COLLECTIVES
 
 //root reads multiple times the same segment and send it to each rank before 

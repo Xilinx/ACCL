@@ -316,17 +316,6 @@ typedef struct {
 //Tag definitions
 #define TAG_ANY 0xFFFFFFFF
 
-//circular buffer
-#define MAX_CIRCULAR_BUFFER_SIZE 20
-typedef struct circular_buffer
-{
-    unsigned int buffer[MAX_CIRCULAR_BUFFER_SIZE];     // data buffer
-    unsigned int capacity;      //real desired capacity of buffer
-    unsigned int occupancy;     //current occupancy
-    unsigned int write_idx;          // where we put data
-    unsigned int read_idx;          // where we get data from
-} circular_buffer;
-
 //define exception handling for simulation
 #ifdef MB_FW_EMULATION
 #define setjmp(x) 0
