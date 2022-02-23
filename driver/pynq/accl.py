@@ -947,8 +947,6 @@ class accl():
             warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
         if count == 0:
             return
-        # TODO: check datatype support
-        assert count % sbuf.itemsize == 0, "Count not a multiple of input element size"
 
         if not from_fpga:
             sbuf[0:count].sync_to_device()

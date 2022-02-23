@@ -1070,10 +1070,6 @@ int allgather(
         curr_pos = (curr_pos + world.size - 1) % world.size;
     }
 
-    // for(i=0; i<(3*world.size-2); i++){
-    //     err |= end_move();
-    // }
-
     return err;
 }
 
@@ -1154,7 +1150,6 @@ int reduce_scatter(
     curr_pos = world.local_rank;
     for(i=0; i<world.size-1; i++){
         rel_stride = count*((curr_pos == 0) ? (world.size-1) : -1);
-        abs_stride = count*((curr_pos == 0) ? (world.size-1) : curr_pos-1);
 
         //simultaneous receive, reduce and send for the received chunk,
         //unless it is the last step, in which case we don't send, but save locally
@@ -1178,54 +1173,176 @@ int reduce_scatter(
             ); 
         }
         curr_pos = (curr_pos + world.size - 1) % world.size;
+        //pop one result here to keep the result FIFO not full
+        err |= end_move();
     }
 
-    for(i=0; i<(2+world.size-1); i++){
+    //pop final two results
+    err |= end_move();
+    err |= end_move();
+
+    return err;
+}
+
+//2 stage allreduce: fused reduce_scatter+all_gather
+int allreduce(
+    unsigned int count,
+    unsigned int func,
+    uint64_t src_buf_addr,
+    uint64_t dst_buf_addr,
+    unsigned int comm_offset,
+    unsigned int arcfg_offset,
+    unsigned int compression,
+    unsigned int stream
+){
+    int i, curr_pos, curr_count, rel_stride, abs_stride, next_in_ring, prev_in_ring;
+    int err = NO_ERROR;
+
+    //compression is tricky for the relay: we've already received into the destination buffer 
+    //with associated flag RES_COMPRESSED; this buffer becomes the source for a send
+    //so if RES_COMPRESSED is set, OP0_COMPRESSED must be set for the send, and RES_COMPRESSED reset
+    unsigned int relay_compression = (compression & RES_COMPRESSED) ? (compression | OP0_COMPRESSED) : compression;
+    relay_compression &= ~(RES_COMPRESSED);
+
+    next_in_ring = (world.local_rank + 1) % world.size;
+    prev_in_ring = (world.local_rank + world.size - 1) % world.size;
+
+    //we need to break the input into world.size chunks of equal size
+    //if count does not divide by world.size, the chunk with the largest index (tail) will be smaller
+    unsigned int bulk_count = (count + world.size -1) / world.size;//equivalent to ceil(count/world.size)
+    unsigned int tail_count = count - bulk_count*(world.size-1);
+
+    //preamble: send our data to next in ring
+    //prime the address slots for the source and destination, 
+    //so we can subsequently stride against them
+    start_move(
+        MOVE_IMMEDIATE, MOVE_NONE, MOVE_IMMEDIATE, 
+        compression, RES_LOCAL, 0,
+        0,
+        0, arcfg_offset, 
+        src_buf_addr, 0, dst_buf_addr, 0, 0, 0,
+        0, 0, 0, 0
+    );
+
+    //send local chunk to next in ring
+    start_move(
+        MOVE_STRIDE, MOVE_NONE, MOVE_IMMEDIATE, 
+        compression & ~(RES_COMPRESSED), RES_REMOTE, 0,
+        (world.local_rank == world.size-1) ? tail_count: bulk_count, 
+        comm_offset, arcfg_offset, 
+        0, 0, 0, bulk_count*world.local_rank, 0, 0,
+        0, 0, next_in_ring, TAG_ANY
+    );
+
+    //receive and reduce+forward from all other members of the communicator
+    curr_pos = world.local_rank;
+    for(i=0; i<world.size-1; i++){
+        rel_stride = bulk_count*((curr_pos == 0) ? (world.size-1) : -1);
+        curr_count = (curr_pos == 0) ? tail_count : bulk_count;
+
+        //simultaneous receive, reduce and send for the received chunk,
+        //unless it is the last step, in which case we don't send, but save locally
+        //unlike normal reduce-scatter, we don't save at offset 0 in the destination buffer
+        //but at the appropriate offset for the data being saved
+        if(i < world.size-2){
+            start_move(
+                MOVE_STRIDE, MOVE_ON_RECV, MOVE_IMMEDIATE, 
+                compression & ~(OP0_COMPRESSED), RES_REMOTE, func,
+                curr_count, 
+                comm_offset, arcfg_offset, 
+                0, 0, 0, rel_stride, 0, 0,
+                prev_in_ring, TAG_ANY, next_in_ring, TAG_ANY
+            ); 
+        } else{
+            start_move(
+                MOVE_STRIDE, MOVE_ON_RECV, MOVE_STRIDE, 
+                compression & ~(OP0_COMPRESSED), RES_LOCAL, 0,
+                curr_count, 
+                comm_offset, arcfg_offset, 
+                0, 0, 0, rel_stride, 0, bulk_count*next_in_ring,
+                prev_in_ring, TAG_ANY, 0, 0
+            ); 
+        }
+        curr_pos = (curr_pos + world.size - 1) % world.size;
+        //pop one result here to keep the result FIFO not full
         err |= end_move();
+    }
+
+    //pop final two results for reduce-scatter
+    err |= end_move();
+    err |= end_move();
+
+    //next phase: allgather
+
+    //send to next in ring, from dst_buf_addr where we stored the scattered reduction result
+    start_move(
+        MOVE_IMMEDIATE, MOVE_NONE, MOVE_NONE, 
+        compression & ~(RES_COMPRESSED), RES_LOCAL, 0,
+        0, 
+        0, arcfg_offset, 
+        dst_buf_addr, 0, 0, 0, 0, 0,
+        0, 0, 0, 0
+    );
+    start_move(
+        MOVE_STRIDE, MOVE_NONE, MOVE_IMMEDIATE, 
+        compression & ~(RES_COMPRESSED), RES_REMOTE, 0,
+        (next_in_ring == world.size-1) ? tail_count : bulk_count, 
+        comm_offset, arcfg_offset, 
+        0, 0, 0, bulk_count*next_in_ring, 0, 0,
+        0, 0, next_in_ring, TAG_ANY
+    );
+
+    err |= end_move();
+    err |= end_move();
+
+    //receive and forward from all other members of the communicator
+    curr_pos = next_in_ring;
+    for(i=0; i<world.size-1; i++){
+        rel_stride = bulk_count*((curr_pos == 0) ? (world.size-1) : -1);
+        curr_count = (curr_pos == 0) ? tail_count : bulk_count;
+
+        //we use a blocking move here, because we want to avoid a race condition with the relay below
+        //TODO: avoid this; we either need to solve the RAW dependency in hardware (the generic approach),
+        //or a way to reuse a rx buffer (solves this problem in particular but does not extend to e.g. reduces)
+        //e.g. MOVE_ON_RECV_KEEP which would keep the RX buffer in the pending state
+        err |= move(
+            MOVE_NONE, MOVE_ON_RECV, MOVE_STRIDE, 
+            compression & ~(OP0_COMPRESSED), RES_LOCAL, 0,
+            curr_count, 
+            comm_offset, arcfg_offset, 
+            0, 0, 0, 0, 0, rel_stride,
+            prev_in_ring, TAG_ANY, 0, 0
+        ); 
+        curr_pos = (curr_pos + world.size - 1) % world.size;
+        curr_count = (curr_pos == (world.size - 1)) ? tail_count : bulk_count;
+        if(i < world.size-2){ //if not the last data, relay to the next in ring
+            //first prime the address 
+            start_move(
+                MOVE_NONE, MOVE_IMMEDIATE, MOVE_NONE, 
+                relay_compression, RES_REMOTE, 0,
+                0, 
+                0, arcfg_offset, 
+                0, dst_buf_addr, 0, 0, 0, 0,
+                0, 0, 0, 0
+            );
+            //send
+            start_move(
+                MOVE_NONE, MOVE_STRIDE, MOVE_IMMEDIATE, 
+                relay_compression, RES_REMOTE, 0,
+                curr_count, 
+                comm_offset, arcfg_offset, 
+                0, 0, 0, 0, bulk_count*curr_pos, 0,
+                0, 0, next_in_ring, TAG_ANY
+            );
+
+            err |= end_move();
+            err |= end_move();
+        }
     }
 
     return err;
 }
 
-/*
-//2 stage allreduce: distribute sums across the ranks. smaller bandwidth between ranks and use multiple arith at the same time. reduce_scatter+all_gather
-int allreduce(  unsigned int count,
-                unsigned int func,
-                uint64_t src_addr,
-                uint64_t dst_addr,
-                unsigned int compression){
-    unsigned int ret,i;
-    uint64_t curr_recv_addr, curr_send_addr;
-
-    int curr_send_chunk, curr_recv_chunk = world.local_rank;			 
-    //divide into chunks, rounding up
-    unsigned int curr_count, count_tail = (count % world.size == 0) ? (count/world.size) : (count%world.size);
-    count = (count+world.size-1) / world.size; 
-    unsigned int next_in_ring = (world.local_rank+1)%world.size;
-    unsigned int prev_in_ring = (world.local_rank+world.size-1)%world.size;
-    //scatter reduce - use top-level compression flags directly
-    reduce_scatter(count, func, src_addr, dst_addr, compression);
-    //allgather in place on dst_buffer
-    for (i = 0; i < world.size -1; ++i)
-    {
-        curr_send_chunk =  curr_recv_chunk;
-        curr_recv_chunk = (curr_recv_chunk + world.size - 1) % world.size;
-        //TODO: 5.6. can be done together since we have 3 dmas (1rx read from spare, 1tx write in the final dest, 2rx can read and transmit to next in the ring)
-        //5. send the local reduced results to next rank
-        curr_send_addr = phys_addr_offset(src_addr, count*curr_recv_chunk, (compression & OP0_COMPRESSED) ? true : false);
-        curr_count = (curr_send_chunk == (world.size - 1)) ? count_tail : count;
-        ret = send(next_in_ring, curr_count, curr_send_addr, TAG_ANY, compression, NO_STREAM);
-        if(ret != NO_ERROR) return ret;
-        //6. receive the reduced results from previous rank and put into correct dst buffer position
-        curr_recv_addr = phys_addr_offset(dst_addr, count*curr_recv_chunk, (compression & RES_COMPRESSED) ? true : false);
-        curr_count = (curr_recv_chunk == (world.size - 1)) ? count_tail : count;
-        ret = recv(prev_in_ring, curr_count, curr_recv_addr, TAG_ANY, compression);
-        if(ret != NO_ERROR) return ret;
-    }
-
-    return NO_ERROR;
-}
-*/
 
 //startup and main
 
@@ -1363,9 +1480,9 @@ void run() {
             case ACCL_REDUCE_SCATTER:
                 retval = reduce_scatter(count, function, op0_addr, res_addr, comm, datapath_cfg, compression_flags, stream_flags);
                 break;
-            // case ACCL_ALLREDUCE:
-            //     retval = allreduce(count, function, op0_addr, res_addr, compression_flags);
-            //     break;
+            case ACCL_ALLREDUCE:
+                retval = allreduce(count, function, op0_addr, res_addr, comm, datapath_cfg, compression_flags, stream_flags);
+                break;
             case ACCL_CONFIG:
                 retval = 0;
                 switch (function)
