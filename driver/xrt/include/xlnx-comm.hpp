@@ -17,66 +17,70 @@
 *******************************************************************************/
 
 #pragma once
-
+#include "xlnx-consts.hpp"
 #include <iostream>
 #include <map>
 
-#include "experimental/xrt_aie.h"
-#include "experimental/xrt_device.h"
-#include "experimental/xrt_kernel.h"
 #include <arpa/inet.h>
-#include <mpi.h>
 
-using namespace std;
+namespace ACCL {
 
-class communicator {
+struct rank_t {
+  std::string ip;
+  int port;
+  int session_id;
+  addr_t max_segment_size;
+};
+
+class Communicator {
 private:
-  string base_ipaddr = "197.11.27.";
+  std::string base_ipaddr = "197.11.27.";
   int start_ip = 1;
   int _world_size;
   int _local_rank;
   int _rank;
   bool _vnx;
-  map<int, string> rank_to_ip;
+  std::map<int, std::string> rank_to_ip;
   uint64_t _comm_addr;
 
 public:
-  communicator() {}
+  // communicator() {}
 
-  communicator(int world_size, uint64_t comm_addr, xrt::kernel krnl,
-               bool vnx = false)
-      : _world_size(world_size), _comm_addr(comm_addr), _vnx(vnx) {
+  // communicator(int world_size, uint64_t comm_addr, xrt::kernel krnl,
+  //              bool vnx = false)
+  //     : _world_size(world_size), _comm_addr(comm_addr), _vnx(vnx) {
 
-    MPI_Comm_rank(MPI_COMM_WORLD, &_rank);
-    char *local_rank_string = getenv("OMPI_COMM_WORLD_LOCAL_RANK");
-    _local_rank = atoi(local_rank_string);
+  //   MPI_Comm_rank(MPI_COMM_WORLD, &_rank);
+  //   char *local_rank_string = getenv("OMPI_COMM_WORLD_LOCAL_RANK");
+  //   _local_rank = atoi(local_rank_string);
 
-    uint64_t addr = _comm_addr;
+  //   uint64_t addr = _comm_addr;
 
-    krnl.write_register(addr, world_size);
-    addr += 4;
-    krnl.write_register(addr, _local_rank);
-    for (int i = 0; i < _world_size; i++) {
-      string ip = base_ipaddr + to_string(i + start_ip);
-      rank_to_ip.insert(pair<int, string>(_rank, ip));
-      addr += 4;
-      krnl.write_register(addr, ip_encode(ip_from_rank(i)));
-      addr += 4;
-      if (_vnx) {
-        krnl.write_register(addr, i);
-      } else {
-        krnl.write_register(addr, port_from_rank(i));
-      }
-    }
-    //  self.communicators.append(communicator)
-  }
+  //   krnl.write_register(addr, world_size);
+  //   addr += 4;
+  //   krnl.write_register(addr, _local_rank);
+  //   for (int i = 0; i < _world_size; i++) {
+  //     string ip = base_ipaddr + to_string(i + start_ip);
+  //     rank_to_ip.insert(pair<int, string>(_rank, ip));
+  //     addr += 4;
+  //     krnl.write_register(addr, ip_encode(ip_from_rank(i)));
+  //     addr += 4;
+  //     if (_vnx) {
+  //       krnl.write_register(addr, i);
+  //     } else {
+  //       krnl.write_register(addr, port_from_rank(i));
+  //     }
+  //   }
+  //   //  self.communicators.append(communicator)
+  // }
 
-  int port_from_rank(int rank) {
-    throw std::logic_error("Function not yet implemented");
-    return 0;
-  }
+  // int port_from_rank(int rank) {
+  //   throw std::logic_error("Function not yet implemented");
+  //   return 0;
+  // }
 
-  uint32_t ip_encode(string ip) { return inet_addr(ip.c_str()); }
+  // uint32_t ip_encode(string ip) { return inet_addr(ip.c_str()); }
 
-  string ip_from_rank(int rank) { return rank_to_ip[rank]; }
+  // string ip_from_rank(int rank) { return rank_to_ip[rank]; }
 };
+} // namespace ACCL

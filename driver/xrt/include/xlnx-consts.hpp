@@ -17,29 +17,27 @@
 #
 *******************************************************************************/
 
+#include <bits/stdint-uintn.h>
 
-const auto TAG_ANY = 0xFFFFFFFF;
-const auto EXCHANGE_MEM_OFFSET_ADDRESS = 0x1000;
-const auto EXCHANGE_MEM_ADDRESS_RANGE = 0x1000;
-const auto HOST_CTRL_ADDRESS_RANGE = 0x800;
+namespace ACCL {
+typedef uint64_t addr_t;
+typedef uint64_t val_t;
+const unsigned int TAG_ANY = 0xFFFFFFFF;
+const addr_t EXCHANGE_MEM_OFFSET_ADDRESS = 0x1000;
+const addr_t EXCHANGE_MEM_ADDRESS_RANGE = 0x1000;
+const addr_t HOST_CTRL_ADDRESS_RANGE = 0x800;
 
-enum accl_fgFunc {
-  enable_irq = 0,
-  disable_irq = 1,
-  reset_periph = 2,
-  enable_pkt = 3,
-  set_timeout = 4,
-  init_connection = 5,
-  open_port = 6,
-  open_con = 7,
-  use_tcp_stack = 8,
-  use_udp_stack = 9,
-  start_profiling = 10,
-  end_profiling = 11,
-  set_dma_transaction_size = 12
+enum fgFunc {
+  reset_periph = 0,
+  enable_pkt = 1,
+  set_timeout = 2,
+  open_port = 3,
+  open_con = 4,
+  set_stack_type = 5,
+  set_max_segment_size = 6
 };
 
-enum accl_operation_t {
+enum operation {
   config = 0,
   sendop = 1,
   recvop = 2,
@@ -63,9 +61,21 @@ enum accl_operation_t {
   nop = 255
 };
 
-typedef enum { fp = 0, dp = 1, i32 = 2, i64 = 3 } accl_reduce_func;
+enum reduceFunctions { SUM = 0 };
 
-enum accl_error_code {
+enum dataType { int8, float16, float32, float64, int32, int64 };
+
+enum streamFlags { NO_STREAM = 0, OP0_STREAM = 1, RES_STREAM = 2 };
+
+enum compressionFlags {
+  NO_COMPRESSION = 0,
+  OP0_COMPRESSED = 1,
+  OP1_COMPRESSED = 2,
+  RES_COMPRESSED = 4,
+  ETH_COMPRESSED = 8
+};
+
+enum errorCode {
   COLLECTIVE_OP_SUCCESS = 0,
   DMA_MISMATCH_ERROR = 1,
   DMA_INTERNAL_ERROR = 2,
@@ -88,5 +98,9 @@ enum accl_error_code {
   DMA_SIZE_ERROR = 19,
   ARITH_ERROR = 20,
   PACK_TIMEOUT_STS_ERROR = 21,
-  PACK_SEQ_NUMBER_ERROR = 22
+  PACK_SEQ_NUMBER_ERROR = 22,
+  ARITHCFG_ERROR = 23,
+  KRNL_TIMEOUT_STS_ERROR = 24,
+  KRNL_STS_COUNT_ERROR = 25
 };
+} // namespace ACCL

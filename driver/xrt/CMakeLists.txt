@@ -19,14 +19,22 @@ project(xlnx-dacusr)
 cmake_minimum_required(VERSION 3.5)
 
 set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_VERBOSE_MAKEFILE ON)
 
 # MPI
-find_package(MPI)
+find_package(MPI REQUIRED)
 
-link_directories($ENV{XILINX_XRT}/lib)
-link_libraries(xilinxopencl)
-link_libraries(xrt_coreutil)
-link_libraries(xrt_core)
-include_directories($ENV{XILINX_XRT}/include)
+# Json
+find_package(jsoncpp REQUIRED)
+link_libraries(jsoncpp_lib)
+
+# ZMQ
+link_libraries(zmq)
+
+# link_directories($ENV{XILINX_XRT}/lib)
+# link_libraries(xilinxopencl)
+# link_libraries(xrt_coreutil)
+# link_libraries(xrt_core)
+# include_directories($ENV{XILINX_XRT}/include)
 include_directories(include)
 add_subdirectory(src)
