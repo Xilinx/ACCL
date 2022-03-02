@@ -20,19 +20,21 @@
 #include <chrono>
 #include <iostream>
 
+/** @file timing.hpp */
+
 using namespace std::chrono;
 
 class Timer {
 	private:
 		steady_clock::time_point _start;
-		steady_clock::time_point _end;	
+		steady_clock::time_point _end;
 		bool _started = false;
 		bool _ended = false;
 	public:
 		Timer() {
-			
+
 		}
-	
+
 		void start() {
 			_start = steady_clock::now();
 			_started = true;

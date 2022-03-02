@@ -17,12 +17,12 @@
 
 *.xclbin
 CMakeCache.txt
+CMakeDoxyFile.in
+CMakeDoxygenDefaults.cmake
 CMakeFiles/
 Makefile
 cmake_install.cmake
-src/bo
-src/CMakeFiles/
-src/Makefile
-src/cmake_install.cmake
-src/dacusr
-
+doxygen.log
+bin
+docs
+lib

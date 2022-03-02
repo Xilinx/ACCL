@@ -17,11 +17,13 @@
 *******************************************************************************/
 
 #pragma once
-#include "xlnx-consts.hpp"
+#include "constants.hpp"
 #include <iostream>
 #include <map>
 
 #include <arpa/inet.h>
+
+/** @file communicator.hpp */
 
 namespace ACCL {
 
@@ -41,9 +43,12 @@ private:
   int _rank;
   bool _vnx;
   std::map<int, std::string> rank_to_ip;
-  uint64_t _comm_addr;
+  addr_t _comm_addr;
 
 public:
+
+  addr_t comm_addr() const { return _comm_addr; }
+
   // communicator() {}
 
   // communicator(int world_size, uint64_t comm_addr, xrt::kernel krnl,
