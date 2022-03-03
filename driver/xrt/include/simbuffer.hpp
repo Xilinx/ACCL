@@ -37,14 +37,15 @@ public:
     request_json["type"] = 2;
     request_json["addr"] = (Json::Value::UInt64)this->_physical_address;
     request_json["len"] = (Json::Value::UInt64)this->_size;
-    std::string request = request_json.asString();
+    Json::StreamWriterBuilder builder;
+    const std::string request = Json::writeString(builder, request_json);
     this->socket->send(zmq::const_buffer(request.c_str(), request.size()),
                        zmq::send_flags::none);
 
     zmq::message_t reply;
     zmq::recv_result_t result =
         this->socket->recv(reply, zmq::recv_flags::none);
-    Json::Value reply_json(reply.to_string());
+    Json::Value reply_json = parse_json(reply.to_string());
     check_return_status(reply_json["status"]);
 
     size_t array_size = reply_json["rdata"].size();
@@ -65,7 +66,8 @@ public:
       array[(Json::ArrayIndex)i] = (Json::Value::Int)data[i];
     }
     request_json["wdata"] = array;
-    std::string request = request_json.asString();
+    Json::StreamWriterBuilder builder;
+    const std::string request = Json::writeString(builder, request_json);
     this->socket->send(zmq::const_buffer(request.c_str(), request.size()),
                        zmq::send_flags::none);
   }
