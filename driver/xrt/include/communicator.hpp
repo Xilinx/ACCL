@@ -22,7 +22,6 @@
 
 #include <arpa/inet.h>
 #include <iostream>
-#include <mpi.h>
 #include <vector>
 
 /** @file communicator.hpp */
@@ -49,12 +48,12 @@ public:
   Communicator(CCLO *cclo, const std::vector<rank_t> &ranks, int rank,
                addr_t communicators_addr);
 
-  rank_t get_rank(int rank) {
-    if (rank > _ranks.size()) {
-      throw std::out_of_range("rank out of range");
-    }
+  int local_rank() const {
+    return _rank;
+  }
 
-    return _ranks[rank];
+  const std::vector<rank_t> *get_ranks() const {
+    return &_ranks;
   }
 
   uint32_t ip_encode(std::string ip) { return inet_addr(ip.c_str()); }

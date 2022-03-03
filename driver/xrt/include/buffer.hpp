@@ -1,5 +1,6 @@
 #pragma once
 #include "constants.hpp"
+#include <memory>
 
 /** @file buffer.hpp */
 
@@ -65,6 +66,15 @@ public:
    */
   addr_t physical_address() const { return _physical_address; }
 
+  /**
+   * Get a slice of the buffer from start to end.
+   *
+   * @param start           Start of the slice.
+   * @param end             End of the slice.
+   * @return BaseBuffer     Slice of the buffer from start to end.
+   */
+  virtual std::unique_ptr<BaseBuffer> slice(size_t start, size_t end) = 0;
+
 protected:
   void *const _byte_array;
   const size_t _size;
@@ -99,15 +109,6 @@ public:
    */
   size_t length() const { return _length; }
 
-  /**
-   * Get a slice of the buffer from start to end.
-   *
-   * @param start           Start of the slice.
-   * @param end             End of the slice.
-   * @return Buffer<dtype>  Slice of the buffer from start to end.
-   */
-  virtual Buffer<dtype> *slice(size_t start, size_t end) = 0;
-
   dtype operator[](size_t i) { return this->buffer[i]; }
 
   dtype &operator[](size_t i) const { return this->buffer[i]; }
@@ -116,4 +117,4 @@ protected:
   dtype *const buffer;
   const size_t _length;
 };
-}
+} // namespace ACCL

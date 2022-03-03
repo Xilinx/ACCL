@@ -49,4 +49,4 @@ void check_return_status(const zmq::message_t &reply) {
   Json::Value reply_json(reply.to_string());
   check_return_status(reply_json["status"]);
 }
-}
+} // namespace ACCL

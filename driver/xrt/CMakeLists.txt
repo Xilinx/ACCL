@@ -21,34 +21,17 @@ project(accl VERSION 0.1.0 DESCRIPTION "ACCL")
 set(CMAKE_CXX_STANDARD 17)
 
 if (NOT CMAKE_LIBRARY_OUTPUT_DIRECTORY)
-  set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib")
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib")
 endif()
 
 if (NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
-  set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 endif()
-
-# MPI
-find_package(MPI REQUIRED)
-include_directories(${MPI_CXX_INCLUDE_PATH})
-link_libraries(${MPI_CXX_LIBRARIES} uuid)
-set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} ${MPI_CXX_LINK_FLAGS})
 
 # Json
 find_package(jsoncpp REQUIRED)
-link_libraries(jsoncpp_lib)
-get_target_property(JSON_INC_PATH jsoncpp_lib INTERFACE_INCLUDE_DIRECTORIES)
-include_directories(${JSON_INC_PATH})
 
-# ZMQ
-link_libraries(zmq)
 
-# link_directories($ENV{XILINX_XRT}/lib)
-# link_libraries(xilinxopencl)
-# link_libraries(xrt_coreutil)
-# link_libraries(xrt_core)
-# include_directories($ENV{XILINX_XRT}/include)
-include_directories(include)
 
 set(ACCL_SOURCES
     src/accl.cpp
@@ -61,23 +44,43 @@ add_library(accl SHARED
     ${ACCL_SOURCES}
 )
 
+target_link_libraries(accl jsoncpp_lib zmq)
+get_target_property(JSON_INC_PATH jsoncpp_lib INTERFACE_INCLUDE_DIRECTORIES)
+target_include_directories(accl PUBLIC ${JSON_INC_PATH} include)
+if (EXISTS $ENV{XILINX_XRT})
+  target_link_directories(accl PUBLIC $ENV{XILINX_XRT}/lib)
+  target_link_libraries(accl PUBLIC xilinxopencl xrt_coreutil xrt_core)
+  target_include_directories(accl PUBLIC $ENV{XILINX_XRT}/include)
+  target_compile_definitions(accl PUBLIC ACCL_HARDWARE_SUPPORT)
+endif (EXISTS $ENV{XILINX_XRT})
+
 set_target_properties(accl PROPERTIES
     VERSION ${PROJECT_VERSION}
     SOVERSION 1
-    PUBLIC_HEADER include/accl.h
+    PUBLIC_HEADER include/accl.hpp
 )
-
-add_executable(test src/test.cpp ${ACCL_SOURCES})
 
 # docs
 find_package(Doxygen)
 if (DOXYGEN_FOUND)
-    # note the option ALL which allows to build the docs together with the application
     add_custom_target(docs ALL
         COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
         COMMENT "Generating API documentation with Doxygen"
         VERBATIM )
 else (DOXYGEN_FOUND)
-  message("Doxygen need to be installed to generate the doxygen documentation")
+    message("Doxygen needs to be installed to generate the doxygen documentation")
 endif (DOXYGEN_FOUND)
+
+# check if called directly
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+  # MPI
+  find_package(MPI)
+  if (MPI_FOUND)
+      add_executable(test src/test.cpp ${ACCL_SOURCES})
+      target_include_directories(test PUBLIC ${MPI_CXX_INCLUDE_PATH} include)
+      target_link_libraries(test PUBLIC MPI::MPI_CXX accl)
+  else (MPI_FOUND)
+      message("MPI needs to be installed to generate test executable")
+  endif (MPI_FOUND)
+endif(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)

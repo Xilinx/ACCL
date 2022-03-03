@@ -21,9 +21,7 @@
 #include <mpi.h>
 #include <vector>
 
-void check_usage(int argc, char *argv[]) {
-
-}
+void check_usage(int argc, char *argv[]) {}
 
 int main(int argc, char *argv[]) {
 

@@ -21,7 +21,8 @@ public:
        addr_t bufsize = 1024,
        const arithConfigMap &arith_config = DEFAULT_ARITH_CONFIG);
   // Simulation constructor
-  ACCL(const std::vector<rank_t> &ranks, int local_rank, std::string sim_sock,
+  ACCL(const std::vector<rank_t> &ranks, int local_rank,
+       const std::string &sim_sock,
        networkProtocol protocol = networkProtocol::TCP, int nbufs = 16,
        addr_t bufsize = 1024,
        const arithConfigMap &arith_config = DEFAULT_ARITH_CONFIG);
@@ -54,14 +55,15 @@ public:
              bool from_fpga = false, bool to_fpga = false,
              bool run_async = false, std::vector<CCLO *> waitfor = {});
 
-  CCLO *combine(unsigned int count, cfgFunc function, BaseBuffer &val1,
-                BaseBuffer &val2, BaseBuffer &result, bool val1_from_fpga = false,
-                bool val2_from_fpga = false, bool to_fpga = false,
-                bool run_async = false, std::vector<CCLO *> waitfor = {});
+  CCLO *combine(unsigned int count, reduceFunction function, BaseBuffer &val1,
+                BaseBuffer &val2, BaseBuffer &result,
+                bool val1_from_fpga = false, bool val2_from_fpga = false,
+                bool to_fpga = false, bool run_async = false,
+                std::vector<CCLO *> waitfor = {});
 
   CCLO *external_stream_kernel(BaseBuffer &srcbuf, BaseBuffer &dstbuf,
-                               unsigned int count, bool from_fpga = false,
-                               bool to_fpga = false, bool run_async = false,
+                               bool from_fpga = false, bool to_fpga = false,
+                               bool run_async = false,
                                std::vector<CCLO *> waitfor = {});
 
   CCLO *bcast(unsigned int comm_id, BaseBuffer &buf, unsigned int count,
@@ -78,18 +80,18 @@ public:
                bool to_fpga = false, bool run_async = false,
                std::vector<CCLO *> waitfor = {});
 
-  CCLO *allgather(unsigned int comm_id, BaseBuffer &sendbuf, BaseBuffer &recvbuf,
-                  unsigned int count, bool from_fpga = false,
-                  bool to_fpga = false, bool run_async = false,
-                  std::vector<CCLO *> waitfor = {});
+  CCLO *allgather(unsigned int comm_id, BaseBuffer &sendbuf,
+                  BaseBuffer &recvbuf, unsigned int count,
+                  bool from_fpga = false, bool to_fpga = false,
+                  bool run_async = false, std::vector<CCLO *> waitfor = {});
 
   CCLO *reduce(unsigned int comm_id, BaseBuffer &sendbuf, BaseBuffer &recvbuf,
                unsigned int count, unsigned int root, reduceFunction func,
                bool from_fpga = false, bool to_fpga = false,
                bool run_async = false, std::vector<CCLO *> waitfor = {});
 
-  CCLO *allreduce(unsigned int comm_id, BaseBuffer &sendbuf, BaseBuffer &recvbuf,
-                  unsigned int count, reduceFunction func,
+  CCLO *allreduce(unsigned int comm_id, BaseBuffer &sendbuf,
+                  BaseBuffer &recvbuf, unsigned int count, reduceFunction func,
                   bool from_fpga = false, bool to_fpga = false,
                   bool run_async = false, std::vector<CCLO *> waitfor = {});
 
@@ -100,31 +102,31 @@ public:
                        std::vector<CCLO *> waitfor = {});
 
 private:
-  CCLO *cclo;
+  CCLO *cclo{};
   // Supported types and corresponding arithmetic config
   arithConfigMap arith_config;
-  addr_t arithcfg_addr;
+  addr_t arithcfg_addr{};
   // RX spare buffers
   std::vector<Buffer<int8_t> *> rx_buffer_spares;
-  addr_t rx_buffer_size;
-  addr_t rx_buffers_adr;
+  addr_t rx_buffer_size{};
+  addr_t rx_buffers_adr{};
   // Buffers for POE
-  Buffer<int8_t> *tx_buf_network;
-  Buffer<int8_t> *rx_buf_network;
+  Buffer<int8_t> *tx_buf_network{};
+  Buffer<int8_t> *rx_buf_network{};
   // Spare buffer for general use
-  Buffer<int8_t> *utility_spare;
+  Buffer<int8_t> *utility_spare{};
   // List of communicators, to which users will add
   std::vector<Communicator> communicators;
-  addr_t communicators_addr;
+  addr_t communicators_addr{};
   // safety checks
-  bool check_return_value_flag;
-  bool ignore_safety_checks;
+  bool check_return_value_flag{};
+  bool ignore_safety_checks{};
   // TODO: use description to gather info about where to allocate spare buffers
-  addr_t segment_size;
+  addr_t segment_size{};
   // protocol being used
   const networkProtocol protocol;
   // flag to indicate whether we've finished config
-  bool config_rdy;
+  bool config_rdy{};
   // flag to indicate whether we're simulating
   const bool sim_mode;
   const std::string sim_sock;

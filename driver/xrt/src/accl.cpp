@@ -3,8 +3,8 @@
 #include "dummybuffer.hpp"
 #include "simbuffer.hpp"
 #include "simdevice.hpp"
+#include <cmath>
 #include <jsoncpp/json/json.h>
-#include <math.h>
 #include <set>
 
 namespace ACCL {
@@ -21,7 +21,7 @@ ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank, int board_idx,
 
 // Simulation constructor
 ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
-           std::string sim_sock, networkProtocol protocol, int nbufs,
+           const std::string &sim_sock, networkProtocol protocol, int nbufs,
            addr_t bufsize, const arithConfigMap &arith_config)
     : protocol(protocol), sim_mode(true), sim_sock(sim_sock), devicemem(0),
       rxbufmem({}), networkmem(0), arith_config(arith_config) {
@@ -150,7 +150,470 @@ CCLO *ACCL::recv(unsigned int comm_id, BaseBuffer &dstbuf, unsigned int count,
 
 CCLO *ACCL::copy(BaseBuffer &srcbuf, BaseBuffer &dstbuf, unsigned int count,
                  bool from_fpga, bool to_fpga, bool run_async,
-                 std::vector<CCLO *> waitfor) {}
+                 std::vector<CCLO *> waitfor) {
+  CCLO::Options options = CCLO::Options();
+
+  if (to_fpga == false && run_async == true) {
+    std::cerr << "ACCL: async run returns data on FPGA, user must "
+                 "sync_from_device() after waiting"
+              << std::endl;
+  }
+
+  if (from_fpga == false) {
+    srcbuf.sync_to_device();
+  }
+
+  options.scenario = operation::copy;
+  options.addr_0 = &srcbuf;
+  options.addr_2 = &dstbuf;
+  options.count = count;
+  options.waitfor = waitfor;
+  CCLO *handle = call_async(options);
+
+  if (run_async) {
+    return handle;
+  } else {
+    handle->wait();
+    if (to_fpga == false) {
+      dstbuf.sync_from_device();
+    }
+    check_return_value("copy");
+  }
+
+  return nullptr;
+}
+
+CCLO *ACCL::combine(unsigned int count, reduceFunction function,
+                    BaseBuffer &val1, BaseBuffer &val2, BaseBuffer &result,
+                    bool val1_from_fpga, bool val2_from_fpga, bool to_fpga,
+                    bool run_async, std::vector<CCLO *> waitfor) {
+  CCLO::Options options = CCLO::Options();
+
+  if (to_fpga == false && run_async == true) {
+    std::cerr << "ACCL: async run returns data on FPGA, user must "
+                 "sync_from_device() after waiting"
+              << std::endl;
+  }
+
+  if (val1_from_fpga == false) {
+    val1.sync_to_device();
+  }
+
+  if (val2_from_fpga == false) {
+    val2.sync_to_device();
+  }
+
+  options.scenario = operation::combine;
+  options.addr_0 = &val1;
+  options.addr_1 = &val2;
+  options.addr_2 = &result;
+  options.reduce_function = function;
+  options.count = count;
+  options.waitfor = waitfor;
+  CCLO *handle = call_async(options);
+
+  if (run_async) {
+    return handle;
+  } else {
+    handle->wait();
+    if (to_fpga == false) {
+      result.sync_from_device();
+    }
+    check_return_value("combine");
+  }
+
+  return nullptr;
+}
+
+CCLO *ACCL::external_stream_kernel(BaseBuffer &srcbuf, BaseBuffer &dstbuf,
+                                   bool from_fpga, bool to_fpga, bool run_async,
+                                   std::vector<CCLO *> waitfor) {
+  CCLO::Options options = CCLO::Options();
+
+  if (to_fpga == false && run_async == true) {
+    std::cerr << "ACCL: async run returns data on FPGA, user must "
+                 "sync_from_device() after waiting"
+              << std::endl;
+  }
+
+  if (srcbuf.size() <= 4) {
+    std::cerr << "ACCL: size of buffer not compatible" << std::endl;
+  }
+
+  if (from_fpga == false) {
+    srcbuf.sync_to_device();
+  }
+
+  options.scenario = operation::ext_stream_krnl;
+  options.addr_0 = &srcbuf;
+  options.addr_1 = &dstbuf;
+  options.count = srcbuf.size();
+  options.waitfor = waitfor;
+  CCLO *handle = call_async(options);
+
+  if (run_async) {
+    return handle;
+  } else {
+    handle->wait();
+    if (to_fpga == false) {
+      dstbuf.sync_from_device();
+    }
+    check_return_value("external_stream_kernel");
+  }
+
+  return nullptr;
+}
+
+CCLO *ACCL::bcast(unsigned int comm_id, BaseBuffer &buf, unsigned int count,
+                  unsigned int root, bool from_fpga, bool to_fpga,
+                  bool run_async, std::vector<CCLO *> waitfor) {
+  CCLO::Options options = CCLO::Options();
+
+  const Communicator &communicator = communicators[comm_id];
+
+  bool is_root = communicator.local_rank() == root;
+
+  if (to_fpga == false && is_root == false && run_async == true) {
+    std::cerr << "ACCL: async run returns data on FPGA, user must "
+                 "sync_from_device() after waiting"
+              << std::endl;
+  }
+
+  if (count == 0) {
+    std::cerr << "ACCL: zero size buffer" << std::endl;
+    return nullptr;
+  }
+
+  if (from_fpga == false && is_root == true) {
+    buf.sync_to_device();
+  }
+
+  options.scenario = operation::bcast;
+  options.comm = communicator.communicators_addr();
+  options.addr_0 = &buf;
+  options.count = count;
+  options.root_src_dst = root;
+  options.waitfor = waitfor;
+  CCLO *handle = call_async(options);
+
+  if (run_async) {
+    return handle;
+  } else {
+    handle->wait();
+    if (to_fpga == false) {
+      buf.sync_from_device();
+    }
+    check_return_value("bcast");
+  }
+
+  return nullptr;
+}
+
+CCLO *ACCL::scatter(unsigned int comm_id, BaseBuffer &sendbuf,
+                    BaseBuffer &recvbuf, unsigned int count, unsigned int root,
+                    bool from_fpga, bool to_fpga, bool run_async,
+                    std::vector<CCLO *> waitfor) {
+  CCLO::Options options = CCLO::Options();
+
+  const Communicator &communicator = communicators[comm_id];
+
+  bool is_root = communicator.local_rank() == root;
+
+  if (to_fpga == false && run_async == true) {
+    std::cerr << "ACCL: async run returns data on FPGA, user must "
+                 "sync_from_device() after waiting"
+              << std::endl;
+  }
+
+  if (count == 0) {
+    std::cerr << "ACCL: zero size buffer" << std::endl;
+    return nullptr;
+  }
+
+  if (from_fpga == false && is_root == true) {
+    auto slice = sendbuf.slice(0, count * communicator.get_ranks()->size());
+    slice->sync_to_device();
+  }
+
+  options.scenario = operation::scatter;
+  options.comm = communicator.communicators_addr();
+  options.addr_0 = &sendbuf;
+  options.addr_2 = &recvbuf;
+  options.count = count;
+  options.root_src_dst = root;
+  options.waitfor = waitfor;
+  CCLO *handle = call_async(options);
+
+  if (run_async) {
+    return handle;
+  } else {
+    handle->wait();
+    if (to_fpga == false) {
+      auto slice = recvbuf.slice(0, count);
+      slice->sync_from_device();
+    }
+    check_return_value("scatter");
+  }
+
+  return nullptr;
+}
+
+CCLO *ACCL::gather(unsigned int comm_id, BaseBuffer &sendbuf,
+                   BaseBuffer &recvbuf, unsigned int count, unsigned int root,
+                   bool from_fpga, bool to_fpga, bool run_async,
+                   std::vector<CCLO *> waitfor) {
+  CCLO::Options options = CCLO::Options();
+
+  const Communicator &communicator = communicators[comm_id];
+
+  bool is_root = communicator.local_rank() == root;
+
+  if (to_fpga == false && run_async == true) {
+    std::cerr << "ACCL: async run returns data on FPGA, user must "
+                 "sync_from_device() after waiting"
+              << std::endl;
+  }
+
+  if (count == 0) {
+    std::cerr << "ACCL: zero size buffer" << std::endl;
+    return nullptr;
+  }
+
+  if (ignore_safety_checks == false &&
+      (count + segment_size - 1) / segment_size *
+              communicator.get_ranks()->size() >
+          rx_buffer_spares.size()) {
+    std::cerr << "ACCL: gather can't be executed safely with this number of "
+                 "spare buffers"
+              << std::endl;
+  }
+
+  if (from_fpga == false) {
+    auto slice = sendbuf.slice(0, count);
+    slice->sync_to_device();
+  }
+
+  options.scenario = operation::gather;
+  options.comm = communicator.communicators_addr();
+  options.addr_0 = &sendbuf;
+  options.addr_2 = &recvbuf;
+  options.count = count;
+  options.root_src_dst = root;
+  options.waitfor = waitfor;
+  CCLO *handle = call_async(options);
+
+  if (run_async) {
+    return handle;
+  } else {
+    handle->wait();
+    if (to_fpga == false && is_root == true) {
+      auto slice = recvbuf.slice(0, count * communicator.get_ranks()->size());
+      slice->sync_from_device();
+    }
+    check_return_value("gather");
+  }
+
+  return nullptr;
+}
+
+CCLO *ACCL::allgather(unsigned int comm_id, BaseBuffer &sendbuf,
+                      BaseBuffer &recvbuf, unsigned int count, bool from_fpga,
+                      bool to_fpga, bool run_async,
+                      std::vector<CCLO *> waitfor) {
+  CCLO::Options options = CCLO::Options();
+
+  const Communicator &communicator = communicators[comm_id];
+
+  if (to_fpga == false && run_async == true) {
+    std::cerr << "ACCL: async run returns data on FPGA, user must "
+                 "sync_from_device() after waiting"
+              << std::endl;
+  }
+
+  if (count == 0) {
+    std::cerr << "ACCL: zero size buffer" << std::endl;
+    return nullptr;
+  }
+
+  if (ignore_safety_checks == false &&
+      (count + segment_size - 1) / segment_size *
+              communicator.get_ranks()->size() >
+          rx_buffer_spares.size()) {
+    std::cerr << "ACCL: gather can't be executed safely with this number of "
+                 "spare buffers"
+              << std::endl;
+  }
+
+  if (from_fpga == false) {
+    auto slice = sendbuf.slice(0, count);
+    slice->sync_to_device();
+  }
+
+  options.scenario = operation::allgather;
+  options.comm = communicator.communicators_addr();
+  options.addr_0 = &sendbuf;
+  options.addr_2 = &recvbuf;
+  options.count = count;
+  options.waitfor = waitfor;
+  CCLO *handle = call_async(options);
+
+  if (run_async) {
+    return handle;
+  } else {
+    handle->wait();
+    if (to_fpga == false) {
+      auto slice = recvbuf.slice(0, count * communicator.get_ranks()->size());
+      slice->sync_from_device();
+    }
+    check_return_value("allgather");
+  }
+
+  return nullptr;
+}
+
+CCLO *ACCL::reduce(unsigned int comm_id, BaseBuffer &sendbuf,
+                   BaseBuffer &recvbuf, unsigned int count, unsigned int root,
+                   reduceFunction func, bool from_fpga, bool to_fpga,
+                   bool run_async, std::vector<CCLO *> waitfor) {
+  CCLO::Options options = CCLO::Options();
+
+  const Communicator &communicator = communicators[comm_id];
+
+  bool is_root = communicator.local_rank() == root;
+
+  if (to_fpga == false && run_async == true) {
+    std::cerr << "ACCL: async run returns data on FPGA, user must "
+                 "sync_from_device() after waiting"
+              << std::endl;
+  }
+
+  if (count == 0) {
+    std::cerr << "ACCL: zero size buffer" << std::endl;
+    return nullptr;
+  }
+
+  if (from_fpga == false) {
+    auto slice = sendbuf.slice(0, count);
+    slice->sync_to_device();
+  }
+
+  options.scenario = operation::reduce;
+  options.comm = communicator.communicators_addr();
+  options.addr_0 = &sendbuf;
+  options.addr_2 = &recvbuf;
+  options.count = count;
+  options.reduce_function = func;
+  options.root_src_dst = root;
+  options.waitfor = waitfor;
+  CCLO *handle = call_async(options);
+
+  if (run_async) {
+    return handle;
+  } else {
+    handle->wait();
+    if (to_fpga == false && is_root == true) {
+      auto slice = recvbuf.slice(0, count);
+      slice->sync_from_device();
+    }
+    check_return_value("reduce");
+  }
+
+  return nullptr;
+}
+
+CCLO *ACCL::allreduce(unsigned int comm_id, BaseBuffer &sendbuf,
+                      BaseBuffer &recvbuf, unsigned int count,
+                      reduceFunction func, bool from_fpga, bool to_fpga,
+                      bool run_async, std::vector<CCLO *> waitfor) {
+  CCLO::Options options = CCLO::Options();
+
+  const Communicator &communicator = communicators[comm_id];
+
+  if (to_fpga == false && run_async == true) {
+    std::cerr << "ACCL: async run returns data on FPGA, user must "
+                 "sync_from_device() after waiting"
+              << std::endl;
+  }
+
+  if (count == 0) {
+    std::cerr << "ACCL: zero size buffer" << std::endl;
+    return nullptr;
+  }
+
+  if (from_fpga == false) {
+    auto slice = sendbuf.slice(0, count);
+    slice->sync_to_device();
+  }
+
+  options.scenario = operation::allreduce;
+  options.comm = communicator.communicators_addr();
+  options.addr_0 = &sendbuf;
+  options.addr_2 = &recvbuf;
+  options.count = count;
+  options.reduce_function = func;
+  options.waitfor = waitfor;
+  CCLO *handle = call_async(options);
+
+  if (run_async) {
+    return handle;
+  } else {
+    handle->wait();
+    if (to_fpga == false) {
+      auto slice = recvbuf.slice(0, count);
+      slice->sync_from_device();
+    }
+    check_return_value("allgather");
+  }
+
+  return nullptr;
+}
+
+CCLO *ACCL::reduce_scatter(unsigned int comm_id, BaseBuffer &sendbuf,
+                           BaseBuffer &recvbuf, unsigned int count,
+                           reduceFunction func, bool from_fpga, bool to_fpga,
+                           bool run_async, std::vector<CCLO *> waitfor) {
+  CCLO::Options options = CCLO::Options();
+
+  const Communicator &communicator = communicators[comm_id];
+
+  if (to_fpga == false && run_async == true) {
+    std::cerr << "ACCL: async run returns data on FPGA, user must "
+                 "sync_from_device() after waiting"
+              << std::endl;
+  }
+
+  if (count == 0) {
+    std::cerr << "ACCL: zero size buffer" << std::endl;
+    return nullptr;
+  }
+
+  if (from_fpga == false) {
+    auto slice = sendbuf.slice(0, count * communicator.get_ranks()->size());
+    slice->sync_to_device();
+  }
+
+  options.scenario = operation::reduce_scatter;
+  options.comm = communicator.communicators_addr();
+  options.addr_0 = &sendbuf;
+  options.addr_2 = &recvbuf;
+  options.count = count;
+  options.reduce_function = func;
+  options.waitfor = waitfor;
+  CCLO *handle = call_async(options);
+
+  if (run_async) {
+    return handle;
+  } else {
+    handle->wait();
+    if (to_fpga == false) {
+      auto slice = recvbuf.slice(0, count);
+      slice->sync_from_device();
+    }
+    check_return_value("reduce_scatter");
+  }
+
+  return nullptr;
+}
 
 std::string ACCL::dump_exchange_memory() {
   std::stringstream stream;

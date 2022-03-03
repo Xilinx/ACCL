@@ -72,9 +72,10 @@ public:
 
   void free_buffer() override { return; }
 
-  Buffer<dtype> *slice(size_t start, size_t end) override {
-    return new SimBuffer(&this->buffer[start], end - start, this->_type,
-                         this->socket, this->_physical_address + start);
+  std::unique_ptr<BaseBuffer> slice(size_t start, size_t end) override {
+    return std::unique_ptr<BaseBuffer>(
+        new SimBuffer(&this->buffer[start], end - start, this->_type,
+                      this->socket, this->_physical_address + start));
   }
 };
 } // namespace ACCL
