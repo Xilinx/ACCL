@@ -693,7 +693,7 @@ void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
   debug("CCLO HWID: " + std::to_string(get_hwid()) + " at 0x" +
         debug_hex(cclo->get_base_addr()));
 
-  if (cclo->read(CFGRDY_OFFSET) == 0) {
+  if (cclo->read(CFGRDY_OFFSET) != 0) {
     throw std::runtime_error("CCLO appears configured, might be in use. Please "
                              "reset the CCLO and retry");
   }
