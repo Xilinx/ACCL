@@ -71,7 +71,7 @@ public:
     this->socket->send(zmq::const_buffer(request.c_str(), request.size()),
                        zmq::send_flags::none);
 
-    zmq::message_t reply
+    zmq::message_t reply;
     zmq::recv_result_t result =
         this->socket->recv(reply, zmq::recv_flags::none);
     check_return_status(reply);
