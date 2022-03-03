@@ -44,7 +44,9 @@ void SimDevice::start(const Options &options) {
   request_json["addr_2"] =
       (Json::Value::UInt64)options.addr_2->physical_address();
 
-  std::string message = request_json.asString();
+  Json::StreamWriterBuilder builder;
+  const std::string message = Json::writeString(builder, request_json);
+
   zmq::message_t request(message.c_str(), message.size());
   this->socket.send(request, zmq::send_flags::none);
 };
@@ -66,13 +68,14 @@ val_t SimDevice::read(addr_t offset) {
   Json::Value request_json;
   request_json["type"] = 0;
   request_json["addr"] = (Json::Value::UInt64)offset;
-  std::string request = request_json.asString();
+  Json::StreamWriterBuilder builder;
+  const std::string request = Json::writeString(builder, request_json);
   this->socket.send(zmq::const_buffer(request.c_str(), request.size()),
                     zmq::send_flags::none);
 
   zmq::message_t reply;
   zmq::recv_result_t result = this->socket.recv(reply, zmq::recv_flags::none);
-  Json::Value reply_json(reply.to_string());
+  Json::Value reply_json = parse_json(reply.to_string());
   check_return_status(reply_json["status"]);
   return reply_json["rdata"].asUInt64();
 }
@@ -84,7 +87,8 @@ void SimDevice::write(addr_t offset, val_t val) {
   request_json["type"] = 1;
   request_json["addr"] = (Json::Value::UInt64)offset;
   request_json["wdata"] = (Json::Value::UInt)val;
-  std::string request = request_json.asString();
+  Json::StreamWriterBuilder builder;
+  const std::string request = Json::writeString(builder, request_json);
   this->socket.send(zmq::const_buffer(request.c_str(), request.size()),
                     zmq::send_flags::none);
 

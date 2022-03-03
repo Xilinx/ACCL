@@ -14,12 +14,13 @@
 namespace ACCL {
 class ACCL {
 public:
-  // Hardware constructor
+#ifdef ACCL_HARDWARE_SUPPORT
   ACCL(const std::vector<rank_t> &ranks, int local_rank, int board_idx,
        int devicemem, std::vector<int> &rxbufmem, int networkmem,
        networkProtocol protocol = networkProtocol::TCP, int nbufs = 16,
        addr_t bufsize = 1024,
        const arithConfigMap &arith_config = DEFAULT_ARITH_CONFIG);
+#endif
   // Simulation constructor
   ACCL(const std::vector<rank_t> &ranks, int local_rank,
        const std::string &sim_sock,

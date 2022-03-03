@@ -45,8 +45,19 @@ void check_return_status(const Json::Value &status) {
   }
 }
 
+Json::Value parse_json(const std::string &raw_json) {
+  Json::CharReaderBuilder builder;
+  const std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
+  Json::Value json;
+  reader->parse(raw_json.c_str(), raw_json.c_str() + raw_json.length(),
+                &json, nullptr);
+  return json;
+}
+
 void check_return_status(const zmq::message_t &reply) {
-  Json::Value reply_json(reply.to_string());
+  Json::CharReaderBuilder builder;
+  const std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
+  Json::Value reply_json = parse_json(reply.to_string());
   check_return_status(reply_json["status"]);
 }
 } // namespace ACCL

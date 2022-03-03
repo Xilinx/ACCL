@@ -31,28 +31,33 @@ endif()
 # Json
 find_package(jsoncpp REQUIRED)
 
-
+set(ACCL_SOURCE_PATH ${CMAKE_CURRENT_LIST_DIR}/src)
 
 set(ACCL_SOURCES
-    src/accl.cpp
-    src/common.cpp
-    src/communicator.cpp
-    src/simdevice.cpp
+    ${ACCL_SOURCE_PATH}/accl.cpp
+    ${ACCL_SOURCE_PATH}/common.cpp
+    ${ACCL_SOURCE_PATH}/communicator.cpp
+    ${ACCL_SOURCE_PATH}/simdevice.cpp
 )
 
-add_library(accl SHARED
-    ${ACCL_SOURCES}
-)
+set(ACCL_INCLUDE_PATH ${CMAKE_CURRENT_LIST_DIR}/include)
+
+add_library(accl SHARED ${ACCL_SOURCES})
 
 target_link_libraries(accl jsoncpp_lib zmq)
 get_target_property(JSON_INC_PATH jsoncpp_lib INTERFACE_INCLUDE_DIRECTORIES)
-target_include_directories(accl PUBLIC ${JSON_INC_PATH} include)
+target_include_directories(accl PUBLIC ${JSON_INC_PATH} ${ACCL_INCLUDE_PATH})
 if (EXISTS $ENV{XILINX_XRT})
   target_link_directories(accl PUBLIC $ENV{XILINX_XRT}/lib)
   target_link_libraries(accl PUBLIC xilinxopencl xrt_coreutil xrt_core)
   target_include_directories(accl PUBLIC $ENV{XILINX_XRT}/include)
   target_compile_definitions(accl PUBLIC ACCL_HARDWARE_SUPPORT)
 endif (EXISTS $ENV{XILINX_XRT})
+
+if (ACCL_DEBUG)
+  target_compile_definitions(accl PUBLIC ACCL_DEBUG)
+  message("Defining ACCL_DEBUG")
+endif (ACCL_DEBUG)
 
 set_target_properties(accl PROPERTIES
     VERSION ${PROJECT_VERSION}
@@ -64,23 +69,10 @@ set_target_properties(accl PROPERTIES
 find_package(Doxygen)
 if (DOXYGEN_FOUND)
     add_custom_target(docs
-        COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_LIST_DIR}/Doxyfile
+        WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
         COMMENT "Generating API documentation with Doxygen"
         VERBATIM )
 else (DOXYGEN_FOUND)
     message("Doxygen needs to be installed to generate the doxygen documentation")
 endif (DOXYGEN_FOUND)
-
-# check if called directly
-if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
-  # MPI
-  find_package(MPI)
-  if (MPI_FOUND)
-      add_executable(test src/test.cpp ${ACCL_SOURCES})
-      target_include_directories(test PUBLIC ${MPI_CXX_INCLUDE_PATH} include)
-      target_link_libraries(test PUBLIC MPI::MPI_CXX accl)
-  else (MPI_FOUND)
-      message("MPI needs to be installed to generate test executable")
-  endif (MPI_FOUND)
-endif(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)

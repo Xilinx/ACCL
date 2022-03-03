@@ -8,7 +8,7 @@
 #include <set>
 
 namespace ACCL {
-// Hardware constructor
+#ifdef ACCL_HARDWARE_SUPPORT
 ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank, int board_idx,
            int devicemem, std::vector<int> &rxbufmem, int networkmem,
            networkProtocol protocol, int nbufs, addr_t bufsize,
@@ -18,6 +18,7 @@ ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank, int board_idx,
   // TODO: Create hardware constructor.
   throw std::logic_error("Hardware constructor currently not supported");
 }
+#endif
 
 // Simulation constructor
 ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
@@ -723,11 +724,13 @@ void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
     use_udp();
     break;
   case networkProtocol::TCP:
+#ifdef ACCL_HARDWARE_SUPPORT
     if (!sim_mode) {
       throw new std::runtime_error("TODO: Allocate buffers.");
       tx_buf_network->sync_to_device();
       rx_buf_network->sync_to_device();
     }
+#endif
     use_tcp();
     break;
   default:
@@ -765,9 +768,12 @@ void ACCL::setup_rx_buffers(size_t nbufs, addr_t bufsize,
     if (sim_mode) {
       buf = new SimBuffer(new int8_t[bufsize], bufsize, dataType::int8,
                           static_cast<SimDevice *>(cclo)->get_socket());
-    } else {
+    }
+#ifdef ACCL_HARDWARE_SUPPORT
+    else {
       std::runtime_error("TODO: allocate hw buffer.");
     }
+#endif
 
     buf->sync_to_device();
     rx_buffer_spares.emplace_back(buf);
@@ -794,9 +800,12 @@ void ACCL::setup_rx_buffers(size_t nbufs, addr_t bufsize,
       utility_spare =
           new SimBuffer(new int8_t[bufsize], bufsize, dataType::int8,
                         static_cast<SimDevice *>(cclo)->get_socket());
-    } else {
+    }
+#ifdef ACCL_HARDWARE_SUPPORT
+    else {
       std::runtime_error("TODO: allocate hw buffer.");
     }
+#endif
   }
 }
 
