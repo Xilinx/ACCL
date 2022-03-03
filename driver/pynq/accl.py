@@ -17,18 +17,13 @@
 
 from argparse import ArgumentError
 import pynq
-from pynq import DefaultIP
-import os
-import sys
 import math
 import numpy as np
-import struct
 import warnings
 import numpy as np
 import ipaddress
 from enum import IntEnum, unique
 import zmq
-from pynq.buffer import PynqBuffer
 
 class SimMMIO():
     def __init__(self, zmqsocket):
@@ -109,6 +104,9 @@ class SimDevice():
         self.socket = zmq.Context().socket(zmq.REQ)
         self.socket.connect(zmqadr)
         self.mmio = SimMMIO(self.socket)
+        self.devicemem = None
+        self.rxbufmem = None
+        self.networkmem = None
         print("SimDevice connected")
 
     # Call request  {"type": 4, arg names and values}
@@ -158,6 +156,49 @@ class SimDevice():
         ack = self.socket.recv_json()
         assert ack["status"] == 0, "ZMQ call error"
 
+class AlveoDevice():
+    def __init__(self, xclbin, board_idx=0, core_idx=0, mem=None):
+        print(f"AlveoDevice connecting to board {} core {} xclbin {}", board_idx, core_idx, xclbin)
+        local_alveo = pynq.Device.devices[board_idx]
+        self.ol = pynq.Overlay(xclbin, device=local_alveo)
+        self.cclo = self.ol.__getattr__(f"ccl_offload_{core_idx}")
+        self.hostctrl = self.ol.__getattr__(f"hostctrl_{core_idx}")
+        self.mmio = self.cclo.mmio
+        if mem is None:
+            print("Best-effort attempt at identifying memories to use for RX buffers")
+            if local_alveo.name == 'xilinx_u250_gen3x16_xdma_shell_3_1':
+                print("Detected U250 (xilinx_u250_gen3x16_xdma_shell_3_1)")
+                self.devicemem   = self.ol.bank1
+                self.rxbufmem    = [self.ol.bank0, self.ol.bank1, self.ol.bank2]
+                self.networkmem  = self.ol.bank3
+            elif local_alveo.name == 'xilinx_u250_xdma_201830_2':
+                print("Detected U250 (xilinx_u250_xdma_201830_2)")
+                self.devicemem   = self.ol.bank0
+                self.rxbufmem    = self.ol.bank0
+                self.networkmem  = self.ol.bank0
+            elif local_alveo.name == 'xilinx_u280_xdma_201920_3':
+                print("Detected U280 (xilinx_u280_xdma_201920_3)")
+                self.devicemem   = self.ol.HBM0
+                self.rxbufmem    = [self.ol.HBM0, self.ol.HBM1, self.ol.HBM2, self.ol.HBM3, self.ol.HBM4, self.ol.HBM5] 
+                self.networkmem  = self.ol.HBM6
+        print("AlveoDevice connected")
+
+    def read(self, offset):
+        return self.mmio.read(offset)
+
+    def write(self, offset, val):
+        return self.mmio.write(offset, val)
+
+    def call(self, scenario, count, comm, root_src_dst, function, tag, arithcfg, compression_flags, stream_flags, addr_0, addr_1, addr_2, waitfor=[]):
+        if self.hostctrl is not None:
+            self.hostctrl.call(scenario, count, comm, root_src_dst, function, tag, arithcfg, compression_flags, stream_flags, addr_0, addr_1, addr_2, waitfor=waitfor)
+        else:
+            raise Exception("Host calling not supported, no hostctrl found")
+    def start(self, scenario, count, comm, root_src_dst, function, tag, arithcfg, compression_flags, stream_flags, addr_0, addr_1, addr_2, waitfor=[]):
+        if self.hostctrl is not None:
+            return self.hostctrl.start(scenario, count, comm, root_src_dst, function, tag, arithcfg, compression_flags, stream_flags, addr_0, addr_1, addr_2, waitfor=waitfor)
+        else:
+            raise Exception("Host calling not supported, no hostctrl found")
 
 @unique
 class CCLOp(IntEnum):
@@ -294,7 +335,7 @@ class accl():
     """
     ACCL Python Driver
     """
-    def __init__(self, ranks, local_rank, xclbin=None, protocol="TCP", board_idx=0, nbufs=16, bufsize=1024, mem=None, arith_config=ACCL_DEFAULT_ARITH_CONFIG, sim_sock=None):
+    def __init__(self, ranks, local_rank, xclbin=None, protocol="TCP", board_idx=0, nbufs=16, bufsize=1024, mem=None, arith_config=ACCL_DEFAULT_ARITH_CONFIG, sim_sock=None, core_idx=0):
         assert xclbin is not None or sim_sock is not None, "Either simulation socket or xclbin must be provided"
         self.cclo = None
         #define supported types and corresponding arithmetic config
@@ -327,32 +368,8 @@ class accl():
         self.sim_sock = sim_sock
         if self.sim_mode:
             self.cclo = SimDevice(sim_sock)
-            self.devicemem = None
-            self.rxbufmem = None
-            self.networkmem = None
         else:
-            local_alveo = pynq.Device.devices[board_idx]
-            self.ol=pynq.Overlay(xclbin, device=local_alveo)
-            self.cclo = self.ol.__getattr__(f"ccl_offload_0")
-            if mem is None:
-                print("Best-effort attempt at identifying memories to use for RX buffers")
-                if local_alveo.name == 'xilinx_u250_gen3x16_xdma_shell_3_1':
-                    print("Detected U250 (xilinx_u250_gen3x16_xdma_shell_3_1)")
-                    self.devicemem   = self.ol.bank1
-                    self.rxbufmem    = [self.ol.bank0, self.ol.bank1, self.ol.bank2]
-                    self.networkmem  = self.ol.bank3
-                elif local_alveo.name == 'xilinx_u250_xdma_201830_2':
-                    print("Detected U250 (xilinx_u250_xdma_201830_2)")
-                    self.devicemem   = self.ol.bank0
-                    self.rxbufmem    = self.ol.bank0
-                    self.networkmem  = self.ol.bank0
-                elif local_alveo.name == 'xilinx_u280_xdma_201920_3':
-                    print("Detected U280 (xilinx_u280_xdma_201920_3)")
-                    self.devicemem   = self.ol.HBM0
-                    self.rxbufmem    = [self.ol.HBM0, self.ol.HBM1, self.ol.HBM2, self.ol.HBM3, self.ol.HBM4, self.ol.HBM5] 
-                    self.networkmem  = self.ol.HBM6
-            else:
-                self.devicemem, self.rxbufmem, self.networkmem = mem
+            self.cclo = AlveoDevice(xclbin, board_idx=board_idx, core_idx=core_idx, mem=mem)
 
         print("CCLO HWID: {} at {}".format(hex(self.get_hwid()), hex(self.cclo.mmio.base_addr)))
         
@@ -384,8 +401,8 @@ class accl():
             self.use_udp()
         elif self.protocol == "TCP":
             if not self.sim_mode:
-                self.tx_buf_network = pynq.allocate((64*1024*1024,), dtype=np.int8, target=self.networkmem)
-                self.rx_buf_network = pynq.allocate((64*1024*1024,), dtype=np.int8, target=self.networkmem)
+                self.tx_buf_network = pynq.allocate((64*1024*1024,), dtype=np.int8, target=self.cclo.networkmem)
+                self.rx_buf_network = pynq.allocate((64*1024*1024,), dtype=np.int8, target=self.cclo.networkmem)
                 self.tx_buf_network.sync_to_device()
                 self.rx_buf_network.sync_to_device()
             self.use_tcp()
@@ -441,16 +458,17 @@ class accl():
             #write configuration into exchange memory
             addr = self.arith_config[key].write(self.cclo.mmio, addr)
 
-    def setup_rx_buffers(self, nbufs, bufsize, devicemem):
+    def setup_rx_buffers(self, nbufs, bufsize):
         addr = self.rx_buffers_adr
         self.rx_buffer_size = bufsize
-        if not isinstance(devicemem, list):
-            devicemem = [devicemem]
+        mem = self.cclo.rxbufmem
+        if not isinstance(mem, list):
+            mem = [mem] 
         for i in range(nbufs):
             # create, clear and sync buffers to device
             if not self.sim_mode:
                 #try to cycle through different banks 
-                buf = pynq.allocate((bufsize,), dtype=np.int8, target=devicemem[i % len(devicemem)])
+                buf = pynq.allocate((bufsize,), dtype=np.int8, target=mem[i % len(mem)])
                 buf[:] = np.zeros((bufsize,), dtype=np.int8)
             else:
                 buf = SimBuffer(np.zeros((bufsize,), dtype=np.int8), self.cclo.socket)
@@ -475,7 +493,7 @@ class accl():
 
         self.communicators_addr = addr+4
         if not self.sim_mode:
-            self.utility_spare = pynq.allocate((bufsize,), dtype=np.int8, target=devicemem[0])
+            self.utility_spare = pynq.allocate((bufsize,), dtype=np.int8, target=mem[0])
         else:
             self.utility_spare = SimBuffer(np.zeros((bufsize,), dtype=np.int8), self.cclo.socket)
     

@@ -33,8 +33,8 @@ def get_buffers(count, op0_dt, op1_dt, res_dt, accl_inst):
     op0_buf.sync_to_device()
     op1_buf.sync_to_device()
     res_buf.sync_to_device()
-    op0_buf.buf[:] = np.random.randn(count).astype(op0_dt)
-    op1_buf.buf[:] = np.random.randn(count).astype(op1_dt)
+    op0_buf.data[:] = np.random.randn(count).astype(op0_dt)
+    op1_buf.data[:] = np.random.randn(count).astype(op1_dt)
     return op0_buf, op1_buf, res_buf
 
 def test_copy(cclo_inst, count):
@@ -43,7 +43,7 @@ def test_copy(cclo_inst, count):
     for op_dt, res_dt in itertools.product(dt, repeat=2):
         op_buf, _, res_buf = get_buffers(count, op_dt, op_dt, res_dt, cclo_inst)
         cclo_inst.copy(op_buf, res_buf, count)
-        if not np.isclose(op_buf.buf, res_buf.buf).all():
+        if not np.isclose(op_buf.data, res_buf.data).all():
             err_count += 1
             print("Copy failed on pair ", op_dt, res_dt)
         else:
@@ -57,7 +57,7 @@ def test_combine(cclo_inst, count):
     for op0_dt, op1_dt, res_dt in itertools.product(dt, repeat=3):
         op0_buf, op1_buf, res_buf = get_buffers(count, op0_dt, op1_dt, res_dt, cclo_inst)
         cclo_inst.combine(count, ACCLReduceFunctions.SUM, op0_buf, op1_buf, res_buf)
-        if not np.isclose(op0_buf.buf+op1_buf.buf, res_buf.buf).all():
+        if not np.isclose(op0_buf.data+op1_buf.data, res_buf.data).all():
             err_count += 1
             print("Combine failed on pair ", op0_dt, op1_dt, res_dt)
         else:
@@ -81,7 +81,7 @@ def test_sendrecv(cclo_inst, world_size, local_rank, count):
         cclo_inst.send(0, res_buf, count, prev_rank, tag=1)
         print("Receiving on ",local_rank," from ",next_rank)
         cclo_inst.recv(0, res_buf, count, next_rank, tag=1)
-        if not np.isclose(op_buf.buf, res_buf.buf).all():
+        if not np.isclose(op_buf.data, res_buf.data).all():
             err_count += 1
             print("Send/recv failed on pair ", op_dt, res_dt)
         else:
@@ -105,7 +105,7 @@ def test_sendrecv_plkernel(cclo_inst, world_size, local_rank, count):
         cclo_inst.send(0, res_buf, count, prev_rank, stream_flags=ACCLStreamFlags.OP0_STREAM, tag=5)
         print("Receiving in memory on ",local_rank," from stream on ",next_rank)
         cclo_inst.recv(0, res_buf, count, next_rank, tag=5)
-        if not np.isclose(op_buf.buf, res_buf.buf).all():
+        if not np.isclose(op_buf.data, res_buf.data).all():
             err_count += 1
             print("Send/recv failed on pair ", op_dt, res_dt)
         else:
@@ -120,8 +120,8 @@ def test_sendrecv_fanin(cclo_inst, world_size, local_rank, count):
         op_buf, _, res_buf = get_buffers(count, op_dt, op_dt, res_dt, cclo_inst)
         # send to next rank; receive from previous rank; send back data to previous rank; receive from next rank; compare
         if local_rank != 0:
-            for i in range(len(op_buf.buf)):
-                op_buf.buf[i] = i+local_rank
+            for i in range(len(op_buf.data)):
+                op_buf.data[i] = i+local_rank
             print("Sending on ", local_rank, " to 0")
             cclo_inst.send(0, op_buf, count, 0, tag=0)
         else:
@@ -130,13 +130,11 @@ def test_sendrecv_fanin(cclo_inst, world_size, local_rank, count):
                     continue
                 print("Receiving on 0 from ", i)
                 cclo_inst.recv(0, res_buf, count, i, tag=0)
-                for j in range(len(op_buf.buf)):
-                    op_buf.buf[j] = j+i
-                if not np.isclose(op_buf.buf, res_buf.buf).all():
+                for j in range(len(op_buf.data)):
+                    op_buf.data[j] = j+i
+                if not np.isclose(op_buf.data, res_buf.data).all():
                     err_count += 1
                     print("Fan-in send/recv failed for sender rank", i)
-                    print(op_buf.buf)
-                    print(res_buf.buf)
                 else:
                     print("Fan-in send/recv succeeded for sender rank ", i)
     if err_count == 0:
@@ -147,13 +145,13 @@ def test_bcast(cclo_inst, local_rank, root, count):
     dt = [np.float32]#[np.float32, np.half]
     for op_dt, res_dt in itertools.product(dt, repeat=2):
         op_buf, _, res_buf = get_buffers(count, op_dt, op_dt, res_dt, cclo_inst)
-        op_buf.buf[:] = [42+i for i in range(len(op_buf.buf))]
+        op_buf.data[:] = [42+i for i in range(len(op_buf.data))]
         cclo_inst.bcast(0, op_buf if root == local_rank else res_buf, count, root=root)
 
         if local_rank == root:
             print("Bcast succeeded on pair ", op_dt, res_dt)
         else:
-            if not np.isclose(op_buf.buf, res_buf.buf).all():
+            if not np.isclose(op_buf.data, res_buf.data).all():
                 err_count += 1
                 print("Bcast failed on pair ", op_dt, res_dt)
     if err_count == 0:
@@ -167,7 +165,7 @@ def test_scatter(cclo_inst, world_size, local_rank, root, count):
         op_buf[:] = [1.0*i for i in range(op_buf.size)]
         cclo_inst.scatter(0, op_buf, res_buf, count, root=root)
 
-        if not np.isclose(op_buf.buf[local_rank*count:(local_rank+1)*count], res_buf.buf[0:count]).all():
+        if not np.isclose(op_buf.data[local_rank*count:(local_rank+1)*count], res_buf.data[0:count]).all():
             err_count += 1
             print("Scatter failed on pair ", op_dt, res_dt)
     if err_count == 0:
@@ -183,7 +181,7 @@ def test_gather(cclo_inst, world_size, local_rank, root, count):
 
         if local_rank == root:
             for i in range(world_size):
-                if not np.isclose(res_buf.buf[i*count:(i+1)*count], [1.0*(i+j) for j in range(count)]).all():
+                if not np.isclose(res_buf.data[i*count:(i+1)*count], [1.0*(i+j) for j in range(count)]).all():
                     err_count += 1
                     print("Gather failed for src rank", i, "on pair ", op_dt, res_dt)
     if err_count == 0:
@@ -198,7 +196,7 @@ def test_allgather(cclo_inst, world_size, local_rank, count):
         cclo_inst.allgather(0, op_buf, res_buf, count)
 
         for i in range(world_size):
-            if not np.isclose(res_buf.buf[i*count:(i+1)*count], [1.0*(i+j) for j in range(count)]).all():
+            if not np.isclose(res_buf.data[i*count:(i+1)*count], [1.0*(i+j) for j in range(count)]).all():
                 err_count += 1
                 print("Allgather failed for src rank", i, "on pair ", op_dt, res_dt)
     if err_count == 0:
@@ -213,7 +211,7 @@ def test_reduce(cclo_inst, world_size, local_rank, root, count, func):
         cclo_inst.reduce(0, op_buf, res_buf, count, root, func)
 
         if local_rank == root:
-            if not np.isclose(res_buf.buf, sum(range(world_size+1))*op_buf.buf).all():
+            if not np.isclose(res_buf.data, sum(range(world_size+1))*op_buf.data).all():
                 err_count += 1
                 print("Reduce failed on pair ", op_dt, res_dt)
     if err_count == 0:
@@ -227,9 +225,9 @@ def test_reduce_scatter(cclo_inst, world_size, local_rank, root, count, func):
         op_buf[:] = [1.0*i for i in range(op_buf.size)]
         cclo_inst.reduce_scatter(0, op_buf, res_buf, count, root, func)
 
-        full_reduce_result = world_size*op_buf.buf
+        full_reduce_result = world_size*op_buf.data
         offset = (local_rank + world_size + 1) % world_size
-        if not np.isclose(res_buf.buf[0:count], full_reduce_result[offset*count:(offset+1)*count]).all():
+        if not np.isclose(res_buf.data[0:count], full_reduce_result[offset*count:(offset+1)*count]).all():
             err_count += 1
             print("Reduce-scatter failed on pair ", op_dt, res_dt)
     if err_count == 0:
@@ -242,8 +240,8 @@ def test_allreduce(cclo_inst, world_size, local_rank, root, count, func):
         op_buf, _, res_buf = get_buffers(count, op_dt, op_dt, res_dt, cclo_inst)
         op_buf[:] = [1.0*i for i in range(op_buf.size)]
         cclo_inst.allreduce(0, op_buf, res_buf, count, root, func)
-        full_reduce_result = world_size*op_buf.buf
-        if not np.isclose(res_buf.buf, full_reduce_result).all():
+        full_reduce_result = world_size*op_buf.data
+        if not np.isclose(res_buf.data, full_reduce_result).all():
             err_count += 1
             print("Allreduce failed on pair ", op_dt, res_dt)
     if err_count == 0:
@@ -255,7 +253,9 @@ if __name__ == "__main__":
     parser.add_argument('--start_port', type=int,            default=5500,  help='Start of range of ports usable for sim')
     parser.add_argument('--count',      type=int,            default=16,    help='How many B per buffer')
     parser.add_argument('--rxbuf_size', type=int,            default=1,     help='How many KB per RX buffer')
-    parser.add_argument('--debug',      action='store_true', default=False, help='enable debug mode')
+    parser.add_argument('--board_idx',  type=int,            default=0,     help='Index of Alveo board, if multiple present')
+    parser.add_argument('--core_idx',   type=int,            default=0,     help='Index of CCLO core, if multiple present')
+    parser.add_argument('--simulate',   action='store_true', default=False, help='enable simulation/emulation mode')
     parser.add_argument('--all',        action='store_true', default=False, help='Select all collectives')
     parser.add_argument('--nop',        action='store_true', default=False, help='Run nop test')
     parser.add_argument('--combine',    action='store_true', default=False, help='Run fp/dp/i32/i64 test')
@@ -296,7 +296,13 @@ if __name__ == "__main__":
         ranks.append({"ip": "127.0.0.1", "port": args.start_port+world_size+i, "session_id":i, "max_segment_size": args.rxbuf_size})
 
     #configure FPGA and CCLO cores with the default 16 RX buffers of size given by args.rxbuf_size
-    cclo_inst = accl(ranks, local_rank, bufsize=args.rxbuf_size, protocol=("TCP" if args.tcp else "UDP"), sim_sock="tcp://localhost:"+str(args.start_port+local_rank))
+    if args.simulate:
+        zmq_socket = "tcp://localhost:"+str(args.start_port+local_rank)
+        xclbin = None
+    else:
+        zmq_socket = None
+        xclbin = args.xclbin
+    cclo_inst = accl(ranks, local_rank, bufsize=args.rxbuf_size, protocol=("TCP" if args.tcp else "UDP"), sim_sock=zmq_socket, xclbin=xclbin, board_idx=args.board_idx, core_idx=args.core_idx)
     cclo_inst.set_timeout(10**8)
     #barrier here to make sure all the devices are configured before testing
     comm.barrier()
