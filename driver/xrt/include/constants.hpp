@@ -17,11 +17,12 @@
 #
 *******************************************************************************/
 #include <bits/stdint-uintn.h>
-#include <stddef.h>
 #include <map>
+#include <stddef.h>
 
 /** @file constants.hpp */
 
+/** ACCL namespace */
 namespace ACCL {
 /** Device address type */
 typedef uint64_t addr_t;
@@ -59,20 +60,20 @@ enum class cfgFunc {
  *
  */
 enum class operation {
-  config = 0,
-  copy = 1,
-  combine = 2,
-  send = 3,
-  recv = 4,
-  bcast = 5,
-  scatter = 6,
-  gather = 7,
-  reduce = 8,
-  allgather = 9,
-  allreduce = 10,
-  reduce_scatter = 11,
-  ext_stream_krnl = 12,
-  nop = 255
+  config = 0,           /**< Set CCLO config */
+  copy = 1,             /**< Copy FPGA buffer */
+  combine = 2,          /**< Perform reduce operator on FPGA buffers */
+  send = 3,             /**< MPI send */
+  recv = 4,             /**< MPI recv */
+  bcast = 5,            /**< MPI bcast */
+  scatter = 6,          /**< MPI scatter */
+  gather = 7,           /**< MPI gather */
+  reduce = 8,           /**< MPI reduce */
+  allgather = 9,        /**< MPI allgather */
+  allreduce = 10,       /**< MPI allreduce */
+  reduce_scatter = 11,  /**< MPI reduce_scatter */
+  ext_stream_krnl = 12, /**< Stream kernel */
+  nop = 255             /**< NOP */
 };
 
 /**
@@ -89,7 +90,7 @@ enum class reduceFunction { SUM = 0 };
  */
 enum class dataType {
   none,    /**< No datatype, only used internally. */
-  int8,    /**< Non-supported datatype, only used internally. */
+  int8,    /**< Unsupported datatype, only used internally. */
   float16, /**< float16 */
   float32, /**< float32 */
   float64, /**< float64 */
@@ -97,7 +98,7 @@ enum class dataType {
   int64    /**< int64 */
 };
 
-std::map<dataType, unsigned int> dataTypeSize = {
+const std::map<dataType, unsigned int> dataTypeSize = {
     {dataType::none, 0},     {dataType::int8, 8},     {dataType::float16, 16},
     {dataType::float32, 32}, {dataType::float64, 64}, {dataType::int32, 32},
     {dataType::int64, 64}};

@@ -46,7 +46,7 @@ inline std::string debug_hex(addr_t value) { return ""; }
  * @param arithcfg Arithmetic configuration to write.
  * @param addr     Address on the FPGA to write arithmetic configuration to.
  */
-void write_arithconfig(CCLO &cclo, ArithConfig const &arithcfg, addr_t *addr);
+void write_arithconfig(CCLO &cclo, ArithConfig &arithcfg, addr_t *addr);
 
 void check_return_status(const Json::Value &status);
 

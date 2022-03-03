@@ -39,62 +39,62 @@ public:
 
   CCLO *nop(bool run_async = false, std::vector<CCLO *> waitfor = {});
 
-  CCLO *send(unsigned int comm_id, BaseBuffer srcbuf, unsigned int count,
+  CCLO *send(unsigned int comm_id, BaseBuffer &srcbuf, unsigned int count,
              unsigned int dst, unsigned int tag = TAG_ANY,
              bool from_fpga = false,
              streamFlags stream_flags = streamFlags::NO_STREAM,
              bool run_async = false, std::vector<CCLO *> waitfor = {});
 
-  CCLO *recv(unsigned int comm_id, BaseBuffer dstbuf, unsigned int count,
+  CCLO *recv(unsigned int comm_id, BaseBuffer &dstbuf, unsigned int count,
              unsigned int src, unsigned int tag = TAG_ANY, bool to_fpga = false,
              streamFlags stream_flags = streamFlags::NO_STREAM,
              bool run_async = false, std::vector<CCLO *> waitfor = {});
 
-  CCLO *copy(BaseBuffer srcbuf, BaseBuffer dstbuf, unsigned int count,
+  CCLO *copy(BaseBuffer &srcbuf, BaseBuffer &dstbuf, unsigned int count,
              bool from_fpga = false, bool to_fpga = false,
              bool run_async = false, std::vector<CCLO *> waitfor = {});
 
-  CCLO *combine(unsigned int count, cfgFunc function, BaseBuffer val1,
-                BaseBuffer val2, BaseBuffer result, bool val1_from_fpga = false,
+  CCLO *combine(unsigned int count, cfgFunc function, BaseBuffer &val1,
+                BaseBuffer &val2, BaseBuffer &result, bool val1_from_fpga = false,
                 bool val2_from_fpga = false, bool to_fpga = false,
                 bool run_async = false, std::vector<CCLO *> waitfor = {});
 
-  CCLO *external_stream_kernel(BaseBuffer srcbuf, BaseBuffer dstbuf,
+  CCLO *external_stream_kernel(BaseBuffer &srcbuf, BaseBuffer &dstbuf,
                                unsigned int count, bool from_fpga = false,
                                bool to_fpga = false, bool run_async = false,
                                std::vector<CCLO *> waitfor = {});
 
-  CCLO *bcast(unsigned int comm_id, BaseBuffer buf, unsigned int count,
+  CCLO *bcast(unsigned int comm_id, BaseBuffer &buf, unsigned int count,
               unsigned int root, bool from_fpga = false, bool to_fpga = false,
               bool run_async = false, std::vector<CCLO *> waitfor = {});
 
-  CCLO *scatter(unsigned int comm_id, BaseBuffer sendbuf, BaseBuffer recvbuf,
+  CCLO *scatter(unsigned int comm_id, BaseBuffer &sendbuf, BaseBuffer &recvbuf,
                 unsigned int count, unsigned int root, bool from_fpga = false,
                 bool to_fpga = false, bool run_async = false,
                 std::vector<CCLO *> waitfor = {});
 
-  CCLO *gather(unsigned int comm_id, BaseBuffer sendbuf, BaseBuffer recvbuf,
+  CCLO *gather(unsigned int comm_id, BaseBuffer &sendbuf, BaseBuffer &recvbuf,
                unsigned int count, unsigned int root, bool from_fpga = false,
                bool to_fpga = false, bool run_async = false,
                std::vector<CCLO *> waitfor = {});
 
-  CCLO *allgather(unsigned int comm_id, BaseBuffer sendbuf, BaseBuffer recvbuf,
+  CCLO *allgather(unsigned int comm_id, BaseBuffer &sendbuf, BaseBuffer &recvbuf,
                   unsigned int count, bool from_fpga = false,
                   bool to_fpga = false, bool run_async = false,
                   std::vector<CCLO *> waitfor = {});
 
-  CCLO *reduce(unsigned int comm_id, BaseBuffer sendbuf, BaseBuffer recvbuf,
+  CCLO *reduce(unsigned int comm_id, BaseBuffer &sendbuf, BaseBuffer &recvbuf,
                unsigned int count, unsigned int root, reduceFunction func,
                bool from_fpga = false, bool to_fpga = false,
                bool run_async = false, std::vector<CCLO *> waitfor = {});
 
-  CCLO *allreduce(unsigned int comm_id, BaseBuffer sendbuf, BaseBuffer recvbuf,
+  CCLO *allreduce(unsigned int comm_id, BaseBuffer &sendbuf, BaseBuffer &recvbuf,
                   unsigned int count, reduceFunction func,
                   bool from_fpga = false, bool to_fpga = false,
                   bool run_async = false, std::vector<CCLO *> waitfor = {});
 
-  CCLO *reduce_scatter(unsigned int comm_id, BaseBuffer sendbuf,
-                       BaseBuffer recvbuf, unsigned int count,
+  CCLO *reduce_scatter(unsigned int comm_id, BaseBuffer &sendbuf,
+                       BaseBuffer &recvbuf, unsigned int count,
                        reduceFunction func, bool from_fpga = false,
                        bool to_fpga = false, bool run_async = false,
                        std::vector<CCLO *> waitfor = {});
@@ -102,7 +102,7 @@ public:
 private:
   CCLO *cclo;
   // Supported types and corresponding arithmetic config
-  const arithConfigMap &arith_config;
+  arithConfigMap arith_config;
   addr_t arithcfg_addr;
   // RX spare buffers
   std::vector<Buffer<int8_t> *> rx_buffer_spares;
@@ -174,8 +174,6 @@ private:
   void use_tcp(unsigned int comm_id = 0);
 
   void set_max_segment_size(unsigned int value = 0);
-
-  void set_max_dma_in_flight(unsigned int value = 0);
 
   void configure_communicator(const std::vector<rank_t> &ranks, int local_rank);
 

@@ -58,16 +58,99 @@ CCLO *ACCL::set_timeout(unsigned int value, bool run_async,
   options.scenario = operation::config;
   options.count = value;
   options.cfg_function = cfgFunc::set_timeout;
-  call_async(options);
+  CCLO *handle = call_async(options);
 
   if (run_async) {
-    return cclo;
+    return handle;
   } else {
-    cclo->wait();
+    handle->wait();
+    check_return_value("set_timeout");
   }
 
-  return NULL;
+  return nullptr;
 }
+
+CCLO *ACCL::nop(bool run_async, std::vector<CCLO *> waitfor) {
+  CCLO::Options options = CCLO::Options();
+  options.scenario = operation::nop;
+  options.waitfor = waitfor;
+  CCLO *handle = call_async(options);
+  if (run_async) {
+    return handle;
+  } else {
+    handle->wait();
+    check_return_value("nop");
+  }
+
+  return nullptr;
+}
+
+CCLO *ACCL::send(unsigned int comm_id, BaseBuffer &srcbuf, unsigned int count,
+                 unsigned int dst, unsigned int tag, bool from_fpga,
+                 streamFlags stream_flags, bool run_async,
+                 std::vector<CCLO *> waitfor) {
+  CCLO::Options options = CCLO::Options();
+  if (from_fpga == false) {
+    srcbuf.sync_to_device();
+  }
+  options.scenario = operation::send;
+  options.comm = communicators[comm_id].communicators_addr();
+  options.addr_0 = &srcbuf;
+  options.count = count;
+  options.root_src_dst = dst;
+  options.tag = tag;
+  options.stream_flags = stream_flags;
+  options.waitfor = waitfor;
+  CCLO *handle = call_async(options);
+
+  if (run_async) {
+    return handle;
+  } else {
+    handle->wait();
+    check_return_value("send");
+  }
+
+  return nullptr;
+}
+
+CCLO *ACCL::recv(unsigned int comm_id, BaseBuffer &dstbuf, unsigned int count,
+                 unsigned int src, unsigned int tag, bool to_fpga,
+                 streamFlags stream_flags, bool run_async,
+                 std::vector<CCLO *> waitfor) {
+  CCLO::Options options = CCLO::Options();
+
+  if (to_fpga == false && run_async == true) {
+    std::cerr << "ACCL: async run returns data on FPGA, user must "
+                 "sync_from_device() after waiting"
+              << std::endl;
+  }
+
+  options.scenario = operation::recv;
+  options.comm = communicators[comm_id].communicators_addr();
+  options.addr_2 = &dstbuf;
+  options.count = count;
+  options.root_src_dst = src;
+  options.tag = tag;
+  options.stream_flags = stream_flags;
+  options.waitfor = waitfor;
+  CCLO *handle = call_async(options);
+
+  if (run_async) {
+    return handle;
+  } else {
+    handle->wait();
+    if (to_fpga == false) {
+      dstbuf.sync_from_device();
+    }
+    check_return_value("send");
+  }
+
+  return nullptr;
+}
+
+CCLO *ACCL::copy(BaseBuffer &srcbuf, BaseBuffer &dstbuf, unsigned int count,
+                 bool from_fpga, bool to_fpga, bool run_async,
+                 std::vector<CCLO *> waitfor) {}
 
 std::string ACCL::dump_exchange_memory() {
   std::stringstream stream;
@@ -143,7 +226,6 @@ std::string ACCL::dump_rx_buffers(size_t nbufs) {
 
 void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
                            int nbufs, addr_t bufsize) {
-
   debug("CCLO HWID: " + std::to_string(get_hwid()) + " at 0x" +
         debug_hex(cclo->get_base_addr()));
 
@@ -204,7 +286,7 @@ void ACCL::configure_arithmetic() {
   }
 
   addr_t address = arithcfg_addr;
-  for (const auto &[_key, arithcfg] : arith_config) {
+  for (auto &[_key, arithcfg] : arith_config) {
     write_arithconfig(*cclo, arithcfg, &address);
   }
 }
@@ -397,17 +479,88 @@ void ACCL::init_connection(unsigned int comm_id) {
 void ACCL::open_port(unsigned int comm_id) {
   CCLO::Options options = CCLO::Options();
   options.scenario = operation::config;
-  options.comm = communicators[comm_id].comm_addr();
+  options.comm = communicators[comm_id].communicators_addr();
   options.cfg_function = cfgFunc::open_port;
   call_sync(options);
+  check_return_value("open_port");
 }
 
 void ACCL::open_con(unsigned int comm_id) {
   CCLO::Options options = CCLO::Options();
   options.scenario = operation::config;
-  options.comm = communicators[comm_id].comm_addr();
+  options.comm = communicators[comm_id].communicators_addr();
   options.cfg_function = cfgFunc::open_con;
   call_sync(options);
+  check_return_value("open_con");
+}
+
+void ACCL::use_udp(unsigned int comm_id) {
+  CCLO::Options options = CCLO::Options();
+  options.scenario = operation::config;
+  options.comm = communicators[comm_id].communicators_addr();
+  options.cfg_function = cfgFunc::set_stack_type;
+  options.count = 0;
+  call_sync(options);
+  check_return_value("use_udp");
+}
+
+void ACCL::use_tcp(unsigned int comm_id) {
+  CCLO::Options options = CCLO::Options();
+  options.scenario = operation::config;
+  options.comm = communicators[comm_id].communicators_addr();
+  options.cfg_function = cfgFunc::set_stack_type;
+  options.count = 1;
+  call_sync(options);
+  check_return_value("use_tcp");
+}
+
+void ACCL::set_max_segment_size(unsigned int value) {
+  if (value % 8 != 0) {
+    std::cerr << "ACCL: dma transaction must be divisible by 8 to use reduce "
+                 "collectives."
+              << std::endl;
+  }
+
+  if (value > rx_buffer_size) {
+    throw std::runtime_error("Transaction size should be less or equal "
+                             "to configured buffer size.");
+  }
+
+  CCLO::Options options = CCLO::Options();
+  options.scenario = operation::config;
+  options.cfg_function = cfgFunc::set_max_segment_size;
+  options.count = value;
+  call_sync(options);
+  segment_size = value;
+  check_return_value("set_max_segment_size");
+}
+
+void ACCL::configure_communicator(const std::vector<rank_t> &ranks,
+                                  int local_rank) {
+  if (rx_buffer_spares.empty()) {
+    throw std::runtime_error(
+        "RX buffers unconfigured, please call setup_rx_buffers() first.");
+  }
+
+  addr_t addr;
+
+  if (communicators.empty()) {
+    addr = communicators_addr;
+  } else {
+    addr = communicators.back().communicators_addr();
+  }
+
+  communicators.emplace_back(Communicator(cclo, ranks, local_rank, addr));
+}
+
+std::string ACCL::dump_communicator() {
+  std::stringstream stream;
+  for (size_t i = 0; i < communicators.size(); ++i) {
+    stream << "Communicator " << i << ":" << std::endl
+           << communicators[i].dump();
+  }
+
+  return stream.str();
 }
 
 } // namespace ACCL

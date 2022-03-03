@@ -17,7 +17,7 @@
 
 *.xclbin
 CMakeCache.txt
-CMakeDoxyFile.in
+CMakeDoxyfile.in
 CMakeDoxygenDefaults.cmake
 CMakeFiles/
 Makefile

@@ -53,6 +53,7 @@ include_directories(include)
 set(ACCL_SOURCES
     src/accl.cpp
     src/common.cpp
+    src/communicator.cpp
     src/simdevice.cpp
 )
 

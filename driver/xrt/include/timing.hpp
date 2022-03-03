@@ -13,7 +13,8 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 #
-# *******************************************************************************/
+#
+*******************************************************************************/
 
 #pragma once
 
@@ -22,34 +23,51 @@
 
 /** @file timing.hpp */
 
-using namespace std::chrono;
-
+namespace ACCL {
 class Timer {
-	private:
-		steady_clock::time_point _start;
-		steady_clock::time_point _end;
-		bool _started = false;
-		bool _ended = false;
-	public:
-		Timer() {
+private:
+  std::chrono::steady_clock::time_point _start;
+  std::chrono::steady_clock::time_point _end;
+  bool _started;
+  bool _ended;
 
-		}
+public:
+  Timer() { reset(); }
 
-		void start() {
-			_start = steady_clock::now();
-			_started = true;
-		}
+  void start() {
+    if (_started == true) {
+      reset();
+    }
 
-		void end() {
-			_end   = steady_clock::now();
-			_ended = true;
-		}
+    _start = std::chrono::steady_clock::now();
+    _started = true;
+  }
 
-		unsigned long elapsed() {
-			if(!_started || !_ended) {
-				std::cerr << "Timer error. You forgot to call start or end or both" << std::endl;
-				return 0;
-			}
-			return std::chrono::duration_cast<std::chrono::microseconds>(_end-_start).count();
-		}
+  void end() {
+    if (_ended == true) {
+      throw std::runtime_error("Timer already ended.");
+    }
+
+    if (_started == false) {
+      throw std::runtime_error("Timer end called before start.");
+    }
+
+    _end = std::chrono::steady_clock::now();
+    _ended = true;
+  }
+
+  void reset() {
+    _started = false;
+    _ended = false;
+  }
+
+  unsigned long elapsed() {
+    if (!_started || !_ended) {
+      throw std::runtime_error("You forgot to call start or end or both");
+    }
+
+    return std::chrono::duration_cast<std::chrono::microseconds>(_end - _start)
+        .count();
+  }
 };
+} // namespace ACCL

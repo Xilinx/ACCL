@@ -1,9 +1,9 @@
 #pragma once
 #include "buffer.hpp"
 #include "common.hpp"
+#include <cmath>
 #include <jsoncpp/json/json.h>
 #include <zmq.hpp>
-#include <cmath>
 
 /** @file simbuffer.hpp */
 
@@ -42,7 +42,8 @@ public:
                        zmq::send_flags::none);
 
     zmq::message_t reply;
-    zmq::recv_result_t result = this->socket->recv(reply, zmq::recv_flags::none);
+    zmq::recv_result_t result =
+        this->socket->recv(reply, zmq::recv_flags::none);
     Json::Value reply_json(reply.to_string());
     check_return_status(reply_json["status"]);
 
@@ -71,9 +72,9 @@ public:
 
   void free_buffer() override { return; }
 
-  Buffer<dtype> slice(size_t start, size_t end) override {
-    return SimBuffer(&this->buffer[start], end - start, this->_type,
-                     this->socket, this->_physical_address + start);
+  Buffer<dtype> *slice(size_t start, size_t end) override {
+    return new SimBuffer(&this->buffer[start], end - start, this->_type,
+                         this->socket, this->_physical_address + start);
   }
 };
 } // namespace ACCL

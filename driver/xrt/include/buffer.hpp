@@ -28,19 +28,19 @@ public:
    * Sync the host buffer to the device buffer.
    *
    */
-  virtual void sync_from_device();
+  virtual void sync_from_device() = 0;
 
   /**
    * Sync the device buffer to the host buffer.
    *
    */
-  virtual void sync_to_device();
+  virtual void sync_to_device() = 0;
 
   /**
    * Free the device buffer.
    *
    */
-  virtual void free_buffer();
+  virtual void free_buffer() = 0;
 
   /**
    * Get the size of the buffer in bytes.
@@ -106,7 +106,7 @@ public:
    * @param end             End of the slice.
    * @return Buffer<dtype>  Slice of the buffer from start to end.
    */
-  virtual Buffer<dtype> slice(size_t start, size_t end);
+  virtual Buffer<dtype> *slice(size_t start, size_t end) = 0;
 
   dtype operator[](size_t i) { return this->buffer[i]; }
 
