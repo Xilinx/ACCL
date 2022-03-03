@@ -766,7 +766,7 @@ void ACCL::setup_rx_buffers(size_t nbufs, addr_t bufsize,
     Buffer<int8_t> *buf;
 
     if (sim_mode) {
-      buf = new SimBuffer(new int8_t[bufsize], bufsize, dataType::int8,
+      buf = new SimBuffer(new int8_t[bufsize](), bufsize, dataType::int8,
                           static_cast<SimDevice *>(cclo)->get_socket());
     }
 #ifdef ACCL_HARDWARE_SUPPORT
@@ -798,7 +798,7 @@ void ACCL::setup_rx_buffers(size_t nbufs, addr_t bufsize,
     communicators_addr = address + 4;
     if (sim_mode) {
       utility_spare =
-          new SimBuffer(new int8_t[bufsize], bufsize, dataType::int8,
+          new SimBuffer(new int8_t[bufsize](), bufsize, dataType::int8,
                         static_cast<SimDevice *>(cclo)->get_socket());
     }
 #ifdef ACCL_HARDWARE_SUPPORT
