@@ -70,6 +70,11 @@ public:
     const std::string request = Json::writeString(builder, request_json);
     this->socket->send(zmq::const_buffer(request.c_str(), request.size()),
                        zmq::send_flags::none);
+
+    zmq::message_t reply
+    zmq::recv_result_t result =
+        this->socket->recv(reply, zmq::recv_flags::none);
+    check_return_status(reply);
   }
 
   void free_buffer() override { return; }
