@@ -29,6 +29,7 @@ void SimDevice::start(const Options &options) {
 
   request_json["type"] = 4;
   request_json["scenario"] = static_cast<int>(options.scenario);
+  request_json["tag"] = options.tag;
   request_json["count"] = options.count;
   request_json["comm"] = options.comm;
   request_json["root_src_dst"] = options.root_src_dst;
@@ -46,6 +47,7 @@ void SimDevice::start(const Options &options) {
 
   Json::StreamWriterBuilder builder;
   const std::string message = Json::writeString(builder, request_json);
+  accl_send_log("device start", message);
 
   zmq::message_t request(message.c_str(), message.size());
   this->socket.send(request, zmq::send_flags::none);
@@ -70,6 +72,7 @@ val_t SimDevice::read(addr_t offset) {
   request_json["addr"] = (Json::Value::UInt64)offset;
   Json::StreamWriterBuilder builder;
   const std::string request = Json::writeString(builder, request_json);
+  accl_send_log("device read", request);
   this->socket.send(zmq::const_buffer(request.c_str(), request.size()),
                     zmq::send_flags::none);
 
@@ -89,6 +92,7 @@ void SimDevice::write(addr_t offset, val_t val) {
   request_json["wdata"] = (Json::Value::UInt)val;
   Json::StreamWriterBuilder builder;
   const std::string request = Json::writeString(builder, request_json);
+  accl_send_log("device write", request);
   this->socket.send(zmq::const_buffer(request.c_str(), request.size()),
                     zmq::send_flags::none);
 

@@ -1,4 +1,7 @@
 #include "common.hpp"
+#ifdef ACCL_DEBUG
+#include <fstream>
+#endif
 
 namespace ACCL {
 Json::Value arithcfg_to_json(ACCL::ArithConfig const &arithcfg) {
@@ -45,12 +48,33 @@ void check_return_status(const Json::Value &status) {
   }
 }
 
+#ifdef ACCL_DEBUG
+void reset_log() {
+  std::string rank = std::getenv("OMPI_COMM_WORLD_RANK");
+  std::string filename = ACCL_SEND_LOG_FILE(rank);
+  std::ofstream outfile.open(filename, std::ios::out);
+  outfile.close();
+}
+
+reset_log();
+
+void accl_send_log(const std::string &label, const std::string &message) {
+  std::string rank = std::getenv("OMPI_COMM_WORLD_RANK");
+  std::string filename = ACCL_SEND_LOG_FILE(rank);
+  std::ofstream outfile.open(filename, std::ios::out | std::ios_base::app);
+  outfile << "Json request " << label << ":" << std::endl
+          << message << std::endl
+          << std::endl;
+  outfile.close();
+}
+#endif
+
 Json::Value parse_json(const std::string &raw_json) {
   Json::CharReaderBuilder builder;
   const std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
   Json::Value json;
-  reader->parse(raw_json.c_str(), raw_json.c_str() + raw_json.length(),
-                &json, nullptr);
+  reader->parse(raw_json.c_str(), raw_json.c_str() + raw_json.length(), &json,
+                nullptr);
   return json;
 }
 

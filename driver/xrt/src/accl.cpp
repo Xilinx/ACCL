@@ -716,7 +716,7 @@ void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
   CCLO::Options options = CCLO::Options();
   options.scenario = operation::config;
   options.cfg_function = cfgFunc::enable_pkt;
-  call_async(options);
+  call_sync(options);
 
   set_max_segment_size(bufsize);
   switch (protocol) {
@@ -792,21 +792,22 @@ void ACCL::setup_rx_buffers(size_t nbufs, addr_t bufsize,
       address += 4;
       cclo->write(address, 0);
     }
-
-    cclo->write(rx_buffers_adr, nbufs);
-
-    communicators_addr = address + 4;
-    if (sim_mode) {
-      utility_spare =
-          new SimBuffer(new int8_t[bufsize](), bufsize, dataType::int8,
-                        static_cast<SimDevice *>(cclo)->get_socket());
-    }
-#ifdef ACCL_HARDWARE_SUPPORT
-    else {
-      std::runtime_error("TODO: allocate hw buffer.");
-    }
-#endif
   }
+
+  // NOTE: the buffer count HAS to be written last (offload checks for this)
+  cclo->write(rx_buffers_adr, nbufs);
+
+  communicators_addr = address + 4;
+  if (sim_mode) {
+    utility_spare =
+        new SimBuffer(new int8_t[bufsize](), bufsize, dataType::int8,
+                      static_cast<SimDevice *>(cclo)->get_socket());
+  }
+#ifdef ACCL_HARDWARE_SUPPORT
+  else {
+    std::runtime_error("TODO: allocate hw buffer.");
+  }
+#endif
 }
 
 void ACCL::check_return_value(const std::string function_name) {

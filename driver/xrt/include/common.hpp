@@ -8,6 +8,8 @@
 
 /** @file common.hpp */
 
+#define ACCL_SEND_LOG_FILE(i) "accl_send" + i + ".log"
+
 namespace ACCL {
 template <typename Iterable>
 inline Json::Value iterable_to_json(Iterable const &iter) {
@@ -30,12 +32,19 @@ inline std::string debug_hex(addr_t value) {
   stream << std::hex << value;
   return stream.str();
 }
+
+void accl_send_log(const std::string &label, const std::string &message);
 #else
 inline void debug(std::string message) {
   // NOP
 }
 
 inline std::string debug_hex(addr_t value) { return ""; }
+
+inline void accl_send_log(const std::string &label,
+                          const std::string &message) {
+  // NOP
+}
 #endif
 
 /**

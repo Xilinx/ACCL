@@ -8,17 +8,18 @@
 /** @file simbuffer.hpp */
 
 namespace ACCL {
+extern addr_t next_free_address;
+
 template <typename dtype> class SimBuffer : public Buffer<dtype> {
 private:
-  addr_t next_free_address{0x0};
   zmq::socket_t *const socket;
 
-  addr_t get_next_free_address() {
+  addr_t get_next_free_address(size_t size) {
     addr_t address = next_free_address;
     // allocate on 4K boundaries
     // not sure how realistic this is, but it does help
     // work around some addressing limitations in RTLsim
-    next_free_address += ((addr_t)std::ceil(this->_size / 4096.0)) * 4096;
+    next_free_address += ((addr_t)std::ceil(size / 4096.0)) * 4096;
 
     return address;
   }
@@ -30,8 +31,8 @@ public:
 
   SimBuffer(dtype *buffer, size_t length, dataType type,
             zmq::socket_t *const socket)
-      : SimBuffer(buffer, length, type, socket, this->get_next_free_address()) {
-  }
+      : SimBuffer(buffer, length, type, socket,
+                  this->get_next_free_address(length * sizeof(dtype))) {}
   void sync_from_device() override {
     Json::Value request_json;
     request_json["type"] = 2;
@@ -39,6 +40,7 @@ public:
     request_json["len"] = (Json::Value::UInt64)this->_size;
     Json::StreamWriterBuilder builder;
     const std::string request = Json::writeString(builder, request_json);
+    accl_send_log("sync from device", request);
     this->socket->send(zmq::const_buffer(request.c_str(), request.size()),
                        zmq::send_flags::none);
 
@@ -68,6 +70,7 @@ public:
     request_json["wdata"] = array;
     Json::StreamWriterBuilder builder;
     const std::string request = Json::writeString(builder, request_json);
+    accl_send_log("sync to device", request);
     this->socket->send(zmq::const_buffer(request.c_str(), request.size()),
                        zmq::send_flags::none);
 

@@ -38,13 +38,14 @@ set(ACCL_SOURCES
     ${ACCL_SOURCE_PATH}/common.cpp
     ${ACCL_SOURCE_PATH}/communicator.cpp
     ${ACCL_SOURCE_PATH}/simdevice.cpp
+    ${ACCL_SOURCE_PATH}/simbuffer.cpp
 )
 
 set(ACCL_INCLUDE_PATH ${CMAKE_CURRENT_LIST_DIR}/include)
 
 add_library(accl SHARED ${ACCL_SOURCES})
 
-target_link_libraries(accl jsoncpp_lib zmq)
+target_link_libraries(accl PUBLIC jsoncpp_lib zmq)
 get_target_property(JSON_INC_PATH jsoncpp_lib INTERFACE_INCLUDE_DIRECTORIES)
 target_include_directories(accl PUBLIC ${JSON_INC_PATH} ${ACCL_INCLUDE_PATH})
 if (EXISTS $ENV{XILINX_XRT})
