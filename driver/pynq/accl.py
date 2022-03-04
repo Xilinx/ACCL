@@ -158,7 +158,7 @@ class SimDevice():
 
 class AlveoDevice():
     def __init__(self, xclbin, board_idx=0, core_idx=0, mem=None):
-        print(f"AlveoDevice connecting to board {} core {} xclbin {}", board_idx, core_idx, xclbin)
+        print(f"AlveoDevice connecting to board {board_idx} core {core_idx} xclbin {xclbin}")
         local_alveo = pynq.Device.devices[board_idx]
         self.ol = pynq.Overlay(xclbin, device=local_alveo)
         self.cclo = self.ol.__getattr__(f"ccl_offload_{core_idx}")

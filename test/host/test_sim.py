@@ -255,6 +255,7 @@ if __name__ == "__main__":
     parser.add_argument('--rxbuf_size', type=int,            default=1,     help='How many KB per RX buffer')
     parser.add_argument('--board_idx',  type=int,            default=0,     help='Index of Alveo board, if multiple present')
     parser.add_argument('--core_idx',   type=int,            default=0,     help='Index of CCLO core, if multiple present')
+    parser.add_argument('--xclbin',     type=str,            default="",    help='Path to xclbin, if present')
     parser.add_argument('--simulate',   action='store_true', default=False, help='enable simulation/emulation mode')
     parser.add_argument('--all',        action='store_true', default=False, help='Select all collectives')
     parser.add_argument('--nop',        action='store_true', default=False, help='Run nop test')
