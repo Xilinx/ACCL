@@ -54,10 +54,12 @@ std::string Communicator::dump() {
   std::stringstream stream;
   addr_t addr = _communicators_addr;
 
-  stream << "local rank: " << cclo->read(addr);
-  addr += 4;
   size_t n = cclo->read(addr);
-  stream << " \t number of ranks: " << n << std::endl;
+  addr += 4;
+  size_t local_rank = cclo->read(addr);
+
+  stream << "local rank: " << local_rank << " \t number of ranks: " << n << std::endl;
+
   for (size_t i = 0; i < n; ++i) {
     addr += 4;
     std::string ip_address = ip_decode(cclo->read(addr));
@@ -77,9 +79,9 @@ std::string Communicator::dump() {
     addr += 4;
     val_t max_seg_size = cclo->read(addr);
     stream << "> rank " << i << " (ip " << ip_address << ":" << port
-           << " ; session " << session << " ; max segment size" << max_seg_size
-           << " : <- inbound seq number " << inbound_seq_number
-           << ", -> outbound seq number" << outbound_seq_number << std::endl;
+           << " ; session " << session << " ; max segment size " << max_seg_size
+           << ") : <- inbound seq number " << inbound_seq_number
+           << ", -> outbound seq number " << outbound_seq_number << std::endl;
   }
 
   return stream.str();

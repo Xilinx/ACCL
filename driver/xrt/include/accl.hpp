@@ -135,6 +135,7 @@ public:
       throw std::runtime_error("TODO: create hardware buffer");
     }
 #endif
+    return std::unique_ptr<Buffer<dtype>>(nullptr);
   }
 
 private:
