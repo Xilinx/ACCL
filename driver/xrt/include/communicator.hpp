@@ -1,5 +1,5 @@
 /*******************************************************************************
-#  Copyright (C) 2021 Xilinx, Inc
+#  Copyright (C) 2022 Xilinx, Inc
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -46,7 +46,7 @@ public:
   addr_t communicators_addr() const { return _communicators_addr; }
 
   Communicator(CCLO *cclo, const std::vector<rank_t> &ranks, int rank,
-               addr_t communicators_addr);
+               addr_t *addr);
 
   int local_rank() const {
     return _rank;

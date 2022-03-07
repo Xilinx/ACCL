@@ -1,5 +1,5 @@
 /*******************************************************************************
-#  Copyright (C) 2021 Xilinx, Inc
+#  Copyright (C) 2022 Xilinx, Inc
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -22,6 +22,8 @@
 #include <sstream>
 #include <vector>
 
+using namespace ACCL;
+
 int rank, size;
 
 struct options_t {
@@ -38,10 +40,81 @@ std::string prepend_process() {
   return "[process " + std::to_string(rank) + "] ";
 }
 
+template <typename dtype>
+std::unique_ptr<SimBuffer<dtype>> gen_buffer(unsigned int count, ACCL::ACCL &accl, dataType type) {
+
+}
+
+void test_copy(ACCL::ACCL &accl, unsigned int count) {
+  float *host_op_buf = new float[count];
+  std::cerr << "Start copy test..." << std::endl;
+  for (unsigned int i = 0; i < count; ++i) {
+    host_op_buf[i] = i;
+  }
+  float *res_op_buf = new float[count];
+  auto op_buf = accl.create_buffer(host_op_buf, count, dataType::float32);
+  auto res_buf = accl.create_buffer(res_op_buf, count, dataType::float32);
+  accl.copy(*op_buf, *res_buf, count);
+  int errors = 0;
+  for (unsigned int i = 0; i < count; ++i) {
+    if ((*op_buf)[i] != (*res_buf)[i]) {
+      std::cerr << i + 1 << "th item is incorrect!" << std::endl;
+    }
+  }
+
+  delete host_op_buf;
+  delete res_op_buf;
+
+  if (errors > 0) {
+    std::cerr << errors  << " errors!";
+  } else {
+    std::cerr << "Test succesfull!" << std::endl;
+  }
+}
+
+void test_sendrcv(ACCL::ACCL &accl, unsigned int count) {
+  float *host_op_buf = new float[count];
+  std::cerr << "Start send recv test..." << std::endl;
+  for (unsigned int i = 0; i < count; ++i) {
+    host_op_buf[i] = i;
+  }
+  float *res_op_buf = new float[count];
+  auto op_buf = accl.create_buffer(host_op_buf, count, dataType::float32);
+  auto res_buf = accl.create_buffer(res_op_buf, count, dataType::float32);
+  if (rank == 0) {
+    std::cerr << "Sending data..." << std::endl;
+    accl.send(0, *op_buf, count, 1, 0);
+  } else {
+    std::cerr << "Recieving data..." << std::endl;
+    accl.recv(0, *res_buf, count, 0, 0);
+  }
+
+  if (rank == 1) {
+    int errors = 0;
+    for (unsigned int i = 0; i < count; ++i) {
+      if ((*op_buf)[i] != (*res_buf)[i]) {
+        std::cerr << i + 1 << "th item is incorrect!" << std::endl;
+      }
+    }
+
+    delete host_op_buf;
+    delete res_op_buf;
+
+    if (errors > 0) {
+      std::cerr << errors  << " errors!";
+      MPI_Abort(MPI_COMM_WORLD, 1);
+    } else {
+      std::cerr << "Test succesfull!" << std::endl;
+    }
+  }
+
+  MPI_Barrier(MPI_COMM_WORLD);
+}
+
 void start_test(options_t options) {
-  std::vector<ACCL::rank_t> ranks = {};
+  std::vector<rank_t> ranks = {};
   for (int i = 0; i < size; ++i) {
-    ACCL::rank_t new_rank = {"127.0.0.1", options.start_port + i, i,
+    rank_t new_rank = {"127.0.0.1", options.start_port + i, i,
                              options.rxbuf_size};
     ranks.emplace_back(new_rank);
   }
@@ -55,6 +128,14 @@ void start_test(options_t options) {
   MPI_Barrier(MPI_COMM_WORLD);
 
   accl.nop();
+
+  // if (rank == 0) {
+  // test_copy(accl, options.count);
+  // }
+
+  // MPI_Barrier(MPI_COMM_WORLD);
+
+  test_sendrcv(accl, options.count);
 }
 
 options_t parse_options(int argc, char *argv[]) {

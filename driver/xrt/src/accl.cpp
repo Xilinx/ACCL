@@ -1,3 +1,21 @@
+/*******************************************************************************
+#  Copyright (C) 2022 Xilinx, Inc
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+#
+*******************************************************************************/
+
 #include "accl.hpp"
 #include "common.hpp"
 #include "dummybuffer.hpp"
@@ -690,6 +708,7 @@ std::string ACCL::dump_rx_buffers(size_t nbufs) {
 
 void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
                            int nbufs, addr_t bufsize) {
+  reset_log();
   debug("CCLO HWID: " + std::to_string(get_hwid()) + " at 0x" +
         debug_hex(cclo->get_base_addr()));
 
@@ -1023,7 +1042,8 @@ void ACCL::configure_communicator(const std::vector<rank_t> &ranks,
     addr = communicators.back().communicators_addr();
   }
 
-  communicators.emplace_back(Communicator(cclo, ranks, local_rank, addr));
+  communicators.emplace_back(Communicator(cclo, ranks, local_rank, &addr));
+  arithcfg_addr = addr + 4;
 }
 
 std::string ACCL::dump_communicator() {
