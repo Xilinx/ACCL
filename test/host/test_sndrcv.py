@@ -16,6 +16,8 @@
 # *******************************************************************************/
 
 import numpy as np
+import sys
+sys.path.append('../../driver/pynq/')
 from accl import accl
 from accl import SimBuffer
 from mpi4py import MPI
