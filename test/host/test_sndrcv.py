@@ -38,13 +38,18 @@ def test_sendrecv(cclo_inst, world_size, local_rank, count):
     op_buf.buf[:] = np.arange(count).astype(np.float32)
     res_buf = SimBuffer(np.zeros((count,), dtype=np.float32), cclo_inst.cclo.socket)
     if local_rank == 0:
+        print("Start send")
         cclo_inst.send(0, op_buf, count, 1, tag=0)
+        print("Finish send")
     else:
+        print("Start recv")
         cclo_inst.recv(0, res_buf, count, 0, tag=0)
+        print("Finish recv")
         if not np.isclose(op_buf.buf, res_buf.buf).all():
             print("test failed")
         else:
             print("test successful")
+    print("Wait for other processes...")
     comm.barrier()
 
 if __name__ == "__main__":
@@ -52,6 +57,9 @@ if __name__ == "__main__":
     comm = MPI.COMM_WORLD
     world_size = comm.Get_size()
     local_rank = comm.Get_rank()
+
+    if world_size != 2:
+        print("Run with two processes!")
 
     #set a random seed to make it reproducible
     np.random.seed(2021+local_rank)
@@ -63,9 +71,10 @@ if __name__ == "__main__":
     #configure FPGA and CCLO cores with the default 16 RX buffers of size given by args.rxbuf_size
     cclo_inst = accl(ranks, local_rank, bufsize=1, protocol="TCP", sim_sock="tcp://localhost:"+str(5500 + local_rank))
     cclo_inst.set_timeout(10**8)
+    print("finish setup")
     #barrier here to make sure all the devices are configured before testing
     comm.barrier()
-
+    print("start test")
     test_sendrecv(cclo_inst, world_size, local_rank, 16)
 
     cclo_inst.deinit()
