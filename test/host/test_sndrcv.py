@@ -22,21 +22,12 @@ from accl import accl
 from accl import SimBuffer
 from mpi4py import MPI
 
-def get_buffers(count, op0_dt, op1_dt, res_dt, accl_inst):
-    op0_buf = SimBuffer(np.zeros((count,), dtype=op0_dt), accl_inst.cclo.socket)
-    op1_buf = SimBuffer(np.zeros((count,), dtype=op1_dt), accl_inst.cclo.socket)
-    res_buf = SimBuffer(np.zeros((count,), dtype=res_dt), accl_inst.cclo.socket)
-    op0_buf.sync_to_device()
-    op1_buf.sync_to_device()
-    res_buf.sync_to_device()
-    op0_buf.buf[:] = np.arange(count).astype(op0_dt)
-    op1_buf.buf[:] = np.arange(count).astype(op1_dt)
-    return op0_buf, op1_buf, res_buf
-
 def test_sendrecv(cclo_inst, world_size, local_rank, count):
     op_buf = SimBuffer(np.zeros((count,), dtype=np.float32), cclo_inst.cclo.socket)
+    op_buf.sync_to_device()
     op_buf.buf[:] = np.arange(count).astype(np.float32)
     res_buf = SimBuffer(np.zeros((count,), dtype=np.float32), cclo_inst.cclo.socket)
+    res_buf.sync_to_device()
     if local_rank == 0:
         print("Start send")
         cclo_inst.send(0, op_buf, count, 1, tag=0)
