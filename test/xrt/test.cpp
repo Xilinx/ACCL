@@ -18,7 +18,9 @@
 
 #include <accl.hpp>
 #include <cxxopts.hpp>
+#include <functional>
 #include <mpi.h>
+#include <random>
 #include <sstream>
 #include <vector>
 
@@ -40,20 +42,24 @@ std::string prepend_process() {
   return "[process " + std::to_string(rank) + "] ";
 }
 
-template <typename dtype>
-std::unique_ptr<SimBuffer<dtype>> gen_buffer(unsigned int count, ACCL::ACCL &accl, dataType type) {
+static std::unique_ptr<float> random_array(size_t count) {
+  static std::uniform_real_distribution<float> distribution(-1000, 1000);
+  static std::mt19937 engine;
+  static auto generator = std::bind(distribution, engine);
+  std::unique_ptr<float> data(new float[count]);
+  for (size_t i = 0; i < count; ++i) {
+    data.get()[i] = generator();
+  }
 
+  return data;
 }
 
 void test_copy(ACCL::ACCL &accl, unsigned int count) {
-  float *host_op_buf = new float[count];
   std::cerr << "Start copy test..." << std::endl;
-  for (unsigned int i = 0; i < count; ++i) {
-    host_op_buf[i] = i;
-  }
-  float *res_op_buf = new float[count];
-  auto op_buf = accl.create_buffer(host_op_buf, count, dataType::float32);
-  auto res_buf = accl.create_buffer(res_op_buf, count, dataType::float32);
+  std::unique_ptr<float> host_op_buf = random_array(count);
+  std::unique_ptr<float> res_op_buf(new float[count]);
+  auto op_buf = accl.create_buffer(host_op_buf.get(), count, dataType::float32);
+  auto res_buf = accl.create_buffer(res_op_buf.get(), count, dataType::float32);
   accl.copy(*op_buf, *res_buf, count);
   int errors = 0;
   for (unsigned int i = 0; i < count; ++i) {
@@ -62,50 +68,60 @@ void test_copy(ACCL::ACCL &accl, unsigned int count) {
     }
   }
 
-  delete host_op_buf;
-  delete res_op_buf;
-
   if (errors > 0) {
-    std::cerr << errors  << " errors!";
+    std::cerr << errors << " errors!";
   } else {
     std::cerr << "Test succesfull!" << std::endl;
   }
 }
 
 void test_sendrcv(ACCL::ACCL &accl, unsigned int count) {
-  float *host_op_buf = new float[count];
+  std::stringstream stream;
   std::cerr << "Start send recv test..." << std::endl;
+  std::unique_ptr<float> host_op_buf = random_array(count);
+  std::unique_ptr<float> res_op_buf(new float[count]);
+  auto op_buf = accl.create_buffer(host_op_buf.get(), count, dataType::float32);
+  auto res_buf = accl.create_buffer(res_op_buf.get(), count, dataType::float32);
+  int next_rank = (rank + 1) % size;
+  int prev_rank = (rank + size - 1) % size;
+  stream << "Sending data on " << rank << " to " << next_rank << "..."
+         << std::endl;
+  std::cerr << stream.str();
+  stream.clear();
+  accl.send(0, *op_buf, count, next_rank, 0);
+
+  stream << "Receiving data on " << rank << " from " << prev_rank << "..."
+         << std::endl;
+  std::cerr << stream.str();
+  stream.clear();
+  accl.recv(0, *res_buf, count, prev_rank, 0);
+
+  stream << "Sending data on " << rank << " to " << prev_rank << "..."
+         << std::endl;
+  std::cerr << stream.str();
+  stream.clear();
+  accl.send(0, *res_buf, count, prev_rank, 1);
+
+  stream << "Receiving data on " << rank << " from " << next_rank << "..."
+         << std::endl;
+  std::cerr << stream.str();
+  stream.clear();
+  accl.recv(0, *res_buf, count, next_rank, 1);
+
+  int errors = 0;
   for (unsigned int i = 0; i < count; ++i) {
-    host_op_buf[i] = i;
+    if ((*op_buf)[i] != (*res_buf)[i]) {
+      stream << i + 1 << "th item is incorrect!" << std::endl;
+      std::cerr << stream.str();
+      stream.clear();
+    }
   }
-  float *res_op_buf = new float[count];
-  auto op_buf = accl.create_buffer(host_op_buf, count, dataType::float32);
-  auto res_buf = accl.create_buffer(res_op_buf, count, dataType::float32);
-  if (rank == 0) {
-    std::cerr << "Sending data..." << std::endl;
-    accl.send(0, *op_buf, count, 1, 0);
+
+  if (errors > 0) {
+    std::cerr << errors << " errors!";
+    MPI_Abort(MPI_COMM_WORLD, 1);
   } else {
-    std::cerr << "Recieving data..." << std::endl;
-    accl.recv(0, *res_buf, count, 0, 0);
-  }
-
-  if (rank == 1) {
-    int errors = 0;
-    for (unsigned int i = 0; i < count; ++i) {
-      if ((*op_buf)[i] != (*res_buf)[i]) {
-        std::cerr << i + 1 << "th item is incorrect!" << std::endl;
-      }
-    }
-
-    delete host_op_buf;
-    delete res_op_buf;
-
-    if (errors > 0) {
-      std::cerr << errors  << " errors!";
-      MPI_Abort(MPI_COMM_WORLD, 1);
-    } else {
-      std::cerr << "Test succesfull!" << std::endl;
-    }
+    std::cerr << "Test succesfull!" << std::endl;
   }
 
   MPI_Barrier(MPI_COMM_WORLD);
@@ -115,7 +131,7 @@ void start_test(options_t options) {
   std::vector<rank_t> ranks = {};
   for (int i = 0; i < size; ++i) {
     rank_t new_rank = {"127.0.0.1", options.start_port + i, i,
-                             options.rxbuf_size};
+                       options.rxbuf_size};
     ranks.emplace_back(new_rank);
   }
 
@@ -172,7 +188,8 @@ options_t parse_options(int argc, char *argv[]) {
   options_t opts;
   opts.start_port = result["start-port"].as<uint16_t>();
   opts.count = result["count"].as<unsigned int>();
-  opts.rxbuf_size = result["rxbuf-size"].as<unsigned int>();
+  opts.rxbuf_size =
+      result["rxbuf-size"].as<unsigned int>() * 1024; // convert to bytes
   opts.nruns = result["nruns"].as<unsigned int>();
   opts.debug = result.count("debug") > 0;
 
