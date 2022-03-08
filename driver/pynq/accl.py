@@ -47,30 +47,30 @@ class SimMMIO():
 
 class SimBuffer():
     next_free_address = 0
-    def __init__(self, buf, zmqsocket, physical_address=None):
+    def __init__(self, data, zmqsocket, physical_address=None):
         self.socket = zmqsocket
-        self.buf = buf
+        self.data = data
         if physical_address is None:
             self.physical_address = SimBuffer.next_free_address
             # allocate on 4K boundaries
             # not sure how realistic this is, but it does help
             # work around some addressing limitations in RTLsim
-            SimBuffer.next_free_address += math.ceil(buf.nbytes/4096)*4096
+            SimBuffer.next_free_address += math.ceil(data.nbytes/4096)*4096
         else:
             self.physical_address = physical_address
     
     # Devicemem read request  {"type": 2, "addr": <uint>, "len": <uint>}
     # Devicemem read response {"status": OK|ERR, "rdata": <array of uint>}
     def sync_from_device(self):
-        self.socket.send_json({"type": 2, "addr": self.physical_address, "len": self.buf.nbytes})
+        self.socket.send_json({"type": 2, "addr": self.physical_address, "len": self.data.nbytes})
         ack = self.socket.recv_json()
         assert ack["status"] == 0, "ZMQ mem buffer read error"
-        self.buf.view(np.uint8)[:] = ack["rdata"]
+        self.data.view(np.uint8)[:] = ack["rdata"]
 
     # Devicemem write request  {"type": 3, "addr": <uint>, "wdata": <array of uint>}
     # Devicemem write response {"status": OK|ERR}
     def sync_to_device(self):
-        self.socket.send_json({"type": 3, "addr": self.physical_address, "wdata": self.buf.view(np.uint8).tolist()})
+        self.socket.send_json({"type": 3, "addr": self.physical_address, "wdata": self.data.view(np.uint8).tolist()})
         ack = self.socket.recv_json()
         assert ack["status"] == 0, "ZMQ mem buffer write error"
 
@@ -79,24 +79,24 @@ class SimBuffer():
 
     @property
     def size(self):
-        return self.buf.size
+        return self.data.size
 
     @property
     def dtype(self):
-        return self.buf.dtype
+        return self.data.dtype
 
     def __getitem__(self, key):
         if isinstance(key, slice):
             if key.start is not None:
-                offset = self.buf[:key.start].nbytes
+                offset = self.data[:key.start].nbytes
             else:
                 offset = 0
-            return SimBuffer(self.buf[key], self.socket, physical_address=self.physical_address+offset)
+            return SimBuffer(self.data[key], self.socket, physical_address=self.physical_address+offset)
         else:
-            return self.buf[key]
+            return self.data[key]
     
     def __setitem__(self, key, value):
-        self.buf[key] = value
+        self.data[key] = value
 
 class SimDevice():
     def __init__(self, zmqadr="tcp://localhost:5555"):
@@ -377,7 +377,7 @@ class accl():
         assert self.cclo.read(CFGRDY_OFFSET) == 0, "CCLO appears configured, might be in use. Please reset the CCLO and retry"
 
         print("Configuring RX Buffers")
-        self.setup_rx_buffers(nbufs, bufsize, self.rxbufmem)
+        self.setup_rx_buffers(nbufs, bufsize)
         print("Configuring a communicator")
         self.configure_communicator(ranks, local_rank)
         print("Configuring arithmetic")

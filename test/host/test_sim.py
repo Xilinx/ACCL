@@ -277,12 +277,18 @@ if __name__ == "__main__":
     args = parser.parse_args()
     args.rxbuf_size = 1024*args.rxbuf_size #convert from KB to B
     if args.all:
-        args.sndrcv  = True
         args.combine = True
         args.copy    = True
+        args.sndrcv  = True
+        args.sndrcv_strm = True
+        args.sndrcv_fanin = True
         args.bcast   = True
         args.scatter = True
-        args.sndrcv_strm = True
+        args.gather = True
+        args.allgather = True
+        args.reduce = True
+        args.allreduce = True
+        args.reduce_scatter = True
 
     # get communicator size and our local rank in it
     comm = MPI.COMM_WORLD
