@@ -98,6 +98,38 @@ void test_copy(ACCL::ACCL &accl, options_t &options) {
   }
 }
 
+void test_combine(ACCL::ACCL &accl, options_t &options) {
+  std::cout << "Start copy test..." << std::endl;
+  unsigned int count = options.count;
+  std::unique_ptr<float> host_op_buf1 = random_array(count);
+  std::unique_ptr<float> host_op_buf2 = random_array(count);
+  std::unique_ptr<float> res_op_buf(new float[count]);
+  auto op_buf1 = accl.create_buffer(host_op_buf1.get(), count, dataType::float32);
+  auto op_buf2 = accl.create_buffer(host_op_buf2.get(), count, dataType::float32);
+  auto res_buf = accl.create_buffer(res_op_buf.get(), count, dataType::float32);
+  (*op_buf1).sync_to_device();
+  (*op_buf2).sync_to_device();
+  (*res_buf).sync_to_device();
+  accl.combine(count, reduceFunction::SUM, *op_buf1, *op_buf2, *res_buf);
+  int errors = 0;
+  for (unsigned int i = 0; i < count; ++i) {
+    float ref = (*op_buf1)[i] + (*op_buf2)[i];
+    float res = (*res_buf)[i];
+    if (res != ref) {
+      std::cout << i + 1
+                << "th item is incorrect! (" + std::to_string(res) +
+                       " != " + std::to_string(ref) + ")"
+                << std::endl;
+    }
+  }
+
+  if (errors > 0) {
+    std::cout << errors << " errors!" << std::endl;
+  } else {
+    std::cout << "Test succesfull!" << std::endl;
+  }
+}
+
 void test_sendrcv(ACCL::ACCL &accl, options_t &options) {
   std::cout << "Start send recv test..." << std::endl;
   unsigned int count = options.count;
@@ -386,6 +418,8 @@ void start_test(options_t options) {
   accl.nop();
   MPI_Barrier(MPI_COMM_WORLD);
   test_copy(accl, options);
+  MPI_Barrier(MPI_COMM_WORLD);
+  test_combine(accl, options);
   MPI_Barrier(MPI_COMM_WORLD);
   test_sendrcv(accl, options);
   MPI_Barrier(MPI_COMM_WORLD);
