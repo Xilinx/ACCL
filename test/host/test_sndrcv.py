@@ -51,16 +51,17 @@ if __name__ == "__main__":
 
     if world_size != 2:
         print("Run with two processes!")
+        sys.exit(1)
 
     #set a random seed to make it reproducible
     np.random.seed(2021+local_rank)
 
     ranks = []
     for i in range(world_size):
-        ranks.append({"ip": "127.0.0.1", "port": 5500 + world_size + i, "session_id":i, "max_segment_size": 1})
+        ranks.append({"ip": "127.0.0.1", "port": 5500 + world_size + i, "session_id":i, "max_segment_size": 1024})
 
     #configure FPGA and CCLO cores with the default 16 RX buffers of size given by args.rxbuf_size
-    cclo_inst = accl(ranks, local_rank, bufsize=1, protocol="TCP", sim_sock="tcp://localhost:"+str(5500 + local_rank))
+    cclo_inst = accl(ranks, local_rank, bufsize=1024, protocol="TCP", sim_sock="tcp://localhost:"+str(5500 + local_rank))
     cclo_inst.set_timeout(10**8)
     print("finish setup")
     #barrier here to make sure all the devices are configured before testing
