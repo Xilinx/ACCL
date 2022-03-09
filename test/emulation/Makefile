@@ -11,7 +11,7 @@ DMA_MOVER_DIR=$(CCLO_HLS_ROOT)/dma_mover
 MB_FW_DIR=$(ACCL_REPO_ROOT)/kernels/cclo/fw/sw_apps/ccl_offload_control/src
 ZMQ_INTF_DIR=$(ACCL_REPO_ROOT)/test/zmq
 
-STACKTYPE ?= "udp"
+STACK_TYPE ?= "udp"
 NRANKS ?=1
 START_PORT ?= 5500
 
@@ -31,5 +31,4 @@ cclo_emu: cclo_emu.cpp $(MB_FW_DIR)/ccl_offload_control.c
 
 .PHONY: run
 run: cclo_emu
-	mpirun -np ${NRANKS} --tag-output ./cclo_emu ${STACKTYPE} ${START_PORT} 2>/dev/null
-
+	mpirun -np ${NRANKS} --tag-output ./cclo_emu ${STACK_TYPE} ${START_PORT} 2>/dev/null

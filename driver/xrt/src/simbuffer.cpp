@@ -1,5 +1,5 @@
 /*******************************************************************************
-#  Copyright (C) 2021 Xilinx, Inc
+#  Copyright (C) 2022 Xilinx, Inc
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -13,9 +13,12 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 #
-# *******************************************************************************/
+#
+*******************************************************************************/
 
-#pragma once
+#include "simbuffer.hpp"
 
-#include "xlnx-device.hpp"
-
+namespace ACCL {
+    /* Can't define variable in header */
+    addr_t next_free_address = 0x0;
+}
