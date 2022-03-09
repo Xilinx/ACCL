@@ -48,15 +48,6 @@ std::string prepend_process() {
   return "[process " + std::to_string(rank) + "] ";
 }
 
-std::unique_ptr<float> static_array(size_t count) {
-  std::unique_ptr<float> data(new float[count]);
-  for (size_t i = 0; i < count; ++i) {
-    data.get()[i] = (((i * 379) % 1000) - 300) / 10.0 + rank;
-  }
-
-  return data;
-}
-
 static std::unique_ptr<float> random_array(size_t count) {
   static std::uniform_real_distribution<float> distribution(-1000, 1000);
   static std::mt19937 engine;
@@ -88,6 +79,7 @@ void test_copy(ACCL::ACCL &accl, options_t &options) {
                 << "th item is incorrect! (" + std::to_string(res) +
                        " != " + std::to_string(ref) + ")"
                 << std::endl;
+      errors += 1;
     }
   }
 
@@ -104,8 +96,10 @@ void test_combine(ACCL::ACCL &accl, options_t &options) {
   std::unique_ptr<float> host_op_buf1 = random_array(count);
   std::unique_ptr<float> host_op_buf2 = random_array(count);
   std::unique_ptr<float> res_op_buf(new float[count]);
-  auto op_buf1 = accl.create_buffer(host_op_buf1.get(), count, dataType::float32);
-  auto op_buf2 = accl.create_buffer(host_op_buf2.get(), count, dataType::float32);
+  auto op_buf1 =
+      accl.create_buffer(host_op_buf1.get(), count, dataType::float32);
+  auto op_buf2 =
+      accl.create_buffer(host_op_buf2.get(), count, dataType::float32);
   auto res_buf = accl.create_buffer(res_op_buf.get(), count, dataType::float32);
   (*op_buf1).sync_to_device();
   (*op_buf2).sync_to_device();
@@ -120,6 +114,7 @@ void test_combine(ACCL::ACCL &accl, options_t &options) {
                 << "th item is incorrect! (" + std::to_string(res) +
                        " != " + std::to_string(ref) + ")"
                 << std::endl;
+      errors += 1;
     }
   }
 
@@ -172,6 +167,7 @@ void test_sendrcv(ACCL::ACCL &accl, options_t &options) {
       std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
                        std::to_string(res) + " != " + std::to_string(ref) + ")"
                 << std::endl;
+      errors += 1;
     }
   }
 
@@ -216,6 +212,7 @@ void test_bcast(ACCL::ACCL &accl, options_t &options, int root) {
                          std::to_string(res) + " != " + std::to_string(ref) +
                          ")"
                   << std::endl;
+        errors += 1;
       }
     }
 
@@ -253,6 +250,7 @@ void test_scatter(ACCL::ACCL &accl, options_t &options, int root) {
       std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
                        std::to_string(res) + " != " + std::to_string(ref) + ")"
                 << std::endl;
+      errors += 1;
     }
   }
 
@@ -301,6 +299,7 @@ void test_gather(ACCL::ACCL &accl, options_t &options, int root) {
                          std::to_string(res) + " != " + std::to_string(ref) +
                          ")"
                   << std::endl;
+        errors += 1;
       }
     }
 
@@ -340,6 +339,7 @@ void test_allgather(ACCL::ACCL &accl, options_t &options) {
       std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
                        std::to_string(res) + " != " + std::to_string(ref) + ")"
                 << std::endl;
+      errors += 1;
     }
   }
 
@@ -358,10 +358,9 @@ void test_reduce(ACCL::ACCL &accl, options_t &options, int root,
                    std::to_string(static_cast<int>(function)) + "..."
             << std::endl;
   unsigned int count = options.count;
-  std::unique_ptr<float> host_op_buf = random_array(count * size);
+  std::unique_ptr<float> host_op_buf = random_array(count);
   std::unique_ptr<float> res_op_buf(new float[count]);
-  auto op_buf =
-      accl.create_buffer(host_op_buf.get(), count * size, dataType::float32);
+  auto op_buf = accl.create_buffer(host_op_buf.get(), count, dataType::float32);
   auto res_buf = accl.create_buffer(res_op_buf.get(), count, dataType::float32);
 
   test_debug("Syncing buffers...", options);
@@ -373,21 +372,17 @@ void test_reduce(ACCL::ACCL &accl, options_t &options, int root,
 
   if (rank == root) {
     int errors = 0;
-    int rank_prod = 0;
-
-    for (int i = 0; i < rank; ++i) {
-      rank_prod += i;
-    }
 
     for (unsigned int i = 0; i < count; ++i) {
       int res = (*res_buf)[i];
-      int ref = (*op_buf)[i] * size + rank_prod;
+      int ref = (*op_buf)[i] * size;
 
       if (res != ref) {
         std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
                          std::to_string(res) + " != " + std::to_string(ref) +
                          ")"
                   << std::endl;
+        errors += 1;
       }
     }
 
@@ -397,6 +392,92 @@ void test_reduce(ACCL::ACCL &accl, options_t &options, int root,
     } else {
       std::cout << "Test is successful!" << std::endl;
     }
+  }
+}
+
+void test_reduce_scatter(ACCL::ACCL &accl, options_t &options,
+                         reduceFunction function) {
+  std::cout << "Start reduce scatter test and reduce function " +
+                   std::to_string(static_cast<int>(function)) + "..."
+            << std::endl;
+  unsigned int count = options.count;
+  std::unique_ptr<float> host_op_buf = random_array(count * size);
+  std::unique_ptr<float> res_op_buf(new float[count]);
+  auto op_buf =
+      accl.create_buffer(host_op_buf.get(), count * size, dataType::float32);
+  auto res_buf = accl.create_buffer(res_op_buf.get(), count, dataType::float32);
+
+  test_debug("Syncing buffers...", options);
+  (*op_buf).sync_to_device();
+  (*res_buf).sync_to_device();
+
+  test_debug("Reducing data...", options);
+  accl.reduce_scatter(0, *op_buf, *res_buf, count, function);
+
+  int errors = 0;
+  int rank_prod = 0;
+
+  for (int i = 0; i < rank; ++i) {
+    rank_prod += i;
+  }
+
+  for (unsigned int i = 0; i < count; ++i) {
+    int res = (*res_buf)[i];
+    int ref = (*op_buf)[i + ((rank + 1) % size) * count] * size;
+
+    if (res != ref) {
+      std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
+                       std::to_string(res) + " != " + std::to_string(ref) + ")"
+                << std::endl;
+      errors += 1;
+    }
+  }
+
+  if (errors > 0) {
+    std::cout << std::to_string(errors) + " errors!" << std::endl;
+    MPI_Abort(MPI_COMM_WORLD, 1);
+  } else {
+    std::cout << "Test is successful!" << std::endl;
+  }
+}
+
+void test_allreduce(ACCL::ACCL &accl, options_t &options,
+                    reduceFunction function) {
+  std::cout << "Start allreduce test and reduce function " +
+                   std::to_string(static_cast<int>(function)) + "..."
+            << std::endl;
+  unsigned int count = options.count;
+  std::unique_ptr<float> host_op_buf = random_array(count);
+  std::unique_ptr<float> res_op_buf(new float[count]);
+  auto op_buf = accl.create_buffer(host_op_buf.get(), count, dataType::float32);
+  auto res_buf = accl.create_buffer(res_op_buf.get(), count, dataType::float32);
+
+  test_debug("Syncing buffers...", options);
+  (*op_buf).sync_to_device();
+  (*res_buf).sync_to_device();
+
+  test_debug("Reducing data...", options);
+  accl.allreduce(0, *op_buf, *res_buf, count, function);
+
+  int errors = 0;
+
+  for (unsigned int i = 0; i < count; ++i) {
+    int res = (*res_buf)[i];
+    int ref = (*op_buf)[i] * size;
+
+    if (res != ref) {
+      std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
+                       std::to_string(res) + " != " + std::to_string(ref) + ")"
+                << std::endl;
+      errors += 1;
+    }
+  }
+
+  if (errors > 0) {
+    std::cout << std::to_string(errors) + " errors!" << std::endl;
+    MPI_Abort(MPI_COMM_WORLD, 1);
+  } else {
+    std::cout << "Test is successful!" << std::endl;
   }
 }
 
@@ -424,6 +505,10 @@ void start_test(options_t options) {
   test_sendrcv(accl, options);
   MPI_Barrier(MPI_COMM_WORLD);
   test_allgather(accl, options);
+  MPI_Barrier(MPI_COMM_WORLD);
+  test_allreduce(accl, options, reduceFunction::SUM);
+  MPI_Barrier(MPI_COMM_WORLD);
+  test_reduce_scatter(accl, options, reduceFunction::SUM);
   MPI_Barrier(MPI_COMM_WORLD);
 
   for (int root = 0; root < size; ++root) {

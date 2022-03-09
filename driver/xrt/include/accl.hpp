@@ -138,6 +138,18 @@ public:
     return std::unique_ptr<Buffer<dtype>>(nullptr);
   }
 
+  std::string dump_exchange_memory();
+
+  std::string dump_rx_buffers(size_t nbufs);
+  std::string dump_rx_buffers() {
+    if (cclo->read(rx_buffers_adr) != rx_buffer_spares.size()) {
+      throw std::runtime_error("CCLO inconsistent");
+    }
+    return dump_rx_buffers(rx_buffer_spares.size());
+  }
+
+  std::string dump_communicator();
+
 private:
   CCLO *cclo{};
   // Supported types and corresponding arithmetic config
@@ -172,16 +184,6 @@ private:
   const std::vector<int> rxbufmem;
   const int networkmem;
 
-  std::string dump_exchange_memory();
-
-  std::string dump_rx_buffers(size_t nbufs);
-  std::string dump_rx_buffers() {
-    if (cclo->read(rx_buffers_adr) != rx_buffer_spares.size()) {
-      throw std::runtime_error("CCLO inconsistent");
-    }
-    return dump_rx_buffers(rx_buffer_spares.size());
-  }
-
   void initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
                        int nbufs, addr_t bufsize);
 
@@ -215,8 +217,6 @@ private:
   void set_max_segment_size(unsigned int value = 0);
 
   void configure_communicator(const std::vector<rank_t> &ranks, int local_rank);
-
-  std::string dump_communicator();
 };
 
 } // namespace ACCL
