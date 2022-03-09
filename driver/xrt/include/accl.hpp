@@ -32,35 +32,119 @@
 /** @file accl.hpp */
 
 namespace ACCL {
+
+/**
+ * Main ACCL class that talks to the CCLO on hardware or emulation/simulation.
+ *
+ */
 class ACCL {
 public:
 #ifdef ACCL_HARDWARE_SUPPORT
+  /**
+   * Construct a new ACCL object that talks to hardware.
+   *
+   * @param ranks         All ranks on the network
+   * @param local_rank    Rank of this process
+   * @param board_idx     Board id
+   * @param devicemem     Memory bank of device memory
+   * @param rxbufmem      Memory banks of rxbuf memory
+   * @param networkmem    Memory bank of network memory
+   * @param protocol      Network protocol to use
+   * @param nbufs         Amount of buffers to use
+   * @param bufsize       Size of buffers
+   * @param arith_config  Arithmetic configuration to use
+   */
   ACCL(const std::vector<rank_t> &ranks, int local_rank, int board_idx,
        int devicemem, std::vector<int> &rxbufmem, int networkmem,
        networkProtocol protocol = networkProtocol::TCP, int nbufs = 16,
        addr_t bufsize = 1024,
        const arithConfigMap &arith_config = DEFAULT_ARITH_CONFIG);
 #endif
-  // Simulation constructor
+  /**
+   * Construct a new ACCL object that talks to emulator/simulator.
+   *
+   * @param ranks         All ranks on the network
+   * @param local_rank    Rank of this process
+   * @param sim_sock      ZMQ socket of emulator/simulator.
+   * @param protocol      Network protocol to use
+   * @param nbufs         Amount of buffers to use
+   * @param bufsize       Size of buffers
+   * @param arith_config  Arithmetic configuration to use
+
+   */
   ACCL(const std::vector<rank_t> &ranks, int local_rank,
        const std::string &sim_sock,
        networkProtocol protocol = networkProtocol::TCP, int nbufs = 16,
        addr_t bufsize = 1024,
        const arithConfigMap &arith_config = DEFAULT_ARITH_CONFIG);
 
+  /**
+   * Destroy the ACCL object. Automatically deinitializes the CCLO.
+   *
+   */
   ~ACCL();
 
+  /**
+   * Deinitializes the CCLO.
+   *
+   */
   void deinit();
 
+  /**
+   * Get the return code of the last ACCL call.
+   *
+   * @return val_t The return code
+   */
   val_t get_retcode() { return this->cclo->read(RETCODE_OFFSET); }
 
+  /**
+   * Get the hardware id from the FPGA.
+   *
+   * @return val_t The hardware id
+   */
   val_t get_hwid() { return this->cclo->read(IDCODE_OFFSET); }
 
+  /**
+   * Set the timeout of ACCL calls.
+   *
+   * @param value      Timeout in miliseconds
+   * @param run_async  Run the ACCL call asynchronously.
+   * @param waitfor    ACCL call will wait for these operations before it will
+   *                   start.
+   * @return CCLO*     CCLO object that can be passed to waitfor;
+   *                   nullptr if run_async is false.
+   */
   CCLO *set_timeout(unsigned int value, bool run_async = false,
                     std::vector<CCLO *> waitfor = {});
 
+  /**
+   * Performs the nop operation on the FPGA.
+   *
+   * @param run_async  Run the ACCL call asynchronously.
+   * @param waitfor    ACCL call will wait for these operations before it will
+   *                   start.
+   * @return CCLO*     CCLO object that can be passed to waitfor;
+   *                   nullptr if run_async is false.
+   */
   CCLO *nop(bool run_async = false, std::vector<CCLO *> waitfor = {});
 
+  /**
+   * Performs the send operation on the FPGA.
+   *
+   * @param comm_id      Index of communicator to use.
+   * @param srcbuf       Buffer that contains the data to be send. Create a
+   *                     buffer using ACCL::create_buffer.
+   * @param count        Amount of elements in buffer to send.
+   * @param dst          Destination rank to send data to.
+   * @param tag          Tag of send operation.
+   * @param from_fpga    Set to true if the data is already on the FPGA.
+   * @param stream_flags Stream flags to use.
+   * @param run_async    Run the ACCL call asynchronously.
+   * @param waitfor      ACCL call will wait for these operations before it will
+   *                     start.
+   * @return CCLO*       CCLO object that can be passed to waitfor;
+   *                     nullptr if run_async is false.
+   */
   CCLO *send(unsigned int comm_id, BaseBuffer &srcbuf, unsigned int count,
              unsigned int dst, unsigned int tag = TAG_ANY,
              bool from_fpga = false,
