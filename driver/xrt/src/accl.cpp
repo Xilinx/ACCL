@@ -759,6 +759,7 @@ void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
 
   if (protocol == networkProtocol::TCP) {
     debug("Starting connections to communicator ranks");
+    init_connection();
   }
 
   debug("Accelerator ready!");

@@ -53,6 +53,8 @@ if (EXISTS $ENV{XILINX_XRT})
   target_link_libraries(accl PUBLIC xilinxopencl xrt_coreutil xrt_core)
   target_include_directories(accl PUBLIC $ENV{XILINX_XRT}/include)
   target_compile_definitions(accl PUBLIC ACCL_HARDWARE_SUPPORT)
+else (EXISTS $ENV{XILINX_XRT})
+  message(WARNING "Xilinx XRT not found, compiling without hardware support")
 endif (EXISTS $ENV{XILINX_XRT})
 
 if (ACCL_DEBUG)
