@@ -219,13 +219,13 @@ def test_reduce(cclo_inst, world_size, local_rank, root, count, func):
     if err_count == 0:
         print("Reduce succeeded")
 
-def test_reduce_scatter(cclo_inst, world_size, local_rank, root, count, func):
+def test_reduce_scatter(cclo_inst, world_size, local_rank, count, func):
     err_count = 0
     dt = [np.float32]#[np.float32, np.half]
     for op_dt, res_dt in itertools.product(dt, repeat=2):
         op_buf, _, res_buf = get_buffers(world_size*count, op_dt, op_dt, res_dt, cclo_inst)
         op_buf[:] = [1.0*i for i in range(op_buf.size)]
-        cclo_inst.reduce_scatter(0, op_buf, res_buf, count, root, func)
+        cclo_inst.reduce_scatter(0, op_buf, res_buf, count, func)
 
         full_reduce_result = world_size*op_buf.buf
         offset = (local_rank + world_size + 1) % world_size
@@ -235,13 +235,13 @@ def test_reduce_scatter(cclo_inst, world_size, local_rank, root, count, func):
     if err_count == 0:
         print("Reduce-scatter succeeded")
 
-def test_allreduce(cclo_inst, world_size, local_rank, root, count, func):
+def test_allreduce(cclo_inst, world_size, local_rank, count, func):
     err_count = 0
     dt = [np.float32]#[np.float32, np.half]
     for op_dt, res_dt in itertools.product(dt, repeat=2):
         op_buf, _, res_buf = get_buffers(count, op_dt, op_dt, res_dt, cclo_inst)
         op_buf[:] = [1.0*i for i in range(op_buf.size)]
-        cclo_inst.allreduce(0, op_buf, res_buf, count, root, func)
+        cclo_inst.allreduce(0, op_buf, res_buf, count, func)
         full_reduce_result = world_size*op_buf.buf
         if not np.isclose(res_buf.buf, full_reduce_result).all():
             err_count += 1
@@ -326,9 +326,9 @@ if __name__ == "__main__":
             if args.reduce:
                 test_reduce(cclo_inst, world_size, local_rank, i, args.count, args.reduce_func)
             if args.reduce_scatter:
-                test_reduce_scatter(cclo_inst, world_size, local_rank, i, args.count, args.reduce_func)
+                test_reduce_scatter(cclo_inst, world_size, local_rank, args.count, args.reduce_func)
             if args.allreduce:
-                test_allreduce(cclo_inst, world_size, local_rank, i, args.count, args.reduce_func)
+                test_allreduce(cclo_inst, world_size, local_rank, args.count, args.reduce_func)
 
     except KeyboardInterrupt:
         print("CTR^C")
