@@ -1,0 +1,10 @@
+*.log
+*.dat
+*.wdb
+*.mem
+xsim.dir
+cclo_sim
+CMakeCache.txt
+CMakeFiles/
+Makefile
+cmake_install.cmake

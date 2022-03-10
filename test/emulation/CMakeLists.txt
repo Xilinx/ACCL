@@ -32,10 +32,6 @@ set(DMA_MOVER_DIR ${CCLO_HLS_ROOT}/dma_mover)
 set(MB_FW_DIR ${ACCL_REPO_ROOT}/kernels/cclo/fw/sw_apps/ccl_offload_control/src)
 set(ZMQ_INTF_DIR ${ACCL_REPO_ROOT}/test/zmq)
 
-set(ENV{STACK_TYPE} "tcp")
-set(ENV{NRANKS} "1")
-set(ENV{START_PORT} 5500)
-
 find_package(MPI REQUIRED)
 find_package(jsoncpp REQUIRED)
 
@@ -58,11 +54,3 @@ target_include_directories(cclo_emu PUBLIC ${JSON_INC_PATH} ${MPI_CXX_INCLUDE_PA
 target_link_libraries(cclo_emu PUBLIC MPI::MPI_CXX zmq zmqpp pthread jsoncpp_lib)
 target_compile_definitions(cclo_emu PUBLIC MB_FW_EMULATION)
 target_compile_options(cclo_emu PRIVATE -Wno-attributes -fdiagnostics-color=always -g)
-
-add_custom_target(run
-    COMMAND mpirun -np $ENV{NRANKS} --tag-output ./cclo_emu $ENV{STACK_TYPE} $ENV{START_PORT} 2>/dev/null
-    DEPENDS cclo_emu
-    WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
-    USES_TERMINAL
-)
-
