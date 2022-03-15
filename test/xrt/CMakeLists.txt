@@ -22,7 +22,7 @@ set(CMAKE_BUILD_TYPE Debug)
 
 set(ACCL_DEBUG 1)
 
-include(${CMAKE_CURRENT_SOURCE_DIR}/../../driver/xrt/CMakeLists.txt)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../driver/xrt/CMakeLists.txt)
 
 find_package(MPI REQUIRED)
 add_executable(test test.cpp)
