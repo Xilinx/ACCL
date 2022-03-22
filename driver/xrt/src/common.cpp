@@ -67,8 +67,17 @@ void check_return_status(const Json::Value &status) {
 }
 
 #ifdef ACCL_DEBUG
+std::string get_rank() {
+  char *ompi_rank = std::getenv("OMPI_COMM_WORLD_RANK");
+  if (!ompi_rank) {
+    return "0";
+  } else {
+    return ompi_rank;
+  }
+}
+
 void reset_log() {
-  std::string rank = std::getenv("OMPI_COMM_WORLD_RANK");
+  std::string rank = get_rank();
   std::string filename = ACCL_SEND_LOG_FILE(rank);
   std::ofstream outfile;
   outfile.open(filename, std::ios::out);
@@ -76,7 +85,7 @@ void reset_log() {
 }
 
 void accl_send_log(const std::string &label, const std::string &message) {
-  std::string rank = std::getenv("OMPI_COMM_WORLD_RANK");
+  std::string rank = get_rank();
   std::string filename = ACCL_SEND_LOG_FILE(rank);
   std::ofstream outfile;
   outfile.open(filename, std::ios::out | std::ios_base::app);
