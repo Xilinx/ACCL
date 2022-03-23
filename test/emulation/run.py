@@ -22,8 +22,6 @@ import argparse
 import sys
 import signal
 
-from matplotlib import use
-
 cwd = Path(__file__).parent.resolve()
 executable = cwd / 'cclo_emu'
 makefile = cwd / 'Makefile'
