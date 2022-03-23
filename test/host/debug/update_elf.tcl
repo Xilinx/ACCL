@@ -17,11 +17,15 @@
 
 set host   [lindex $argv 0]
 set port   [lindex $argv 1]
-set target [lindex $argv 2]
-set elf    [lindex $argv 3]
+set elf    [lindex $argv 2]
 
 connect -xvc $host:$port
-targets $target
-rst -proc
-dow $elf
-con
+
+for {set i 3} {$i < $argc} {incr i} {
+    puts "Connecting to target [lindex $argv $i]"
+    targets [lindex $argv $i]
+    rst -proc
+    dow $elf
+    con
+}
+

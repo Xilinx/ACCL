@@ -561,7 +561,7 @@ class accl():
             #this must be a housekeeping call, no config needed
             arithcfg = 0
             compression_flags = ACCLCompressionFlags.NO_COMPRESSION
-            return arithcfg, compression_flags, addr_0, addr_1, addr_2
+            return arithcfg, compression_flags, addr_0.device_address, addr_1.device_address, addr_2.device_address
         # if no compressed data type specified, set same as uncompressed
         compression_flags = ACCLCompressionFlags.NO_COMPRESSION
         if compress_dtype is None:
@@ -607,7 +607,7 @@ class accl():
                     compression_flags |= ACCLCompressionFlags.RES_COMPRESSED
                 # set arithcfg
                 arithcfg = self.arith_config[(u_dt.name, c_dt.name)]
-        return arithcfg.addr, compression_flags, addr_0, addr_1, addr_2
+        return arithcfg.addr, compression_flags, addr_0.device_address, addr_1.device_address, addr_2.device_address
 
     def call_async(self, scenario=CCLOp.nop, count=1, comm=0, root_src_dst=0, function=0, tag=TAG_ANY, compress_dtype=None, stream_flags=ACCLStreamFlags.NO_STREAM, addr_0=None, addr_1=None, addr_2=None, waitfor=[]):
         assert self.config_rdy, "CCLO not configured, cannot call"
@@ -646,11 +646,7 @@ class accl():
         return self.cclo.read(IDCODE_OFFSET) 
 
     def set_timeout(self, value, run_async=False, waitfor=[]):
-        handle = self.call_async(scenario=CCLOp.config, count=value, function=CCLOCfgFunc.set_timeout, waitfor=waitfor)
-        if run_async:
-            return handle
-        else:
-            handle.wait()     
+        self.call_sync(scenario=CCLOp.config, count=value, function=CCLOCfgFunc.set_timeout)
 
     def init_connection(self, comm_id=0):
         print("Opening ports to communicator ranks")

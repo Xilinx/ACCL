@@ -1117,14 +1117,8 @@ void init(void) {
     check_hwid();
     //deactivate reset of all peripherals
     SET(GPIO_DATA_REG, GPIO_SWRST_MASK);
-    //enable access from host to exchange memory by removing reset of interface
+    //mark init done
     SET(GPIO_DATA_REG, GPIO_READY_MASK);
-    //poll CFGRDY until it is set (by the driver, following configuration)
-    volatile bool rdy = false;
-    do{
-        rdy = *((volatile bool *)(cfgmem+CFGRDY_OFFSET/4));
-    }
-    while(!rdy);
 }
 
 //reset the control module
