@@ -38,7 +38,7 @@ struct rank_t {
 class Communicator {
 private:
   CCLO *cclo;
-  const std::vector<rank_t> &_ranks;
+  const std::vector<rank_t> _ranks;
   int _rank;
   addr_t _communicators_addr;
 
