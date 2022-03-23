@@ -1,5 +1,5 @@
-/*******************************************************************************
-#  Copyright (C) 2021 Xilinx, Inc
+# /*******************************************************************************
+#  Copyright (C) 2022 Xilinx, Inc
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -15,5 +15,16 @@
 #
 # *******************************************************************************/
 
-#pragma once
+cmake_minimum_required(VERSION 3.9)
+project(xrt_test)
 
+set(CMAKE_BUILD_TYPE Debug)
+
+set(ACCL_DEBUG 1)
+
+include(${CMAKE_CURRENT_SOURCE_DIR}/../../driver/xrt/CMakeLists.txt)
+
+find_package(MPI REQUIRED)
+add_executable(test test.cpp)
+target_include_directories(test PUBLIC ${MPI_CXX_INCLUDE_PATH} ${ACCL_INCLUDE_PATH} cxxopts/include)
+target_link_libraries(test PUBLIC MPI::MPI_CXX accl)

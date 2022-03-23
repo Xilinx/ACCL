@@ -1,5 +1,5 @@
 # /*******************************************************************************
-#  Copyright (C) 2021 Xilinx, Inc
+#  Copyright (C) 2022 Xilinx, Inc
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 #  limitations under the License.
 #
 # *******************************************************************************/
+
 from __future__ import annotations
 
 import subprocess
@@ -176,7 +177,7 @@ def run_test(test: str, cfg: Config, reduce_func: int = None):
     if cfg.stacktype == 'tcp':
         args.append('--tcp')
     process = subprocess.Popen(
-        args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        args) #stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     try:
         process.wait(timeout=cfg.test_timeout)
     except subprocess.TimeoutExpired:
