@@ -58,6 +58,7 @@ class SimBuffer():
             SimBuffer.next_free_address += math.ceil(data.nbytes/4096)*4096
         else:
             self.physical_address = physical_address
+        self.device_address = self.physical_address
     
     # Devicemem read request  {"type": 2, "addr": <uint>, "len": <uint>}
     # Devicemem read response {"status": OK|ERR, "rdata": <array of uint>}
@@ -123,9 +124,9 @@ class SimDevice():
                                 "arithcfg": arithcfg,
                                 "compression_flags": compression_flags,
                                 "stream_flags": stream_flags,
-                                "addr_0": addr_0.physical_address,
-                                "addr_1": addr_1.physical_address,
-                                "addr_2": addr_2.physical_address})
+                                "addr_0": addr_0,
+                                "addr_1": addr_1,
+                                "addr_2": addr_2})
         ack = self.socket.recv_json()
         assert ack["status"] == 0, "ZMQ call error"
 
@@ -141,9 +142,9 @@ class SimDevice():
                                 "arithcfg": arithcfg,
                                 "compression_flags": compression_flags,
                                 "stream_flags": stream_flags,
-                                "addr_0": addr_0.physical_address,
-                                "addr_1": addr_1.physical_address,
-                                "addr_2": addr_2.physical_address})
+                                "addr_0": addr_0,
+                                "addr_1": addr_1,
+                                "addr_2": addr_2})
         return self
 
     def read(self, offset):
