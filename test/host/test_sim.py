@@ -228,8 +228,7 @@ def test_reduce_scatter(cclo_inst, world_size, local_rank, count, func):
         cclo_inst.reduce_scatter(0, op_buf, res_buf, count, func)
 
         full_reduce_result = world_size*op_buf.buf
-        offset = (local_rank + world_size + 1) % world_size
-        if not np.isclose(res_buf.buf[0:count], full_reduce_result[offset*count:(offset+1)*count]).all():
+        if not np.isclose(res_buf.buf[0:count], full_reduce_result[local_rank*count:(local_rank+1)*count]).all():
             err_count += 1
             print("Reduce-scatter failed on pair ", op_dt, res_dt)
     if err_count == 0:
