@@ -423,7 +423,7 @@ void test_reduce_scatter(ACCL::ACCL &accl, options_t &options,
 
   for (unsigned int i = 0; i < count; ++i) {
     int res = (*res_buf)[i];
-    int ref = (*op_buf)[i + ((rank + 1) % size) * count] * size;
+    int ref = (*op_buf)[i + rank * count] * size;
 
     if (res != ref) {
       std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
