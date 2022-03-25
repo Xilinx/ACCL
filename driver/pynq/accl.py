@@ -576,7 +576,7 @@ class accl():
                 arithcfg = self.arith_config[(dtypes.pop().name, compress_dtype.name)]
             else:
                 assert compress_dtype in dtypes, "Unsupported data type combination"
-                dtypes.discard(compress_dtype);
+                dtypes.discard(compress_dtype)
                 # with operand compression
                 c_dt = compress_dtype
                 u_dt = dtypes.pop()
