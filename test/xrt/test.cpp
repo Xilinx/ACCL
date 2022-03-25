@@ -292,7 +292,7 @@ void test_gather(ACCL::ACCL &accl, options_t &options, int root) {
   if (rank == root) {
     int errors = 0;
     for (unsigned int i = 0; i < count; ++i) {
-      float res = (*res_buf)[i];
+      float res = (*res_buf)[i + rank * count];
       float ref = (*op_buf)[i];
       if (res != ref) {
         std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
@@ -423,7 +423,7 @@ void test_reduce_scatter(ACCL::ACCL &accl, options_t &options,
 
   for (unsigned int i = 0; i < count; ++i) {
     int res = (*res_buf)[i];
-    int ref = (*op_buf)[i + ((rank + 1) % size) * count] * size;
+    int ref = (*op_buf)[i + rank * count] * size;
 
     if (res != ref) {
       std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
@@ -515,6 +515,8 @@ void start_test(options_t options) {
     test_bcast(accl, options, root);
     MPI_Barrier(MPI_COMM_WORLD);
     test_scatter(accl, options, root);
+    MPI_Barrier(MPI_COMM_WORLD);
+    test_gather(accl, options, root);
     MPI_Barrier(MPI_COMM_WORLD);
     test_reduce(accl, options, root, reduceFunction::SUM);
     MPI_Barrier(MPI_COMM_WORLD);

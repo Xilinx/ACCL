@@ -890,18 +890,19 @@ int reduce_scatter(
         0, 0, 0, 0
     );
 
+    curr_pos = prev_in_ring;
+
     //send local chunk to next in ring
     start_move(
         MOVE_STRIDE, MOVE_NONE, MOVE_IMMEDIATE, 
         compression & ~(RES_COMPRESSED), RES_REMOTE, 0,
         count, 
         comm_offset, arcfg_offset, 
-        0, 0, 0, count*world.local_rank, 0, 0,
+        0, 0, 0, count*curr_pos, 0, 0,
         0, 0, next_in_ring, TAG_ANY
     );
 
     //receive and reduce+forward from all other members of the communicator
-    curr_pos = world.local_rank;
     for(i=0; i<world.size-1; i++){
         rel_stride = count*((curr_pos == 0) ? (world.size-1) : -1);
 

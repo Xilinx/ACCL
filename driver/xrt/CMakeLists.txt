@@ -28,8 +28,9 @@ if (NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 endif()
 
-# Json
-find_package(jsoncpp REQUIRED)
+# Consider switching to PROJECT_IS_TOP_LEVEL from CMake 3.21
+# (https://cmake.org/cmake/help/latest/variable/PROJECT_IS_TOP_LEVEL.html)
+get_directory_property(HAS_PARENT PARENT_DIRECTORY)
 
 set(ACCL_SOURCE_PATH ${CMAKE_CURRENT_LIST_DIR}/src)
 
@@ -42,20 +43,60 @@ set(ACCL_SOURCES
 )
 
 set(ACCL_INCLUDE_PATH ${CMAKE_CURRENT_LIST_DIR}/include)
+if (HAS_PARENT)
+  set(ACCL_INCLUDE_PATH ${CMAKE_CURRENT_LIST_DIR}/include PARENT_SCOPE)
+endif (HAS_PARENT)
 
 add_library(accl SHARED ${ACCL_SOURCES})
 
-target_link_libraries(accl PUBLIC jsoncpp_lib zmq)
-get_target_property(JSON_INC_PATH jsoncpp_lib INTERFACE_INCLUDE_DIRECTORIES)
-target_include_directories(accl PUBLIC ${JSON_INC_PATH} ${ACCL_INCLUDE_PATH})
+# XRT
 if (EXISTS $ENV{XILINX_XRT})
+  set(ACCL_HARDWARE_SUPPORT TRUE)
+  if (HAS_PARENT)
+    set(ACCL_HARDWARE_SUPPORT TRUE PARENT_SCOPE)
+  endif (HAS_PARENT)
   target_link_directories(accl PUBLIC $ENV{XILINX_XRT}/lib)
   target_link_libraries(accl PUBLIC xilinxopencl xrt_coreutil xrt_core)
   target_include_directories(accl PUBLIC $ENV{XILINX_XRT}/include)
   target_compile_definitions(accl PUBLIC ACCL_HARDWARE_SUPPORT)
 else (EXISTS $ENV{XILINX_XRT})
+  set(ACCL_HARDWARE_SUPPORT FALSE)
+  if (HAS_PARENT)
+    set(ACCL_HARDWARE_SUPPORT FALSE PARENT_SCOPE)
+  endif (HAS_PARENT)
   message(WARNING "Xilinx XRT not found, compiling without hardware support")
 endif (EXISTS $ENV{XILINX_XRT})
+
+if (ACCL_OLD_ABI)
+  if (ACCL_HARDWARE_SUPPORT)
+    message(FATAL_ERROR "Can't compile with old ABI when using hardware "
+                        "support. Please unload Xilinx XRT to compile "
+                        "using the old ABI.")
+  endif (ACCL_HARDWARE_SUPPORT)
+
+  message(WARNING "Using old ABI")
+  target_compile_definitions(accl PUBLIC _GLIBCXX_USE_CXX11_ABI=0)
+endif (ACCL_OLD_ABI)
+
+target_link_libraries(accl PUBLIC zmq)
+target_include_directories(accl PUBLIC ${ACCL_INCLUDE_PATH})
+
+# Json
+if (ACCL_OLD_ABI)
+  set(JSON_PATH ${CMAKE_CURRENT_LIST_DIR}/../../jsoncpp)
+  target_sources(accl PRIVATE ${JSON_PATH}/src/lib_json/json_reader.cpp
+                              ${JSON_PATH}/src/lib_json/json_value.cpp
+                              ${JSON_PATH}/src/lib_json/json_writer.cpp
+                              )
+  target_include_directories(accl PRIVATE ${JSON_PATH}/src/lib_json)
+  target_include_directories(accl PUBLIC ${JSON_PATH}/include)
+else (ACCL_OLD_ABI)
+  find_package(jsoncpp REQUIRED)
+  target_link_libraries(accl PUBLIC jsoncpp_lib)
+  get_target_property(JSON_INC_PATH jsoncpp_lib INTERFACE_INCLUDE_DIRECTORIES)
+  target_include_directories(accl PUBLIC ${JSON_INC_PATH})
+endif (ACCL_OLD_ABI)
+
 
 if (ACCL_DEBUG)
   target_compile_definitions(accl PUBLIC ACCL_DEBUG)
@@ -70,8 +111,15 @@ set_target_properties(accl PROPERTIES
 
 # docs
 find_package(Doxygen)
+
+if (HAS_PARENT)
+  set(DOC_TARGET accl_docs)
+else (HAS_PARENT)
+  set(DOC_TARGET docs)
+endif (HAS_PARENT)
+
 if (DOXYGEN_FOUND)
-    add_custom_target(docs
+    add_custom_target(${DOC_TARGET}
         COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_LIST_DIR}/Doxyfile
         WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
         COMMENT "Generating API documentation with Doxygen"
