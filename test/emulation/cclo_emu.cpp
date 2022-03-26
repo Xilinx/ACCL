@@ -179,9 +179,9 @@ void arithmetic(Stream<stream_word > &op0, Stream<stream_word > &op1, Stream<str
             reduce_sum_int64_t(op_int, res);
             break;
         //half precision is problematic, no default support in C++
-        // case 4:
-        //     stream_add<512, half>(op_int, res_int);
-        //     break;
+        case 4:
+            reduce_sum_half(op_int, res);
+            break;
     }
     //load result stream
     cout << "Arith packet processed" << endl;

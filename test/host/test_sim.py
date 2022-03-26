@@ -42,7 +42,7 @@ def test_copy(cclo_inst, count, dt = [np.float32]):
     for op_dt, res_dt in itertools.product(dt, repeat=2):
         op_buf, _, res_buf = get_buffers(count, op_dt, op_dt, res_dt, cclo_inst)
         cclo_inst.copy(op_buf, res_buf, count)
-        if not np.isclose(op_buf.data, res_buf.data).all():
+        if not np.isclose(op_buf.data.astype(res_dt), res_buf.data).all():
             err_count += 1
             print("Copy failed on pair ", op_dt, res_dt)
         else:
@@ -55,7 +55,7 @@ def test_combine(cclo_inst, count, dt = [np.float32]):
     for op0_dt, op1_dt, res_dt in itertools.product(dt, repeat=3):
         op0_buf, op1_buf, res_buf = get_buffers(count, op0_dt, op1_dt, res_dt, cclo_inst)
         cclo_inst.combine(count, ACCLReduceFunctions.SUM, op0_buf, op1_buf, res_buf)
-        if not np.isclose(op0_buf.data+op1_buf.data, res_buf.data).all():
+        if not np.isclose(op0_buf.data+op1_buf.data, res_buf.data, atol=1e-02).all():
             err_count += 1
             print("Combine failed on pair ", op0_dt, op1_dt, res_dt)
         else:
@@ -78,7 +78,7 @@ def test_sendrecv(cclo_inst, world_size, local_rank, count, dt = [np.float32]):
         cclo_inst.send(0, res_buf, count, prev_rank, tag=1)
         print("Receiving on ",local_rank," from ",next_rank)
         cclo_inst.recv(0, res_buf, count, next_rank, tag=1)
-        if not np.isclose(op_buf.data, res_buf.data).all():
+        if not np.isclose(op_buf.data.astype(res_dt), res_buf.data).all():
             err_count += 1
             print("Send/recv failed on pair ", op_dt, res_dt)
         else:
@@ -86,7 +86,7 @@ def test_sendrecv(cclo_inst, world_size, local_rank, count, dt = [np.float32]):
     if err_count == 0:
         print("Send/recv succeeded")
 
-def test_sendrecv_plkernel(cclo_inst, world_size, local_rank, count, dt = [np.float32]):
+def test_sendrecv_strm(cclo_inst, world_size, local_rank, count, dt = [np.float32]):
     #NOTE: this requires loopback on the external stream interface
     err_count = 0
     for op_dt, res_dt in itertools.product(dt, repeat=2):
@@ -101,7 +101,7 @@ def test_sendrecv_plkernel(cclo_inst, world_size, local_rank, count, dt = [np.fl
         cclo_inst.send(0, res_buf, count, prev_rank, stream_flags=ACCLStreamFlags.OP0_STREAM, tag=5)
         print("Receiving in memory on ",local_rank," from stream on ",next_rank)
         cclo_inst.recv(0, res_buf, count, next_rank, tag=5)
-        if not np.isclose(op_buf.data, res_buf.data).all():
+        if not np.isclose(op_buf.data.astype(res_dt), res_buf.data).all():
             err_count += 1
             print("Send/recv failed on pair ", op_dt, res_dt)
         else:
@@ -224,8 +224,8 @@ def test_reduce_scatter(cclo_inst, world_size, local_rank, count, func, dt = [np
         op_buf[:] = [1.0*i for i in range(op_buf.size)]
         cclo_inst.reduce_scatter(0, op_buf, res_buf, count, func)
 
-        full_reduce_result = world_size*op_buf.buf
-        if not np.isclose(res_buf.buf[0:count], full_reduce_result[local_rank*count:(local_rank+1)*count]).all():
+        full_reduce_result = world_size*op_buf.data
+        if not np.isclose(res_buf.data[0:count], full_reduce_result[local_rank*count:(local_rank+1)*count]).all():
             err_count += 1
             print("Reduce-scatter failed on pair ", op_dt, res_dt)
     if err_count == 0:
@@ -345,7 +345,7 @@ if __name__ == "__main__":
                     test_sendrecv(cclo_inst, world_size, local_rank, args.count, dt=dt)
                     comm.barrier()
                 if args.sndrcv_strm:
-                    test_sendrecv_plkernel(cclo_inst, world_size, local_rank, args.count, dt=dt)
+                    test_sendrecv_strm(cclo_inst, world_size, local_rank, args.count, dt=dt)
                     comm.barrier()
                 if args.sndrcv_fanin:
                     test_sendrecv_fanin(cclo_inst, world_size, local_rank, args.count, dt=dt)

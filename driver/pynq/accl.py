@@ -289,7 +289,7 @@ class ACCLArithConfig():
 
 ACCL_DEFAULT_ARITH_CONFIG = {
     ('float16', 'float16'): ACCLArithConfig(2, 2, 0, 0, 0, 0, [4]),
-    ('float32', 'float16'): ACCLArithConfig(4, 2, 0, 1, 1, 1, [4]),
+    ('float32', 'float16'): ACCLArithConfig(4, 2, 0, 0, 1, 1, [4]),
     ('float32', 'float32'): ACCLArithConfig(4, 4, 0, 0, 0, 0, [0]),
     ('float64', 'float64'): ACCLArithConfig(8, 8, 0, 0, 0, 0, [1]),
     ('int32'  , 'int32'  ): ACCLArithConfig(4, 4, 0, 0, 0, 0, [2]),
