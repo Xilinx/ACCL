@@ -27,6 +27,8 @@
 #include "ap_int.h"
 #include <stdint.h>
 #include "reduce_sum.h"
+#include "fp_hp_stream_conv.h"
+#include "hp_fp_stream_conv.h"
 #include "eth_intf.h"
 #include "dummy_tcp_stack.h"
 #include "stream_segmenter.h"
@@ -190,34 +192,17 @@ void arithmetic(Stream<stream_word > &op0, Stream<stream_word > &op1, Stream<str
 void compression(Stream<stream_word> &op0, Stream<stream_word> &res){ 
     stream_word tmp_op0;
     stream_word tmp_res;
+    Stream<stream_word> op_int;
 
     tmp_op0 = op0.Pop();
     cout << "Running compression lane with TDEST=" << tmp_op0.dest << endl;
+    op_int.Push(tmp_op0);
     switch(tmp_op0.dest){
-        case 0:
-            res.Push(tmp_op0);
+        case 0://downcast
+            fp_hp_stream_conv(op_int, res);
             break;
-        case 1://downcast
-            for(int i=0; i<16; i++){
-                tmp_res.data(16*(i+1)-1,16*i) = tmp_op0.data(32*(i+1)-1,32*i+16);
-            }
-            tmp_op0 = op0.Pop();
-            for(int i=0; i<16; i++){
-                tmp_res.data(16*(i+16+1)-1,16*(i+16)) = tmp_op0.data(32*(i+1)-1,32*i+16);
-            }
-            res.Push(tmp_res);
-            break;
-        case 2://upcast
-            tmp_res.data = 0;
-            for(int i=0; i<16; i++){
-                tmp_res.data(32*(i+1)-1,32*i+16) = tmp_op0.data(16*(i+1)-1,16*i);
-            }
-            res.Push(tmp_res);
-            tmp_res.data = 0;
-            for(int i=0; i<16; i++){
-                tmp_res.data(32*(i+1)-1,32*i) = tmp_op0.data(16*(i+16+1)-1,16*(i+16));
-            }
-            res.Push(tmp_res);
+        case 1://upcast
+            hp_fp_stream_conv(op_int, res);
             break;
     }
 }

@@ -42,7 +42,7 @@ def test_copy(cclo_inst, count, dt = [np.float32]):
     for op_dt, res_dt in itertools.product(dt, repeat=2):
         op_buf, _, res_buf = get_buffers(count, op_dt, op_dt, res_dt, cclo_inst)
         cclo_inst.copy(op_buf, res_buf, count)
-        if not np.isclose(op_buf.data.astype(res_dt), res_buf.data).all():
+        if not np.isclose(op_buf.data.astype(res_dt), res_buf.data, atol=1e-02).all():
             err_count += 1
             print("Copy failed on pair ", op_dt, res_dt)
         else:
