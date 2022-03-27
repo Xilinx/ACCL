@@ -66,6 +66,8 @@ def test_combine(cclo_inst, count, dt = [np.float32]):
 def test_sendrecv(cclo_inst, world_size, local_rank, count, dt = [np.float32]):
     err_count = 0
     for op_dt, res_dt in itertools.product(dt, repeat=2):
+        if len(dt) > 1 and op_dt == res_dt:
+            continue
         op_buf, _, res_buf = get_buffers(count, op_dt, op_dt, res_dt, cclo_inst)
         # send to next rank; receive from previous rank; send back data to previous rank; receive from next rank; compare
         next_rank = (local_rank+1)%world_size
@@ -252,6 +254,7 @@ if __name__ == "__main__":
     parser.add_argument('--rxbuf_size', type=int,            default=1,     help='How many KB per RX buffer')
     parser.add_argument('--board_idx',  type=int,            default=0,     help='Index of Alveo board, if multiple present')
     parser.add_argument('--core_idx',   type=int,            default=0,     help='Index of CCLO core, if multiple present')
+    parser.add_argument('--multicore',  action='store_true', default=False, help='target multiple CCLOs on a single board')
     parser.add_argument('--xclbin',     type=str,            default="",    help='Path to xclbin, if present')
     parser.add_argument('--simulate',   action='store_true', default=False, help='enable simulation/emulation mode')
     parser.add_argument('--all',        action='store_true', default=False, help='Select all collectives')
@@ -311,22 +314,30 @@ if __name__ == "__main__":
     else:
         zmq_socket = None
         xclbin = args.xclbin
-    cclo_inst = accl(ranks, local_rank, bufsize=args.rxbuf_size, protocol=("TCP" if args.tcp else "UDP"), sim_sock=zmq_socket, xclbin=xclbin, board_idx=args.board_idx, core_idx=args.core_idx)
+    cclo_inst = accl(   ranks, 
+                        local_rank, 
+                        bufsize=args.rxbuf_size, 
+                        protocol=("TCP" if args.tcp else "UDP"), 
+                        sim_sock=zmq_socket, 
+                        xclbin=xclbin, 
+                        board_idx=args.board_idx, 
+                        core_idx=local_rank if args.multicore else args.core_idx
+                    )
     cclo_inst.set_timeout(10**8)
     #barrier here to make sure all the devices are configured before testing
     comm.barrier()
 
     types = [[np.float32]]
     if args.fp16:
-        types.append([np.float16])
+        types = [[np.float16]]
     if args.fp64:
-        types.append([np.float64])
+        types = [[np.float64]]
     if args.int32:
-        types.append([np.int32])
+        types = [[np.int32]]
     if args.int64:
-        types.append([np.int64])
+        types = [[np.int64]]
     if args.compression:
-        types.append([np.float32, np.float16])
+        types = [[np.float32, np.float16]]
 
     try:
         for i in range(args.nruns):
