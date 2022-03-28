@@ -173,7 +173,7 @@ def run_test(test: str, cfg: Config, reduce_func: int = None):
 
     print(f"Starting test {test_name}.")
     args = ['mpirun', '-np', f'{cfg.nranks}',
-            'python3', 'test_sim.py', '--simulate', f'--{test}']
+            'python3', 'test_sim.py', f'--{test}']
     if cfg.stacktype == 'tcp':
         args.append('--tcp')
     process = subprocess.Popen(

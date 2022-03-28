@@ -19,7 +19,10 @@ set host   [lindex $argv 0]
 set port   [lindex $argv 1]
 set elf    [lindex $argv 2]
 
+puts "Connecting to XVC server on $host:$port"
 connect -xvc $host:$port
+puts "Waiting for connection to be established"
+after 3000
 
 for {set i 3} {$i < $argc} {incr i} {
     puts "Connecting to target [lindex $argv $i]"
