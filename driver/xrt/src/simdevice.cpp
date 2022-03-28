@@ -64,6 +64,7 @@ void SimDevice::start(const Options &options) {
       (Json::Value::UInt64)options.addr_2->physical_address();
 
   Json::StreamWriterBuilder builder;
+  builder["indentation"] = ""; // minimize output
   const std::string message = Json::writeString(builder, request_json);
   accl_send_log("device start", message);
 
@@ -89,6 +90,7 @@ val_t SimDevice::read(addr_t offset) {
   request_json["type"] = 0;
   request_json["addr"] = (Json::Value::UInt64)offset;
   Json::StreamWriterBuilder builder;
+  builder["indentation"] = ""; // minimize output
   const std::string request = Json::writeString(builder, request_json);
   accl_send_log("device read", request);
   this->socket.send(zmq::const_buffer(request.c_str(), request.size()),
@@ -109,6 +111,7 @@ void SimDevice::write(addr_t offset, val_t val) {
   request_json["addr"] = (Json::Value::UInt64)offset;
   request_json["wdata"] = (Json::Value::UInt)val;
   Json::StreamWriterBuilder builder;
+  builder["indentation"] = ""; // minimize output
   const std::string request = Json::writeString(builder, request_json);
   accl_send_log("device write", request);
   this->socket.send(zmq::const_buffer(request.c_str(), request.size()),
