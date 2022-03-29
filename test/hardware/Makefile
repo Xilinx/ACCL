@@ -73,7 +73,7 @@ endif
 
 CONFIGFILE := config/link_config_$(BOARD)_$(MODE).ini
 CONFIG := --config $(CONFIGFILE)
-ifeq (vnx,$(MODE))
+ifeq (udp,$(MODE))
 	CMAC_IP_FOLDER = $(shell readlink -f ./$(CMACDIR)/cmac)
 	ifeq (u50,$(findstring u50, $(PLATFORM)))
 		HLS_IP_FOLDER  = $(shell readlink -f ./$(NETLAYERHLS)/synthesis_results_HMB)
