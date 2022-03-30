@@ -281,7 +281,7 @@ if __name__ == "__main__":
         args.combine = True
         args.sndrcv  = True
         args.sndrcv_strm = True
-        args.sndrcv_fanin = True
+        args.sndrcv_fanin = args.tcp
         args.bcast   = True
         args.scatter = True
         args.gather = True
@@ -346,7 +346,10 @@ if __name__ == "__main__":
                     test_sendrecv_strm(cclo_inst, world_size, local_rank, args.count, dt=dt)
                     comm.barrier()
                 if args.sndrcv_fanin:
-                    test_sendrecv_fanin(cclo_inst, world_size, local_rank, args.count, dt=dt)
+                    if args.tcp:
+                        test_sendrecv_fanin(cclo_inst, world_size, local_rank, args.count, dt=dt)
+                    else:
+                        print("Skipping fanin test, feature not available for UDP")
                     comm.barrier()
                 if args.bcast:
                     test_bcast(cclo_inst, local_rank, i, args.count, dt=dt)
