@@ -91,7 +91,7 @@ void test_copy(ACCL::ACCL &accl, options_t &options) {
 }
 
 void test_combine(ACCL::ACCL &accl, options_t &options) {
-  std::cout << "Start copy test..." << std::endl;
+  std::cout << "Start combine test..." << std::endl;
   unsigned int count = options.count;
   std::unique_ptr<float> host_op_buf1 = random_array(count);
   std::unique_ptr<float> host_op_buf2 = random_array(count);
@@ -491,7 +491,8 @@ void start_test(options_t options) {
 
   ACCL::ACCL accl(ranks, rank,
                   "tcp://localhost:" +
-                      std::to_string(options.start_port + rank));
+                      std::to_string(options.start_port + rank),
+                  networkProtocol::TCP, 16, options.rxbuf_size);
   accl.set_timeout(1e8);
 
   // barrier here to make sure all the devices are configured before testing
