@@ -20,16 +20,16 @@ import numpy as np
 import time
 sys.path.append('../../driver/pynq/')
 from accl import accl, ACCLReduceFunctions, ACCLStreamFlags
-from accl import SimBuffer
+import pynq
 import argparse
 import itertools
 import math
 from mpi4py import MPI
 
 def get_buffers(count, op0_dt, op1_dt, res_dt, accl_inst):
-    op0_buf = pynq.allocate((count,), dtype=op0_dt, target=accl_inst.cclo.devicemem)^M
-    op1_buf = pynq.allocate((count,), dtype=op1_dt, target=accl_inst.cclo.devicemem)^M
-    res_buf = pynq.allocate((count,), dtype=res_dt, target=accl_inst.cclo.devicemem)^M
+    op0_buf = pynq.allocate((count,), dtype=op0_dt, target=accl_inst.cclo.devicemem)
+    op1_buf = pynq.allocate((count,), dtype=op1_dt, target=accl_inst.cclo.devicemem)
+    res_buf = pynq.allocate((count,), dtype=res_dt, target=accl_inst.cclo.devicemem)
     op0_buf[:] = np.random.randn(count).astype(op0_dt)
     op1_buf[:] = np.random.randn(count).astype(op1_dt)
     return op0_buf, op1_buf, res_buf
@@ -250,8 +250,6 @@ if __name__ == "__main__":
     parser.add_argument('--count',      type=int,            default=16,    help='How many B per buffer')
     parser.add_argument('--rxbuf_size', type=int,            default=1,     help='How many KB per RX buffer')
     parser.add_argument('--board_idx',  type=int,            default=0,     help='Index of Alveo board, if multiple present')
-    parser.add_argument('--core_idx',   type=int,            default=0,     help='Index of CCLO core, if multiple present')
-    parser.add_argument('--multicore',  action='store_true', default=False, help='target multiple CCLOs on a single board')
     parser.add_argument('--xclbin',     type=str,            default="",    help='Path to xclbin, if present')
     parser.add_argument('--all',        action='store_true', default=False, help='Select all collectives')
     parser.add_argument('--nop',        action='store_true', default=False, help='Run nop test')
@@ -296,6 +294,8 @@ if __name__ == "__main__":
     world_size = comm.Get_size()
     local_rank = comm.Get_rank()
 
+    assert world_size == 3, "This test only applies to the triple-CCLO configuration on a single board"
+
     #set a random seed to make it reproducible
     np.random.seed(2021+local_rank)
 
@@ -304,14 +304,29 @@ if __name__ == "__main__":
         ranks.append({"ip": "127.0.0.1", "port": args.start_port+world_size+i, "session_id":i, "max_segment_size": args.rxbuf_size})
 
     #configure FPGA and CCLO cores with the default 16 RX buffers of size given by args.rxbuf_size
+    print(f"AlveoDevice connecting to board {args.board_idx} core {local_rank} xclbin {args.xclbin}")
+    local_alveo = pynq.Device.devices[args.board_idx]
+    #this will program the FPGA if not already; when running under MPI, program the board ahead of time
+    #with xbutil to avoid race conditions on the XCLBIN writes
+    ol = pynq.Overlay(args.xclbin, device=local_alveo)
+    #get handles to ACCL cores
+    cclo_ip = ol.__getattr__(f"ccl_offload_{local_rank}")
+    hostctrl_ip = ol.__getattr__(f"hostctrl_{local_rank}")
+    #create a memory config corresponding to each CCLO
+    #CCLOs are connected to HBM banks [0:5], [6:11], [12:17]
+    # for simplicity we use the first bank in the range for user buffers, 
+    # second bank for RX buffers, and third bank for theoretical TCP buffers
+    mems = [[ol.HBM0, ol.HBM1, ol.HBM2],
+            [ol.HBM6, ol.HBM7, ol.HBM8],
+            [ol.HBM12, ol.HBM13, ol.HBM14]]
     cclo_inst = accl(   ranks, 
                         local_rank, 
                         bufsize=args.rxbuf_size, 
-                        protocol=("TCP" if args.tcp else "UDP"), 
-                        sim_sock=None, 
-                        xclbin=args.xclbin, 
-                        board_idx=args.board_idx, 
-                        core_idx=local_rank if args.multicore else args.core_idx
+                        protocol="TCP", 
+                        overlay=ol, 
+                        cclo_ip=cclo_ip, 
+                        hostctrl_ip=hostctrl_ip,
+                        mem = mems[local_rank]
                     )
     cclo_inst.set_timeout(10**8)
     #barrier here to make sure all the devices are configured before testing

@@ -158,12 +158,10 @@ class SimDevice():
         assert ack["status"] == 0, "ZMQ call error"
 
 class AlveoDevice():
-    def __init__(self, xclbin, board_idx=0, core_idx=0, mem=None):
-        print(f"AlveoDevice connecting to board {board_idx} core {core_idx} xclbin {xclbin}")
-        local_alveo = pynq.Device.devices[board_idx]
-        self.ol = pynq.Overlay(xclbin, device=local_alveo)
-        self.cclo = self.ol.__getattr__(f"ccl_offload_{core_idx}")
-        self.hostctrl = self.ol.__getattr__(f"hostctrl_{core_idx}")
+    def __init__(self, overlay, cclo_ip, hostctrl_ip, mem=None):
+        self.ol = overlay
+        self.cclo = cclo_ip
+        self.hostctrl = hostctrl_ip
         self.mmio = self.cclo.mmio
         if mem is None:
             print("Best-effort attempt at identifying memories to use for RX buffers")
@@ -182,6 +180,11 @@ class AlveoDevice():
                 self.devicemem   = self.ol.HBM0
                 self.rxbufmem    = [self.ol.HBM0, self.ol.HBM1, self.ol.HBM2, self.ol.HBM3, self.ol.HBM4, self.ol.HBM5] 
                 self.networkmem  = self.ol.HBM6
+        else:
+            print("Applying user-provided memory config")
+            self.devicemem = mem[0]
+            self.rxbufmem = mem[1]
+            self.networkmem = mem[2]
         print("AlveoDevice connected")
 
     def read(self, offset):
@@ -336,8 +339,8 @@ class accl():
     """
     ACCL Python Driver
     """
-    def __init__(self, ranks, local_rank, xclbin=None, protocol="TCP", board_idx=0, nbufs=16, bufsize=1024, mem=None, arith_config=ACCL_DEFAULT_ARITH_CONFIG, sim_sock=None, core_idx=0):
-        assert xclbin is not None or sim_sock is not None, "Either simulation socket or xclbin must be provided"
+    def __init__(self, ranks, local_rank, protocol="TCP", nbufs=16, bufsize=1024, mem=None, overlay=None, cclo_ip=None, hostctrl_ip=None, arith_config=ACCL_DEFAULT_ARITH_CONFIG, sim_sock=None):
+        assert overlay is not None or sim_sock is not None, "Either simulation socket or FPGA overlay must be provided"
         self.cclo = None
         #define supported types and corresponding arithmetic config
         self.arith_config = {}
@@ -370,7 +373,8 @@ class accl():
         if self.sim_mode:
             self.cclo = SimDevice(sim_sock)
         else:
-            self.cclo = AlveoDevice(xclbin, board_idx=board_idx, core_idx=core_idx, mem=mem)
+            assert (overlay is not None) and (cclo_ip is not None) and (hostctrl_ip is not None)
+            self.cclo = AlveoDevice(overlay, cclo_ip, hostctrl_ip, mem=mem)
 
         print("CCLO HWID: {} at {}".format(hex(self.get_hwid()), hex(self.cclo.mmio.base_addr)))
         
