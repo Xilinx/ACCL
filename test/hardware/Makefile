@@ -74,7 +74,6 @@ endif
 CONFIGFILE := config/link_config_$(BOARD)_$(MODE).ini
 CONFIG := --config $(CONFIGFILE)
 ifeq (udp,$(MODE))
-	CMAC_IP_FOLDER = $(shell readlink -f ./$(CMACDIR)/cmac)
 	ifeq (u50,$(findstring u50, $(PLATFORM)))
 		HLS_IP_FOLDER  = $(shell readlink -f ./$(NETLAYERHLS)/synthesis_results_HMB)
 	endif
@@ -87,10 +86,9 @@ ifeq (udp,$(MODE))
 	ifeq (u280,$(findstring u280, $(PLATFORM)))
 		HLS_IP_FOLDER  = $(shell readlink -f ./$(NETLAYERHLS)/synthesis_results_HMB)
 	endif
-	CONFIG += --connectivity.nk cmac_$(ETH_IF):1:cmac_inst
-	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/$(VNX)/post_sys_link.tcl
+	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/$(VNX)/Ethernet/post_sys_link.tcl
 	NET_XO = $(CMAC_UDP_XO) $(UDP_XO)
-	CONFIG += --user_ip_repo_paths $(CMAC_IP_FOLDER)
+	OTHER_XO = $(LOOPBACK_XO)
 	CONFIG += --user_ip_repo_paths $(HLS_IP_FOLDER)
 else ifeq (tri,$(MODE))
 	ETH_IF := none
