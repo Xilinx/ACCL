@@ -27,6 +27,8 @@
 #include "ap_int.h"
 #include <stdint.h>
 #include "reduce_sum.h"
+#include "fp_hp_stream_conv.h"
+#include "hp_fp_stream_conv.h"
 #include "eth_intf.h"
 #include "dummy_tcp_stack.h"
 #include "stream_segmenter.h"
@@ -180,9 +182,9 @@ void arithmetic(Stream<stream_word > &op0, Stream<stream_word > &op1, Stream<str
             reduce_sum_int64_t(op_int, res);
             break;
         //half precision is problematic, no default support in C++
-        // case 4:
-        //     stream_add<512, half>(op_int, res_int);
-        //     break;
+        case 4:
+            reduce_sum_half(op_int, res);
+            break;
     }
     //load result stream
     logger("Arith packet processed", log_level::verbose);
@@ -191,50 +193,45 @@ void arithmetic(Stream<stream_word > &op0, Stream<stream_word > &op1, Stream<str
 void compression(Stream<stream_word> &op0, Stream<stream_word> &res){
     stream_word tmp_op0;
     stream_word tmp_res;
+    Stream<stream_word> op_int;
 
     tmp_op0 = op0.Pop();
     logger << log_level::verbose << "Running compression lane with TDEST=" << tmp_op0.dest << endl;
+    op_int.Push(tmp_op0);
     switch(tmp_op0.dest){
-        case 0:
-            res.Push(tmp_op0);
+        case 0://downcast
+            fp_hp_stream_conv(op_int, res);
             break;
-        case 1://downcast
-            for(int i=0; i<16; i++){
-                tmp_res.data(16*(i+1)-1,16*i) = tmp_op0.data(32*(i+1)-1,32*i+16);
-            }
-            tmp_op0 = op0.Pop();
-            for(int i=0; i<16; i++){
-                tmp_res.data(16*(i+16+1)-1,16*(i+16)) = tmp_op0.data(32*(i+1)-1,32*i+16);
-            }
-            res.Push(tmp_res);
-            break;
-        case 2://upcast
-            tmp_res.data = 0;
-            for(int i=0; i<16; i++){
-                tmp_res.data(32*(i+1)-1,32*i+16) = tmp_op0.data(16*(i+1)-1,16*i);
-            }
-            res.Push(tmp_res);
-            tmp_res.data = 0;
-            for(int i=0; i<16; i++){
-                tmp_res.data(32*(i+1)-1,32*i) = tmp_op0.data(16*(i+16+1)-1,16*(i+16));
-            }
-            res.Push(tmp_res);
+        case 1://upcast
+            hp_fp_stream_conv(op_int, res);
             break;
     }
 }
 
-//emulate an AXI Stream Switch with TDEST routing
+//emulate an AXI Stream Switch with TDEST routing and arbitrate on TLAST
+//NOTE: this implementation will block if the first transfer from a newly activated
+//slave hits a full master. In that scenario, the switch will block on all
+//inputs until the targeted master becomes not full. This differs from
+//a physical switch, which is able to operate other streams when one blocks
 template <unsigned int NSLAVES, unsigned int NMASTERS>
 void axis_switch( Stream<stream_word> s[NSLAVES], Stream<stream_word> m[NMASTERS]){
     stream_word word;
+    static int destination[NSLAVES];
+    static bool active[NSLAVES];
     for(int i=0; i<NSLAVES; i++){
+        //skip this slave if its destination is full
+        if(active[i] && m[destination[i]].IsFull()) continue;
         if(!s[i].IsEmpty()){
-            do{
-                word = s[i].Pop();
-                int d = min(NMASTERS-1, (unsigned int)word.dest);
-                m[d].Push(word);
-                logger << log_level::verbose << "Switch arbitrate: S" << i << " -> M" << d << "(" << (unsigned int)word.dest << ")" << endl;
-            } while(word.last == 0);
+            word = s[i].Pop();
+            if(!active[i]){
+                destination[i] = min(NMASTERS-1, (unsigned int)word.dest);
+                active[i] = true;
+            }
+            m[destination[i]].Push(word);
+            logger << log_level::verbose << "Switch arbitrate: S" << i << " -> M" << destination[i] << "(" << (unsigned int)word.dest << ")" << endl;
+            if(word.last != 0){
+                active[i] = false;
+            }
         }
     }
 }
@@ -272,24 +269,24 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsign
     Stream<ap_uint<32>, 32> host_cmd("host_cmd");
     Stream<ap_uint<32>, 32> host_sts("host_sts");
 
-    Stream<stream_word, 32> krnl_to_accl_data;
-    Stream<stream_word > accl_to_krnl_data;
+    Stream<stream_word, 32> krnl_to_accl_data("krnl_out");
+    Stream<stream_word > accl_to_krnl_data("krnl_in");
 
-    Stream<stream_word, 1024> eth_rx_data;
-    Stream<stream_word, 1024> eth_tx_data;
+    Stream<stream_word, 1024> eth_rx_data("eth_in");
+    Stream<stream_word, 1024> eth_tx_data("eth_out");
 
-    Stream<stream_word > arith_op0;
-    Stream<stream_word > arith_op1;
-    Stream<stream_word > arith_res;
+    Stream<stream_word > arith_op0("arith_op0");
+    Stream<stream_word > arith_op1("arith_op1");
+    Stream<stream_word > arith_res("arith_res");
 
-    Stream<stream_word > clane0_op;
-    Stream<stream_word > clane0_res;
+    Stream<stream_word > clane0_op("clane0_op");
+    Stream<stream_word > clane0_res("clane0_res");
 
-    Stream<stream_word > clane1_op;
-    Stream<stream_word > clane1_res;
+    Stream<stream_word > clane1_op("clane1_op");
+    Stream<stream_word > clane1_res("clane1_res");
 
-    Stream<stream_word > clane2_op;
-    Stream<stream_word > clane2_res;
+    Stream<stream_word > clane2_op("clane2_op");
+    Stream<stream_word > clane2_res("clane2_res");
 
     Stream<ap_uint<104>, 32> dma_write_cmd_int[2];
     Stream<ap_uint<104>, 32> dma_read_cmd_int[2];

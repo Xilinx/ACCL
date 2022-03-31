@@ -57,6 +57,7 @@ public:
     request_json["addr"] = (Json::Value::UInt64)this->_physical_address;
     request_json["len"] = (Json::Value::UInt64)this->_size;
     Json::StreamWriterBuilder builder;
+    builder["indentation"] = ""; // minimize output
     const std::string request = Json::writeString(builder, request_json);
     accl_send_log("sync from device", request);
     this->socket->send(zmq::const_buffer(request.c_str(), request.size()),
@@ -87,6 +88,7 @@ public:
     }
     request_json["wdata"] = array;
     Json::StreamWriterBuilder builder;
+    builder["indentation"] = ""; // minimize output
     const std::string request = Json::writeString(builder, request_json);
     accl_send_log("sync to device", request);
     this->socket->send(zmq::const_buffer(request.c_str(), request.size()),

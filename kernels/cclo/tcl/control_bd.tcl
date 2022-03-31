@@ -224,14 +224,6 @@ set axi_bram_ctrl_bypass [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_bram_
    CONFIG.DOUT_WIDTH {1} \
  ] $xlslice_encore_rstn
 
-  # Create instance: xlslice_init_done, and set properties
-  set xlslice_init_done [ create_bd_cell -type ip -vlnv xilinx.com:ip:xlslice:1.0 xlslice_init_done ]
-  set_property -dict [ list \
-   CONFIG.DIN_FROM {0} \
-   CONFIG.DIN_TO {0} \
-   CONFIG.DIN_WIDTH {3} \
- ] $xlslice_init_done
-
   # Create interface connections
   connect_bd_intf_net -intf_net S00_AXI_1 [get_bd_intf_pins S_AXI_MB] [get_bd_intf_pins axi_crossbar_1/S00_AXI]
   connect_bd_intf_net -intf_net S_AXI_1 [get_bd_intf_pins S_AXI_HOST] [get_bd_intf_pins axi_register_slice_0/S_AXI]
@@ -243,11 +235,10 @@ set axi_bram_ctrl_bypass [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_bram_
   connect_bd_intf_net [get_bd_intf_pins S_AXI_BYP] [get_bd_intf_pins axi_bram_ctrl_bypass/S_AXI]
   connect_bd_intf_net [get_bd_intf_pins axi_bram_ctrl_bypass/BRAM_PORTA] [get_bd_intf_pins axi_bram_ctrl_0_bram/BRAM_PORTB]
   # Create port connections
-  connect_bd_net -net ap_rst_n_1 [get_bd_pins ap_rst_n] [get_bd_pins axi_bram_ctrl_0/s_axi_aresetn] [get_bd_pins axi_bram_ctrl_bypass/s_axi_aresetn] [get_bd_pins axi_crossbar_0/aresetn] [get_bd_pins axi_crossbar_1/aresetn] [get_bd_pins axi_gpio_0/s_axi_aresetn]
-  connect_bd_net -net axi_gpio_0_gpio_io_o [get_bd_pins axi_gpio_0/gpio_io_o] [get_bd_pins xlslice_encore_rstn/Din] [get_bd_pins xlslice_init_done/Din]
+  connect_bd_net [get_bd_pins ap_rst_n] [get_bd_pins axi_bram_ctrl_0/s_axi_aresetn] [get_bd_pins axi_register_slice_0/aresetn] [get_bd_pins axi_bram_ctrl_bypass/s_axi_aresetn] [get_bd_pins axi_crossbar_0/aresetn] [get_bd_pins axi_crossbar_1/aresetn] [get_bd_pins axi_gpio_0/s_axi_aresetn]
+  connect_bd_net -net axi_gpio_0_gpio_io_o [get_bd_pins axi_gpio_0/gpio_io_o] [get_bd_pins xlslice_encore_rstn/Din]
   connect_bd_net -net s_axi_aclk_1 [get_bd_pins s_axi_aclk] [get_bd_pins axi_bram_ctrl_0/s_axi_aclk] [get_bd_pins axi_bram_ctrl_bypass/s_axi_aclk] [get_bd_pins axi_crossbar_0/aclk] [get_bd_pins axi_crossbar_1/aclk] [get_bd_pins axi_gpio_0/s_axi_aclk] [get_bd_pins axi_register_slice_0/aclk]
   connect_bd_net -net xlslice_encore_rstn_Dout [get_bd_pins encore_aresetn] [get_bd_pins xlslice_encore_rstn/Dout]
-  connect_bd_net -net xlslice_init_done [get_bd_pins axi_register_slice_0/aresetn] [get_bd_pins xlslice_init_done/Dout]
   connect_bd_net -net hwid [get_bd_pins xlconstant_hwid/dout] [get_bd_pins axi_gpio_0/gpio2_io_i]
 
   # Restore current instance

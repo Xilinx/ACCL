@@ -602,9 +602,6 @@ void instruction_decode(
         }
         prev_dm1_rd = dm1_rd;
     }
-    //get communicator if targeting a remote node
-    if(insn.res_is_remote && !dry_run){
-}
     //DM1 write channel corresponding to RES
     static datamover_instruction prev_dm1_wr;
     if(insn.res_opcode != MOVE_NONE){

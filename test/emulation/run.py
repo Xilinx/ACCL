@@ -98,9 +98,5 @@ if __name__ == '__main__':
     parser.add_argument('--no-build', action='store_true', default=False,
                         help="Don't build latest executable")
     args = parser.parse_args()
-    main(
-        args.nranks,
-        args.log_level,
-        args.start_port,
-        args.udp,
-        not args.no_build)
+    main(args.nranks, args.log_level, args.start_port, args.udp,
+         not args.no_build)
