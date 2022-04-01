@@ -51,12 +51,11 @@ void reduce_sum(STREAM<stream_word> & in0, STREAM<stream_word> & in1, STREAM<str
 #pragma HLS INTERFACE axis register both port=in1
 #pragma HLS INTERFACE axis register both port=out
 #pragma HLS INTERFACE ap_ctrl_none port=return
-
 	stream_word op0, op1, wword;
 	ap_uint<DATA_WIDTH> res;
 
 	do {
-#pragma HLS PIPELINE II=1
+#pragma HLS PIPELINE II=1 style=frp
 		op0 = STREAM_READ(in0);
 		op1 = STREAM_READ(in1);
 
