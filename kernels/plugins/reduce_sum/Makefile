@@ -19,11 +19,11 @@ TARGET=ip
 DEVICE=xcu250-figd2104-2L-e
 DTYPES=float half double int32_t int64_t
 DWIDTH=512
-REDUCE_IP = $(addsuffix .xo, $(addprefix reduce_sum_, $(DTYPES)))
+REDUCE_IP = reduce_sum.xo
 
 all: $(REDUCE_IP)
 
-reduce_sum_%.xo: build.tcl reduce_sum.cpp
-	vitis_hls $< -tclargs $(TARGET) $(DEVICE) $* $(DWIDTH)
+reduce_sum.xo: build.tcl reduce_sum.cpp
+	vitis_hls $< -tclargs $(TARGET) $(DEVICE)
 
 

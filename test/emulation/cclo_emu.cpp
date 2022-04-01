@@ -147,48 +147,6 @@ void dwc(Stream<ap_axiu<INW, 0, 0, DESTW> > &in, Stream<ap_axiu<OUTW, 0, 0, DEST
     }
 }
 
-void arithmetic(Stream<stream_word > &op0, Stream<stream_word > &op1, Stream<stream_word > &res){
-    Stream<ap_axiu<2*DATA_WIDTH,0,0,DEST_WIDTH> > op_int("arith_op");
-    stream_word tmp_op0;
-    stream_word tmp_op1;
-    ap_axiu<2*DATA_WIDTH,0,0,DEST_WIDTH> tmp_op;
-    stream_word tmp_res;
-
-    //load op stream
-    do {
-        tmp_op0 = op0.Pop();
-        tmp_op1 = op1.Pop();
-        tmp_op.data(511,0) = tmp_op0.data;
-        tmp_op.keep(63,0) = tmp_op0.keep;
-        tmp_op.data(1023,512) = tmp_op1.data;
-        tmp_op.keep(127,64) = tmp_op1.keep;
-        tmp_op.last = tmp_op0.last;
-        op_int.write(tmp_op);
-    } while(tmp_op0.last == 0);
-    cout << "Arith packet received" << endl;
-    //call arith
-    switch(tmp_op0.dest){
-        case 0:
-            reduce_sum_float(op_int, res);
-            break;
-        case 1:
-            reduce_sum_double(op_int, res);
-            break;
-        case 2:
-            reduce_sum_int32_t(op_int, res);
-            break;
-        case 3:
-            reduce_sum_int64_t(op_int, res);
-            break;
-        //half precision is problematic, no default support in C++
-        case 4:
-            reduce_sum_half(op_int, res);
-            break;
-    }
-    //load result stream
-    cout << "Arith packet processed" << endl;
-}
-
 void compression(Stream<stream_word> &op0, Stream<stream_word> &res){ 
     stream_word tmp_op0;
     stream_word tmp_res;
@@ -399,7 +357,7 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsign
     HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, clane2_res,                   switch_s[SWITCH_S_CLANE2], seg_cmd[12], seg_sts[12]);   //clane2 result
     HLSLIB_FREERUNNING_FUNCTION(axis_mux, accl_to_krnl_seg, switch_m[SWITCH_M_BYPASS], accl_to_krnl_data);
     //ARITH
-    HLSLIB_FREERUNNING_FUNCTION(arithmetic, arith_op0, arith_op1, arith_res);
+    HLSLIB_FREERUNNING_FUNCTION(reduce_sum, arith_op0, arith_op1, arith_res);
     //COMPRESS 0, 1, 2
     HLSLIB_FREERUNNING_FUNCTION(compression, clane0_op, clane0_res);
     HLSLIB_FREERUNNING_FUNCTION(compression, clane1_op, clane1_res);

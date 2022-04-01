@@ -19,17 +19,8 @@
 #include "ap_int.h"
 #include <stdint.h>
 
-#ifndef DATA_TYPE
-#define DATA_TYPE float
-#endif
 
-template<unsigned int data_width, unsigned int dest_width, typename T>
-void stream_add(STREAM<ap_axiu<2*data_width,0,0,dest_width> > & in, STREAM<ap_axiu<data_width,0,0,dest_width> > & out);
+// template<unsigned int data_width, unsigned int dest_width, typename T>
+// void stream_add(STREAM<ap_axiu<2*data_width,0,0,dest_width> > & in, STREAM<ap_axiu<data_width,0,0,dest_width> > & out);
 
-void reduce_sum_float(STREAM<ap_axiu<2*DATA_WIDTH,0,0,DEST_WIDTH> > & in, STREAM<stream_word> & out);
-void reduce_sum_int32_t(STREAM<ap_axiu<2*DATA_WIDTH,0,0,DEST_WIDTH> > & in, STREAM<stream_word> & out);
-void reduce_sum_double(STREAM<ap_axiu<2*DATA_WIDTH,0,0,DEST_WIDTH> > & in, STREAM<stream_word> & out);
-void reduce_sum_int64_t(STREAM<ap_axiu<2*DATA_WIDTH,0,0,DEST_WIDTH> > & in, STREAM<stream_word> & out);
-#ifdef REDUCE_HALF_PRECISION
-void reduce_sum_half(STREAM<ap_axiu<2*DATA_WIDTH,0,0,DEST_WIDTH> > & in, STREAM<stream_word> & out) ;
-#endif
+void reduce_sum(STREAM<stream_word> & in0, STREAM<stream_word> & in1, STREAM<stream_word> & out);

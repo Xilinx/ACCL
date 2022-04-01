@@ -17,10 +17,8 @@
 
 set command [lindex $argv 0]
 set device [lindex $argv 1]
-set dtype [lindex $argv 2]
-set dwidth [lindex $argv 3]
 
-set ipname reduce_sum_${dtype}
+set ipname reduce_sum
 
 set do_sim 0
 set do_syn 0
@@ -57,13 +55,12 @@ switch $command {
 
 open_project build_${ipname}
 
-add_files reduce_sum.cpp -cflags "-std=c++14 -DDATA_WIDTH=${dwidth} -DREDUCE_HALF_PRECISION -I[pwd]/ -I[pwd]/../../cclo/hls -DACCL_SYNTHESIS"
-add_files -tb tb.cpp -cflags "-std=c++14 -DDATA_WIDTH=${dwidth} -DREDUCE_HALF_PRECISION -I[pwd]/ -I[pwd]/../../cclo/hls -DACCL_SYNTHESIS"
+add_files reduce_sum.cpp -cflags "-std=c++14 -I[pwd]/ -I[pwd]/../../cclo/hls -DACCL_SYNTHESIS"
+add_files -tb tb.cpp -cflags "-std=c++14 -I[pwd]/ -I[pwd]/../../cclo/hls -DACCL_SYNTHESIS"
 
 set_top ${ipname}
 
 open_solution sol1
-config_rtl -module_prefix ${dtype}_${dwidth}_
 config_export -format xo -library ACCL -output [pwd]/${ipname}.xo
 
 if {$do_sim} {

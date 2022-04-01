@@ -43,7 +43,8 @@ open_bd_design {./ccl_offload_ex/ccl_offload_ex.srcs/sources_1/bd/ccl_offload_bd
 # remove some ports which we don't need (to be replaced by logic)
 catch { delete_bd_objs [get_bd_intf_ports m_axi_0] }
 catch { delete_bd_objs [get_bd_intf_ports m_axi_1] }
-catch { delete_bd_objs [get_bd_intf_ports m_axis_arith_op] }
+catch { delete_bd_objs [get_bd_intf_ports m_axis_arith_op0] }
+catch { delete_bd_objs [get_bd_intf_ports m_axis_arith_op1] }
 catch { delete_bd_objs [get_bd_intf_ports s_axis_arith_res] }
 catch { delete_bd_objs [get_bd_intf_ports s_axis_compression0] }
 catch { delete_bd_objs [get_bd_intf_ports s_axis_compression1] }
@@ -135,62 +136,12 @@ if { $en_extkrnl != 0 } {
 
 # connect arithmetic plugins
 if { $en_arith != 0 } {
-    create_bd_cell -type ip -vlnv xilinx.com:ACCL:reduce_sum_double:1.0 reduce_sum_double_0
-    create_bd_cell -type ip -vlnv xilinx.com:ACCL:reduce_sum_float:1.0 reduce_sum_float_0
-    create_bd_cell -type ip -vlnv xilinx.com:ACCL:reduce_sum_half:1.0 reduce_sum_half_0
-    create_bd_cell -type ip -vlnv xilinx.com:ACCL:reduce_sum_int32_t:1.0 reduce_sum_int32_t_0
-    create_bd_cell -type ip -vlnv xilinx.com:ACCL:reduce_sum_int64_t:1.0 reduce_sum_int64_t_0
-    create_bd_cell -type ip -vlnv xilinx.com:ip:axis_switch:1.1 axis_ic_arith_op
-    set_property -dict [list \
-        CONFIG.NUM_SI {1} \
-        CONFIG.NUM_MI {5} \
-    ] [get_bd_cells axis_ic_arith_op]
-
-    connect_bd_intf_net [get_bd_intf_pins axis_ic_arith_op/S00_AXIS] [get_bd_intf_pins cclo/m_axis_arith_op]
-    connect_bd_intf_net [get_bd_intf_pins axis_ic_arith_op/M00_AXIS] [get_bd_intf_pins reduce_sum_float_0/in_r]
-    connect_bd_intf_net [get_bd_intf_pins axis_ic_arith_op/M01_AXIS] [get_bd_intf_pins reduce_sum_double_0/in_r]
-    connect_bd_intf_net [get_bd_intf_pins axis_ic_arith_op/M02_AXIS] [get_bd_intf_pins reduce_sum_int32_t_0/in_r]
-    connect_bd_intf_net [get_bd_intf_pins axis_ic_arith_op/M03_AXIS] [get_bd_intf_pins reduce_sum_int64_t_0/in_r]
-    connect_bd_intf_net [get_bd_intf_pins axis_ic_arith_op/M04_AXIS] [get_bd_intf_pins reduce_sum_half_0/in_r]
-    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins axis_ic_arith_op/aclk]
-    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins axis_ic_arith_op/aresetn]
-    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins reduce_sum_float_0/ap_rst_n]
-    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins reduce_sum_double_0/ap_rst_n]
-    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins reduce_sum_int32_t_0/ap_rst_n]
-    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins reduce_sum_int64_t_0/ap_rst_n]
-    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins reduce_sum_half_0/ap_rst_n]
-    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins reduce_sum_int32_t_0/ap_clk]
-    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins reduce_sum_int64_t_0/ap_clk]
-    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins reduce_sum_float_0/ap_clk]
-    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins reduce_sum_double_0/ap_clk]
-    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins reduce_sum_half_0/ap_clk]
-
-    create_bd_cell -type ip -vlnv xilinx.com:ip:axis_switch:1.1 axis_ic_arith_res
-    set_property -dict [list \
-        CONFIG.NUM_SI {5} \
-        CONFIG.NUM_MI {1} \
-        CONFIG.HAS_TLAST.VALUE_SRC USER \
-        CONFIG.HAS_TLAST {1} \
-        CONFIG.ARB_ON_TLAST {1} \
-        CONFIG.ARB_ALGORITHM {3} \
-        CONFIG.ARB_ON_MAX_XFERS {0} \
-    ] [get_bd_cells axis_ic_arith_res]
-    connect_bd_intf_net [get_bd_intf_pins axis_ic_arith_res/M00_AXIS] [get_bd_intf_pins cclo/s_axis_arith_res]
-    connect_bd_intf_net [get_bd_intf_pins axis_ic_arith_res/S00_AXIS] [get_bd_intf_pins reduce_sum_float_0/out_r]
-    connect_bd_intf_net [get_bd_intf_pins axis_ic_arith_res/S01_AXIS] [get_bd_intf_pins reduce_sum_double_0/out_r]
-    connect_bd_intf_net [get_bd_intf_pins axis_ic_arith_res/S02_AXIS] [get_bd_intf_pins reduce_sum_int32_t_0/out_r]
-    connect_bd_intf_net [get_bd_intf_pins axis_ic_arith_res/S03_AXIS] [get_bd_intf_pins reduce_sum_int64_t_0/out_r]
-    connect_bd_intf_net [get_bd_intf_pins axis_ic_arith_res/S04_AXIS] [get_bd_intf_pins reduce_sum_half_0/out_r]
-    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins axis_ic_arith_res/aclk]
-    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins axis_ic_arith_res/aresetn]
-
-    group_bd_cells reduce_arith [get_bd_cells reduce_sum_double_0] \
-                                [get_bd_cells reduce_sum_int32_t_0] \
-                                [get_bd_cells reduce_sum_half_0] \
-                                [get_bd_cells reduce_sum_float_0] \
-                                [get_bd_cells reduce_sum_int64_t_0] \
-                                [get_bd_cells axis_ic_arith_res] \
-                                [get_bd_cells axis_ic_arith_op]
+    create_bd_cell -type ip -vlnv xilinx.com:ACCL:reduce_sum:1.0 reduce_sum
+    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins reduce_sum/ap_rst_n]
+    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins reduce_sum/ap_clk]
+    connect_bd_intf_net [get_bd_intf_pins cclo/m_axis_arith_op0] [get_bd_intf_pins reduce_sum/in0]
+    connect_bd_intf_net [get_bd_intf_pins cclo/m_axis_arith_op1] [get_bd_intf_pins reduce_sum/in1]
+    connect_bd_intf_net [get_bd_intf_pins reduce_sum/out_r] [get_bd_intf_pins cclo/s_axis_arith_res] 
 }
 
 # implement compression lanes
