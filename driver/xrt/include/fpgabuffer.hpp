@@ -20,29 +20,42 @@
 #ifdef ACCL_HARDWARE_SUPPORT
 #include "buffer.hpp"
 #include "common.hpp"
+#include <math.h>
 #include <xrt/xrt_bo.h>
 #include <xrt/xrt_device.h>
 
+#define ALIGNMENT 4096
+
+/** @file fpgabuffer.hpp */
+
 namespace ACCL {
 template <typename dtype> class FPGABuffer : public Buffer<dtype> {
-
 public:
-  FPGABuffer(dtype *buffer, size_t length, dataType type, xrt::bo bo_)
+  FPGABuffer(dtype *buffer, addr_t length, dataType type, xrt::bo bo_)
       : bo(bo), Buffer<dtype>(buffer, length, type, bo.address()) {}
-  FPGABuffer(dtype *buffer, size_t length, dataType type, xrt::device device,
+  FPGABuffer(dtype *buffer, addr_t length, dataType type, xrt::device &device,
              xrt::memory_group mem_grp)
-      : bo(device, buffer, length * sizeof(dtype), mem_grp), Buffer<dtype>(
-                                                                 buffer, length,
-                                                                 type,
-                                                                 bo.address()) {
-  }
+      : bo(device, get_aligned_buffer(buffer), length * sizeof(dtype), mem_grp),
+        Buffer<dtype>(buffer, length, type, bo.address()) {}
+  FPGABuffer(addr_t length, dataType type, xrt::device &device,
+             xrt::memory_group mem_grp)
+      : bo(device, length * sizeof(dtype), mem_grp), Buffer<dtype>(
+                                                         bo.map<dtype *>(),
+                                                         length, type,
+                                                         bo.address()) {}
 
   void sync_from_device() override {
+    if (!is_aligned) {
+      memcpy(aligned_buffer, unaligned_buffer, this.size());
+    }
     bo.sync(xclBOSyncDirection::XCL_BO_SYNC_BO_FROM_DEVICE);
   }
 
   void sync_to_device() override {
     bo.sync(xclBOSyncDirection::XCL_BO_SYNC_BO_TO_DEVICE);
+    if (!is_aligned) {
+      memcpy(unaligned_buffer, aligned_buffer, this.size());
+    }
   }
 
   void free_buffer() override { return; }
@@ -55,7 +68,25 @@ public:
 
 private:
   xrt::bo bo;
+  bool is_aligned;
+  dtype *aligned_buffer;
+  dtype *unaligned_buffer;
+
+  dtype *get_aligned_buffer(dtype *host_buffer, size_t length) {
+    if ((reinterpret_cast<uintptr_t>(host_buffer) % ALIGNMENT) != 0) {
+      size_t aligned_size =
+          ((size_t)ceil(length * sizeof(dtype) / (double)ALIGNMENT)) *
+          ALIGNMENT;
+      is_aligned = false;
+      aligned_buffer = std::aligned_alloc(ALIGNMENT, aligned_size);
+      unaligned_buffer = host_buffer;
+      return aligned_buffer;
+    }
+
+    is_aligned = true;
+    return host_buffer;
+  }
 };
 } // namespace ACCL
 
-#endif
+#endif // ACCL_HARDWARE_SUPPORT

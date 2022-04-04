@@ -34,6 +34,9 @@ struct options_t {
   unsigned int count;
   unsigned int nruns;
   bool debug;
+#ifdef ACCL_HARDWARE_SUPPORT
+  bool hardware;
+#endif
 };
 
 void test_debug(std::string message, options_t &options) {
@@ -48,25 +51,28 @@ std::string prepend_process() {
   return "[process " + std::to_string(rank) + "] ";
 }
 
-static std::unique_ptr<float> random_array(size_t count) {
+static void random_array(float *data, size_t count) {
   static std::uniform_real_distribution<float> distribution(-1000, 1000);
   static std::mt19937 engine;
   static auto generator = std::bind(distribution, engine);
-  std::unique_ptr<float> data(new float[count]);
   for (size_t i = 0; i < count; ++i) {
-    data.get()[i] = generator();
+    data[i] = generator();
   }
+}
 
+std::unique_ptr<float> random_array(size_t count) {
+  std::unique_ptr<float> data(new float[count]);
+  random_array(data.get(), count);
   return data;
 }
 
 void test_copy(ACCL::ACCL &accl, options_t &options) {
   std::cout << "Start copy test..." << std::endl;
   unsigned int count = options.count;
-  std::unique_ptr<float> host_op_buf = random_array(count);
-  std::unique_ptr<float> res_op_buf(new float[count]);
-  auto op_buf = accl.create_buffer(host_op_buf.get(), count, dataType::float32);
-  auto res_buf = accl.create_buffer(res_op_buf.get(), count, dataType::float32);
+  auto op_buf = accl.create_buffer<float>(count, dataType::float32);
+  auto res_buf = accl.create_buffer<float>(count, dataType::float32);
+  random_array(op_buf->buffer(), count);
+
   (*op_buf).sync_to_device();
   (*res_buf).sync_to_device();
   accl.copy(*op_buf, *res_buf, count);
@@ -93,14 +99,11 @@ void test_copy(ACCL::ACCL &accl, options_t &options) {
 void test_combine(ACCL::ACCL &accl, options_t &options) {
   std::cout << "Start copy test..." << std::endl;
   unsigned int count = options.count;
-  std::unique_ptr<float> host_op_buf1 = random_array(count);
-  std::unique_ptr<float> host_op_buf2 = random_array(count);
-  std::unique_ptr<float> res_op_buf(new float[count]);
-  auto op_buf1 =
-      accl.create_buffer(host_op_buf1.get(), count, dataType::float32);
-  auto op_buf2 =
-      accl.create_buffer(host_op_buf2.get(), count, dataType::float32);
-  auto res_buf = accl.create_buffer(res_op_buf.get(), count, dataType::float32);
+  auto op_buf1 = accl.create_buffer<float>(count, dataType::float32);
+  auto op_buf2 = accl.create_buffer<float>(count, dataType::float32);
+  auto res_buf = accl.create_buffer<float>(count, dataType::float32);
+  random_array(op_buf1->buffer(), count);
+  random_array(op_buf2->buffer(), count);
   (*op_buf1).sync_to_device();
   (*op_buf2).sync_to_device();
   (*res_buf).sync_to_device();
@@ -128,10 +131,9 @@ void test_combine(ACCL::ACCL &accl, options_t &options) {
 void test_sendrcv(ACCL::ACCL &accl, options_t &options) {
   std::cout << "Start send recv test..." << std::endl;
   unsigned int count = options.count;
-  std::unique_ptr<float> host_op_buf = random_array(count);
-  std::unique_ptr<float> res_op_buf(new float[count]);
-  auto op_buf = accl.create_buffer(host_op_buf.get(), count, dataType::float32);
-  auto res_buf = accl.create_buffer(res_op_buf.get(), count, dataType::float32);
+  auto op_buf = accl.create_buffer<float>(count, dataType::float32);
+  auto res_buf = accl.create_buffer<float>(count, dataType::float32);
+  random_array(op_buf->buffer(), count);
   int next_rank = (rank + 1) % size;
   int prev_rank = (rank + size - 1) % size;
 
@@ -183,10 +185,9 @@ void test_bcast(ACCL::ACCL &accl, options_t &options, int root) {
   std::cout << "Start bcast test with root " + std::to_string(root) + " ..."
             << std::endl;
   unsigned int count = options.count;
-  std::unique_ptr<float> host_op_buf = random_array(count);
-  std::unique_ptr<float> res_op_buf(new float[count]);
-  auto op_buf = accl.create_buffer(host_op_buf.get(), count, dataType::float32);
-  auto res_buf = accl.create_buffer(res_op_buf.get(), count, dataType::float32);
+  auto op_buf = accl.create_buffer<float>(count, dataType::float32);
+  auto res_buf = accl.create_buffer<float>(count, dataType::float32);
+  random_array(op_buf->buffer(), count);
 
   test_debug("Syncing buffers...", options);
   (*op_buf).sync_to_device();
@@ -229,11 +230,9 @@ void test_scatter(ACCL::ACCL &accl, options_t &options, int root) {
   std::cout << "Start scatter test with root " + std::to_string(root) + " ..."
             << std::endl;
   unsigned int count = options.count;
-  std::unique_ptr<float> host_op_buf = random_array(count * size);
-  std::unique_ptr<float> res_op_buf(new float[count]);
-  auto op_buf =
-      accl.create_buffer(host_op_buf.get(), count * size, dataType::float32);
-  auto res_buf = accl.create_buffer(res_op_buf.get(), count, dataType::float32);
+  auto op_buf = accl.create_buffer<float>(count * size, dataType::float32);
+  auto res_buf = accl.create_buffer<float>(count, dataType::float32);
+  random_array(op_buf->buffer(), count * size);
 
   test_debug("Syncing buffers...", options);
   (*op_buf).sync_to_device();
@@ -269,12 +268,9 @@ void test_gather(ACCL::ACCL &accl, options_t &options, int root) {
   std::unique_ptr<float> host_op_buf = random_array(count * size);
   auto op_buf = accl.create_buffer(host_op_buf.get() + count * rank, count,
                                    dataType::float32);
-  std::unique_ptr<float> res_op_buf;
   std::unique_ptr<ACCL::Buffer<float>> res_buf;
   if (rank == root) {
-    res_op_buf = std::unique_ptr<float>(new float[count * size]);
-    res_buf =
-        accl.create_buffer(res_op_buf.get(), count * size, dataType::float32);
+    res_buf = accl.create_buffer<float>(count * size, dataType::float32);
   } else {
     res_buf = std::unique_ptr<ACCL::Buffer<float>>(nullptr);
   }
@@ -318,11 +314,7 @@ void test_allgather(ACCL::ACCL &accl, options_t &options) {
   std::unique_ptr<float> host_op_buf = random_array(count * size);
   auto op_buf = accl.create_buffer(host_op_buf.get() + count * rank, count,
                                    dataType::float32);
-  std::unique_ptr<float> res_op_buf =
-      std::unique_ptr<float>(new float[count * size]);
-  std::unique_ptr<ACCL::Buffer<float>> res_buf =
-      accl.create_buffer(res_op_buf.get(), count * size, dataType::float32);
-  ;
+  auto res_buf = accl.create_buffer<float>(count * size, dataType::float32);
 
   test_debug("Syncing buffers...", options);
   (*op_buf).sync_to_device();
@@ -358,10 +350,9 @@ void test_reduce(ACCL::ACCL &accl, options_t &options, int root,
                    std::to_string(static_cast<int>(function)) + "..."
             << std::endl;
   unsigned int count = options.count;
-  std::unique_ptr<float> host_op_buf = random_array(count);
-  std::unique_ptr<float> res_op_buf(new float[count]);
-  auto op_buf = accl.create_buffer(host_op_buf.get(), count, dataType::float32);
-  auto res_buf = accl.create_buffer(res_op_buf.get(), count, dataType::float32);
+  auto op_buf = accl.create_buffer<float>(count, dataType::float32);
+  auto res_buf = accl.create_buffer<float>(count, dataType::float32);
+  random_array(op_buf->buffer(), count);
 
   test_debug("Syncing buffers...", options);
   (*op_buf).sync_to_device();
@@ -401,11 +392,9 @@ void test_reduce_scatter(ACCL::ACCL &accl, options_t &options,
                    std::to_string(static_cast<int>(function)) + "..."
             << std::endl;
   unsigned int count = options.count;
-  std::unique_ptr<float> host_op_buf = random_array(count * size);
-  std::unique_ptr<float> res_op_buf(new float[count]);
-  auto op_buf =
-      accl.create_buffer(host_op_buf.get(), count * size, dataType::float32);
-  auto res_buf = accl.create_buffer(res_op_buf.get(), count, dataType::float32);
+  auto op_buf = accl.create_buffer<float>(count * size, dataType::float32);
+  auto res_buf = accl.create_buffer<float>(count, dataType::float32);
+  random_array(op_buf->buffer(), count * size);
 
   test_debug("Syncing buffers...", options);
   (*op_buf).sync_to_device();
@@ -447,10 +436,9 @@ void test_allreduce(ACCL::ACCL &accl, options_t &options,
                    std::to_string(static_cast<int>(function)) + "..."
             << std::endl;
   unsigned int count = options.count;
-  std::unique_ptr<float> host_op_buf = random_array(count);
-  std::unique_ptr<float> res_op_buf(new float[count]);
-  auto op_buf = accl.create_buffer(host_op_buf.get(), count, dataType::float32);
-  auto res_buf = accl.create_buffer(res_op_buf.get(), count, dataType::float32);
+  auto op_buf = accl.create_buffer<float>(count, dataType::float32);
+  auto res_buf = accl.create_buffer<float>(count, dataType::float32);
+  random_array(op_buf->buffer(), count);
 
   test_debug("Syncing buffers...", options);
   (*op_buf).sync_to_device();
@@ -532,8 +520,12 @@ options_t parse_options(int argc, char *argv[]) {
       "c,count", "how many bytes per buffer",
       cxxopts::value<unsigned int>()->default_value("16"))(
       "rxbuf-size", "How many KB per RX buffer",
-      cxxopts::value<unsigned int>()->default_value("1"))(
-      "d,debug", "enable debug mode")("h,help", "Print usage");
+      cxxopts::value<unsigned int>()->default_value("1"))("d,debug",
+                                                          "enable debug mode")
+#ifdef ACCL_HARDWARE_SUPPORT
+      ("h,hardware", "enable hardware mode")
+#endif
+          ("h,help", "Print usage");
   cxxopts::ParseResult result;
   try {
     result = options.parse(argc, argv);
@@ -561,7 +553,9 @@ options_t parse_options(int argc, char *argv[]) {
       result["rxbuf-size"].as<unsigned int>() * 1024; // convert to bytes
   opts.nruns = result["nruns"].as<unsigned int>();
   opts.debug = result.count("debug") > 0;
-
+#ifdef ACCL_HARDWARE_SUPPORT
+  opts.hardware = result.count("hardware") > 0;
+#endif
   return opts;
 }
 

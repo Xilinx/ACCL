@@ -118,7 +118,7 @@ public:
   Buffer(dtype *buffer, size_t length, dataType type, addr_t physical_address)
       : BaseBuffer((void *)buffer, length * sizeof(dtype), type,
                    physical_address),
-        buffer(buffer), _length(length){};
+        _buffer(buffer), _length(length){};
 
   /**
    * Get the length of the host buffer.
@@ -127,12 +127,14 @@ public:
    */
   size_t length() const { return _length; }
 
-  dtype operator[](size_t i) { return this->buffer[i]; }
+  dtype *buffer() const { return _buffer; }
 
-  dtype &operator[](size_t i) const { return this->buffer[i]; }
+  dtype operator[](size_t i) { return this->_buffer[i]; }
+
+  dtype &operator[](size_t i) const { return this->_buffer[i]; }
 
 protected:
-  dtype *const buffer;
+  dtype *const _buffer;
   const size_t _length;
 };
 } // namespace ACCL

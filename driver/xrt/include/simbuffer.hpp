@@ -31,6 +31,7 @@ extern addr_t next_free_address;
 template <typename dtype> class SimBuffer : public Buffer<dtype> {
 private:
   zmq::socket_t *const socket;
+  bool own_buffer{}; // Initialize to false
 
   addr_t get_next_free_address(size_t size) {
     addr_t address = next_free_address;
@@ -42,6 +43,11 @@ private:
     return address;
   }
 
+  dtype *create_internal_buffer(size_t length) {
+    own_buffer = true;
+    return new dtype[length];
+  }
+
 public:
   SimBuffer(dtype *buffer, size_t length, dataType type,
             zmq::socket_t *const socket, const addr_t physical_address)
@@ -51,6 +57,17 @@ public:
             zmq::socket_t *const socket)
       : SimBuffer(buffer, length, type, socket,
                   this->get_next_free_address(length * sizeof(dtype))) {}
+
+  SimBuffer(size_t length, dataType type,
+            zmq::socket_t *const socket)
+      : SimBuffer(create_internal_buffer(length), length, type, socket) {}
+
+  ~SimBuffer() {
+    if (own_buffer) {
+      delete this->_buffer;
+    }
+  }
+
   void sync_from_device() override {
     Json::Value request_json;
     request_json["type"] = 2;
@@ -104,7 +121,7 @@ public:
 
   std::unique_ptr<BaseBuffer> slice(size_t start, size_t end) override {
     return std::unique_ptr<BaseBuffer>(
-        new SimBuffer(&this->buffer[start], end - start, this->_type,
+        new SimBuffer(&this->_buffer[start], end - start, this->_type,
                       this->socket, this->_physical_address + start));
   }
 };

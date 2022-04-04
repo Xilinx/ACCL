@@ -17,24 +17,26 @@
 *******************************************************************************/
 
 #include "accl.hpp"
-#include "common.hpp"
 #include "dummybuffer.hpp"
-#include "simbuffer.hpp"
-#include "simdevice.hpp"
 #include <cmath>
 #include <jsoncpp/json/json.h>
 #include <set>
 
+// 64 MB
+#define NETWORK_BUF_SIZE (64 << 20)
+
 namespace ACCL {
 #ifdef ACCL_HARDWARE_SUPPORT
-ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank, int board_idx,
-           int devicemem, std::vector<int> &rxbufmem, int networkmem,
+ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
+           xrt::device &device, xrt::kernel &cclo_ip, xrt::kernel &hostctrl_ip,
+           int devicemem, const std::vector<int> &rxbufmem, int networkmem,
            networkProtocol protocol, int nbufs, addr_t bufsize,
            const arithConfigMap &arith_config)
-    : protocol(protocol), sim_mode(false), sim_sock(""), devicemem(devicemem),
-      rxbufmem(rxbufmem), networkmem(networkmem), arith_config(arith_config) {
-  // TODO: Create hardware constructor.
-  throw std::logic_error("Hardware constructor currently not supported");
+    : device(&device), protocol(protocol), sim_mode(false), sim_sock(""),
+      devicemem(devicemem), rxbufmem(rxbufmem), networkmem(networkmem),
+      arith_config(arith_config) {
+  cclo = new FPGADevice(cclo_ip, hostctrl_ip);
+  initialize_accl(ranks, local_rank, nbufs, bufsize);
 }
 #endif
 
@@ -745,7 +747,10 @@ void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
   case networkProtocol::TCP:
 #ifdef ACCL_HARDWARE_SUPPORT
     if (!sim_mode) {
-      throw new std::runtime_error("TODO: Allocate buffers.");
+      tx_buf_network = new FPGABuffer<int8_t>(NETWORK_BUF_SIZE, dataType::int8,
+                                              *device, networkmem);
+      rx_buf_network = new FPGABuffer<int8_t>(NETWORK_BUF_SIZE, dataType::int8,
+                                              *device, networkmem);
       tx_buf_network->sync_to_device();
       rx_buf_network->sync_to_device();
     }
@@ -791,7 +796,8 @@ void ACCL::setup_rx_buffers(size_t nbufs, addr_t bufsize,
     }
 #ifdef ACCL_HARDWARE_SUPPORT
     else {
-      std::runtime_error("TODO: allocate hw buffer.");
+      buf = new FPGABuffer<int8_t>(bufsize, dataType::int8, *device,
+                                   devicemem[i % devicemem.size()]);
     }
 #endif
 
@@ -825,7 +831,8 @@ void ACCL::setup_rx_buffers(size_t nbufs, addr_t bufsize,
   }
 #ifdef ACCL_HARDWARE_SUPPORT
   else {
-    std::runtime_error("TODO: allocate hw buffer.");
+    utility_spare =
+        new FPGABuffer<int8_t>(bufsize, dataType::int8, *device, devicemem[0]);
   }
 #endif
 }

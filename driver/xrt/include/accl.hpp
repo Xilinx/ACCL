@@ -23,6 +23,8 @@
 #include "cclo.hpp"
 #include "communicator.hpp"
 #include "constants.hpp"
+#include "fpgabuffer.hpp"
+#include "fpgadevice.hpp"
 #include "simbuffer.hpp"
 #include "simdevice.hpp"
 #include <stdexcept>
@@ -54,8 +56,9 @@ public:
    * @param bufsize       Size of buffers
    * @param arith_config  Arithmetic configuration to use
    */
-  ACCL(const std::vector<rank_t> &ranks, int local_rank, int board_idx,
-       int devicemem, std::vector<int> &rxbufmem, int networkmem,
+  ACCL(const std::vector<rank_t> &ranks, int local_rank, xrt::device &device,
+       xrt::kernel &cclo_ip, xrt::kernel &hostctrl_ip, int devicemem,
+       const std::vector<int> &rxbufmem, int networkmem,
        networkProtocol protocol = networkProtocol::TCP, int nbufs = 16,
        addr_t bufsize = 1024,
        const arithConfigMap &arith_config = DEFAULT_ARITH_CONFIG);
@@ -208,7 +211,8 @@ public:
 
   template <typename dtype>
   std::unique_ptr<Buffer<dtype>> create_buffer(dtype *host_buffer, size_t size,
-                                               dataType type) {
+                                               dataType type,
+                                               unsigned mem_grp = 0) {
     if (sim_mode) {
       return std::unique_ptr<Buffer<dtype>>(
           new SimBuffer<dtype>(host_buffer, size, type,
@@ -216,7 +220,24 @@ public:
     }
 #ifdef ACCL_HARDWARE_SUPPORT
     else {
-      throw std::runtime_error("TODO: create hardware buffer");
+      return std::unique_ptr<Buffer<dtype>>(new FPGABuffer<dtype>(
+          host_buffer, size, type, *device, (xrt::memory_group)mem_grp));
+    }
+#endif
+    return std::unique_ptr<Buffer<dtype>>(nullptr);
+  }
+
+  template <typename dtype>
+  std::unique_ptr<Buffer<dtype>> create_buffer(size_t size, dataType type,
+                                               unsigned mem_grp = 0) {
+    if (sim_mode) {
+      return std::unique_ptr<Buffer<dtype>>(new SimBuffer<dtype>(
+          size, type, static_cast<SimDevice *>(cclo)->get_socket()));
+    }
+#ifdef ACCL_HARDWARE_SUPPORT
+    else {
+      return std::unique_ptr<Buffer<dtype>>(new FPGABuffer<dtype>(
+          size, type, *device, (xrt::memory_group)mem_grp));
     }
 #endif
     return std::unique_ptr<Buffer<dtype>>(nullptr);
@@ -267,6 +288,9 @@ private:
   const int devicemem;
   const std::vector<int> rxbufmem;
   const int networkmem;
+#ifdef ACCL_HARDWARE_SUPPORT
+  xrt::device *device{};
+#endif
 
   void initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
                        int nbufs, addr_t bufsize);
