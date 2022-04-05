@@ -146,46 +146,12 @@ if { $en_arith != 0 } {
 
 # implement compression lanes
 proc assemble_clane { idx } {
-    create_bd_cell -type ip -vlnv xilinx.com:ip:axis_switch:1.1 axis_ic_clane${idx}_op
-    set_property -dict [list \
-        CONFIG.NUM_SI {1} \
-        CONFIG.NUM_MI {2} \
-        CONFIG.HAS_TLAST.VALUE_SRC USER \
-        CONFIG.HAS_TLAST {1} \
-    ] [get_bd_cells axis_ic_clane${idx}_op]
-    create_bd_cell -type ip -vlnv xilinx.com:ip:axis_switch:1.1 axis_ic_clane${idx}_res
-    set_property -dict [list \
-        CONFIG.NUM_SI {2} \
-        CONFIG.NUM_MI {1} \
-        CONFIG.HAS_TLAST.VALUE_SRC USER \
-        CONFIG.HAS_TLAST {1} \
-        CONFIG.ARB_ON_TLAST {1} \
-        CONFIG.ARB_ALGORITHM {3} \
-        CONFIG.ARB_ON_MAX_XFERS {0} \
-    ] [get_bd_cells axis_ic_clane${idx}_res]
-    create_bd_cell -type ip -vlnv xilinx.com:ACCL:fp_hp_stream_conv:1.0 fp_hp_stream_conv_${idx}
-    create_bd_cell -type ip -vlnv xilinx.com:ACCL:hp_fp_stream_conv:1.0 hp_fp_stream_conv_${idx}
-    connect_bd_intf_net [get_bd_intf_pins axis_ic_clane${idx}_res/M00_AXIS] [get_bd_intf_pins cclo/s_axis_compression${idx}]
-    connect_bd_intf_net [get_bd_intf_pins axis_ic_clane${idx}_res/S00_AXIS] [get_bd_intf_pins fp_hp_stream_conv_${idx}/out_r]
-    connect_bd_intf_net [get_bd_intf_pins axis_ic_clane${idx}_res/S01_AXIS] [get_bd_intf_pins hp_fp_stream_conv_${idx}/out_r]
-    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins axis_ic_clane${idx}_res/aclk]
-    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins axis_ic_clane${idx}_res/aresetn]
+    create_bd_cell -type ip -vlnv xilinx.com:ACCL:hp_compression:1.0 hp_compression_${idx}
+    connect_bd_intf_net [get_bd_intf_pins hp_compression_${idx}/out_r] [get_bd_intf_pins cclo/s_axis_compression${idx}]
+    connect_bd_intf_net [get_bd_intf_pins cclo/m_axis_compression${idx}] [get_bd_intf_pins hp_compression_${idx}/in_r]
+    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins hp_compression_${idx}/ap_rst_n]
+    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins hp_compression_${idx}/ap_clk]
 
-    connect_bd_intf_net [get_bd_intf_pins axis_ic_clane${idx}_op/S00_AXIS] [get_bd_intf_pins cclo/m_axis_compression${idx}]
-    connect_bd_intf_net [get_bd_intf_pins axis_ic_clane${idx}_op/M00_AXIS] [get_bd_intf_pins fp_hp_stream_conv_${idx}/in_r]
-    connect_bd_intf_net [get_bd_intf_pins axis_ic_clane${idx}_op/M01_AXIS] [get_bd_intf_pins hp_fp_stream_conv_${idx}/in_r]
-    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins axis_ic_clane${idx}_op/aclk]
-    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins axis_ic_clane${idx}_op/aresetn]
-
-    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins hp_fp_stream_conv_${idx}/ap_rst_n]
-    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins fp_hp_stream_conv_${idx}/ap_rst_n]
-    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins hp_fp_stream_conv_${idx}/ap_clk]
-    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins fp_hp_stream_conv_${idx}/ap_clk]
-
-    group_bd_cells compression_lane_${idx}  [get_bd_cells fp_hp_stream_conv_${idx}] \
-                                            [get_bd_cells hp_fp_stream_conv_${idx}] \
-                                            [get_bd_cells axis_ic_clane${idx}_op] \
-                                            [get_bd_cells axis_ic_clane${idx}_res]
 }
 
 if { $en_compress != 0 } {
@@ -193,9 +159,7 @@ if { $en_compress != 0 } {
     assemble_clane 1
     assemble_clane 2
 
-    group_bd_cells compression  [get_bd_cells compression_lane_0] \
-                                [get_bd_cells compression_lane_1] \
-                                [get_bd_cells compression_lane_2]
+    group_bd_cells compression  [get_bd_cells hp_compression_*]
 }
 
 save_bd_design

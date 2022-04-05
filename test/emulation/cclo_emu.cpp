@@ -27,8 +27,7 @@
 #include "ap_int.h"
 #include <stdint.h>
 #include "reduce_sum.h"
-#include "fp_hp_stream_conv.h"
-#include "hp_fp_stream_conv.h"
+#include "hp_compression.h"
 #include "eth_intf.h"
 #include "dummy_tcp_stack.h"
 #include "stream_segmenter.h"
@@ -144,24 +143,6 @@ void dwc(Stream<ap_axiu<INW, 0, 0, DESTW> > &in, Stream<ap_axiu<OUTW, 0, 0, DEST
         Stream<axi::Stream<ap_axiu<inter_width, 0, 0, 0> > > inter;
         dwc<INW, inter_width>(in, inter);
         dwc<inter_width, OUTW>(inter, out);
-    }
-}
-
-void compression(Stream<stream_word> &op0, Stream<stream_word> &res){ 
-    stream_word tmp_op0;
-    stream_word tmp_res;
-    Stream<stream_word> op_int;
-
-    tmp_op0 = op0.Pop();
-    cout << "Running compression lane with TDEST=" << tmp_op0.dest << endl;
-    op_int.Push(tmp_op0);
-    switch(tmp_op0.dest){
-        case 0://downcast
-            fp_hp_stream_conv(op_int, res);
-            break;
-        case 1://upcast
-            hp_fp_stream_conv(op_int, res);
-            break;
     }
 }
 
@@ -359,9 +340,9 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsign
     //ARITH
     HLSLIB_FREERUNNING_FUNCTION(reduce_sum, arith_op0, arith_op1, arith_res);
     //COMPRESS 0, 1, 2
-    HLSLIB_FREERUNNING_FUNCTION(compression, clane0_op, clane0_res);
-    HLSLIB_FREERUNNING_FUNCTION(compression, clane1_op, clane1_res);
-    HLSLIB_FREERUNNING_FUNCTION(compression, clane2_op, clane2_res);
+    HLSLIB_FREERUNNING_FUNCTION(hp_compression, clane0_op, clane0_res);
+    HLSLIB_FREERUNNING_FUNCTION(hp_compression, clane1_op, clane1_res);
+    HLSLIB_FREERUNNING_FUNCTION(hp_compression, clane2_op, clane2_res);
     //network PACK/DEPACK
     if(use_tcp){
         HLSLIB_FREERUNNING_FUNCTION(tcp_packetizer, switch_m[SWITCH_M_ETH_TX], eth_tx_data_int, eth_tx_cmd, cmd_txHandler, eth_tx_sts, max_words_per_pkt);

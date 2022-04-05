@@ -17,4 +17,4 @@
 
 #include "streamdefines.h"
 
-void fp_hp_stream_conv(STREAM<stream_word> & in, STREAM<stream_word> & out);
+void hp_compression(STREAM<stream_word> & in, STREAM<stream_word> & out);

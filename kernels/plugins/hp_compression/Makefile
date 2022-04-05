@@ -1,4 +1,4 @@
-/*******************************************************************************
+# /*******************************************************************************
 #  Copyright (C) 2021 Xilinx, Inc
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,6 +15,12 @@
 #
 # *******************************************************************************/
 
-#include "streamdefines.h"
+TARGET=ip
+DEVICE=xcu250-figd2104-2L-e
+REDUCE_IP=hp_compression.xo
 
-void hp_fp_stream_conv(STREAM<stream_word> & in, STREAM<stream_word> & out);
+all: $(REDUCE_IP)
+
+$(REDUCE_IP): build.tcl hp_compression.cpp 
+	vitis_hls $< -tclargs $(TARGET) $(DEVICE)
+
