@@ -25,6 +25,7 @@ set(HLSLIB_INCLUDE ${ACCL_REPO_ROOT}/hlslib/include/hlslib/xilinx/)
 set(CCLO_HLS_ROOT ${ACCL_REPO_ROOT}/kernels/cclo/hls)
 set(MB_FW_DIR ${ACCL_REPO_ROOT}/kernels/cclo/fw/sw_apps/ccl_offload_control/src)
 set(ZMQ_INTF_DIR ${ACCL_REPO_ROOT}/test/zmq)
+set(LOG_DIR ${ACCL_REPO_ROOT}/test/log)
 
 if (NOT EXISTS $ENV{XILINX_HLS})
   message(FATAL_ERROR "Xilinx HLS not loaded!")
@@ -33,11 +34,10 @@ endif (NOT EXISTS $ENV{XILINX_HLS})
 find_package(MPI REQUIRED)
 find_package(jsoncpp REQUIRED)
 
-set(SIM_INCLUDES ${HLSLIB_INCLUDE} $ENV{XILINX_HLS}/include/ $ENV{XILINX_VIVADO}/data/xsim/include/ ${MB_FW_DIR} ${CCLO_HLS_ROOT} ${ZMQ_INTF_DIR})
+set(SIM_INCLUDES ${HLSLIB_INCLUDE} $ENV{XILINX_HLS}/include/ $ENV{XILINX_VIVADO}/data/xsim/include/ ${MB_FW_DIR} ${CCLO_HLS_ROOT} ${ZMQ_INTF_DIR} ${LOG_DIR})
 set(SIM_SOURCES cclo_sim.cpp xsi_dut.cpp xsi_loader.cpp ${ZMQ_INTF_DIR}/zmq_intf.cpp)
 
 add_executable(cclo_sim ${SIM_SOURCES})
-
 get_target_property(JSON_INC_PATH jsoncpp_lib INTERFACE_INCLUDE_DIRECTORIES)
 target_include_directories(cclo_sim PUBLIC ${JSON_INC_PATH} ${MPI_CXX_INCLUDE_PATH} ${SIM_INCLUDES})
 target_link_libraries(cclo_sim PUBLIC MPI::MPI_CXX zmq zmqpp pthread jsoncpp_lib dl rt)
