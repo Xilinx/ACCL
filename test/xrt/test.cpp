@@ -23,6 +23,10 @@
 #include <random>
 #include <sstream>
 #include <vector>
+#ifdef ACCL_HARDWARE_SUPPORT
+#include <xrt/xrt_device.h>
+#include <xrt/xrt_kernel.h>
+#endif
 
 using namespace ACCL;
 
@@ -36,6 +40,8 @@ struct options_t {
   bool debug;
 #ifdef ACCL_HARDWARE_SUPPORT
   bool hardware;
+  unsigned int device_index;
+  std::string xclbin;
 #endif
 };
 
@@ -469,6 +475,14 @@ void test_allreduce(ACCL::ACCL &accl, options_t &options,
   }
 }
 
+inline bool hardware_set(options_t options) {
+#ifdef ACCL_HARDWARE_SUPPORT
+  return options.hardware;
+#else
+  return false;
+#endif
+}
+
 void start_test(options_t options) {
   std::vector<rank_t> ranks = {};
   for (int i = 0; i < size; ++i) {
@@ -477,36 +491,54 @@ void start_test(options_t options) {
     ranks.emplace_back(new_rank);
   }
 
-  ACCL::ACCL accl(ranks, rank,
-                  "tcp://localhost:" +
-                      std::to_string(options.start_port + rank));
-  accl.set_timeout(1e8);
+  ACCL::ACCL *accl;
+
+  if (hardware_set(options)) {
+#ifdef ACCL_HARDWARE_SUPPORT
+    auto device = xrt::device(options.device_index);
+    auto xclbin_uuid = device.load_xclbin(options.xclbin);
+    auto cclo_ip = xrt::kernel(device, xclbin_uuid, "ccl_offload:{ccl_offload_" + std::to_string(rank) + "}", xrt::kernel::cu_access_mode::exclusive);
+    auto hostctrl_ip = xrt::kernel(device, xclbin_uuid, "hostctrl:{hostctrl_" + std::to_string(rank) + "}", xrt::kernel::cu_access_mode::exclusive);
+
+    std::vector<int> mem;
+    for (int i = 2; i <= 31; ++i) {
+      mem.emplace_back(i);
+    }
+
+    accl = new ACCL::ACCL(ranks, rank, device, cclo_ip, hostctrl_ip, 0, mem, 1);
+#endif
+  } else {
+    accl = new ACCL::ACCL(ranks, rank,
+                          "tcp://localhost:" +
+                              std::to_string(options.start_port + rank));
+  }
+  accl->set_timeout(1e8);
 
   // barrier here to make sure all the devices are configured before testing
   MPI_Barrier(MPI_COMM_WORLD);
-  accl.nop();
+  accl->nop();
   MPI_Barrier(MPI_COMM_WORLD);
-  test_copy(accl, options);
+  test_copy(*accl, options);
   MPI_Barrier(MPI_COMM_WORLD);
-  test_combine(accl, options);
+  test_combine(*accl, options);
   MPI_Barrier(MPI_COMM_WORLD);
-  test_sendrcv(accl, options);
+  test_sendrcv(*accl, options);
   MPI_Barrier(MPI_COMM_WORLD);
-  test_allgather(accl, options);
+  test_allgather(*accl, options);
   MPI_Barrier(MPI_COMM_WORLD);
-  test_allreduce(accl, options, reduceFunction::SUM);
+  test_allreduce(*accl, options, reduceFunction::SUM);
   MPI_Barrier(MPI_COMM_WORLD);
-  test_reduce_scatter(accl, options, reduceFunction::SUM);
+  test_reduce_scatter(*accl, options, reduceFunction::SUM);
   MPI_Barrier(MPI_COMM_WORLD);
 
   for (int root = 0; root < size; ++root) {
-    test_bcast(accl, options, root);
+    test_bcast(*accl, options, root);
     MPI_Barrier(MPI_COMM_WORLD);
-    test_scatter(accl, options, root);
+    test_scatter(*accl, options, root);
     MPI_Barrier(MPI_COMM_WORLD);
-    test_gather(accl, options, root);
+    test_gather(*accl, options, root);
     MPI_Barrier(MPI_COMM_WORLD);
-    test_reduce(accl, options, root, reduceFunction::SUM);
+    test_reduce(*accl, options, root, reduceFunction::SUM);
     MPI_Barrier(MPI_COMM_WORLD);
   }
 }
@@ -523,7 +555,11 @@ options_t parse_options(int argc, char *argv[]) {
       cxxopts::value<unsigned int>()->default_value("1"))("d,debug",
                                                           "enable debug mode")
 #ifdef ACCL_HARDWARE_SUPPORT
-      ("f,hardware", "enable hardware mode")
+      ("f,hardware", "enable hardware mode")(
+          "device-index", "index of fpga to use",
+          cxxopts::value<unsigned int>()->default_value("0"))(
+          "xclbin", "xclbin of accl driver if hardware mode is used",
+          cxxopts::value<std::string>()->default_value("accl.xclbin"))
 #endif
           ("h,help", "Print usage");
   cxxopts::ParseResult result;
@@ -555,6 +591,8 @@ options_t parse_options(int argc, char *argv[]) {
   opts.debug = result.count("debug") > 0;
 #ifdef ACCL_HARDWARE_SUPPORT
   opts.hardware = result.count("hardware") > 0;
+  opts.device_index = result["device-index"].as<unsigned int>();
+  opts.xclbin = result["xclbin"].as<std::string>();
 #endif
   return opts;
 }
