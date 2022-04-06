@@ -40,6 +40,7 @@ set(ACCL_SOURCES
     ${ACCL_SOURCE_PATH}/communicator.cpp
     ${ACCL_SOURCE_PATH}/simdevice.cpp
     ${ACCL_SOURCE_PATH}/simbuffer.cpp
+    ${ACCL_SOURCE_PATH}/fpgadevice.cpp
 )
 
 set(ACCL_INCLUDE_PATH ${CMAKE_CURRENT_LIST_DIR}/include)

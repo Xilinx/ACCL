@@ -523,7 +523,7 @@ options_t parse_options(int argc, char *argv[]) {
       cxxopts::value<unsigned int>()->default_value("1"))("d,debug",
                                                           "enable debug mode")
 #ifdef ACCL_HARDWARE_SUPPORT
-      ("h,hardware", "enable hardware mode")
+      ("f,hardware", "enable hardware mode")
 #endif
           ("h,help", "Print usage");
   cxxopts::ParseResult result;

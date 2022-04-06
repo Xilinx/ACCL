@@ -35,7 +35,8 @@ public:
       : bo(bo), Buffer<dtype>(buffer, length, type, bo.address()) {}
   FPGABuffer(dtype *buffer, addr_t length, dataType type, xrt::device &device,
              xrt::memory_group mem_grp)
-      : bo(device, get_aligned_buffer(buffer), length * sizeof(dtype), mem_grp),
+      : bo(device, get_aligned_buffer(buffer, length * sizeof(dtype)),
+           length * sizeof(dtype), mem_grp),
         Buffer<dtype>(buffer, length, type, bo.address()) {}
   FPGABuffer(addr_t length, dataType type, xrt::device &device,
              xrt::memory_group mem_grp)
@@ -46,7 +47,7 @@ public:
 
   void sync_from_device() override {
     if (!is_aligned) {
-      memcpy(aligned_buffer, unaligned_buffer, this.size());
+      memcpy(aligned_buffer, unaligned_buffer, this->size());
     }
     bo.sync(xclBOSyncDirection::XCL_BO_SYNC_BO_FROM_DEVICE);
   }
@@ -54,7 +55,7 @@ public:
   void sync_to_device() override {
     bo.sync(xclBOSyncDirection::XCL_BO_SYNC_BO_TO_DEVICE);
     if (!is_aligned) {
-      memcpy(unaligned_buffer, aligned_buffer, this.size());
+      memcpy(unaligned_buffer, aligned_buffer, this->size());
     }
   }
 
@@ -62,7 +63,7 @@ public:
 
   std::unique_ptr<BaseBuffer> slice(size_t start, size_t end) override {
     return std::unique_ptr<BaseBuffer>(
-        new FPGABuffer(&this->buffer[start], end - start, this->_type,
+        new FPGABuffer(&this->_buffer[start], end - start, this->_type,
                        xrt::bo(bo, end - start, start)));
   }
 
@@ -78,7 +79,8 @@ private:
           ((size_t)ceil(length * sizeof(dtype) / (double)ALIGNMENT)) *
           ALIGNMENT;
       is_aligned = false;
-      aligned_buffer = std::aligned_alloc(ALIGNMENT, aligned_size);
+      aligned_buffer =
+          static_cast<dtype *>(std::aligned_alloc(ALIGNMENT, aligned_size));
       unaligned_buffer = host_buffer;
       return aligned_buffer;
     }
