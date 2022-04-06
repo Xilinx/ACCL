@@ -415,12 +415,19 @@ module ccl_offload
 `endif
 
 `ifdef ARITH_ENABLE
-        .m_axis_arith_op_tdata(m_axis_arith_op_tdata),
-        .m_axis_arith_op_tkeep(m_axis_arith_op_tkeep),
-        .m_axis_arith_op_tdest(m_axis_arith_op_tdest),
-        .m_axis_arith_op_tlast(m_axis_arith_op_tlast),
-        .m_axis_arith_op_tready(m_axis_arith_op_tready),
-        .m_axis_arith_op_tvalid(m_axis_arith_op_tvalid),
+        .m_axis_arith_op0_tdata(m_axis_arith_op0_tdata),
+        .m_axis_arith_op0_tkeep(m_axis_arith_op0_tkeep),
+        .m_axis_arith_op0_tdest(m_axis_arith_op0_tdest),
+        .m_axis_arith_op0_tlast(m_axis_arith_op0_tlast),
+        .m_axis_arith_op0_tready(m_axis_arith_op0_tready),
+        .m_axis_arith_op0_tvalid(m_axis_arith_op0_tvalid),
+
+        .m_axis_arith_op1_tdata(m_axis_arith_op1_tdata),
+        .m_axis_arith_op1_tkeep(m_axis_arith_op1_tkeep),
+        .m_axis_arith_op1_tdest(m_axis_arith_op1_tdest),
+        .m_axis_arith_op1_tlast(m_axis_arith_op1_tlast),
+        .m_axis_arith_op1_tready(m_axis_arith_op1_tready),
+        .m_axis_arith_op1_tvalid(m_axis_arith_op1_tvalid),
 
         .s_axis_arith_res_tdata(s_axis_arith_res_tdata),
         .s_axis_arith_res_tkeep(s_axis_arith_res_tkeep),
