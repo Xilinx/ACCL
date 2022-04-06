@@ -581,7 +581,7 @@ CCLO *ACCL::allreduce(unsigned int comm_id, BaseBuffer &sendbuf,
       auto slice = recvbuf.slice(0, count);
       slice->sync_from_device();
     }
-    check_return_value("allgather");
+    check_return_value("allreduce");
   }
 
   return nullptr;

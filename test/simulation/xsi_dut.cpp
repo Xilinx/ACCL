@@ -26,21 +26,26 @@
 
 using namespace std;
 
-XSI_DUT::XSI_DUT(const string& design_libname, const string& simkernel_libname, 
-                    const string& reset_name, bool reset_active_low, 
-                    const string& clock_name, float clock_period_ns, const string& wdbName) :
+namespace {
+    Log *logger;
+}
+
+XSI_DUT::XSI_DUT(const string& design_libname, const string& simkernel_libname,
+                    const string& reset_name, bool reset_active_low,
+                    const string& clock_name, float clock_period_ns, const string& wdbName, Log &log) :
     xsi(design_libname, simkernel_libname)
 {
-    cout << "Constructing DUT" << std::endl;
+    logger = &log;
+    *logger << log_level::verbose << "Constructing DUT" << std::endl;
     //xsi = new Xsi::Loader(design_libname, simkernel_libname);
-    cout << "Created loader" << std::endl;
+    *logger << log_level::verbose << "Created loader" << std::endl;
     //initialize XSI
     s_xsi_setup_info info;
     memset(&info, 0, sizeof(info));
     info.logFileName = NULL;
     info.wdbFileName = const_cast<char*>(wdbName.c_str());
     xsi.open(&info);
-    cout << "XSI opened" << std::endl;
+    *logger << log_level::verbose << "XSI opened" << std::endl;
     xsi.trace_all();
     //get ports
     for(int i=0; i<xsi.get_num_ports(); i++){
@@ -61,10 +66,10 @@ XSI_DUT::XSI_DUT(const string& design_libname, const string& simkernel_libname,
     clk_half_period = (unsigned int)(clock_period_ns*pow(10,-9)/xsi.get_time_precision()/2);
     if(clk_half_period == 0) throw invalid_argument("Calculated half period is zero");
     //report results
-    cout << "Identified " << num_ports() << " top-level ports:" << endl;
+    *logger << log_level::verbose << "Identified " << num_ports() << " top-level ports:" << endl;
     list_ports();
-    cout << "Using " << rst << " as " << (rst_active_low ? "active-low" : "active-high") << " reset" << endl;
-    cout << "Using " << clk << " as clock with half-period of " << clk_half_period << " simulation steps" << endl;
+    *logger << log_level::verbose << "Using " << rst << " as " << (rst_active_low ? "active-low" : "active-high") << " reset" << endl;
+    *logger << log_level::verbose << "Using " << clk << " as clock with half-period of " << clk_half_period << " simulation steps" << endl;
     cycle_count = 0;
 }
 
@@ -87,8 +92,8 @@ uint64_t XSI_DUT::get_cycle_count(){
 void XSI_DUT::list_ports(){
     map<string, port_parameters>::iterator it = port_map.begin();
     while(it != port_map.end()){
-        cout<< it->first << " (ID: " << it->second.port_id << ", " 
-                            << it->second.port_bits << "b, " 
+        *logger << log_level::verbose << it->first << " (ID: " << it->second.port_id << ", "
+                            << it->second.port_bits << "b, "
                                 << (it->second.is_input ? "I)" : "O)") << endl;
         it++;
     }
@@ -121,7 +126,7 @@ void XSI_DUT::write(const std::string &port_name, unsigned int val){
         throw invalid_argument("Write called on output port");
     }
     unsigned int nwords = (port_map[port_name].port_bits+31)/32; //find how many 32-bit chunks we need
-    vector<s_xsi_vlog_logicval> logic_val(nwords); 
+    vector<s_xsi_vlog_logicval> logic_val(nwords);
     logic_val.at(0) = (s_xsi_vlog_logicval){val, 0};
     for(int i=1; i<nwords; i++){
         logic_val.at(i) = (s_xsi_vlog_logicval){0, 0};//only two-valued logic
