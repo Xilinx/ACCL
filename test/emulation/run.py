@@ -67,6 +67,8 @@ def run_emulator(ranks: int, log_level: int, start_port: int, use_udp: bool):
                     print("Terminating emulator...")
                     p.terminate()
                     p.wait()
+        if p.returncode != 0:
+            print(f"Emulator exited with error code {p.returncode}")
 
 
 def main(ranks: int, log_level: int, start_port: int,

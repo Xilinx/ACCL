@@ -67,6 +67,8 @@ def run_simulator(ranks: int, log_level: int, start_port: int, use_udp: bool):
                     print("Terminating simulator...")
                     p.terminate()
                     p.wait()
+        if p.returncode != 0:
+            print(f"Simulator exited with error code {p.returncode}")
 
 
 def main(ranks: int, log_level: int, start_port: int,
