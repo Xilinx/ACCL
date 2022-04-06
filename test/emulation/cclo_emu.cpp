@@ -27,8 +27,7 @@
 #include "ap_int.h"
 #include <stdint.h>
 #include "reduce_sum.h"
-#include "fp_hp_stream_conv.h"
-#include "hp_fp_stream_conv.h"
+#include "hp_compression.h"
 #include "eth_intf.h"
 #include "dummy_tcp_stack.h"
 #include "stream_segmenter.h"
@@ -145,66 +144,6 @@ void dwc(Stream<ap_axiu<INW, 0, 0, DESTW> > &in, Stream<ap_axiu<OUTW, 0, 0, DEST
         Stream<axi::Stream<ap_axiu<inter_width, 0, 0, 0> > > inter;
         dwc<INW, inter_width>(in, inter);
         dwc<inter_width, OUTW>(inter, out);
-    }
-}
-
-void arithmetic(Stream<stream_word > &op0, Stream<stream_word > &op1, Stream<stream_word > &res){
-    Stream<ap_axiu<2*DATA_WIDTH,0,0,DEST_WIDTH> > op_int("arith_op");
-    stream_word tmp_op0;
-    stream_word tmp_op1;
-    ap_axiu<2*DATA_WIDTH,0,0,DEST_WIDTH> tmp_op;
-    stream_word tmp_res;
-
-    //load op stream
-    do {
-        tmp_op0 = op0.Pop();
-        tmp_op1 = op1.Pop();
-        tmp_op.data(511,0) = tmp_op0.data;
-        tmp_op.keep(63,0) = tmp_op0.keep;
-        tmp_op.data(1023,512) = tmp_op1.data;
-        tmp_op.keep(127,64) = tmp_op1.keep;
-        tmp_op.last = tmp_op0.last;
-        op_int.write(tmp_op);
-    } while(tmp_op0.last == 0);
-    logger("Arith packet received\n", log_level::verbose);
-    //call arith
-    switch(tmp_op0.dest){
-        case 0:
-            reduce_sum_float(op_int, res);
-            break;
-        case 1:
-            reduce_sum_double(op_int, res);
-            break;
-        case 2:
-            reduce_sum_int32_t(op_int, res);
-            break;
-        case 3:
-            reduce_sum_int64_t(op_int, res);
-            break;
-        //half precision is problematic, no default support in C++
-        case 4:
-            reduce_sum_half(op_int, res);
-            break;
-    }
-    //load result stream
-    logger("Arith packet processed", log_level::verbose);
-}
-
-void compression(Stream<stream_word> &op0, Stream<stream_word> &res){
-    stream_word tmp_op0;
-    stream_word tmp_res;
-    Stream<stream_word> op_int;
-
-    tmp_op0 = op0.Pop();
-    logger << log_level::verbose << "Running compression lane with TDEST=" << tmp_op0.dest << endl;
-    op_int.Push(tmp_op0);
-    switch(tmp_op0.dest){
-        case 0://downcast
-            fp_hp_stream_conv(op_int, res);
-            break;
-        case 1://upcast
-            hp_fp_stream_conv(op_int, res);
-            break;
     }
 }
 
@@ -392,11 +331,11 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsign
     HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, clane2_res,                   switch_s[SWITCH_S_CLANE2], seg_cmd[12], seg_sts[12]);   //clane2 result
     HLSLIB_FREERUNNING_FUNCTION(axis_mux, accl_to_krnl_seg, switch_m[SWITCH_M_BYPASS], accl_to_krnl_data);
     //ARITH
-    HLSLIB_FREERUNNING_FUNCTION(arithmetic, arith_op0, arith_op1, arith_res);
+    HLSLIB_FREERUNNING_FUNCTION(reduce_sum, arith_op0, arith_op1, arith_res);
     //COMPRESS 0, 1, 2
-    HLSLIB_FREERUNNING_FUNCTION(compression, clane0_op, clane0_res);
-    HLSLIB_FREERUNNING_FUNCTION(compression, clane1_op, clane1_res);
-    HLSLIB_FREERUNNING_FUNCTION(compression, clane2_op, clane2_res);
+    HLSLIB_FREERUNNING_FUNCTION(hp_compression, clane0_op, clane0_res);
+    HLSLIB_FREERUNNING_FUNCTION(hp_compression, clane1_op, clane1_res);
+    HLSLIB_FREERUNNING_FUNCTION(hp_compression, clane2_op, clane2_res);
     //network PACK/DEPACK
     if(use_tcp){
         HLSLIB_FREERUNNING_FUNCTION(tcp_packetizer, switch_m[SWITCH_M_ETH_TX], eth_tx_data_int, eth_tx_cmd, cmd_txHandler, eth_tx_sts, max_words_per_pkt);

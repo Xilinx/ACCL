@@ -47,10 +47,12 @@ id = 0
 if int(sys.argv[2]) == 1:
     xml_ports, xml_args, id = fill_xml_aximm_port_arg(xml_ports, xml_args, "m_axi_0", 512, 16, id)
     xml_ports, xml_args, id = fill_xml_aximm_port_arg(xml_ports, xml_args, "m_axi_1", 512, 32, id)
+
 xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "s_axis_call_req", False, 32, id)
 xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "m_axis_call_ack", True, 32, id)
 xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "s_axis_eth_rx_data", False, 512, id)
 xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "m_axis_eth_tx_data", True, 512, id)
+
 if sys.argv[1] == "TCP":
     xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "s_axis_eth_notification", False, 128, id)
     xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "m_axis_eth_read_pkg", True, 32, id)
@@ -61,9 +63,11 @@ if sys.argv[1] == "TCP":
     xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "s_axis_eth_open_status", False, 128, id)
     xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "m_axis_eth_listen_port", True, 16, id)
     xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "s_axis_eth_port_status", False, 8, id)
+
 if  int(sys.argv[5]) == 1:
     xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "s_axis_krnl", False, 512, id)
     xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "m_axis_krnl", True, 512, id)
+
 if  int(sys.argv[4]) == 1:
     xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "s_axis_compression0", False, 512, id)
     xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "m_axis_compression0", True, 512, id)
@@ -71,9 +75,11 @@ if  int(sys.argv[4]) == 1:
     xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "m_axis_compression1", True, 512, id)
     xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "s_axis_compression2", False, 512, id)
     xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "m_axis_compression2", True, 512, id)
+
 if  int(sys.argv[3]) == 1:
     xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "s_axis_arith_res", False, 512, id)
-    xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "m_axis_arith_op", True, 1024, id)
+    xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "m_axis_arith_op0", True, 512, id)
+    xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "m_axis_arith_op1", True, 512, id)
 
 xml_ports += "</ports>\n"
 xml_args += "</args>\n"

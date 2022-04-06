@@ -307,8 +307,7 @@ if __name__ == "__main__":
                         local_rank, 
                         bufsize=args.rxbuf_size, 
                         protocol=("TCP" if args.tcp else "UDP"), 
-                        sim_sock="tcp://localhost:"+str(args.start_port+local_rank), 
-                        xclbin=None
+                        sim_sock="tcp://localhost:"+str(args.start_port+local_rank)
                     )
     cclo_inst.set_timeout(10**8)
     #barrier here to make sure all the devices are configured before testing

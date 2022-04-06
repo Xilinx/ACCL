@@ -50,16 +50,14 @@ switch $command {
     }
 }
 
+open_project build_hp_compression
 
-open_project build_hp_fp_stream_conv
+add_files hp_compression.cpp -cflags "-std=c++14 -I[pwd]/../../cclo/hls -DACCL_SYNTHESIS"
 
-add_files hp_fp_stream_conv.cpp -cflags "-std=c++14 -I[pwd]/../../cclo/hls -DACCL_SYNTHESIS"
-add_files -tb tb.cpp -cflags "-std=c++14 -I[pwd]/../../cclo/hls -DACCL_SYNTHESIS"
-
-set_top hp_fp_stream_conv
+set_top hp_compression
 
 open_solution sol1
-config_export -format xo -library ACCL -output [pwd]/hp_fp_stream_conv.xo
+config_export -format xo -library ACCL -output [pwd]/hp_compression.xo
 
 if {$do_sim} {
     csim_design -clean

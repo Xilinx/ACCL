@@ -40,12 +40,11 @@ CMAC_TCP_XO=Vitis_with_100Gbps_TCP-IP/_x.hw.$(XSA)/cmac_krnl.xo
 XCLBIN=$(BUILD_DIR)/ccl_offload.xclbin
 
 HOSTCTRL_XO=../../kernels/plugins/hostctrl/hostctrl.xo
-SUM_XO=$(wildcard ../../kernels/plugins/reduce_sum/*.xo)
-HP_UPCAST_XO=../../kernels/plugins/hp_fp_stream_conv/hp_fp_stream_conv.xo
-HP_DOWNCAST_XO=../../kernels/plugins/fp_hp_stream_conv/fp_hp_stream_conv.xo
+SUM_XO=../../kernels/plugins/reduce_sum/reduce_sum.xo
+COMPRESSION_XO=../../kernels/plugins/hp_compression/hp_compression.xo
 LOOPBACK_XO=../../kernels/plugins/loopback/loopback.xo
 
-ARITHMETIC_XO = $(SUM_XO) $(HP_UPCAST_XO) $(HP_DOWNCAST_XO)
+ARITHMETIC_XO = $(SUM_XO) $(COMPRESSION_XO)
 
 ifeq (all,$(PROFILE))
 	PROFILE_OPTS := --profile.data all:all:all --profile.exec all:all:all --profile.stall all:all:all
@@ -95,11 +94,6 @@ else ifeq (tri,$(MODE))
 	NET_XO = $(TCP_DUMMY_XO)
 	OTHER_XO = $(LOOPBACK_XO)
 	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/tcl/post_sys_link_tri.tcl
-else ifeq (lb,$(MODE))
-	ETH_IF := none
-	NET_XO = $(TCP_DUMMY_XO)
-	OTHER_XO = $(LOOPBACK_XO)
-	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/tcl/post_sys_link_lb.tcl
 else ifeq (tcp, $(MODE))
 	CMAC_TCP_XO=Vitis_with_100Gbps_TCP-IP/_x.hw.$(XSA)/cmac_krnl.xo
 	NET_XO = $(TCP_XO) $(CMAC_TCP_XO)
