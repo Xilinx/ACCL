@@ -133,7 +133,8 @@ proc edit_core {core} {
 
     if { $en_arith == 1 } {
         config_axis_if $core "s_axis_arith_res" "ap_clk" 64 0 0 0 1 0 1 1
-        config_axis_if $core "m_axis_arith_op" "ap_clk" 128 0 0 8 1 0 1 1
+        config_axis_if $core "m_axis_arith_op0" "ap_clk" 64 0 0 8 1 0 1 1
+        config_axis_if $core "m_axis_arith_op1" "ap_clk" 64 0 0 8 1 0 1 1
     }
 
     # Specify the freq_hz parameter 
