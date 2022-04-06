@@ -111,6 +111,7 @@ void eth_endpoint_egress_port(zmq_intf_context *ctx, Stream<stream_word > &in, u
     message << to_string(local_rank);
     //finally package the data
     string str = Json::writeString(builder, packet);
+    message << str;
     *logger << log_level::verbose << "ETH Send " << idx << " bytes to " << dest << endl;
     *logger << log_level::debug << str << endl;
     ctx->eth_tx_socket->send(message);
