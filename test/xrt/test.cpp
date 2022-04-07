@@ -501,12 +501,9 @@ void start_test(options_t options) {
     auto cclo_ip = xrt::ip(device, xclbin_uuid, "ccl_offload:{ccl_offload_" + std::to_string(rank) + "}");
     auto hostctrl_ip = xrt::kernel(device, xclbin_uuid, "hostctrl:{hostctrl_" + std::to_string(rank) + "}", xrt::kernel::cu_access_mode::exclusive);
 
-    std::vector<int> mem;
-    for (int i = 2; i <= 31; ++i) {
-      mem.emplace_back(i);
-    }
+    std::vector<int> mem = {rank * 6 + 1};
 
-    accl = new ACCL::ACCL(ranks, rank, device, cclo_ip, hostctrl_ip, 0, mem, 1);
+    accl = new ACCL::ACCL(ranks, rank, device, cclo_ip, hostctrl_ip, rank * 6, mem, rank * 6 + 2);
 #endif
   } else {
     accl = new ACCL::ACCL(ranks, rank,
