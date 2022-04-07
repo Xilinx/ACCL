@@ -19,12 +19,32 @@ import sys
 import numpy as np
 import time
 sys.path.append('../../driver/pynq/')
+sys.path.append('../hardware/xup_vitis_network_example/Notebooks/')
 from accl import accl, ACCLReduceFunctions, ACCLStreamFlags
+from vnx_utils import *
 import pynq
 import argparse
 import itertools
 import math
 from mpi4py import MPI
+
+def configure_vnx_ip(overlay, our_ip):
+    print("Link interface 1 {}".format(ol.cmac_0.linkStatus()))
+    print(ol.networklayer_0.updateIPAddress(our_ip, debug=True))
+
+def configure_vnx_socket(overlay, their_rank, our_port, their_ip, their_port):
+    # populate socket table with tuples of remote ip, remote port, local port 
+    # up to 16 entries possible in VNx
+    ol.networklayer_0.sockets[their_rank] = (their_ip, their_port, our_port, True)
+    print(ol.networklayer_0.populateSocketTable(debug=True))
+
+def configure_vnx(overlay, localrank, ranks):
+    assert len(ranks) <= 16, "Too many ranks. VNX supports up to 16 sockets"
+    for i in range(len(ranks)):
+        if i == localrank:
+            configure_vnx_ip(overlay, ranks[i]["ip"])
+        else:
+            configure_vnx_socket(overlay, i, ranks[localrank]["port"], ranks[i]["ip"], ranks[i]["port"])
 
 def get_buffers(count, op0_dt, op1_dt, res_dt, accl_inst):
     op0_buf = pynq.allocate((count,), dtype=op0_dt, target=accl_inst.cclo.devicemem)
@@ -107,32 +127,6 @@ def test_sendrecv_strm(cclo_inst, world_size, local_rank, count, dt = [np.float3
             print("Send/recv succeeded on pair ", op_dt, res_dt)
     if err_count == 0:
         print("Send/recv succeeded")
-
-def test_sendrecv_fanin(cclo_inst, world_size, local_rank, count, dt = [np.float32]):
-    err_count = 0
-    for op_dt, res_dt in itertools.product(dt, repeat=2):
-        op_buf, _, res_buf = get_buffers(count, op_dt, op_dt, res_dt, cclo_inst)
-        # send to next rank; receive from previous rank; send back data to previous rank; receive from next rank; compare
-        if local_rank != 0:
-            for i in range(len(op_buf)):
-                op_buf[i] = i+local_rank
-            print("Sending on ", local_rank, " to 0")
-            cclo_inst.send(0, op_buf, count, 0, tag=0)
-        else:
-            for i in range(world_size):
-                if i == local_rank:
-                    continue
-                print("Receiving on 0 from ", i)
-                cclo_inst.recv(0, res_buf, count, i, tag=0)
-                for j in range(len(op_buf)):
-                    op_buf[j] = j+i
-                if not np.isclose(op_buf, res_buf).all():
-                    err_count += 1
-                    print("Fan-in send/recv failed for sender rank", i, "on pair", op_dt, res_dt)
-                else:
-                    print("Fan-in send/recv succeeded for sender rank ", i, "on pair", op_dt, res_dt)
-    if err_count == 0:
-        print("Fan-in send/recv succeeded")
 
 def test_bcast(cclo_inst, local_rank, root, count, dt = [np.float32]):
     err_count = 0
@@ -246,7 +240,7 @@ def test_allreduce(cclo_inst, world_size, local_rank, count, func, dt = [np.floa
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Tests for ACCL (emulation mode)')
     parser.add_argument('--nruns',      type=int,            default=1,     help='How many times to run each test')
-    parser.add_argument('--start_port', type=int,            default=5500,  help='Start of range of ports usable for sim')
+    parser.add_argument('--port', type=int,            default=5500,  help='Start of range of ports usable for sim')
     parser.add_argument('--count',      type=int,            default=16,    help='How many B per buffer')
     parser.add_argument('--rxbuf_size', type=int,            default=1,     help='How many KB per RX buffer')
     parser.add_argument('--board_idx',  type=int,            default=0,     help='Index of Alveo board, if multiple present')
@@ -257,7 +251,6 @@ if __name__ == "__main__":
     parser.add_argument('--copy',       action='store_true', default=False, help='Run copy test')
     parser.add_argument('--sndrcv',     action='store_true', default=False, help='Run send/receive test')
     parser.add_argument('--sndrcv_strm', action='store_true', default=False, help='Run send/receive stream test')
-    parser.add_argument('--sndrcv_fanin', action='store_true', default=False, help='Run send/receive fan-in test')
     parser.add_argument('--bcast',      action='store_true', default=False, help='Run bcast test')
     parser.add_argument('--scatter',    action='store_true', default=False, help='Run scatter test')
     parser.add_argument('--gather',     action='store_true', default=False, help='Run gather test')
@@ -279,7 +272,6 @@ if __name__ == "__main__":
         args.combine = True
         args.sndrcv  = True
         args.sndrcv_strm = True
-        args.sndrcv_fanin = True
         args.bcast   = True
         args.scatter = True
         args.gather = True
@@ -293,14 +285,13 @@ if __name__ == "__main__":
     world_size = comm.Get_size()
     local_rank = comm.Get_rank()
 
-    assert world_size == 3, "This test only applies to the triple-CCLO configuration on a single board"
+    #assert world_size == 2, "This test only applies to the UDP configuration and 2 boards"
 
     #set a random seed to make it reproducible
     np.random.seed(2021+local_rank)
 
-    ranks = []
-    for i in range(world_size):
-        ranks.append({"ip": "127.0.0.1", "port": args.start_port+world_size+i, "session_id":i, "max_segment_size": args.rxbuf_size})
+    ranks = [{"ip": "192.168.0.1", "port": args.port, "session_id":0, "max_segment_size": args.rxbuf_size},
+             {"ip": "192.168.0.2", "port": args.port, "session_id":1, "max_segment_size": args.rxbuf_size}]
 
     #configure FPGA and CCLO cores with the default 16 RX buffers of size given by args.rxbuf_size
     print(f"AlveoDevice connecting to board {args.board_idx} core {local_rank} xclbin {args.xclbin}")
@@ -308,24 +299,25 @@ if __name__ == "__main__":
     #this will program the FPGA if not already; when running under MPI, program the board ahead of time
     #with xbutil to avoid race conditions on the XCLBIN writes
     ol = pynq.Overlay(args.xclbin, device=local_alveo)
+
+    # set up UDP POE
+    configure_vnx(ol, local_rank, ranks)
+    import pdb; pdb.set_trace()
+
     #get handles to ACCL cores
     cclo_ip = ol.__getattr__(f"ccl_offload_{local_rank}")
     hostctrl_ip = ol.__getattr__(f"hostctrl_{local_rank}")
     #create a memory config corresponding to each CCLO
-    #CCLOs are connected to HBM banks [0:5], [6:11], [12:17]
-    # for simplicity we use the first bank in the range for user buffers, 
-    # second bank for RX buffers, and third bank for theoretical TCP buffers
-    mems = [[ol.HBM0, ol.HBM1, ol.HBM2],
-            [ol.HBM6, ol.HBM7, ol.HBM8],
-            [ol.HBM12, ol.HBM13, ol.HBM14]]
+    #CCLO is connected to DDR banks [0:2]
+    # for simplicity we use the first bank for everything
     cclo_inst = accl(   ranks, 
                         local_rank, 
                         bufsize=args.rxbuf_size, 
-                        protocol="TCP", 
+                        protocol="UDP", 
                         overlay=ol, 
                         cclo_ip=cclo_ip, 
                         hostctrl_ip=hostctrl_ip,
-                        mem = mems[local_rank]
+                        mem = [ol.DDR0, ol.DDR0, ol.DDR0]
                     )
     cclo_inst.set_timeout(10**8)
     #barrier here to make sure all the devices are configured before testing
@@ -361,9 +353,6 @@ if __name__ == "__main__":
                     comm.barrier()
                 if args.sndrcv_strm:
                     test_sendrecv_strm(cclo_inst, world_size, local_rank, args.count, dt=dt)
-                    comm.barrier()
-                if args.sndrcv_fanin:
-                    test_sendrecv_fanin(cclo_inst, world_size, local_rank, args.count, dt=dt)
                     comm.barrier()
                 if args.bcast:
                     test_bcast(cclo_inst, local_rank, i, args.count, dt=dt)
