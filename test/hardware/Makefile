@@ -40,12 +40,11 @@ CMAC_TCP_XO=Vitis_with_100Gbps_TCP-IP/_x.hw.$(XSA)/cmac_krnl.xo
 XCLBIN=$(BUILD_DIR)/ccl_offload.xclbin
 
 HOSTCTRL_XO=../../kernels/plugins/hostctrl/hostctrl.xo
-SUM_XO=$(wildcard ../../kernels/plugins/reduce_sum/*.xo)
-HP_UPCAST_XO=../../kernels/plugins/hp_fp_stream_conv/hp_fp_stream_conv.xo
-HP_DOWNCAST_XO=../../kernels/plugins/fp_hp_stream_conv/fp_hp_stream_conv.xo
+SUM_XO=../../kernels/plugins/reduce_sum/reduce_sum.xo
+COMPRESSION_XO=../../kernels/plugins/hp_compression/hp_compression.xo
 LOOPBACK_XO=../../kernels/plugins/loopback/loopback.xo
 
-ARITHMETIC_XO = $(SUM_XO) $(HP_UPCAST_XO) $(HP_DOWNCAST_XO)
+ARITHMETIC_XO = $(SUM_XO) $(COMPRESSION_XO)
 
 ifeq (all,$(PROFILE))
 	PROFILE_OPTS := --profile.data all:all:all --profile.exec all:all:all --profile.stall all:all:all
@@ -73,8 +72,7 @@ endif
 
 CONFIGFILE := config/link_config_$(BOARD)_$(MODE).ini
 CONFIG := --config $(CONFIGFILE)
-ifeq (vnx,$(MODE))
-	CMAC_IP_FOLDER = $(shell readlink -f ./$(CMACDIR)/cmac)
+ifeq (udp,$(MODE))
 	ifeq (u50,$(findstring u50, $(PLATFORM)))
 		HLS_IP_FOLDER  = $(shell readlink -f ./$(NETLAYERHLS)/synthesis_results_HMB)
 	endif
@@ -87,21 +85,15 @@ ifeq (vnx,$(MODE))
 	ifeq (u280,$(findstring u280, $(PLATFORM)))
 		HLS_IP_FOLDER  = $(shell readlink -f ./$(NETLAYERHLS)/synthesis_results_HMB)
 	endif
-	CONFIG += --connectivity.nk cmac_$(ETH_IF):1:cmac_inst
-	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/$(VNX)/post_sys_link.tcl
+	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/$(VNX)/Ethernet/post_sys_link.tcl
 	NET_XO = $(CMAC_UDP_XO) $(UDP_XO)
-	CONFIG += --user_ip_repo_paths $(CMAC_IP_FOLDER)
+	OTHER_XO = $(LOOPBACK_XO)
 	CONFIG += --user_ip_repo_paths $(HLS_IP_FOLDER)
 else ifeq (tri,$(MODE))
 	ETH_IF := none
 	NET_XO = $(TCP_DUMMY_XO)
 	OTHER_XO = $(LOOPBACK_XO)
 	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/tcl/post_sys_link_tri.tcl
-else ifeq (lb,$(MODE))
-	ETH_IF := none
-	NET_XO = $(TCP_DUMMY_XO)
-	OTHER_XO = $(LOOPBACK_XO)
-	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/tcl/post_sys_link_lb.tcl
 else ifeq (tcp, $(MODE))
 	CMAC_TCP_XO=Vitis_with_100Gbps_TCP-IP/_x.hw.$(XSA)/cmac_krnl.xo
 	NET_XO = $(TCP_XO) $(CMAC_TCP_XO)

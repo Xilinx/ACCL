@@ -24,3 +24,6 @@
 [submodule "hlslib"]
 	path = hlslib
 	url = https://github.com/quetric/hlslib.git
+[submodule "test/xrt/cxxopts"]
+	path = test/xrt/cxxopts
+	url = https://github.com/jarro2783/cxxopts.git

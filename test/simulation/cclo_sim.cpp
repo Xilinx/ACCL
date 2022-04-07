@@ -33,17 +33,25 @@
 #include "cclo_sim.h"
 #include <filesystem>
 #include "zmq_intf.h"
+#include "log.hpp"
+
+#ifndef DEFAULT_LOG_LEVEL
+    #define DEFAULT_LOG_LEVEL 3
+#endif
 
 using namespace std;
 using namespace hlslib;
 
-const axilite control("s_axi_control");
-const axistream callreq("s_axis_call_req");
-const axistream callack("m_axis_call_ack");
-const axistream eth_tx("m_axis_eth_tx_data");
-const axistream eth_rx("s_axis_eth_rx_data");
-const aximm datamem("s_axi_data");
-bool stop = false;
+namespace {
+    const axilite control("s_axi_control");
+    const axistream callreq("s_axis_call_req");
+    const axistream callack("m_axis_call_ack");
+    const axistream eth_tx("m_axis_eth_tx_data");
+    const axistream eth_rx("s_axis_eth_rx_data");
+    const aximm datamem("s_axi_data");
+    bool stop = false;
+    Log logger;
+}
 
 void control_read_fsm(XSI_DUT *dut, Stream<unsigned int> &addr, Stream<unsigned int> &ret){
     static axi_fsm_state state = VALID_ADDR;
@@ -340,14 +348,14 @@ void eth_ingress_fsm(XSI_DUT *dut, Stream<stream_word> &val){
 void eth_egress_fsm(XSI_DUT *dut, Stream<stream_word> &val){
     stream_word tmp;
     if(val.IsFull()){
-        dut->clear(eth_tx.tready());   
+        dut->clear(eth_tx.tready());
     } else{
         dut->set(eth_tx.tready());
         if(dut->test(eth_tx.tvalid())){
             tmp.data = dut->read<512>(eth_tx.tdata());
             tmp.dest = dut->read(eth_tx.tdest());
             tmp.last = dut->read(eth_tx.tlast());
-            tmp.keep = dut->read<64>(eth_tx.tkeep());        
+            tmp.keep = dut->read<64>(eth_tx.tkeep());
             val.Push(tmp);
         }
     }
@@ -359,9 +367,9 @@ void interface_handler(XSI_DUT *dut, Stream<unsigned int> &axilite_rd_addr, Stre
                         Stream<ap_uint<64> > &aximm_wr_addr, Stream<ap_uint<512> > &aximm_wr_data, Stream<ap_uint<64> > &aximm_wr_strb,
                         Stream<unsigned int> &callreq, Stream<unsigned int> &callack,
                         Stream<stream_word> &eth_tx_data, Stream<stream_word> &eth_rx_data){
-    cout << "Starting XSI interface server" << endl;
+    logger << log_level::info << "Starting XSI interface server" << endl;
     while(!stop){
-        dut->run_ncycles(1); 
+        dut->run_ncycles(1);
         control_read_fsm(dut, axilite_rd_addr, axilite_rd_data);
         control_write_fsm(dut, axilite_wr_addr, axilite_wr_data);
         data_read_fsm(dut, aximm_rd_addr, aximm_rd_data);
@@ -371,7 +379,7 @@ void interface_handler(XSI_DUT *dut, Stream<unsigned int> &axilite_rd_addr, Stre
         eth_ingress_fsm(dut, eth_rx_data);
         eth_egress_fsm(dut, eth_tx_data);
     }
-    cout << "Exiting XSI interface server" << endl;
+    logger << log_level::info << "Exiting XSI interface server" << endl;
 }
 
 //this function copies from the global var stop
@@ -389,38 +397,48 @@ void finish(int signum) {
 }
 
 int main(int argc, char **argv)
-{ 
+{
     std::string simengine_libname = "librdi_simulator_kernel.so";
     std::string design_libname;
 
     int world_size; // number of processes
     int local_rank; // the rank of the process
+
+    char *level_env = getenv("LOG_LEVEL");
+    log_level level;
+    if (level_env) {
+        level = static_cast<log_level>(strtoul(level_env, nullptr, 10));
+    } else {
+        level = static_cast<log_level>(DEFAULT_LOG_LEVEL);
+    }
+    logger = Log(level);
+
     try {
         MPI_Init(NULL, NULL);      // initialize MPI environment
         MPI_Comm_size(MPI_COMM_WORLD, &world_size);
         MPI_Comm_rank(MPI_COMM_WORLD, &local_rank);
     } catch (std::exception& e) {
-        std::cerr << "ERROR during MPI initialization: " << e.what() << std::endl;
+        logger << log_level::error << "Error during MPI initialization: " << e.what() << std::endl;
         world_size = 1;
         local_rank = 0;
     }
-    cout << "World Size: " << world_size << " Local Rank: " << local_rank << endl; 
+    logger << log_level::info << "World Size: " << world_size << " Local Rank: " << local_rank << endl;
 
 
     design_libname = std::string(argv[3]);
 
-    std::cout << "Design DLL     : " << design_libname << std::endl;
-    std::cout << "Sim Engine DLL : " << simengine_libname << std::endl;
-    std::cout << "Library path: " << std::getenv("LD_LIBRARY_PATH") << std::endl;
+    logger << log_level::verbose << "Design DLL     : " << design_libname << std::endl;
+    logger << log_level::verbose << "Sim Engine DLL : " << simengine_libname << std::endl;
+    logger << log_level::verbose << "Library path: " << std::getenv("LD_LIBRARY_PATH") << std::endl;
     std::string wdb_name = filesystem::current_path().string() + "/waveform_rank" + std::to_string(local_rank) + ".wdb";
-    std::cout << "Waveform : " << wdb_name << std::endl;
-    XSI_DUT dut(design_libname, simengine_libname, "ap_rst_n", true, "ap_clk", 4, wdb_name);
-    std::cout << "DUT initialized" << std::endl;
+    logger << log_level::verbose << "Waveform : " << wdb_name << std::endl;
+    XSI_DUT dut(design_libname, simengine_libname, "ap_rst_n", true, "ap_clk", 4, wdb_name, logger);
+    logger << log_level::info << "DUT initialized" << std::endl;
 
     string eth_type = argv[1];
     unsigned int starting_port = atoi(argv[2]);
 
-    zmq_intf_context ctx = zmq_intf(starting_port, local_rank, world_size);
+    zmq_intf_context ctx = zmq_intf(starting_port, local_rank, world_size, logger);
 
     int status = 0;
 
@@ -445,25 +463,25 @@ int main(int argc, char **argv)
         signal(SIGTERM, finish);//for running under MPI, which sends SIGTERM instead of SIGINT when it itself receives SIGINT
 
         //reset design and let it run for a while to initialize
-        cout << "Resetting design" << endl;
+        logger << log_level::verbose << "Resetting design" << endl;
         dut.reset_design();
-        cout << "Reset done" << endl;
-        cout << "Initializing design" << endl;
+        logger << log_level::verbose << "Reset done" << endl;
+        logger << log_level::verbose << "Initializing design" << endl;
         dut.run_ncycles(1000);
-        cout << "Initialization done" << endl;
+        logger << log_level::verbose << "Initialization done" << endl;
 
         HLSLIB_DATAFLOW_INIT();
         HLSLIB_DATAFLOW_FUNCTION(interface_handler, &dut,
-                                    axilite_rd_addr, axilite_rd_data, 
-                                    axilite_wr_addr, axilite_wr_data, 
-                                    aximm_rd_addr, aximm_rd_data, 
+                                    axilite_rd_addr, axilite_rd_data,
+                                    axilite_wr_addr, axilite_wr_data,
+                                    aximm_rd_addr, aximm_rd_data,
                                     aximm_wr_addr, aximm_wr_data, aximm_wr_strb,
                                     callreq, callack,
                                     eth_tx_data, eth_rx_data);
         HLSLIB_DATAFLOW_FUNCTION(zmq_cmd_server,  &ctx,
-                                    axilite_rd_addr, axilite_rd_data, 
-                                    axilite_wr_addr, axilite_wr_data, 
-                                    aximm_rd_addr, aximm_rd_data, 
+                                    axilite_rd_addr, axilite_rd_data,
+                                    axilite_wr_addr, axilite_wr_data,
+                                    aximm_rd_addr, aximm_rd_data,
                                     aximm_wr_addr, aximm_wr_data, aximm_wr_strb,
                                     callreq, callack);
         //ZMQ to other nodes process(es)
@@ -473,21 +491,19 @@ int main(int argc, char **argv)
         HLSLIB_DATAFLOW_FINALIZE();
     }
     catch (std::exception& e) {
-        std::cerr << "ERROR: An exception occurred: " << e.what() << std::endl;
+        logger << log_level::error << "An exception occurred: " << e.what() << std::endl;
         status = 2;
     }
     catch (...) {
-        std::cerr << "ERROR: An unknown exception occurred." << std::endl;
+        logger << log_level::error << "An unknown exception occurred." << std::endl;
         status = 3;
     }
 
     if(status == 0) {
-        std::cout << "PASSED test\n";
+        logger << log_level::info << "PASSED test" << std::endl;
     } else {
-        std::cout << "FAILED test\n";
+        logger << log_level::warning << "FAILED test" << std::endl;
     }
 
     exit(status);
 }
-
-

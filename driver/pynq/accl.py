@@ -58,6 +58,7 @@ class SimBuffer():
             SimBuffer.next_free_address += math.ceil(data.nbytes/4096)*4096
         else:
             self.physical_address = physical_address
+        self.device_address = self.physical_address
     
     # Devicemem read request  {"type": 2, "addr": <uint>, "len": <uint>}
     # Devicemem read response {"status": OK|ERR, "rdata": <array of uint>}
@@ -111,8 +112,7 @@ class SimDevice():
 
     # Call request  {"type": 4, arg names and values}
     # Call response {"status": OK|ERR}
-    def call(self, scenario, count, comm, root_src_dst, function, tag, arithcfg, compression_flags, stream_flags, addr_0, addr_1, addr_2, waitfor=[]):
-        assert len(waitfor) == 0, "SimDevice does not support chaining"
+    def call(self, scenario, count, comm, root_src_dst, function, tag, arithcfg, compression_flags, stream_flags, addr_0, addr_1, addr_2):
         self.socket.send_json({ "type": 4,
                                 "scenario": scenario,
                                 "count": count,
@@ -123,14 +123,13 @@ class SimDevice():
                                 "arithcfg": arithcfg,
                                 "compression_flags": compression_flags,
                                 "stream_flags": stream_flags,
-                                "addr_0": addr_0.physical_address,
-                                "addr_1": addr_1.physical_address,
-                                "addr_2": addr_2.physical_address})
+                                "addr_0": addr_0,
+                                "addr_1": addr_1,
+                                "addr_2": addr_2})
         ack = self.socket.recv_json()
         assert ack["status"] == 0, "ZMQ call error"
 
-    def start(self, scenario, count, comm, root_src_dst, function, tag, arithcfg, compression_flags, stream_flags, addr_0, addr_1, addr_2, waitfor=[]):
-        assert len(waitfor) == 0, "SimDevice does not support chaining"
+    def start(self, scenario, count, comm, root_src_dst, function, tag, arithcfg, compression_flags, stream_flags, addr_0, addr_1, addr_2):
         self.socket.send_json({ "type": 4,
                                 "scenario": scenario,
                                 "count": count,
@@ -141,9 +140,9 @@ class SimDevice():
                                 "arithcfg": arithcfg,
                                 "compression_flags": compression_flags,
                                 "stream_flags": stream_flags,
-                                "addr_0": addr_0.physical_address,
-                                "addr_1": addr_1.physical_address,
-                                "addr_2": addr_2.physical_address})
+                                "addr_0": addr_0,
+                                "addr_1": addr_1,
+                                "addr_2": addr_2})
         return self
 
     def read(self, offset):
@@ -157,12 +156,10 @@ class SimDevice():
         assert ack["status"] == 0, "ZMQ call error"
 
 class AlveoDevice():
-    def __init__(self, xclbin, board_idx=0, core_idx=0, mem=None):
-        print(f"AlveoDevice connecting to board {board_idx} core {core_idx} xclbin {xclbin}")
-        local_alveo = pynq.Device.devices[board_idx]
-        self.ol = pynq.Overlay(xclbin, device=local_alveo)
-        self.cclo = self.ol.__getattr__(f"ccl_offload_{core_idx}")
-        self.hostctrl = self.ol.__getattr__(f"hostctrl_{core_idx}")
+    def __init__(self, overlay, cclo_ip, hostctrl_ip, mem=None):
+        self.ol = overlay
+        self.cclo = cclo_ip
+        self.hostctrl = hostctrl_ip
         self.mmio = self.cclo.mmio
         if mem is None:
             print("Best-effort attempt at identifying memories to use for RX buffers")
@@ -181,6 +178,11 @@ class AlveoDevice():
                 self.devicemem   = self.ol.HBM0
                 self.rxbufmem    = [self.ol.HBM0, self.ol.HBM1, self.ol.HBM2, self.ol.HBM3, self.ol.HBM4, self.ol.HBM5] 
                 self.networkmem  = self.ol.HBM6
+        else:
+            print("Applying user-provided memory config")
+            self.devicemem = mem[0]
+            self.rxbufmem = mem[1]
+            self.networkmem = mem[2]
         print("AlveoDevice connected")
 
     def read(self, offset):
@@ -189,14 +191,15 @@ class AlveoDevice():
     def write(self, offset, val):
         return self.mmio.write(offset, val)
 
-    def call(self, scenario, count, comm, root_src_dst, function, tag, arithcfg, compression_flags, stream_flags, addr_0, addr_1, addr_2, waitfor=[]):
+    def call(self, scenario, count, comm, root_src_dst, function, tag, arithcfg, compression_flags, stream_flags, addr_0, addr_1, addr_2):
         if self.hostctrl is not None:
-            self.hostctrl.call(scenario, count, comm, root_src_dst, function, tag, arithcfg, compression_flags, stream_flags, addr_0, addr_1, addr_2, waitfor=waitfor)
+            self.hostctrl.call(scenario, count, comm, root_src_dst, function, tag, arithcfg, compression_flags, stream_flags, addr_0, addr_1, addr_2)
         else:
             raise Exception("Host calling not supported, no hostctrl found")
-    def start(self, scenario, count, comm, root_src_dst, function, tag, arithcfg, compression_flags, stream_flags, addr_0, addr_1, addr_2, waitfor=[]):
+
+    def start(self, scenario, count, comm, root_src_dst, function, tag, arithcfg, compression_flags, stream_flags, addr_0, addr_1, addr_2):
         if self.hostctrl is not None:
-            return self.hostctrl.start(scenario, count, comm, root_src_dst, function, tag, arithcfg, compression_flags, stream_flags, addr_0, addr_1, addr_2, waitfor=waitfor)
+            return self.hostctrl.start(scenario, count, comm, root_src_dst, function, tag, arithcfg, compression_flags, stream_flags, addr_0, addr_1, addr_2)
         else:
             raise Exception("Host calling not supported, no hostctrl found")
 
@@ -288,7 +291,7 @@ class ACCLArithConfig():
 
 ACCL_DEFAULT_ARITH_CONFIG = {
     ('float16', 'float16'): ACCLArithConfig(2, 2, 0, 0, 0, 0, [4]),
-    ('float32', 'float16'): ACCLArithConfig(4, 2, 0, 1, 1, 1, [4]),
+    ('float32', 'float16'): ACCLArithConfig(4, 2, 0, 0, 1, 1, [4]),
     ('float32', 'float32'): ACCLArithConfig(4, 4, 0, 0, 0, 0, [0]),
     ('float64', 'float64'): ACCLArithConfig(8, 8, 0, 0, 0, 0, [1]),
     ('int32'  , 'int32'  ): ACCLArithConfig(4, 4, 0, 0, 0, 0, [2]),
@@ -335,8 +338,8 @@ class accl():
     """
     ACCL Python Driver
     """
-    def __init__(self, ranks, local_rank, xclbin=None, protocol="TCP", board_idx=0, nbufs=16, bufsize=1024, mem=None, arith_config=ACCL_DEFAULT_ARITH_CONFIG, sim_sock=None, core_idx=0):
-        assert xclbin is not None or sim_sock is not None, "Either simulation socket or xclbin must be provided"
+    def __init__(self, ranks, local_rank, protocol="TCP", nbufs=16, bufsize=1024, mem=None, overlay=None, cclo_ip=None, hostctrl_ip=None, arith_config=ACCL_DEFAULT_ARITH_CONFIG, sim_sock=None):
+        assert overlay is not None or sim_sock is not None, "Either simulation socket or FPGA overlay must be provided"
         self.cclo = None
         #define supported types and corresponding arithmetic config
         self.arith_config = {}
@@ -369,7 +372,8 @@ class accl():
         if self.sim_mode:
             self.cclo = SimDevice(sim_sock)
         else:
-            self.cclo = AlveoDevice(xclbin, board_idx=board_idx, core_idx=core_idx, mem=mem)
+            assert (overlay is not None) and (cclo_ip is not None) and (hostctrl_ip is not None)
+            self.cclo = AlveoDevice(overlay, cclo_ip, hostctrl_ip, mem=mem)
 
         print("CCLO HWID: {} at {}".format(hex(self.get_hwid()), hex(self.cclo.mmio.base_addr)))
         
@@ -561,7 +565,7 @@ class accl():
             #this must be a housekeeping call, no config needed
             arithcfg = 0
             compression_flags = ACCLCompressionFlags.NO_COMPRESSION
-            return arithcfg, compression_flags, addr_0, addr_1, addr_2
+            return arithcfg, compression_flags, addr_0.device_address, addr_1.device_address, addr_2.device_address
         # if no compressed data type specified, set same as uncompressed
         compression_flags = ACCLCompressionFlags.NO_COMPRESSION
         if compress_dtype is None:
@@ -594,7 +598,7 @@ class accl():
                 arithcfg = self.arith_config[(dtypes.pop().name, compress_dtype.name)]
             else:
                 assert compress_dtype in dtypes, "Unsupported data type combination"
-                dtypes.discard(compress_dtype);
+                dtypes.discard(compress_dtype)
                 # with operand compression
                 c_dt = compress_dtype
                 u_dt = dtypes.pop()
@@ -607,17 +611,17 @@ class accl():
                     compression_flags |= ACCLCompressionFlags.RES_COMPRESSED
                 # set arithcfg
                 arithcfg = self.arith_config[(u_dt.name, c_dt.name)]
-        return arithcfg.addr, compression_flags, addr_0, addr_1, addr_2
+        return arithcfg.addr, compression_flags, addr_0.device_address, addr_1.device_address, addr_2.device_address
 
-    def call_async(self, scenario=CCLOp.nop, count=1, comm=0, root_src_dst=0, function=0, tag=TAG_ANY, compress_dtype=None, stream_flags=ACCLStreamFlags.NO_STREAM, addr_0=None, addr_1=None, addr_2=None, waitfor=[]):
+    def call_async(self, scenario=CCLOp.nop, count=1, comm=0, root_src_dst=0, function=0, tag=TAG_ANY, compress_dtype=None, stream_flags=ACCLStreamFlags.NO_STREAM, addr_0=None, addr_1=None, addr_2=None):
         assert self.config_rdy, "CCLO not configured, cannot call"
         arithcfg, compression_flags, addr_0, addr_1, addr_2 = self.prepare_call(addr_0, addr_1, addr_2, compress_dtype)
-        return self.cclo.start(scenario, count, comm, root_src_dst, function, tag, arithcfg, compression_flags, stream_flags, addr_0, addr_1, addr_2, waitfor=waitfor)        
+        return self.cclo.start(scenario, count, comm, root_src_dst, function, tag, arithcfg, compression_flags, stream_flags, addr_0, addr_1, addr_2)        
 
     def call_sync(self, scenario=CCLOp.nop, count=1, comm=0, root_src_dst=0, function=0, tag=TAG_ANY, compress_dtype=None, stream_flags=ACCLStreamFlags.NO_STREAM, addr_0=None, addr_1=None, addr_2=None):
         assert self.config_rdy, "CCLO not configured, cannot call"
         arithcfg, compression_flags, addr_0, addr_1, addr_2 = self.prepare_call(addr_0, addr_1, addr_2, compress_dtype)
-        return self.cclo.call(scenario, count, comm, root_src_dst, function, tag, arithcfg, compression_flags, stream_flags, addr_0, addr_1, addr_2)        
+        self.cclo.call(scenario, count, comm, root_src_dst, function, tag, arithcfg, compression_flags, stream_flags, addr_0, addr_1, addr_2)        
 
     def get_retcode(self):
         return self.cclo.read(RETCODE_OFFSET)
@@ -645,12 +649,8 @@ class accl():
         #TODO: add check
         return self.cclo.read(IDCODE_OFFSET) 
 
-    def set_timeout(self, value, run_async=False, waitfor=[]):
-        handle = self.call_async(scenario=CCLOp.config, count=value, function=CCLOCfgFunc.set_timeout, waitfor=waitfor)
-        if run_async:
-            return handle
-        else:
-            handle.wait()     
+    def set_timeout(self, value, run_async=False):
+        self.call_sync(scenario=CCLOp.config, count=value, function=CCLOCfgFunc.set_timeout)
 
     def init_connection(self, comm_id=0):
         print("Opening ports to communicator ranks")
@@ -754,29 +754,29 @@ class accl():
    
 
     @self_check_return_value
-    def nop(self, run_async=False, waitfor=[]):
+    def nop(self, run_async=False):
         #calls the accelerator with no work. Useful for measuring call latency
-        handle = self.call_async(scenario=CCLOp.nop, waitfor=waitfor)
+        handle = self.call_async(scenario=CCLOp.nop)
         if run_async:
             return handle 
         else:
             handle.wait()
 
     @self_check_return_value
-    def send(self, comm_id, srcbuf, count, dst, tag=TAG_ANY, from_fpga=False, stream_flags=ACCLStreamFlags.NO_STREAM, run_async=False, waitfor=[]):
+    def send(self, comm_id, srcbuf, count, dst, tag=TAG_ANY, from_fpga=False, stream_flags=ACCLStreamFlags.NO_STREAM, run_async=False):
         if not from_fpga:
             srcbuf.sync_to_device()
-        handle = self.call_async(scenario=CCLOp.send, count=count, comm=self.communicators[comm_id]["addr"], root_src_dst=dst, tag=tag, stream_flags=stream_flags, addr_0=srcbuf, waitfor=waitfor)
+        handle = self.call_async(scenario=CCLOp.send, count=count, comm=self.communicators[comm_id]["addr"], root_src_dst=dst, tag=tag, stream_flags=stream_flags, addr_0=srcbuf)
         if run_async:
             return handle 
         else:
             handle.wait()
     
     @self_check_return_value
-    def recv(self, comm_id, dstbuf, count, src, tag=TAG_ANY, to_fpga=False, run_async=False, waitfor=[]):
+    def recv(self, comm_id, dstbuf, count, src, tag=TAG_ANY, to_fpga=False, run_async=False):
         if not to_fpga and run_async:
             warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
-        handle = self.call_async(scenario=CCLOp.recv, count=count, comm=self.communicators[comm_id]["addr"], root_src_dst=src, tag=tag, addr_2=dstbuf, waitfor=waitfor)
+        handle = self.call_async(scenario=CCLOp.recv, count=count, comm=self.communicators[comm_id]["addr"], root_src_dst=src, tag=tag, addr_2=dstbuf)
         if run_async:
             return handle
         else:
@@ -785,13 +785,13 @@ class accl():
             dstbuf.sync_from_device()
 
     @self_check_return_value
-    def copy(self, srcbuf, dstbuf, count, from_fpga=False, to_fpga=False, run_async=False, waitfor=[]):
+    def copy(self, srcbuf, dstbuf, count, from_fpga=False, to_fpga=False, run_async=False):
         if not to_fpga and run_async:
             warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
         # performs dstbuf = srcbuf
         if not from_fpga:
             srcbuf.sync_to_device()
-        handle = self.call_async(scenario=CCLOp.copy, count=count, addr_0=srcbuf, addr_2=dstbuf, waitfor=waitfor)
+        handle = self.call_async(scenario=CCLOp.copy, count=count, addr_0=srcbuf, addr_2=dstbuf)
         if run_async:
             return handle
         
@@ -800,7 +800,7 @@ class accl():
             dstbuf.sync_from_device()
 
     @self_check_return_value
-    def combine(self, count, func, val1, val2, result, val1_from_fpga=False, val2_from_fpga=False, to_fpga=False, run_async=False, waitfor=[]):
+    def combine(self, count, func, val1, val2, result, val1_from_fpga=False, val2_from_fpga=False, to_fpga=False, run_async=False):
         if not to_fpga and run_async:
             warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
         # TODO: check datatype support
@@ -809,7 +809,7 @@ class accl():
             val1.sync_to_device()
         if not val2_from_fpga:
             val2.sync_to_device()
-        handle = self.call_async(scenario=CCLOp.combine, count=count, function=func, addr_0=val1, addr_1=val2, addr_2=result, waitfor=waitfor)
+        handle = self.call_async(scenario=CCLOp.combine, count=count, function=func, addr_0=val1, addr_1=val2, addr_2=result)
         if run_async:
             return handle
         
@@ -818,7 +818,7 @@ class accl():
             result.sync_from_device()
     
     @self_check_return_value
-    def external_stream_kernel(self, src_buf, dst_buf, from_fpga=False, to_fpga=False, run_async=False, waitfor=[]):
+    def external_stream_kernel(self, src_buf, dst_buf, from_fpga=False, to_fpga=False, run_async=False):
         if not to_fpga and run_async:
             warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
         if src_buf.size <= 4:
@@ -828,7 +828,7 @@ class accl():
         if not from_fpga:
             src_buf.sync_to_device()
 
-        handle = self.call_async(scenario=CCLOp.ext_stream_krnl, count=src_buf.size, addr_0=src_buf, addr_1=dst_buf, waitfor=waitfor)
+        handle = self.call_async(scenario=CCLOp.ext_stream_krnl, count=src_buf.size, addr_0=src_buf, addr_1=dst_buf)
         if run_async:
             return handle
         
@@ -837,7 +837,7 @@ class accl():
             dst_buf.sync_from_device()
 
     @self_check_return_value
-    def bcast(self, comm_id, buf, count, root, from_fpga=False, to_fpga=False, run_async=False, waitfor=[]):
+    def bcast(self, comm_id, buf, count, root, from_fpga=False, to_fpga=False, run_async=False):
         comm = self.communicators[comm_id]
         is_root = comm["local_rank"] == root
         if not to_fpga and not(is_root) and run_async:
@@ -849,7 +849,7 @@ class accl():
         if not from_fpga and is_root:
             buf.sync_to_device()
 
-        prevcall = [self.call_async(scenario=CCLOp.bcast, count=count, comm=self.communicators[comm_id]["addr"], root_src_dst=root, addr_0=buf, waitfor=waitfor)]
+        prevcall = [self.call_async(scenario=CCLOp.bcast, count=count, comm=self.communicators[comm_id]["addr"], root_src_dst=root, addr_0=buf)]
         
         if run_async:
             return prevcall[0]
@@ -859,7 +859,7 @@ class accl():
             buf.sync_from_device()
 
     @self_check_return_value
-    def scatter(self, comm_id, sbuf, rbuf, count, root, from_fpga=False, to_fpga=False, run_async=False, waitfor=[]):
+    def scatter(self, comm_id, sbuf, rbuf, count, root, from_fpga=False, to_fpga=False, run_async=False):
         if not to_fpga and run_async:
             warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
         if count == 0:
@@ -872,7 +872,7 @@ class accl():
         if not from_fpga and local_rank == root:
             sbuf[:count*p].sync_to_device()
 
-        prevcall = [self.call_async(scenario=CCLOp.scatter, count=count, comm=comm["addr"], root_src_dst=root, addr_0=sbuf, addr_2=rbuf[0:count], waitfor=waitfor)]
+        prevcall = [self.call_async(scenario=CCLOp.scatter, count=count, comm=comm["addr"], root_src_dst=root, addr_0=sbuf, addr_2=rbuf[0:count])]
 
         if run_async:
             return prevcall[0]
@@ -882,7 +882,7 @@ class accl():
             rbuf[0:count].sync_from_device()
 
     @self_check_return_value
-    def gather(self, comm_id, sbuf, rbuf, count, root, from_fpga=False, to_fpga=False, run_async=False, waitfor=[]):
+    def gather(self, comm_id, sbuf, rbuf, count, root, from_fpga=False, to_fpga=False, run_async=False):
         if not to_fpga and run_async:
             warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
         if count == 0:
@@ -899,7 +899,7 @@ class accl():
         if not from_fpga:
             sbuf[0:count].sync_to_device()
             
-        prevcall = [self.call_async(scenario=CCLOp.gather, count=count, comm=comm["addr"], root_src_dst=root, addr_0=sbuf, addr_2=rbuf, waitfor=waitfor)]
+        prevcall = [self.call_async(scenario=CCLOp.gather, count=count, comm=comm["addr"], root_src_dst=root, addr_0=sbuf, addr_2=rbuf)]
             
         if run_async:
             return prevcall[0]
@@ -909,7 +909,7 @@ class accl():
             rbuf[:count*p].sync_from_device()
 
     @self_check_return_value
-    def allgather(self, comm_id, sbuf, rbuf, count, from_fpga=False, to_fpga=False, run_async=False, waitfor=[]):
+    def allgather(self, comm_id, sbuf, rbuf, count, from_fpga=False, to_fpga=False, run_async=False):
         if not to_fpga and run_async:
             warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
         if count == 0:
@@ -924,7 +924,7 @@ class accl():
         if not from_fpga:
             sbuf[0:count].sync_to_device()
 
-        prevcall = [self.call_async(scenario=CCLOp.allgather, count=count, comm=comm["addr"], addr_0=sbuf, addr_2=rbuf, waitfor=waitfor)]
+        prevcall = [self.call_async(scenario=CCLOp.allgather, count=count, comm=comm["addr"], addr_0=sbuf, addr_2=rbuf)]
 
         if run_async:
             return prevcall[0]
@@ -936,7 +936,7 @@ class accl():
     #TODO: figure out if we need to mess with the datatypes
     # https://stackoverflow.com/questions/49135350/how-to-create-a-uint16-numpy-array-from-a-uint8-raw-image-data-array
     @self_check_return_value
-    def reduce(self, comm_id, sbuf, rbuf, count, root, func, from_fpga=False, to_fpga=False, run_async=False, waitfor=[]):
+    def reduce(self, comm_id, sbuf, rbuf, count, root, func, from_fpga=False, to_fpga=False, run_async=False):
         if not to_fpga and run_async:
             warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
         if count == 0:
@@ -950,7 +950,7 @@ class accl():
         if not from_fpga:
             sbuf[0:count].sync_to_device()
 
-        prevcall = [self.call_async(scenario=CCLOp.reduce, count=count, comm=self.communicators[comm_id]["addr"], root_src_dst=root, function=func, addr_0=sbuf, addr_2=rbuf, waitfor=waitfor)]
+        prevcall = [self.call_async(scenario=CCLOp.reduce, count=count, comm=self.communicators[comm_id]["addr"], root_src_dst=root, function=func, addr_0=sbuf, addr_2=rbuf)]
 
         if run_async:
             return prevcall[0]
@@ -960,7 +960,7 @@ class accl():
             rbuf[0:count].sync_from_device()
  
     @self_check_return_value
-    def allreduce(self, comm_id, sbuf, rbuf, count, func, from_fpga=False, to_fpga=False, run_async=False, waitfor=[]):
+    def allreduce(self, comm_id, sbuf, rbuf, count, func, from_fpga=False, to_fpga=False, run_async=False):
         if not to_fpga and run_async:
             warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
         if count == 0:
@@ -969,7 +969,7 @@ class accl():
         if not from_fpga:
             sbuf[0:count].sync_to_device()
 
-        prevcall = [self.call_async(scenario=CCLOp.allreduce, count=count, comm=self.communicators[comm_id]["addr"], function=func, addr_0=sbuf, addr_2=rbuf, waitfor=waitfor)]
+        prevcall = [self.call_async(scenario=CCLOp.allreduce, count=count, comm=self.communicators[comm_id]["addr"], function=func, addr_0=sbuf, addr_2=rbuf)]
 
         if run_async:
             return prevcall[0]
@@ -979,7 +979,7 @@ class accl():
             rbuf[0:count].sync_from_device()
     
     @self_check_return_value
-    def reduce_scatter(self, comm_id, sbuf, rbuf, count, func, from_fpga=False, to_fpga=False, run_async=False, waitfor=[]):
+    def reduce_scatter(self, comm_id, sbuf, rbuf, count, func, from_fpga=False, to_fpga=False, run_async=False):
         if not to_fpga and run_async:
             warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
         if count == 0:
@@ -993,7 +993,7 @@ class accl():
         if not from_fpga:
             sbuf[0:count*p].sync_to_device()
 
-        prevcall = [self.call_async(scenario=CCLOp.reduce_scatter, count=count, comm=self.communicators[comm_id]["addr"], function=func, addr_0=sbuf, addr_2=rbuf, waitfor=waitfor)]
+        prevcall = [self.call_async(scenario=CCLOp.reduce_scatter, count=count, comm=self.communicators[comm_id]["addr"], function=func, addr_0=sbuf, addr_2=rbuf)]
 
         if run_async:
             return prevcall[0]

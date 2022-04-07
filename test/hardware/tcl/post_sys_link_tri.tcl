@@ -15,7 +15,20 @@
 #
 # *******************************************************************************/
 
-source [file dirname [file normalize [info script]]]/rewire.tcl
+proc connect_clk_rst {clksig rstsig rstslr} {
+    if {![catch { connect_bd_net [get_bd_ports clkwiz_kernel_clk_out1] [get_bd_pins $clksig] } ]} {
+        puts "Inferred shell xilinx_u280_xdma_201920_3"
+        connect_bd_net [get_bd_pins slr${rstslr}/peripheral_aresetn] [get_bd_pins $rstsig]
+    }
+    if {![catch { connect_bd_net [get_bd_pins slr1/clkwiz_kernel_clk_out_gen] [get_bd_pins $clksig] } ]} {
+        puts "Inferred shell xilinx_u250_xdma_201830_2"
+        connect_bd_net [get_bd_pins slr${rstslr}/peripheral_aresetn] [get_bd_pins $rstsig]
+    }
+    if {![catch { connect_bd_net [get_bd_pins ss_ucs/aclk_kernel_00] [get_bd_pins $clksig] } ]} {
+        puts "Inferred shell xilinx_u250_gen3x16_xdma_3_1_202020_1"
+        connect_bd_net [get_bd_pins ip_psr_aresetn_kernel_00_slr${rstslr}/peripheral_aresetn] [get_bd_pins $rstsig]
+    }
+}
 
 # Break existing TCP connections and redo them through an AXI switch
 create_bd_cell -type ip -vlnv xilinx.com:ip:axis_switch:1.1 tcp_axis_switch
@@ -35,10 +48,3 @@ connect_bd_intf_net [get_bd_intf_pins network_krnl_1/net_tx] [get_bd_intf_pins t
 connect_bd_intf_net [get_bd_intf_pins tcp_axis_switch/M01_AXIS] [get_bd_intf_pins network_krnl_1/net_rx]
 connect_bd_intf_net [get_bd_intf_pins network_krnl_2/net_tx] [get_bd_intf_pins tcp_axis_switch/S02_AXIS]
 connect_bd_intf_net [get_bd_intf_pins tcp_axis_switch/M02_AXIS] [get_bd_intf_pins network_krnl_2/net_rx]
-
-rewire_compression 0
-rewire_compression 1
-rewire_compression 2
-rewire_reduction 0
-rewire_reduction 1
-rewire_reduction 2

@@ -21,14 +21,20 @@
 #include <chrono>
 #include <thread>
 #include "ccl_offload_control.h"
+#include "log.hpp"
 
 using namespace std;
 using namespace hlslib;
 
-zmq_intf_context zmq_intf(unsigned int starting_port, unsigned int local_rank, unsigned int world_size)
+namespace {
+    Log *logger;
+}
+
+zmq_intf_context zmq_intf(unsigned int starting_port, unsigned int local_rank, unsigned int world_size, Log &log)
 {
     zmq_intf_context ctx;
 
+    logger = &log;
     ctx.cmd_socket = new zmqpp::socket(ctx.context, zmqpp::socket_type::reply);
     ctx.eth_tx_socket = new zmqpp::socket(ctx.context, zmqpp::socket_type::pub);
     ctx.eth_rx_socket = new zmqpp::socket(ctx.context, zmqpp::socket_type::sub);
@@ -36,16 +42,16 @@ zmq_intf_context zmq_intf(unsigned int starting_port, unsigned int local_rank, u
     const string endpoint_base = "tcp://127.0.0.1:";
 
     string cmd_endpoint = endpoint_base + to_string(starting_port + local_rank);
-    cout << cmd_endpoint << endl;
+    *logger << log_level::verbose << "Endpoint: " << cmd_endpoint << endl;
     vector<string> eth_endpoints;
 
     for(int i=0; i<world_size; i++){
         eth_endpoints.emplace_back(endpoint_base + to_string(starting_port+world_size+i));
-        cout << eth_endpoints.at(i) << endl;
+        *logger << log_level::verbose << "Endpoint rank " << i << ": " << eth_endpoints.at(i) << endl;
     }
-    
+
     // bind to the socket(s)
-    cout << "Rank " << local_rank << " binding to " << cmd_endpoint << " and " << eth_endpoints.at(local_rank) << endl;
+    *logger << log_level::info << "Rank " << local_rank << " binding to " << cmd_endpoint << " and " << eth_endpoints.at(local_rank) << endl;
     ctx.cmd_socket->bind(cmd_endpoint);
     ctx.eth_tx_socket->bind(eth_endpoints.at(local_rank));
 
@@ -53,13 +59,13 @@ zmq_intf_context zmq_intf(unsigned int starting_port, unsigned int local_rank, u
 
     // connect to the sockets
     for(int i=0; i<world_size; i++){
-        cout << "Rank " << local_rank << " connecting to " << eth_endpoints.at(i) << endl;
+        *logger << log_level::info << "Rank " << local_rank << " connecting to " << eth_endpoints.at(i) << endl;
         ctx.eth_rx_socket->connect(eth_endpoints.at(i));
     }
 
     this_thread::sleep_for(chrono::milliseconds(1000));
 
-    cout << "Rank " << local_rank << " subscribing to " << local_rank << endl;
+    *logger << log_level::info << "Rank " << local_rank << " subscribing to " << local_rank << endl;
     ctx.eth_rx_socket->subscribe(to_string(local_rank));
 
     this_thread::sleep_for(chrono::milliseconds(1000));
@@ -82,7 +88,7 @@ void eth_endpoint_egress_port(zmq_intf_context *ctx, Stream<stream_word > &in, u
     unsigned int idx=0;
     do{
         tmp = in.Pop();
-        for(int i=0; i<64; i++){ 
+        for(int i=0; i<64; i++){
             if(tmp.keep(i,i) == 1){
                 packet["data"][idx++] = (unsigned int)tmp.data(8*(i+1)-1,8*i);
             }
@@ -106,10 +112,8 @@ void eth_endpoint_egress_port(zmq_intf_context *ctx, Stream<stream_word > &in, u
     //finally package the data
     string str = Json::writeString(builder, packet);
     message << str;
-    cout << "ETH Send " << idx << " bytes to " << dest << endl;
-#ifdef ZMQ_ETH_VERBOSE
-    cout << str << endl;
-#endif
+    *logger << log_level::verbose << "ETH Send " << idx << " bytes to " << dest << endl;
+    *logger << log_level::debug << str << endl;
     ctx->eth_tx_socket->send(message);
     //add some spacing to encourage realistic
     //interleaving between messsages in fabric
@@ -117,14 +121,14 @@ void eth_endpoint_egress_port(zmq_intf_context *ctx, Stream<stream_word > &in, u
 }
 
 void eth_endpoint_ingress_port(zmq_intf_context *ctx, Stream<stream_word > &out){
-    
+
     Json::Reader reader;
 
     // receive the message
     zmqpp::message message;
     if(!ctx->eth_rx_socket->receive(message, true)) return;
 
-    // decompose the message 
+    // decompose the message
     string msg_text, dst_text, src_text, sender_rank_text;
 
     //get and check destination ID
@@ -155,11 +159,8 @@ void eth_endpoint_ingress_port(zmq_intf_context *ctx, Stream<stream_word > &out)
         out.Push(tmp);
     }
 
-    cout << "ETH Receive " << len << " bytes from " << sender_rank_text << endl;
-
-#ifdef ZMQ_ETH_VERBOSE
-    cout << msg_text << endl;
-#endif
+    *logger << log_level::verbose << "ETH Receive " << len << " bytes from " << sender_rank_text << endl;
+    *logger << log_level::debug << msg_text << endl;
 
 }
 
@@ -172,13 +173,11 @@ void serve_zmq(zmq_intf_context *ctx, uint32_t *cfgmem, vector<char> &devicemem,
     zmqpp::message message;
     if(!ctx->cmd_socket->receive(message, true)) return;
 
-    // decompose the message 
+    // decompose the message
     string msg_text;
     message >> msg_text;//message now is in a string
 
-#ifdef ZMQ_CALL_VERBOSE
-    cout << "Received: " << msg_text << endl;
-#endif
+    *logger << log_level::debug << "Received: " << msg_text << endl;
 
     //parse msg_text as json
     Json::Value request;
@@ -195,9 +194,8 @@ void serve_zmq(zmq_intf_context *ctx, uint32_t *cfgmem, vector<char> &devicemem,
         // MMIO read response {"status": OK|ERR, "rdata": <uint>}
         case 0:
             adr = request["addr"].asUInt();
-#ifdef ZMQ_CALL_VERBOSE
-            cout << "MMIO read " << adr << endl;
-#endif
+            *logger << log_level::info << "MMIO read " << adr << endl;
+
             if(adr >= END_OF_EXCHMEM){
                 response["status"] = 1;
                 response["rdata"] = 0;
@@ -209,9 +207,7 @@ void serve_zmq(zmq_intf_context *ctx, uint32_t *cfgmem, vector<char> &devicemem,
         // MMIO write response {"status": OK|ERR}
         case 1:
             adr = request["addr"].asUInt();
-#ifdef ZMQ_CALL_VERBOSE
-            cout << "MMIO write " << adr << endl;
-#endif
+            *logger << log_level::info << "MMIO write " << adr << endl;
             if(adr >= END_OF_EXCHMEM){
                 response["status"] = 1;
             } else {
@@ -223,15 +219,13 @@ void serve_zmq(zmq_intf_context *ctx, uint32_t *cfgmem, vector<char> &devicemem,
         case 2:
             adr = request["addr"].asUInt();
             len = request["len"].asUInt();
-#ifdef ZMQ_CALL_VERBOSE
-            cout << "Mem read " << adr << " len: " << len << endl;
-#endif
+            *logger << log_level::info << "Mem read " << adr << " len: " << len << endl;
             if((adr+len) > devicemem.size()){
                 response["status"] = 1;
                 response["rdata"][0] = 0;
             } else {
-                for (int i=0; i<len; i++) 
-                { 
+                for (int i=0; i<len; i++)
+                {
                     response["rdata"][i] = devicemem.at(adr+i);
                 }
             }
@@ -242,9 +236,7 @@ void serve_zmq(zmq_intf_context *ctx, uint32_t *cfgmem, vector<char> &devicemem,
             adr = request["addr"].asUInt();
             dma_wdata = request["wdata"];
             len = dma_wdata.size();
-#ifdef ZMQ_CALL_VERBOSE
-            cout << "Mem write " << adr << " len: " << len << endl;
-#endif
+            *logger << log_level::info << "Mem write " << adr << " len: " << len << endl;
             if((adr+len) > devicemem.size()){
                 devicemem.resize(adr+len);
             }
@@ -255,9 +247,7 @@ void serve_zmq(zmq_intf_context *ctx, uint32_t *cfgmem, vector<char> &devicemem,
         // Call request  {"type": 4, arg names and values}
         // Call response {"status": OK|ERR}
         case 4:
-#ifdef ZMQ_CALL_VERBOSE
-            cout << "Call with scenario " << request["scenario"].asUInt() << endl;
-#endif
+            *logger << log_level::info << "Call with scenario " << request["scenario"].asUInt() << endl;
             cmd.Push((ap_axiu<32,0,0,0>){.data=request["scenario"].asUInt(), .last=0});
             cmd.Push((ap_axiu<32,0,0,0>){.data=request["count"].asUInt(), .last=0});
             cmd.Push((ap_axiu<32,0,0,0>){.data=request["comm"].asUInt(), .last=0});
@@ -280,9 +270,7 @@ void serve_zmq(zmq_intf_context *ctx, uint32_t *cfgmem, vector<char> &devicemem,
             sts.Pop();
             break;
         default:
-#ifdef ZMQ_CALL_VERBOSE
-            cout << "Unrecognized message" << endl;
-#endif
+            (*logger)("Unrecognized message\n", log_level::warning);
             response["status"] = 1;
     }
     //return message to client
@@ -305,13 +293,11 @@ void serve_zmq(zmq_intf_context *ctx,
     zmqpp::message message;
     if(!ctx->cmd_socket->receive(message, true)) return;
 
-    // decompose the message 
+    // decompose the message
     string msg_text;
     message >> msg_text;//message now is in a string
 
-#ifdef ZMQ_CALL_VERBOSE
-    cout << "Received: " << msg_text << endl;
-#endif
+    *logger << log_level::debug << "Received: " << msg_text << endl;
 
     //parse msg_text as json
     Json::Value request;
@@ -331,9 +317,7 @@ void serve_zmq(zmq_intf_context *ctx,
         // MMIO read response {"status": OK|ERR, "rdata": <uint>}
         case 0:
             adr = request["addr"].asUInt();
-#ifdef ZMQ_CALL_VERBOSE
-            cout << "MMIO read " << adr << endl;
-#endif
+            *logger << log_level::info << "MMIO read " << adr << endl;
             if(adr >= END_OF_EXCHMEM){
                 response["status"] = 1;
                 response["rdata"] = 0;
@@ -353,9 +337,7 @@ void serve_zmq(zmq_intf_context *ctx,
         // MMIO write response {"status": OK|ERR}
         case 1:
             adr = request["addr"].asUInt();
-#ifdef ZMQ_CALL_VERBOSE
-            cout << "MMIO write " << adr << endl;
-#endif
+            *logger << log_level::info << "MMIO write " << adr << endl;
             if(adr >= END_OF_EXCHMEM){
                 response["status"] = 1;
             } else {
@@ -375,9 +357,7 @@ void serve_zmq(zmq_intf_context *ctx,
         case 2:
             adr = request["addr"].asUInt();
             len = request["len"].asUInt();
-#ifdef ZMQ_CALL_VERBOSE
-            cout << "Mem read " << adr << " len: " << len << endl;
-#endif
+            *logger << log_level::info << "Mem read " << adr << " len: " << len << endl;
             if((adr+len) > 256*1024){
                 response["status"] = 1;
                 response["rdata"][0] = 0;
@@ -405,9 +385,7 @@ void serve_zmq(zmq_intf_context *ctx,
             adr = request["addr"].asUInt();
             dma_wdata = request["wdata"];
             len = dma_wdata.size();
-#ifdef ZMQ_CALL_VERBOSE
-            cout << "Mem write " << adr << " len: " << len << endl;
-#endif
+            *logger << log_level::info << "Mem write " << adr << " len: " << len << endl;
             if((adr+len) > 256*1024){
                 response["status"] = 1;
             } else{
@@ -434,9 +412,7 @@ void serve_zmq(zmq_intf_context *ctx,
         // Call request  {"type": 4, arg names and values}
         // Call response {"status": OK|ERR}
         case 4:
-#ifdef ZMQ_CALL_VERBOSE
-            cout << "Call with scenario " << request["scenario"].asUInt() << endl;
-#endif
+            *logger << log_level::info << "Call with scenario " << request["scenario"].asUInt() << endl;
             callreq.Push(request["scenario"].asUInt());
             callreq.Push(request["count"].asUInt());
             callreq.Push(request["comm"].asUInt());
@@ -466,9 +442,7 @@ void serve_zmq(zmq_intf_context *ctx,
             }
             break;
         default:
-#ifdef ZMQ_CALL_VERBOSE
-            cout << "Unrecognized message" << endl;
-#endif
+            (*logger)("Unrecognized message\n", log_level::warning);
             response["status"] = 1;
 
     }
@@ -483,34 +457,34 @@ void zmq_cmd_server(zmq_intf_context *ctx,
                 Stream<ap_uint<64> > &aximm_rd_addr, Stream<ap_uint<512> > &aximm_rd_data,
                 Stream<ap_uint<64> > &aximm_wr_addr, Stream<ap_uint<512> > &aximm_wr_data, Stream<ap_uint<64> > &aximm_wr_strb,
                 Stream<unsigned int> &callreq, Stream<unsigned int> &callack){
-    cout << "Starting ZMQ server" << endl;
+    (*logger)("Starting ZMQ server\n", log_level::info);
     while(!ctx->stop){
         serve_zmq(ctx,
-            axilite_rd_addr, axilite_rd_data, 
-            axilite_wr_addr, axilite_wr_data, 
-            aximm_rd_addr, aximm_rd_data, 
+            axilite_rd_addr, axilite_rd_data,
+            axilite_wr_addr, axilite_wr_data,
+            aximm_rd_addr, aximm_rd_data,
             aximm_wr_addr, aximm_wr_data, aximm_wr_strb,
             callreq, callack
         );
         this_thread::sleep_for(chrono::milliseconds(10));
     }
-    cout << "Exiting ZMQ server" << endl;
+    (*logger)("Exiting ZMQ server\n", log_level::info);
 }
 
 void zmq_eth_egress_server(zmq_intf_context *ctx, Stream<stream_word > &in, unsigned int local_rank, bool remap_dest){
-    cout << "Starting ZMQ Eth Egress server" << endl;
+    (*logger)("Starting ZMQ Eth Egress server\n", log_level::info);
     while(!ctx->stop){
         eth_endpoint_egress_port(ctx, in, local_rank, remap_dest);
         this_thread::sleep_for(chrono::milliseconds(10));
     }
-    cout << "Exiting ZMQ Eth Egress server" << endl;
+    (*logger)("Exiting ZMQ Eth Egress server\n", log_level::info);
 }
 
 void zmq_eth_ingress_server(zmq_intf_context *ctx, Stream<stream_word > &out){
-    cout << "Starting ZMQ Eth Ingress server" << endl;
+    (*logger)("Starting ZMQ Eth Ingress server\n", log_level::info);
     while(!ctx->stop){
         eth_endpoint_ingress_port(ctx, out);
         this_thread::sleep_for(chrono::milliseconds(10));
     }
-    cout << "Exiting ZMQ Eth Ingress server" << endl;
+    (*logger)("Exiting ZMQ Eth Ingress server\n", log_level::info);
 }
