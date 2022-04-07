@@ -39,16 +39,16 @@ class Communicator {
 private:
   CCLO *cclo;
   const std::vector<rank_t> _ranks;
-  int _rank;
+  unsigned int _rank;
   addr_t _communicators_addr;
 
 public:
   addr_t communicators_addr() const { return _communicators_addr; }
 
-  Communicator(CCLO *cclo, const std::vector<rank_t> &ranks, int rank,
+  Communicator(CCLO *cclo, const std::vector<rank_t> &ranks, unsigned int rank,
                addr_t *addr);
 
-  int local_rank() const {
+  unsigned int local_rank() const {
     return _rank;
   }
 

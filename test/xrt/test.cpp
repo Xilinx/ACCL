@@ -566,7 +566,7 @@ options_t parse_options(int argc, char *argv[]) {
   cxxopts::ParseResult result;
   try {
     result = options.parse(argc, argv);
-  } catch (cxxopts::OptionException e) {
+  } catch (cxxopts::OptionException const &e) {
     if (rank == 0) {
       std::cout << "Error: " << e.what() << std::endl;
     }

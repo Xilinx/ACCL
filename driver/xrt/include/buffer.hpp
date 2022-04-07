@@ -40,8 +40,8 @@ public:
    */
   BaseBuffer(void *byte_array, size_t size, dataType type,
              addr_t physical_address)
-      : _byte_array(byte_array), _type(type),
-        _physical_address(physical_address), _size(size) {}
+      : _byte_array(byte_array), _size(size), _type(type),
+        _physical_address(physical_address) {}
 
   /**
    * Sync the host buffer to the device buffer.
@@ -94,10 +94,10 @@ public:
   virtual std::unique_ptr<BaseBuffer> slice(size_t start, size_t end) = 0;
 
 protected:
-  void *const _byte_array;
+  void *_byte_array;
   const size_t _size;
   const dataType _type;
-  const addr_t _physical_address;
+  addr_t _physical_address;
 };
 
 /**
@@ -120,6 +120,8 @@ public:
                    physical_address),
         _buffer(buffer), _length(length){};
 
+  virtual ~Buffer() {};
+
   /**
    * Get the length of the host buffer.
    *
@@ -134,7 +136,13 @@ public:
   dtype &operator[](size_t i) const { return this->_buffer[i]; }
 
 protected:
-  dtype *const _buffer;
+  dtype *_buffer;
   const size_t _length;
+
+  void update_buffer(dtype *buffer, addr_t physical_address) {
+    _buffer = buffer;
+    _byte_array = static_cast<void *>(buffer);
+    _physical_address = physical_address;
+  }
 };
 } // namespace ACCL

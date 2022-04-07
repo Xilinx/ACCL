@@ -20,6 +20,10 @@ project(xrt_test)
 
 set(CMAKE_CXX_STANDARD 17)
 
+# Set useful compile warnings
+add_compile_options(-Wall -Wextra -Wno-unused-variable
+                    -Wno-unused-but-set-variable -Wno-unused-parameter)
+
 if (NOT CMAKE_LIBRARY_OUTPUT_DIRECTORY)
     set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib")
 endif()

@@ -32,9 +32,9 @@ ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
            int devicemem, const std::vector<int> &rxbufmem, int networkmem,
            networkProtocol protocol, int nbufs, addr_t bufsize,
            const arithConfigMap &arith_config)
-    : device(&device), protocol(protocol), sim_mode(false), sim_sock(""),
-      devicemem(devicemem), rxbufmem(rxbufmem), networkmem(networkmem),
-      arith_config(arith_config) {
+    : arith_config(arith_config), protocol(protocol), sim_mode(false),
+      sim_sock(""), devicemem(devicemem), rxbufmem(rxbufmem),
+      networkmem(networkmem), device(&device) {
   cclo = new FPGADevice(cclo_ip, hostctrl_ip);
   initialize_accl(ranks, local_rank, nbufs, bufsize);
 }
@@ -44,8 +44,8 @@ ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
 ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
            const std::string &sim_sock, networkProtocol protocol, int nbufs,
            addr_t bufsize, const arithConfigMap &arith_config)
-    : protocol(protocol), sim_mode(true), sim_sock(sim_sock), devicemem(0),
-      rxbufmem({}), networkmem(0), arith_config(arith_config) {
+    : arith_config(arith_config), protocol(protocol), sim_mode(true),
+      sim_sock(sim_sock), devicemem(0), rxbufmem({}), networkmem(0) {
   cclo = new SimDevice(sim_sock);
   initialize_accl(ranks, local_rank, nbufs, bufsize);
 }

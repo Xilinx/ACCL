@@ -22,7 +22,7 @@
 
 namespace ACCL {
 Communicator::Communicator(CCLO *cclo, const std::vector<rank_t> &ranks,
-                           int rank, addr_t *addr)
+                           unsigned int rank, addr_t *addr)
     : cclo(cclo), _ranks(ranks), _rank(rank),
       _communicators_addr(*addr) {
   cclo->write(*addr, _ranks.size());

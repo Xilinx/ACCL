@@ -35,6 +35,8 @@ class FPGADevice : public CCLO {
 public:
   FPGADevice(xrt::ip &cclo_ip, xrt::kernel &hostctrl_ip);
 
+  ~FPGADevice() override {}
+
   void call(const Options &options) override;
 
   void start(const Options &options) override;

@@ -31,19 +31,25 @@
 namespace ACCL {
 template <typename dtype> class FPGABuffer : public Buffer<dtype> {
 public:
-  FPGABuffer(dtype *buffer, addr_t length, dataType type, xrt::bo bo_)
-      : bo(bo), Buffer<dtype>(buffer, length, type, bo.address()) {}
+  FPGABuffer(xrt::bo bo_, addr_t length, dataType type)
+      : Buffer<dtype>(nullptr, length, type, 0x0), bo(bo_), is_aligned(true) {
+    set_buffer();
+  }
   FPGABuffer(dtype *buffer, addr_t length, dataType type, xrt::device &device,
              xrt::memory_group mem_grp)
-      : bo(device, get_aligned_buffer(buffer, length * sizeof(dtype)),
-           length * sizeof(dtype), mem_grp),
-        Buffer<dtype>(buffer, length, type, bo.address()) {}
+      : Buffer<dtype>(nullptr, length, type, 0x0),
+        bo(device, get_aligned_buffer(buffer, length * sizeof(dtype)),
+           length * sizeof(dtype), mem_grp) {
+    set_buffer();
+  }
   FPGABuffer(addr_t length, dataType type, xrt::device &device,
              xrt::memory_group mem_grp)
-      : bo(device, length * sizeof(dtype), mem_grp), Buffer<dtype>(
-                                                         bo.map<dtype *>(),
-                                                         length, type,
-                                                         bo.address()) {}
+      : Buffer<dtype>(nullptr, length, type, 0x0),
+        bo(device, length * sizeof(dtype), mem_grp), is_aligned(true) {
+    set_buffer();
+  }
+
+  ~FPGABuffer() override {}
 
   void sync_from_device() override {
     if (!is_aligned) {
@@ -62,9 +68,8 @@ public:
   void free_buffer() override { return; }
 
   std::unique_ptr<BaseBuffer> slice(size_t start, size_t end) override {
-    return std::unique_ptr<BaseBuffer>(
-        new FPGABuffer(&this->_buffer[start], end - start, this->_type,
-                       xrt::bo(bo, end - start, start)));
+    return std::unique_ptr<BaseBuffer>(new FPGABuffer(
+        xrt::bo(bo, end - start, start), end - start, this->_type));
   }
 
 private:
@@ -88,6 +93,10 @@ private:
     is_aligned = true;
     return host_buffer;
   }
+
+  // Set the buffer after initialization since bo needs to be initialized first,
+  // but base constructor is called beforehand.
+  void set_buffer() { this->update_buffer(bo.map<dtype *>(), bo.address()); }
 };
 } // namespace ACCL
 
