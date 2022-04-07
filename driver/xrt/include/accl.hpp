@@ -57,7 +57,7 @@ public:
    * @param arith_config  Arithmetic configuration to use
    */
   ACCL(const std::vector<rank_t> &ranks, int local_rank, xrt::device &device,
-       xrt::kernel &cclo_ip, xrt::kernel &hostctrl_ip, int devicemem,
+       xrt::ip &cclo_ip, xrt::kernel &hostctrl_ip, int devicemem,
        const std::vector<int> &rxbufmem, int networkmem,
        networkProtocol protocol = networkProtocol::TCP, int nbufs = 16,
        addr_t bufsize = 1024,

@@ -21,7 +21,7 @@
 #include <jsoncpp/json/json.h>
 
 namespace ACCL {
-FPGADevice::FPGADevice(xrt::kernel &cclo_ip, xrt::kernel &hostctrl_ip)
+FPGADevice::FPGADevice(xrt::ip &cclo_ip, xrt::kernel &hostctrl_ip)
     : cclo(cclo_ip), hostctrl(hostctrl_ip) {}
 
 void FPGADevice::start(const Options &options) {

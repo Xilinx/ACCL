@@ -28,7 +28,7 @@
 namespace ACCL {
 #ifdef ACCL_HARDWARE_SUPPORT
 ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
-           xrt::device &device, xrt::kernel &cclo_ip, xrt::kernel &hostctrl_ip,
+           xrt::device &device, xrt::ip &cclo_ip, xrt::kernel &hostctrl_ip,
            int devicemem, const std::vector<int> &rxbufmem, int networkmem,
            networkProtocol protocol, int nbufs, addr_t bufsize,
            const arithConfigMap &arith_config)

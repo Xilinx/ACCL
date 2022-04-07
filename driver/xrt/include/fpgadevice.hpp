@@ -22,6 +22,7 @@
 #include "constants.hpp"
 #include <string>
 #include <xrt/xrt_kernel.h>
+#include <experimental/xrt_ip.h>
 
 /** @file fpgadevice.hpp */
 
@@ -32,7 +33,7 @@ namespace ACCL {
  */
 class FPGADevice : public CCLO {
 public:
-  FPGADevice(xrt::kernel &cclo_ip, xrt::kernel &hostctrl_ip);
+  FPGADevice(xrt::ip &cclo_ip, xrt::kernel &hostctrl_ip);
 
   void call(const Options &options) override;
 
@@ -47,7 +48,7 @@ public:
   addr_t get_base_addr() override { return 0x0; }
 
 private:
-  xrt::kernel cclo;
+  xrt::ip cclo;
   xrt::kernel hostctrl;
   xrt::run run{};
 };

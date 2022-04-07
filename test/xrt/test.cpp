@@ -26,6 +26,7 @@
 #ifdef ACCL_HARDWARE_SUPPORT
 #include <xrt/xrt_device.h>
 #include <xrt/xrt_kernel.h>
+#include <experimental/xrt_ip.h>
 #endif
 
 using namespace ACCL;
@@ -497,7 +498,7 @@ void start_test(options_t options) {
 #ifdef ACCL_HARDWARE_SUPPORT
     auto device = xrt::device(options.device_index);
     auto xclbin_uuid = device.load_xclbin(options.xclbin);
-    auto cclo_ip = xrt::kernel(device, xclbin_uuid, "ccl_offload:{ccl_offload_" + std::to_string(rank) + "}", xrt::kernel::cu_access_mode::exclusive);
+    auto cclo_ip = xrt::ip(device, xclbin_uuid, "ccl_offload:{ccl_offload_" + std::to_string(rank) + "}");
     auto hostctrl_ip = xrt::kernel(device, xclbin_uuid, "hostctrl:{hostctrl_" + std::to_string(rank) + "}", xrt::kernel::cu_access_mode::exclusive);
 
     std::vector<int> mem;

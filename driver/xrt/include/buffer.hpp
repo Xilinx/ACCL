@@ -116,7 +116,7 @@ public:
    * @param physical_address  The location of the device buffer.
    */
   Buffer(dtype *buffer, size_t length, dataType type, addr_t physical_address)
-      : BaseBuffer((void *)buffer, length * sizeof(dtype), type,
+      : BaseBuffer(static_cast<void *>(buffer), length * sizeof(dtype), type,
                    physical_address),
         _buffer(buffer), _length(length){};
 
