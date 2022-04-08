@@ -638,15 +638,18 @@ CCLO *ACCL::reduce_scatter(unsigned int comm_id, BaseBuffer &sendbuf,
 
 std::string ACCL::dump_exchange_memory() {
   std::stringstream stream;
-  stream << "exchange mem:" << std::endl;
+  stream << "exchange mem:" << std::hex << std::endl;
   size_t num_word_per_line = 4;
   for (size_t i = 0; i < EXCHANGE_MEM_ADDRESS_RANGE;
        i += 4 * num_word_per_line) {
-    stream << std::hex << EXCHANGE_MEM_OFFSET_ADDRESS + i << ": ";
+    stream << "0x" << EXCHANGE_MEM_OFFSET_ADDRESS + i << ": [";
     for (size_t j = 0; j < num_word_per_line; ++j) {
-      stream << std::hex << cclo->read(EXCHANGE_MEM_OFFSET_ADDRESS + i + j * 4);
+      stream << "0x" << cclo->read(EXCHANGE_MEM_OFFSET_ADDRESS + i + j * 4);
+      if (j != num_word_per_line - 1) {
+        stream << ", ";
+      }
     }
-    stream << std::endl;
+    stream << "]" << std::endl;
   }
 
   return stream.str();
@@ -698,12 +701,15 @@ std::string ACCL::dump_rx_buffers(size_t nbufs) {
            << " \t status: " << status << " \t occupancy: " << rxlen << "/"
            << maxsize << " \t MPI tag: " << std::hex << rxtag << std::dec
            << " \t seq: " << seq << " \t src: " << rxsrc
-           << " \t data: " << std::hex;
+           << " \t data: " << std::hex << "[";
     for (size_t j = 0; j < rx_buffer_spares[i]->size(); ++j) {
-      stream << static_cast<uint16_t>(
+      stream << "0x" << static_cast<uint16_t>(
           static_cast<uint8_t *>(rx_buffer_spares[i]->byte_array())[j]);
+      if (j != rx_buffer_spares[i]->size() - 1) {
+        stream << ", ";
+      }
     }
-    stream << std::dec << std::endl;
+    stream << "]" << std::dec << std::endl;
   }
 
   return stream.str();
