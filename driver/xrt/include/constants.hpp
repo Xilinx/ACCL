@@ -31,9 +31,9 @@ typedef uint32_t val_t;
 /** Tag any */
 const unsigned int TAG_ANY = 0xFFFFFFFF;
 /** Exchange mem offset address */
-const addr_t EXCHANGE_MEM_OFFSET_ADDRESS = 0x1000;
+const addr_t EXCHANGE_MEM_OFFSET_ADDRESS = 0x0;
 /** Exchange mem address range */
-const addr_t EXCHANGE_MEM_ADDRESS_RANGE = 0x1000;
+const addr_t EXCHANGE_MEM_ADDRESS_RANGE = 0x2000;
 /** Return code offset */
 const addr_t RETCODE_OFFSET = 0x1FFC;
 /** hardware id offset */
