@@ -35,6 +35,9 @@ struct rank_t {
   addr_t max_segment_size;
 };
 
+uint32_t ip_encode(std::string ip);
+std::string ip_decode(uint32_t ip);
+
 class Communicator {
 private:
   CCLO *cclo;
@@ -54,16 +57,6 @@ public:
 
   const std::vector<rank_t> *get_ranks() const {
     return &_ranks;
-  }
-
-  uint32_t ip_encode(std::string ip) { return inet_addr(ip.c_str()); }
-
-  std::string ip_decode(uint32_t ip) {
-    char buffer[INET_ADDRSTRLEN];
-    struct in_addr sa;
-    sa.s_addr = ip;
-    inet_ntop(AF_INET, &sa, buffer, INET_ADDRSTRLEN);
-    return std::string(buffer, INET_ADDRSTRLEN);
   }
 
   std::string dump();
