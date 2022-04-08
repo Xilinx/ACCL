@@ -694,15 +694,16 @@ std::string ACCL::dump_rx_buffers(size_t nbufs) {
     rx_buffer_spares[i]->sync_from_device();
 
     stream << "Spare RX Buffer " << i << ":\t address: 0x" << std::hex
-           << addrh * (1UL << 32) + addrl << " \t status: " << status
-           << " \t occupancy: " << rxlen << "/" << maxsize
-           << " \t MPI tag: " << std::hex << rxtag << " \t seq: " << seq
-           << " \t src: " << rxsrc << " \t data: ";
+           << addrh * (1UL << 32) + addrl << std::dec
+           << " \t status: " << status << " \t occupancy: " << rxlen << "/"
+           << maxsize << " \t MPI tag: " << std::hex << rxtag << std::dec
+           << " \t seq: " << seq << " \t src: " << rxsrc
+           << " \t data: " << std::hex;
     for (size_t j = 0; j < rx_buffer_spares[i]->size(); ++j) {
-      stream << std::hex
-             << static_cast<uint8_t *>(rx_buffer_spares[i]->byte_array())[j];
+      stream << static_cast<uint16_t>(
+          static_cast<uint8_t *>(rx_buffer_spares[i]->byte_array())[j]);
     }
-    stream << std::endl;
+    stream << std::dec << std::endl;
   }
 
   return stream.str();
