@@ -42,11 +42,11 @@ def build_executable():
         sys.exit(1)
 
 
-def run_emulator(ranks: int, log_level: int, start_port: int, use_udp: bool):
+def run_emulator(ranks: int, log_level: int, start_port: int, use_udp: bool, kernel_loopback: bool):
     env = os.environ.copy()
     env['LOG_LEVEL'] = str(log_level)
     args = ['mpirun', '-np', str(ranks), '--tag-output', str(executable),
-            'udp' if use_udp else 'tcp', str(start_port)]
+            'udp' if use_udp else 'tcp', str(start_port), "loopback" if kernel_loopback else ""]
     print(' '.join(args))
     with subprocess.Popen(args, cwd=cwd, env=env,
                           stderr=subprocess.DEVNULL) as p:
@@ -72,7 +72,7 @@ def run_emulator(ranks: int, log_level: int, start_port: int, use_udp: bool):
 
 
 def main(ranks: int, log_level: int, start_port: int,
-         use_udp: bool, build: bool):
+         use_udp: bool, kernel_loopback: bool, build: bool):
     if not build and not executable.exists():
         print(f"Executable {executable} does not exists!")
         sys.exit(1)
@@ -84,7 +84,7 @@ def main(ranks: int, log_level: int, start_port: int,
         build_executable()
 
     print("Starting emulator...")
-    run_emulator(ranks, log_level, start_port, use_udp)
+    run_emulator(ranks, log_level, start_port, use_udp, kernel_loopback)
 
 
 if __name__ == '__main__':
@@ -99,6 +99,8 @@ if __name__ == '__main__':
                         help='Run emulator over UDP instead of TCP')
     parser.add_argument('--no-build', action='store_true', default=False,
                         help="Don't build latest executable")
+    parser.add_argument('--no-kernel-loopback', action='store_true', default=False,
+                        help="Do not connect user kernel data ports in loopback")
     args = parser.parse_args()
     main(args.nranks, args.log_level, args.start_port, args.udp,
-         not args.no_build)
+        not args.no_kernel_loopback, not args.no_build)

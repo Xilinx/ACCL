@@ -48,6 +48,8 @@ namespace {
     const axistream callack("m_axis_call_ack");
     const axistream eth_tx("m_axis_eth_tx_data");
     const axistream eth_rx("s_axis_eth_rx_data");
+    const axistream krnl_tx("m_axis_krnl");
+    const axistream krnl_rx("s_axis_krnl");
     const aximm datamem("s_axi_data");
     bool stop = false;
     Log logger;
@@ -361,12 +363,69 @@ void eth_egress_fsm(XSI_DUT *dut, Stream<stream_word> &val){
     }
 }
 
+void krnl_ingress_fsm(XSI_DUT *dut, Stream<stream_word> &val){
+    static axi_fsm_state state = VALID_DATA;
+    stream_word tmp;
+    switch(state){
+        case VALID_DATA:
+            if(!val.IsEmpty()){
+                tmp = val.Pop();
+                dut->write<512>(krnl_rx.tdata(), tmp.data);
+                dut->write(krnl_rx.tdest(), tmp.dest);
+                dut->write<64>(krnl_rx.tkeep(), tmp.keep);
+                dut->write(krnl_rx.tlast(), tmp.last);
+                dut->set(krnl_rx.tvalid());
+                if(dut->test(krnl_rx.tready())){
+                    if(!val.IsEmpty()){
+                        state = VALID_DATA;
+                    } else{
+                        state = CLEAR_DATA;
+                    }
+                } else{
+                    state = READY_DATA;
+                }
+            }
+            return;
+        case READY_DATA:
+            if(dut->test(krnl_rx.tready())){
+                if(!val.IsEmpty()){
+                    state = VALID_DATA;
+                } else{
+                    state = CLEAR_DATA;
+                }
+
+            }
+            return;
+        case CLEAR_DATA:
+            dut->clear(krnl_rx.tvalid());
+            state = VALID_DATA;
+            return;
+    }
+}
+
+void krnl_egress_fsm(XSI_DUT *dut, Stream<stream_word> &val){
+    stream_word tmp;
+    if(val.IsFull()){
+        dut->clear(krnl_tx.tready());
+    } else{
+        dut->set(krnl_tx.tready());
+        if(dut->test(krnl_tx.tvalid())){
+            tmp.data = dut->read<512>(krnl_tx.tdata());
+            tmp.dest = dut->read(krnl_tx.tdest());
+            tmp.last = dut->read(krnl_tx.tlast());
+            tmp.keep = dut->read<64>(krnl_tx.tkeep());
+            val.Push(tmp);
+        }
+    }
+}
+
 void interface_handler(XSI_DUT *dut, Stream<unsigned int> &axilite_rd_addr, Stream<unsigned int> &axilite_rd_data,
                         Stream<unsigned int> &axilite_wr_addr, Stream<unsigned int> &axilite_wr_data,
                         Stream<ap_uint<64> > &aximm_rd_addr, Stream<ap_uint<512> > &aximm_rd_data,
                         Stream<ap_uint<64> > &aximm_wr_addr, Stream<ap_uint<512> > &aximm_wr_data, Stream<ap_uint<64> > &aximm_wr_strb,
                         Stream<unsigned int> &callreq, Stream<unsigned int> &callack,
-                        Stream<stream_word> &eth_tx_data, Stream<stream_word> &eth_rx_data){
+                        Stream<stream_word> &eth_tx_data, Stream<stream_word> &eth_rx_data,
+                        Stream<stream_word> &krnl_tx_data, Stream<stream_word> &krnl_rx_data){
     logger << log_level::info << "Starting XSI interface server" << endl;
     while(!stop){
         dut->run_ncycles(1);
@@ -378,6 +437,8 @@ void interface_handler(XSI_DUT *dut, Stream<unsigned int> &axilite_rd_addr, Stre
         call_ack_fsm(dut, callack);
         eth_ingress_fsm(dut, eth_rx_data);
         eth_egress_fsm(dut, eth_tx_data);
+        krnl_ingress_fsm(dut, krnl_rx_data);
+        krnl_egress_fsm(dut, krnl_tx_data);
     }
     logger << log_level::info << "Exiting XSI interface server" << endl;
 }
@@ -438,7 +499,12 @@ int main(int argc, char **argv)
     string eth_type = argv[1];
     unsigned int starting_port = atoi(argv[2]);
 
-    zmq_intf_context ctx = zmq_intf(starting_port, local_rank, world_size, logger);
+    bool krnl_loopback = false;
+    if(argc == 5 && string(argv[4]) == "loopback"){
+        krnl_loopback = true;
+    }
+
+    zmq_intf_context ctx = zmq_intf(starting_port, local_rank, world_size, krnl_loopback, logger);
 
     int status = 0;
 
@@ -456,6 +522,9 @@ int main(int argc, char **argv)
 
     Stream<stream_word> eth_tx_data;
     Stream<stream_word> eth_rx_data;
+
+    Stream<stream_word> krnl_tx_data;
+    Stream<stream_word> krnl_rx_data;
 
     try {
         // Register signal and signal handler
@@ -477,7 +546,8 @@ int main(int argc, char **argv)
                                     aximm_rd_addr, aximm_rd_data,
                                     aximm_wr_addr, aximm_wr_data, aximm_wr_strb,
                                     callreq, callack,
-                                    eth_tx_data, eth_rx_data);
+                                    eth_tx_data, eth_rx_data,
+                                    krnl_tx_data, krnl_rx_data);
         HLSLIB_DATAFLOW_FUNCTION(zmq_cmd_server,  &ctx,
                                     axilite_rd_addr, axilite_rd_data,
                                     axilite_wr_addr, axilite_wr_data,
@@ -487,6 +557,8 @@ int main(int argc, char **argv)
         //ZMQ to other nodes process(es)
         HLSLIB_DATAFLOW_FUNCTION(zmq_eth_egress_server, &ctx, eth_tx_data, local_rank, eth_type == "tcp");
         HLSLIB_DATAFLOW_FUNCTION(zmq_eth_ingress_server, &ctx, eth_rx_data);
+        HLSLIB_DATAFLOW_FUNCTION(zmq_krnl_egress_server, &ctx, krnl_tx_data);
+        HLSLIB_DATAFLOW_FUNCTION(zmq_krnl_ingress_server, &ctx, krnl_rx_data);
         HLSLIB_DATAFLOW_FUNCTION(update_zmq_stop, &ctx);
         HLSLIB_DATAFLOW_FINALIZE();
     }

@@ -52,8 +52,6 @@ catch { delete_bd_objs [get_bd_intf_ports s_axis_compression2] }
 catch { delete_bd_objs [get_bd_intf_ports m_axis_compression0] }
 catch { delete_bd_objs [get_bd_intf_ports m_axis_compression1] }
 catch { delete_bd_objs [get_bd_intf_ports m_axis_compression2] }
-catch { delete_bd_objs [get_bd_intf_ports m_axis_krnl] }
-catch { delete_bd_objs [get_bd_intf_ports s_axis_krnl] }
 catch { delete_bd_objs [get_bd_intf_ports bscan_0] }
 
 if { $en_dma != 0 } {
@@ -125,15 +123,6 @@ if { $stacktype == "TCP" } {
     connect_bd_intf_net [get_bd_intf_pins dummy_tcp_stack/m_axis_tcp_rx_data] [get_bd_intf_pins cclo/s_axis_eth_rx_data]
 }
 
-# loopback between streaming kernel interfaces
-if { $en_extkrnl != 0 } {
-    create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 krnl_loopback
-    connect_bd_intf_net [get_bd_intf_pins cclo/m_axis_krnl] [get_bd_intf_pins krnl_loopback/S_AXIS]
-    connect_bd_intf_net [get_bd_intf_pins krnl_loopback/M_AXIS] [get_bd_intf_pins cclo/s_axis_krnl]
-    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins krnl_loopback/s_axis_aresetn]
-    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins krnl_loopback/s_axis_aclk]
-}
-
 # connect arithmetic plugins
 if { $en_arith != 0 } {
     create_bd_cell -type ip -vlnv xilinx.com:ACCL:reduce_sum:1.0 reduce_sum
@@ -167,6 +156,7 @@ validate_bd_design
 
 set extra_sim_options ""
 if { $en_dma == 1 } { set extra_sim_options "$extra_sim_options -d AXI_DATA_ACCESS " }
+if { $en_extkrnl == 1 } { set extra_sim_options "$extra_sim_options -d STREAM_ENABLE " }
 set_property -name {xsim.compile.xvlog.more_options} -value $extra_sim_options -objects [get_filesets sim_1]
 set_property -name {xsim.elaborate.xelab.more_options} -value {-dll} -objects [get_filesets sim_1]
 set_property generate_scripts_only 1 [current_fileset -simset]

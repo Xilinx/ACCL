@@ -126,6 +126,7 @@ module ccl_offload
 
 `ifdef STREAM_ENABLE
   output [511:0] m_axis_krnl_tdata,
+  output [7:0] m_axis_krnl_tdest,
   output [63:0] m_axis_krnl_tkeep,
   output [0:0] m_axis_krnl_tlast,
   input [0:0] m_axis_krnl_tready,
@@ -133,6 +134,7 @@ module ccl_offload
 
   input [511:0] s_axis_krnl_tdata,
   input [63:0] s_axis_krnl_tkeep,
+  input [7:0] s_axis_krnl_tdest,
   input [0:0] s_axis_krnl_tlast,
   output [0:0] s_axis_krnl_tready,
   input [0:0] s_axis_krnl_tvalid,

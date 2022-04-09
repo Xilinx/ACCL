@@ -15,141 +15,116 @@
 #
 #
 *******************************************************************************/
-#ifndef _HLS_COLLECTIVES_H_
-#define _HLS_COLLECTIVES_H_
+#pragma once
 
-//******************************
-//**  ACC COLLECTIVE          **
-//******************************
-#define ACCL_CONFIG               0
-#define ACCL_SEND                 1 
-#define ACCL_RECV                 2
-#define ACCL_BCAST                3
-#define ACCL_SCATTER              4
-#define ACCL_GATHER               5
-#define ACCL_REDUCE               6
-#define ACCL_ALLGATHER            7
-#define ACCL_ALLREDUCE            8
-#define ACCL_ACC                  9
-#define ACCL_COPY                 10
-#define ACCL_EXT_STREAM_KRNL      15
-#define ACCL_EXT_REDUCE           16
-#define ACCL_REDUCE_SCATTER       20
+#include "hls_stream.h"
+#include "ap_int.h"
+#include "ap_utils.h"
 
-//******************************
-//**  PACKET INDEXES          **
-//******************************
-// #define START_SCENARIO 0
-// #define END_SCENARIO (START_SCENARIO+32-1)
-// #define START_LEN (END_SCENARIO+1)
-// #define END_LEN (START_LEN+32-1)
-// #define START_COMM (END_LEN+1)
-// #define END_COMM (START_COMM+32-1)
-// #define START_ROOT_SRC_DST (END_COMM+1)
-// #define END_ROOT_SRC_DST (START_ROOT_SRC_DST+32-1)
-// #define START_FUNCTION (END_ROOT_SRC_DST+1)
-// #define END_FUNCTION (START_FUNCTION+32-1)
-// #define START_TAG (END_FUNCTION+1)
-// #define END_TAG (START_TAG+32-1)
-// #define START_BUFF_0_TYPE (END_TAG+1)
-// #define END_BUFF_0_TYPE (START_BUFF_0_TYPE+32-1)
-// #define START_BUFF_1_TYPE (END_BUFF_0_TYPE+1)
-// #define END_BUFF_1_TYPE (START_BUFF_1_TYPE+32-1)
-// #define START_BUFF_2_TYPE (END_BUFF_1_TYPE+1)
-// #define END_BUFF_2_TYPE (START_BUFF_2_TYPE+32-1)
-// #define START_ADDR_A (END_BUFF_2_TYPE+1)
-// #define END_ADDR_A (START_ADDR_A+64-1)
-// #define START_ADDR_B (END_ADDR_A+1)
-// #define END_ADDR_B (START_ADDR_B+64-1)
-// #define START_ADDR_C (END_ADDR_B+1)
-// #define END_ADDR_C (START_ADDR_C+64-1)
+namespace accl_hls {
 
+//Primitives
+#define ACCL_COPY           1
+#define ACCL_COMBINE        2
+#define ACCL_SEND           3 
+#define ACCL_RECV           4
+//Collectives
+#define ACCL_BCAST          5
+#define ACCL_SCATTER        6
+#define ACCL_GATHER         7
+#define ACCL_REDUCE         8
+#define ACCL_ALLGATHER      9
+#define ACCL_ALLREDUCE      10
+#define ACCL_REDUCE_SCATTER 11
 
-ap_uint<32> send_in(
-    unsigned int comm,
-    unsigned int len,
-    unsigned int tag,
-    unsigned int dst_rank,
-    uint64_t buf_addr);
+class ACCLCommand{
+    public:
+        ACCLCommand(hls::stream<ap_uint<32> > &cmd, hls::stream<ap_uint<32> > &sts) : cmd(cmd), sts(sts) {}
 
-ap_uint<32> recv_in(
-    unsigned int comm,
-    unsigned int len,
-    unsigned int tag,
-    unsigned int src_rank,
-    uint64_t buf_addr);
+    protected:
+        hls::stream<ap_uint<32> > &cmd;
+        hls::stream<ap_uint<32> > &sts;
 
-ap_uint<32> broadcast_in(
-    unsigned int comm,
-    unsigned int len,
-    unsigned int src_rank,
-    uint64_t buf_addr);
+    public:
+        void start_call(
+            ap_uint<32> scenario,
+            ap_uint<32> len,
+            ap_uint<32> comm,
+            ap_uint<32> root_src_dst,
+            ap_uint<32> function,
+            ap_uint<32> msg_tag,
+            ap_uint<32> datapath_cfg,
+            ap_uint<32> compression_flags,
+            ap_uint<32> stream_flags,
+            ap_uint<64> addra,
+            ap_uint<64> addrb,
+            ap_uint<64> addrc
+        ){
+            io_section:{
+                #pragma HLS protocol fixed
+                cmd.write(scenario);
+                ap_wait();
+                cmd.write(len);
+                ap_wait();
+                cmd.write(comm);
+                ap_wait();
+                cmd.write(root_src_dst);
+                ap_wait();
+                cmd.write(function);
+                ap_wait();
+                cmd.write(msg_tag);
+                ap_wait();
+                cmd.write(datapath_cfg);
+                ap_wait();
+                cmd.write(compression_flags);
+                ap_wait();
+                cmd.write(stream_flags);
+                ap_wait();
+                cmd.write(addra(31,0));
+                ap_wait();
+                cmd.write(addra(63,32));
+                ap_wait();
+                cmd.write(addrb(31,0));
+                ap_wait();
+                cmd.write(addrb(63,32));
+                ap_wait();
+                cmd.write(addrc(31,0));
+                ap_wait();
+                cmd.write(addrc(63,32));
+                ap_wait();
+            }  
+        }
 
-ap_uint<32> scatter_in(
-    unsigned int comm,
-    unsigned int len,
-    unsigned int src_rank,
-    uint64_t src_buf_addr,
-    uint64_t dst_buf_addr);
+        void finalize_call(){
+            sts.read(); 
+        }
 
-ap_uint<32> gather_in(
-    unsigned int comm,
-    unsigned int len,
-    unsigned int root_rank,
-    uint64_t src_buf_addr,
-    uint64_t dst_buf_addr);
+        void send(  ap_uint<32> comm,
+                    ap_uint<32> len,
+                    ap_uint<32> tag,
+                    ap_uint<32> dst_rank,
+                    ap_uint<64> buf_addr
+        ){
+            start_call(
+                ACCL_SEND, len, comm, dst_rank, 0, tag, 0, 0, 0, 
+                buf_addr, 0, 0
+            );
+            finalize_call();
+        }
 
-ap_uint<32> allgather_in(
-    unsigned int comm,
-    unsigned int len,
-    uint64_t src_buf_addr,
-    uint64_t dst_buf_addr);
+        void recv(  ap_uint<32> comm,
+                    ap_uint<32> len,
+                    ap_uint<32> tag,
+                    ap_uint<32> src_rank,
+                    ap_uint<64> buf_addr
+        ){
+            start_call(
+                ACCL_RECV, len, comm, src_rank, 0, tag, 0, 0, 0,
+                0, buf_addr, 0
+            );
+            finalize_call();
+        }
 
-ap_uint<32> reduce_in(
-    unsigned int comm,
-    unsigned int len,
-    unsigned int function,
-    unsigned int root_rank,
-    uint64_t src_addr,
-    uint64_t dst_addr);
+};
 
-ap_uint<32> allreduce_in(
-    unsigned int comm,
-    unsigned int len,
-    unsigned int function,
-    uint64_t src_addr,
-    uint64_t dst_addr);
-
-ap_uint<32> config_in(unsigned int function);
-
-ap_uint<32> accumulate_in(
-    unsigned int len,
-    unsigned int function,
-    uint64_t op0_addr,
-    uint64_t op1_addr);
-
-ap_uint<32> copy_in(
-    unsigned int len,
-    uint64_t src_addr,
-    uint64_t dst_addr);
-
-ap_uint<32> ext_kernel_stream_in(
-    unsigned int len,
-    uint64_t src_addr,
-    uint64_t dst_addr);
-
-ap_uint<32> reduce_ext_in(
-    unsigned int len,
-    uint64_t op1_addr,
-    uint64_t op2_addr,
-    uint64_t dst_addr);
-
-ap_uint<32> scatter_reduce_in(
-    unsigned int comm,
-    unsigned int len,
-    unsigned int function,
-    uint64_t src_addr,
-    uint64_t dst_addr);
-
-#endif //_HLS_COLLECTIVES_H_
-
+}

@@ -194,14 +194,6 @@ void axis_mux(Stream<stream_word> &s0, Stream<stream_word> &s1, Stream<stream_wo
     }
 }
 
-void dummy_external_kernel(Stream<stream_word> &in, Stream<stream_word> &out){
-    stream_word tmp, tmp_no_tdest;
-    tmp = in.Pop();
-    logger << log_level::verbose << "External Kernel Interface: Read TDEST=" << tmp.dest << endl;
-    tmp_no_tdest = {.data = tmp.data, .keep = tmp.keep, .last = tmp.last};
-    out.Push(tmp_no_tdest);
-}
-
 void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsigned int world_size) {
     vector<char> devicemem;
 
@@ -364,7 +356,9 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsign
         HLSLIB_FREERUNNING_FUNCTION(udp_depacketizer, eth_rx_data, switch_s[SWITCH_S_ETH_RX], eth_rx_sts);
     }
     //emulated external kernel
-    HLSLIB_FREERUNNING_FUNCTION(dummy_external_kernel, accl_to_krnl_data, krnl_to_accl_data);
+    HLSLIB_FREERUNNING_FUNCTION(krnl_endpoint_egress_port, ctx, accl_to_krnl_data);
+    HLSLIB_FREERUNNING_FUNCTION(krnl_endpoint_ingress_port, ctx, krnl_to_accl_data);
+
     //ZMQ to host process
     HLSLIB_FREERUNNING_FUNCTION(serve_zmq, ctx, cfgmem, devicemem, sts_fifos[CMD_CALL], cmd_fifos[STS_CALL]);
     //ZMQ to other nodes process(es)
@@ -398,7 +392,12 @@ int main(int argc, char** argv){
 
     string eth_type = argv[1];
     unsigned int starting_port = atoi(argv[2]);
+    
+    bool krnl_loopback = false;
+    if(argc == 4 && string(argv[3]) == "loopback"){
+        krnl_loopback = true;
+    }
 
-    zmq_intf_context ctx = zmq_intf(starting_port, local_rank, world_size, logger);
+    zmq_intf_context ctx = zmq_intf(starting_port, local_rank, world_size, krnl_loopback, logger);
     sim_bd(&ctx, eth_type == "tcp", local_rank, world_size);
 }

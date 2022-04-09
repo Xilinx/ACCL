@@ -30,7 +30,7 @@ namespace {
     Log *logger;
 }
 
-zmq_intf_context zmq_intf(unsigned int starting_port, unsigned int local_rank, unsigned int world_size, Log &log)
+zmq_intf_context zmq_intf(unsigned int starting_port, unsigned int local_rank, unsigned int world_size, bool kernel_loopback, Log &log)
 {
     zmq_intf_context ctx;
 
@@ -38,6 +38,8 @@ zmq_intf_context zmq_intf(unsigned int starting_port, unsigned int local_rank, u
     ctx.cmd_socket = new zmqpp::socket(ctx.context, zmqpp::socket_type::reply);
     ctx.eth_tx_socket = new zmqpp::socket(ctx.context, zmqpp::socket_type::pub);
     ctx.eth_rx_socket = new zmqpp::socket(ctx.context, zmqpp::socket_type::sub);
+    ctx.krnl_tx_socket = new zmqpp::socket(ctx.context, zmqpp::socket_type::pub);
+    ctx.krnl_rx_socket = new zmqpp::socket(ctx.context, zmqpp::socket_type::sub);
 
     const string endpoint_base = "tcp://127.0.0.1:";
 
@@ -51,7 +53,7 @@ zmq_intf_context zmq_intf(unsigned int starting_port, unsigned int local_rank, u
     }
 
     // bind to the socket(s)
-    *logger << log_level::info << "Rank " << local_rank << " binding to " << cmd_endpoint << " and " << eth_endpoints.at(local_rank) << endl;
+    *logger << log_level::info << "Rank " << local_rank << " binding to " << cmd_endpoint << " (CMD) and " << eth_endpoints.at(local_rank) << " (ETH)" << endl;
     ctx.cmd_socket->bind(cmd_endpoint);
     ctx.eth_tx_socket->bind(eth_endpoints.at(local_rank));
 
@@ -59,16 +61,38 @@ zmq_intf_context zmq_intf(unsigned int starting_port, unsigned int local_rank, u
 
     // connect to the sockets
     for(int i=0; i<world_size; i++){
-        *logger << log_level::info << "Rank " << local_rank << " connecting to " << eth_endpoints.at(i) << endl;
+        *logger << log_level::info << "Rank " << local_rank << " connecting to " << eth_endpoints.at(i) << " (ETH)" << endl;
         ctx.eth_rx_socket->connect(eth_endpoints.at(i));
     }
 
     this_thread::sleep_for(chrono::milliseconds(1000));
 
-    *logger << log_level::info << "Rank " << local_rank << " subscribing to " << local_rank << endl;
+    *logger << log_level::info << "Rank " << local_rank << " subscribing to " << local_rank << " (ETH)" << endl;
     ctx.eth_rx_socket->subscribe(to_string(local_rank));
 
     this_thread::sleep_for(chrono::milliseconds(1000));
+
+    //kernel interface
+    //bind to tx socket
+    string krnl_endpoint = endpoint_base + to_string(starting_port+2*world_size+local_rank);
+    *logger << log_level::info << "Rank " << local_rank << " binding to " << krnl_endpoint << " (KRNL)" << endl;
+    ctx.krnl_tx_socket->bind(krnl_endpoint);
+    this_thread::sleep_for(chrono::milliseconds(1000));
+    //connect to rx socket
+    //in case we want to loopback the kernel interface, we connect to the TX sockets for RX
+    if(!kernel_loopback){
+        krnl_endpoint = endpoint_base + to_string(starting_port+3*world_size+local_rank);
+    }
+    *logger << log_level::info << "Rank " << local_rank << " connecting to " << krnl_endpoint << " (KRNL)" << endl;
+    ctx.krnl_rx_socket->connect(krnl_endpoint);
+    this_thread::sleep_for(chrono::milliseconds(1000));
+    //subscribe to dst == local_rank
+    string krnl_subscribe = kernel_loopback ? "" : to_string(local_rank);
+    *logger << log_level::info << "Rank " << local_rank << " subscribing to " << krnl_subscribe << " (KRNL)" << endl;
+    ctx.krnl_rx_socket->subscribe(krnl_subscribe);
+    this_thread::sleep_for(chrono::milliseconds(1000));
+
+    *logger << log_level::info << "ZMQ Context established for rank " << local_rank << endl;
 
     return ctx;
 }
@@ -160,6 +184,84 @@ void eth_endpoint_ingress_port(zmq_intf_context *ctx, Stream<stream_word > &out)
     }
 
     *logger << log_level::verbose << "ETH Receive " << len << " bytes from " << sender_rank_text << endl;
+    *logger << log_level::debug << msg_text << endl;
+
+}
+
+void krnl_endpoint_egress_port(zmq_intf_context *ctx, Stream<stream_word > &in){
+
+    zmqpp::message message;
+    Json::Value packet;
+    Json::StreamWriterBuilder builder;
+
+    if(in.IsEmpty()) return;
+    //pop first word in packet
+    unsigned int dest;
+    stream_word tmp;
+
+    //get the data (bytes valid from tkeep)
+    unsigned int idx=0;
+    do{
+        tmp = in.Pop();
+        for(int i=0; i<64; i++){
+            if(tmp.keep(i,i) == 1){
+                packet["data"][idx++] = (unsigned int)tmp.data(8*(i+1)-1,8*i);
+            }
+        }
+    }while(tmp.last == 0);
+
+    //first part of the message is the destination port ID
+    dest = tmp.dest;
+    message << to_string(dest);
+
+    //finally package the data
+    string str = Json::writeString(builder, packet);
+    message << str;
+    *logger << log_level::verbose << "CCLO to user kernel: push " << idx << " bytes to dest = " << dest << endl;
+    *logger << log_level::debug << str << endl;
+    ctx->krnl_tx_socket->send(message);
+}
+
+
+void krnl_endpoint_ingress_port(zmq_intf_context *ctx, Stream<stream_word > &out){
+
+    Json::Reader reader;
+
+    // receive the message
+    zmqpp::message message;
+    if(!ctx->krnl_rx_socket->receive(message, true)) return;
+
+    // decompose the message
+    string msg_text, dst_text;;
+
+    //get and check destination ID
+    message >> dst_text;
+    message >> msg_text;
+
+    //parse msg_text as json
+    Json::Value packet, data;
+    reader.parse(msg_text, packet);
+
+    data = packet["data"];
+    unsigned int len = data.size();
+
+    stream_word tmp;
+    int idx = 0;
+    while(idx<len){
+        for(int i=0; i<64; i++){
+            if(idx<len){
+                tmp.data(8*(i+1)-1,8*i) = data[idx++].asUInt();
+                tmp.keep(i,i) = 1;
+            } else{
+                tmp.keep(i,i) = 0;
+            }
+        }
+        tmp.last = (idx == len);
+        tmp.dest = stoi(dst_text);
+        out.Push(tmp);
+    }
+
+    *logger << log_level::verbose << "User kernel to CCLO: push " << len << " bytes" << endl;
     *logger << log_level::debug << msg_text << endl;
 
 }
@@ -487,4 +589,22 @@ void zmq_eth_ingress_server(zmq_intf_context *ctx, Stream<stream_word > &out){
         this_thread::sleep_for(chrono::milliseconds(10));
     }
     (*logger)("Exiting ZMQ Eth Ingress server\n", log_level::info);
+}
+
+void zmq_krnl_egress_server(zmq_intf_context *ctx, Stream<stream_word > &in){
+    (*logger)("Starting ZMQ Streaming Kernel Egress server\n", log_level::info);
+    while(!ctx->stop){
+        krnl_endpoint_egress_port(ctx, in);
+        this_thread::sleep_for(chrono::milliseconds(10));
+    }
+    (*logger)("Exiting ZMQ Streaming Kernel Egress server\n", log_level::info);
+}
+
+void zmq_krnl_ingress_server(zmq_intf_context *ctx, Stream<stream_word > &out){
+    (*logger)("Starting ZMQ Streaming Kernel Ingress server\n", log_level::info);
+    while(!ctx->stop){
+        krnl_endpoint_ingress_port(ctx, out);
+        this_thread::sleep_for(chrono::milliseconds(10));
+    }
+    (*logger)("Exiting ZMQ Streaming Kernel Ingress server\n", log_level::info);
 }
