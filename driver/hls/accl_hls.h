@@ -39,11 +39,20 @@ namespace accl_hls {
 
 class ACCLCommand{
     public:
-        ACCLCommand(hls::stream<ap_uint<32> > &cmd, hls::stream<ap_uint<32> > &sts) : cmd(cmd), sts(sts) {}
+        ACCLCommand(hls::stream<ap_uint<32> > &cmd, hls::stream<ap_uint<32> > &sts,
+                    ap_uint<32> comm_adr, ap_uint<32> dpcfg_adr,
+                    ap_uint<32> cflags, ap_uint<32> sflags) : 
+                    cmd(cmd), sts(sts), comm_adr(comm_adr), dpcfg_adr(dpcfg_adr), cflags(cflags), sflags(sflags) {}
+        ACCLCommand(hls::stream<ap_uint<32> > &cmd, hls::stream<ap_uint<32> > &sts) : 
+                    cmd(cmd), sts(sts), comm_adr(0), dpcfg_adr(0), cflags(0), sflags(0) {}
 
     protected:
         hls::stream<ap_uint<32> > &cmd;
         hls::stream<ap_uint<32> > &sts;
+        ap_uint<32> comm_adr;
+        ap_uint<32> dpcfg_adr;
+        ap_uint<32> cflags;
+        ap_uint<32> sflags;
 
     public:
         void start_call(
@@ -99,32 +108,146 @@ class ACCLCommand{
             sts.read(); 
         }
 
-        void send(  ap_uint<32> comm,
-                    ap_uint<32> len,
+        void copy(  ap_uint<32> len,
+                    ap_uint<64> src_addr,
+                    ap_uint<64> dst_addr
+        ){
+            start_call(
+                ACCL_COPY, len, 0, 0, 0, 0, 
+                dpcfg_adr, cflags, sflags, 
+                src_addr, 0, dst_addr
+            );
+            finalize_call();
+        }
+
+        void combine(   ap_uint<32> len,
+                        ap_uint<64> op0_addr,
+                        ap_uint<64> op1_addr,
+                        ap_uint<64> res_addr
+        ){
+            start_call(
+                ACCL_COMBINE, len, 0, 0, 0, 0, 
+                dpcfg_adr, cflags, sflags, 
+                op0_addr, op1_addr, res_addr
+            );
+            finalize_call();
+        }
+
+        void send(  ap_uint<32> len,
                     ap_uint<32> tag,
                     ap_uint<32> dst_rank,
-                    ap_uint<64> buf_addr
+                    ap_uint<64> src_addr
         ){
             start_call(
-                ACCL_SEND, len, comm, dst_rank, 0, tag, 0, 0, 0, 
-                buf_addr, 0, 0
+                ACCL_SEND, len, comm_adr, dst_rank, 0, tag, 
+                dpcfg_adr, cflags, sflags, 
+                src_addr, 0, 0
             );
             finalize_call();
         }
 
-        void recv(  ap_uint<32> comm,
-                    ap_uint<32> len,
+        void recv(  ap_uint<32> len,
                     ap_uint<32> tag,
                     ap_uint<32> src_rank,
-                    ap_uint<64> buf_addr
+                    ap_uint<64> dst_addr
         ){
             start_call(
-                ACCL_RECV, len, comm, src_rank, 0, tag, 0, 0, 0,
-                0, buf_addr, 0
+                ACCL_RECV, len, comm_adr, src_rank, 0, tag, 
+                dpcfg_adr, cflags, sflags,
+                0, dst_addr, 0
             );
             finalize_call();
         }
 
+        void bcast( ap_uint<32> len,
+                    ap_uint<32> root,
+                    ap_uint<64> src_addr
+        ){
+            start_call(
+                ACCL_BCAST, len, comm_adr, root, 0, 0, 
+                dpcfg_adr, cflags, sflags, 
+                src_addr, 0, 0
+            );
+            finalize_call();
+        }
+
+        void scatter( ap_uint<32> len,
+                    ap_uint<32> root,
+                    ap_uint<64> src_addr,
+                    ap_uint<64> dst_addr
+        ){
+            start_call(
+                ACCL_SCATTER, len, comm_adr, root, 0, 0, 
+                dpcfg_adr, cflags, sflags, 
+                src_addr, 0, dst_addr
+            );
+            finalize_call();
+        }
+
+        void gather(ap_uint<32> len,
+                    ap_uint<32> root,
+                    ap_uint<64> src_addr,
+                    ap_uint<64> dst_addr
+        ){
+            start_call(
+                ACCL_GATHER, len, comm_adr, root, 0, 0, 
+                dpcfg_adr, cflags, sflags, 
+                src_addr, 0, dst_addr
+            );
+            finalize_call();
+        }
+
+        void all_gather(ap_uint<32> len,
+                        ap_uint<64> src_addr,
+                        ap_uint<64> dst_addr
+        ){
+            start_call(
+                ACCL_ALLGATHER, len, comm_adr, 0, 0, 0, 
+                dpcfg_adr, cflags, sflags, 
+                src_addr, 0, dst_addr
+            );
+            finalize_call();
+        }
+
+        void reduce(ap_uint<32> len,
+                    ap_uint<32> root,
+                    ap_uint<32> function,
+                    ap_uint<64> src_addr,
+                    ap_uint<64> dst_addr
+        ){
+            start_call(
+                ACCL_REDUCE, len, comm_adr, root, function, 0, 
+                dpcfg_adr, cflags, sflags, 
+                src_addr, 0, dst_addr
+            );
+            finalize_call();
+        }
+
+        void reduce_scatter(ap_uint<32> len,
+                            ap_uint<32> function,
+                            ap_uint<64> src_addr,
+                            ap_uint<64> dst_addr
+        ){
+            start_call(
+                ACCL_REDUCE_SCATTER, len, comm_adr, 0, function, 0, 
+                dpcfg_adr, cflags, sflags, 
+                src_addr, 0, dst_addr
+            );
+            finalize_call();
+        }
+
+        void all_reduce(ap_uint<32> len,
+                        ap_uint<32> function,
+                        ap_uint<64> src_addr,
+                        ap_uint<64> dst_addr
+        ){
+            start_call(
+                ACCL_ALLREDUCE, len, comm_adr, 0, function, 0, 
+                dpcfg_adr, cflags, sflags, 
+                src_addr, 0, dst_addr
+            );
+            finalize_call();
+        }
 };
 
 }
