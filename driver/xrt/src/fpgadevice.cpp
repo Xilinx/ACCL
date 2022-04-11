@@ -37,13 +37,18 @@ void FPGADevice::start(const Options &options) {
   } else {
     function = static_cast<int>(options.reduce_function);
   }
-  run = hostctrl(
-      static_cast<int>(options.scenario), options.count, options.root_src_dst,
-      function, options.tag, options.arithcfg_addr,
-      static_cast<int>(options.compression_flags),
-      static_cast<int>(options.stream_flags),
-      options.addr_0->physical_address(), options.addr_1->physical_address(),
-      options.addr_2->physical_address());
+  run = hostctrl(static_cast<uint32_t>(options.scenario),
+                 static_cast<uint32_t>(options.count),
+                 static_cast<uint32_t>(options.comm),
+                 static_cast<uint32_t>(options.root_src_dst),
+                 static_cast<uint32_t>(function),
+                 static_cast<uint32_t>(options.tag),
+                 static_cast<uint32_t>(options.arithcfg_addr),
+                 static_cast<uint32_t>(options.compression_flags),
+                 static_cast<uint32_t>(options.stream_flags),
+                 static_cast<uint64_t>(options.addr_0->physical_address()),
+                 static_cast<uint64_t>(options.addr_1->physical_address()),
+                 static_cast<uint64_t>(options.addr_2->physical_address()));
 }
 
 void FPGADevice::wait() {
