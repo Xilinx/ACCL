@@ -70,8 +70,11 @@ public:
   void free_buffer() override { return; }
 
   std::unique_ptr<BaseBuffer> slice(size_t start, size_t end) override {
-    return std::unique_ptr<BaseBuffer>(new FPGABuffer(
-        xrt::bo(bo, end - start, start), end - start, this->_type));
+    size_t start_bytes = start * sizeof(dtype);
+    size_t end_bytes = end * sizeof(dtype);
+    return std::unique_ptr<BaseBuffer>(
+        new FPGABuffer(xrt::bo(bo, end_bytes - start_bytes, start_bytes),
+                       end - start, this->_type));
   }
 
 private:

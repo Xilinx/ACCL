@@ -210,48 +210,48 @@ public:
                        std::vector<CCLO *> waitfor = {});
 
   template <typename dtype>
-  std::unique_ptr<Buffer<dtype>> create_buffer(dtype *host_buffer, size_t size,
-                                               dataType type,
+  std::unique_ptr<Buffer<dtype>> create_buffer(dtype *host_buffer,
+                                               size_t length, dataType type,
                                                unsigned mem_grp) {
     if (sim_mode) {
       return std::unique_ptr<Buffer<dtype>>(
-          new SimBuffer<dtype>(host_buffer, size, type,
+          new SimBuffer<dtype>(host_buffer, length, type,
                                static_cast<SimDevice *>(cclo)->get_socket()));
     }
 #ifdef ACCL_HARDWARE_SUPPORT
     else {
       return std::unique_ptr<Buffer<dtype>>(new FPGABuffer<dtype>(
-          host_buffer, size, type, *device, (xrt::memory_group)mem_grp));
+          host_buffer, length, type, *device, (xrt::memory_group)mem_grp));
     }
 #endif
     return std::unique_ptr<Buffer<dtype>>(nullptr);
   }
 
   template <typename dtype>
-  std::unique_ptr<Buffer<dtype>> create_buffer(size_t size, dataType type,
+  std::unique_ptr<Buffer<dtype>> create_buffer(size_t length, dataType type,
                                                unsigned mem_grp) {
     if (sim_mode) {
       return std::unique_ptr<Buffer<dtype>>(new SimBuffer<dtype>(
-          size, type, static_cast<SimDevice *>(cclo)->get_socket()));
+          length, type, static_cast<SimDevice *>(cclo)->get_socket()));
     }
 #ifdef ACCL_HARDWARE_SUPPORT
     else {
       return std::unique_ptr<Buffer<dtype>>(new FPGABuffer<dtype>(
-          size, type, *device, (xrt::memory_group)mem_grp));
+          length, type, *device, (xrt::memory_group)mem_grp));
     }
 #endif
     return std::unique_ptr<Buffer<dtype>>(nullptr);
   }
 
   template <typename dtype>
-  std::unique_ptr<Buffer<dtype>> create_buffer(dtype *host_buffer, size_t size,
-                                               dataType type) {
-    return create_buffer(host_buffer, size, type, devicemem);
+  std::unique_ptr<Buffer<dtype>> create_buffer(dtype *host_buffer,
+                                               size_t length, dataType type) {
+    return create_buffer(host_buffer, length, type, devicemem);
   }
 
   template <typename dtype>
-  std::unique_ptr<Buffer<dtype>> create_buffer(size_t size, dataType type) {
-    return create_buffer<dtype>(size, type, devicemem);
+  std::unique_ptr<Buffer<dtype>> create_buffer(size_t length, dataType type) {
+    return create_buffer<dtype>(length, type, devicemem);
   }
 
   std::string dump_exchange_memory();
