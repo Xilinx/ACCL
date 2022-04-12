@@ -62,13 +62,13 @@ public:
   void sync_from_device() override {
     bo.sync(xclBOSyncDirection::XCL_BO_SYNC_BO_FROM_DEVICE);
     if (!is_aligned) {
-      memcpy(aligned_buffer, unaligned_buffer, this->size());
+      memcpy(unaligned_buffer, aligned_buffer, this->size());
     }
   }
 
   void sync_to_device() override {
     if (!is_aligned) {
-      memcpy(unaligned_buffer, aligned_buffer, this->size());
+      memcpy(aligned_buffer, unaligned_buffer, this->size());
     }
     bo.sync(xclBOSyncDirection::XCL_BO_SYNC_BO_TO_DEVICE);
   }
