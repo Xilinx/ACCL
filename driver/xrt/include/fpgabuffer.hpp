@@ -84,10 +84,9 @@ public:
       offset_unaligned_buffer = &unaligned_buffer[start];
     }
 
-    return std::unique_ptr<BaseBuffer>(
-        new FPGABuffer(xrt::bo(bo, end_bytes - start_bytes, start_bytes),
-                       end - start, this->_type, this->is_aligned,
-                       offset_unaligned_buffer));
+    return std::unique_ptr<BaseBuffer>(new FPGABuffer(
+        xrt::bo(bo, end_bytes - start_bytes, start_bytes), end - start,
+        this->_type, this->is_aligned, offset_unaligned_buffer));
   }
 
 private:
@@ -98,6 +97,10 @@ private:
 
   dtype *get_aligned_buffer(dtype *host_buffer, size_t length) {
     if ((reinterpret_cast<uintptr_t>(host_buffer) % ALIGNMENT) != 0) {
+      std::cerr
+          << "[ACCL] Warning: you're creating a buffer from an unaligned host "
+             "pointer. This will cause extra copying when syncing the buffers."
+          << std::endl;
       size_t aligned_size =
           ((size_t)ceil(length * sizeof(dtype) / (double)ALIGNMENT)) *
           ALIGNMENT;

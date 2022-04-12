@@ -517,16 +517,6 @@ void start_test(options_t options) {
                           "tcp://localhost:" +
                               std::to_string(options.start_port + rank));
   }
-  for (int i = 0; i < size; ++i) {
-    if (i == rank) {
-      std::string info = prepend_process() + accl->dump_communicator() +
-                         accl->dump_exchange_memory() +
-                         accl->dump_rx_buffers() + "\n";
-      std::cerr << info;
-      std::cerr.flush();
-    }
-    MPI_Barrier(MPI_COMM_WORLD);
-  }
   accl->set_timeout(1e8);
 
   // barrier here to make sure all the devices are configured before testing
