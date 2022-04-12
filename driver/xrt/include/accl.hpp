@@ -212,7 +212,7 @@ public:
   template <typename dtype>
   std::unique_ptr<Buffer<dtype>> create_buffer(dtype *host_buffer, size_t size,
                                                dataType type,
-                                               unsigned mem_grp = 0) {
+                                               unsigned mem_grp) {
     if (sim_mode) {
       return std::unique_ptr<Buffer<dtype>>(
           new SimBuffer<dtype>(host_buffer, size, type,
@@ -229,7 +229,7 @@ public:
 
   template <typename dtype>
   std::unique_ptr<Buffer<dtype>> create_buffer(size_t size, dataType type,
-                                               unsigned mem_grp = 0) {
+                                               unsigned mem_grp) {
     if (sim_mode) {
       return std::unique_ptr<Buffer<dtype>>(new SimBuffer<dtype>(
           size, type, static_cast<SimDevice *>(cclo)->get_socket()));
@@ -241,6 +241,17 @@ public:
     }
 #endif
     return std::unique_ptr<Buffer<dtype>>(nullptr);
+  }
+
+  template <typename dtype>
+  std::unique_ptr<Buffer<dtype>> create_buffer(dtype *host_buffer, size_t size,
+                                               dataType type) {
+    return create_buffer(host_buffer, size, type, devicemem);
+  }
+
+  template <typename dtype>
+  std::unique_ptr<Buffer<dtype>> create_buffer(size_t size, dataType type) {
+    return create_buffer<dtype>(size, type, devicemem);
   }
 
   std::string dump_exchange_memory();

@@ -20,9 +20,9 @@
 #ifdef ACCL_HARDWARE_SUPPORT
 #include "cclo.hpp"
 #include "constants.hpp"
+#include <experimental/xrt_ip.h>
 #include <string>
 #include <xrt/xrt_kernel.h>
-#include <experimental/xrt_ip.h>
 
 /** @file fpgadevice.hpp */
 
@@ -47,7 +47,10 @@ public:
 
   void wait() override;
 
-  addr_t get_base_addr() override { return 0x0; }
+  addr_t get_base_addr() override {
+    // TODO: Find way to retrieve CCLO base address on FPGA
+    return 0x0;
+  }
 
 private:
   xrt::ip cclo;
