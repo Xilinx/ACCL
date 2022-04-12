@@ -76,8 +76,8 @@ std::unique_ptr<float> random_array(size_t count) {
 void test_copy(ACCL::ACCL &accl, options_t &options) {
   std::cout << "Start copy test..." << std::endl;
   unsigned int count = options.count;
-  auto op_buf = accl.create_buffer<float>(count, dataType::float32);
-  auto res_buf = accl.create_buffer<float>(count, dataType::float32);
+  auto op_buf = accl.create_buffer<float>(count, dataType::float32, rank * 6 + 1);
+  auto res_buf = accl.create_buffer<float>(count, dataType::float32, rank * 6 + 1);
   random_array(op_buf->buffer(), count);
 
   (*op_buf).sync_to_device();
@@ -104,11 +104,11 @@ void test_copy(ACCL::ACCL &accl, options_t &options) {
 }
 
 void test_combine(ACCL::ACCL &accl, options_t &options) {
-  std::cout << "Start copy test..." << std::endl;
+  std::cout << "Start combine test..." << std::endl;
   unsigned int count = options.count;
-  auto op_buf1 = accl.create_buffer<float>(count, dataType::float32);
-  auto op_buf2 = accl.create_buffer<float>(count, dataType::float32);
-  auto res_buf = accl.create_buffer<float>(count, dataType::float32);
+  auto op_buf1 = accl.create_buffer<float>(count, dataType::float32, rank * 6 + 1);
+  auto op_buf2 = accl.create_buffer<float>(count, dataType::float32, rank * 6 + 1);
+  auto res_buf = accl.create_buffer<float>(count, dataType::float32, rank * 6 + 1);
   random_array(op_buf1->buffer(), count);
   random_array(op_buf2->buffer(), count);
   (*op_buf1).sync_to_device();
@@ -138,8 +138,8 @@ void test_combine(ACCL::ACCL &accl, options_t &options) {
 void test_sendrcv(ACCL::ACCL &accl, options_t &options) {
   std::cout << "Start send recv test..." << std::endl;
   unsigned int count = options.count;
-  auto op_buf = accl.create_buffer<float>(count, dataType::float32);
-  auto res_buf = accl.create_buffer<float>(count, dataType::float32);
+  auto op_buf = accl.create_buffer<float>(count, dataType::float32, rank * 6 + 1);
+  auto res_buf = accl.create_buffer<float>(count, dataType::float32, rank * 6 + 1);
   random_array(op_buf->buffer(), count);
   int next_rank = (rank + 1) % size;
   int prev_rank = (rank + size - 1) % size;
@@ -192,8 +192,8 @@ void test_bcast(ACCL::ACCL &accl, options_t &options, int root) {
   std::cout << "Start bcast test with root " + std::to_string(root) + " ..."
             << std::endl;
   unsigned int count = options.count;
-  auto op_buf = accl.create_buffer<float>(count, dataType::float32);
-  auto res_buf = accl.create_buffer<float>(count, dataType::float32);
+  auto op_buf = accl.create_buffer<float>(count, dataType::float32, rank * 6 + 1);
+  auto res_buf = accl.create_buffer<float>(count, dataType::float32, rank * 6 + 1);
   random_array(op_buf->buffer(), count);
 
   test_debug("Syncing buffers...", options);
@@ -237,8 +237,8 @@ void test_scatter(ACCL::ACCL &accl, options_t &options, int root) {
   std::cout << "Start scatter test with root " + std::to_string(root) + " ..."
             << std::endl;
   unsigned int count = options.count;
-  auto op_buf = accl.create_buffer<float>(count * size, dataType::float32);
-  auto res_buf = accl.create_buffer<float>(count, dataType::float32);
+  auto op_buf = accl.create_buffer<float>(count * size, dataType::float32, rank * 6 + 1);
+  auto res_buf = accl.create_buffer<float>(count, dataType::float32, rank * 6 + 1);
   random_array(op_buf->buffer(), count * size);
 
   test_debug("Syncing buffers...", options);
@@ -274,10 +274,10 @@ void test_gather(ACCL::ACCL &accl, options_t &options, int root) {
   unsigned int count = options.count;
   std::unique_ptr<float> host_op_buf = random_array(count * size);
   auto op_buf = accl.create_buffer(host_op_buf.get() + count * rank, count,
-                                   dataType::float32);
+                                   dataType::float32, rank * 6 + 1);
   std::unique_ptr<ACCL::Buffer<float>> res_buf;
   if (rank == root) {
-    res_buf = accl.create_buffer<float>(count * size, dataType::float32);
+    res_buf = accl.create_buffer<float>(count * size, dataType::float32, rank * 6 + 1);
   } else {
     res_buf = std::unique_ptr<ACCL::Buffer<float>>(nullptr);
   }
@@ -320,8 +320,8 @@ void test_allgather(ACCL::ACCL &accl, options_t &options) {
   unsigned int count = options.count;
   std::unique_ptr<float> host_op_buf = random_array(count * size);
   auto op_buf = accl.create_buffer(host_op_buf.get() + count * rank, count,
-                                   dataType::float32);
-  auto res_buf = accl.create_buffer<float>(count * size, dataType::float32);
+                                   dataType::float32, rank * 6 + 1);
+  auto res_buf = accl.create_buffer<float>(count * size, dataType::float32, rank * 6 + 1);
 
   test_debug("Syncing buffers...", options);
   (*op_buf).sync_to_device();
@@ -357,8 +357,8 @@ void test_reduce(ACCL::ACCL &accl, options_t &options, int root,
                    std::to_string(static_cast<int>(function)) + "..."
             << std::endl;
   unsigned int count = options.count;
-  auto op_buf = accl.create_buffer<float>(count, dataType::float32);
-  auto res_buf = accl.create_buffer<float>(count, dataType::float32);
+  auto op_buf = accl.create_buffer<float>(count, dataType::float32, rank * 6 + 1);
+  auto res_buf = accl.create_buffer<float>(count, dataType::float32, rank * 6 + 1);
   random_array(op_buf->buffer(), count);
 
   test_debug("Syncing buffers...", options);
@@ -399,8 +399,8 @@ void test_reduce_scatter(ACCL::ACCL &accl, options_t &options,
                    std::to_string(static_cast<int>(function)) + "..."
             << std::endl;
   unsigned int count = options.count;
-  auto op_buf = accl.create_buffer<float>(count * size, dataType::float32);
-  auto res_buf = accl.create_buffer<float>(count, dataType::float32);
+  auto op_buf = accl.create_buffer<float>(count * size, dataType::float32, rank * 6 + 1);
+  auto res_buf = accl.create_buffer<float>(count, dataType::float32, rank * 6 + 1);
   random_array(op_buf->buffer(), count * size);
 
   test_debug("Syncing buffers...", options);
@@ -443,8 +443,8 @@ void test_allreduce(ACCL::ACCL &accl, options_t &options,
                    std::to_string(static_cast<int>(function)) + "..."
             << std::endl;
   unsigned int count = options.count;
-  auto op_buf = accl.create_buffer<float>(count, dataType::float32);
-  auto res_buf = accl.create_buffer<float>(count, dataType::float32);
+  auto op_buf = accl.create_buffer<float>(count, dataType::float32, rank * 6 + 1);
+  auto res_buf = accl.create_buffer<float>(count, dataType::float32, rank * 6 + 1);
   random_array(op_buf->buffer(), count);
 
   test_debug("Syncing buffers...", options);
@@ -509,6 +509,14 @@ void start_test(options_t options) {
     accl = new ACCL::ACCL(ranks, rank,
                           "tcp://localhost:" +
                               std::to_string(options.start_port + rank));
+  }
+  for (int i = 0; i < size; ++i) {
+    if (i == rank) {
+      std::string info = prepend_process() + accl->dump_communicator() + accl->dump_exchange_memory() + accl->dump_rx_buffers() + "\n";
+      std::cerr << info;
+      std::cerr.flush();
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
   }
   accl->set_timeout(1e8);
 

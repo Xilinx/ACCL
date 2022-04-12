@@ -49,7 +49,7 @@ void write_arithconfig(CCLO &cclo, ArithConfig &arithcfg, addr_t *addr) {
   *addr += 4;
   cclo.write(*addr, arithcfg.decompressor_tdest);
   *addr += 4;
-  cclo.write(*addr, arithcfg.arith_tdest.size());
+  cclo.write(*addr, arithcfg.arith_tdest.size()); // amount of arithmetic functions
   *addr += 4;
   cclo.write(*addr, arithcfg.arith_is_compressed);
   *addr += 4;
