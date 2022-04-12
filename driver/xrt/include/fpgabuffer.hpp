@@ -31,10 +31,6 @@
 namespace ACCL {
 template <typename dtype> class FPGABuffer : public Buffer<dtype> {
 public:
-  FPGABuffer(xrt::bo bo_, addr_t length, dataType type)
-      : Buffer<dtype>(nullptr, length, type, 0x0), bo(bo_), is_aligned(true) {
-    set_buffer();
-  }
   FPGABuffer(dtype *buffer, addr_t length, dataType type, xrt::device &device,
              xrt::memory_group mem_grp)
       : Buffer<dtype>(nullptr, length, type, 0x0),
@@ -42,6 +38,7 @@ public:
            length * sizeof(dtype), mem_grp) {
     set_buffer();
   }
+
   FPGABuffer(addr_t length, dataType type, xrt::device &device,
              xrt::memory_group mem_grp)
       : Buffer<dtype>(nullptr, length, type, 0x0),
@@ -49,6 +46,15 @@ public:
     set_buffer();
     // Initialize memory to zero
     memset(this->_buffer, 0, this->_size);
+  }
+
+  // copy constructor
+  FPGABuffer(xrt::bo bo_, addr_t length, dataType type, bool is_aligned_,
+             dtype *aligned_buffer_, dtype *unaligned_buffer_)
+      : Buffer<dtype>(nullptr, length, type, 0x0), bo(bo_),
+        is_aligned(is_aligned_), aligned_buffer(aligned_buffer_),
+        unaligned_buffer(unaligned_buffer_) {
+    set_buffer();
   }
 
   ~FPGABuffer() override {}
@@ -72,9 +78,18 @@ public:
   std::unique_ptr<BaseBuffer> slice(size_t start, size_t end) override {
     size_t start_bytes = start * sizeof(dtype);
     size_t end_bytes = end * sizeof(dtype);
+
+    dtype *offset_aligned_buffer = nullptr;
+    dtype *offset_unaligned_buffer = nullptr;
+    if (!is_aligned) {
+      offset_aligned_buffer = &aligned_buffer[start];
+      offset_unaligned_buffer = &unaligned_buffer[start];
+    }
+
     return std::unique_ptr<BaseBuffer>(
         new FPGABuffer(xrt::bo(bo, end_bytes - start_bytes, start_bytes),
-                       end - start, this->_type));
+                       end - start, this->_type, this->is_aligned,
+                       offset_aligned_buffer, offset_unaligned_buffer));
   }
 
 private:

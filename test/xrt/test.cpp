@@ -294,9 +294,9 @@ void test_gather(ACCL::ACCL &accl, options_t &options, int root) {
 
   if (rank == root) {
     int errors = 0;
-    for (unsigned int i = 0; i < count; ++i) {
-      float res = (*res_buf)[i + rank * count];
-      float ref = (*op_buf)[i];
+    for (unsigned int i = 0; i < count * size; ++i) {
+      float res = (*res_buf)[i];
+      float ref = host_op_buf.get()[i];
       if (res != ref) {
         std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
                          std::to_string(res) + " != " + std::to_string(ref) +
@@ -331,7 +331,7 @@ void test_allgather(ACCL::ACCL &accl, options_t &options) {
   accl.allgather(0, *op_buf, *res_buf, count);
 
   int errors = 0;
-  for (unsigned int i = 0; i < count; ++i) {
+  for (unsigned int i = 0; i < count * size; ++i) {
     float res = (*res_buf)[i];
     float ref = host_op_buf.get()[i];
     if (res != ref) {
