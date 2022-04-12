@@ -32,6 +32,7 @@
 using namespace ACCL;
 
 int rank, size;
+unsigned failed_tests;
 
 struct options_t {
   int start_port;
@@ -182,7 +183,7 @@ void test_sendrcv(ACCL::ACCL &accl, options_t &options) {
 
   if (errors > 0) {
     std::cout << std::to_string(errors) + " errors!" << std::endl;
-    MPI_Abort(MPI_COMM_WORLD, 1);
+    failed_tests++;
   } else {
     std::cout << "Test is successful!" << std::endl;
   }
@@ -226,7 +227,7 @@ void test_bcast(ACCL::ACCL &accl, options_t &options, int root) {
 
     if (errors > 0) {
       std::cout << std::to_string(errors) + " errors!" << std::endl;
-      MPI_Abort(MPI_COMM_WORLD, 1);
+      failed_tests++;
     } else {
       std::cout << "Test is successful!" << std::endl;
     }
@@ -262,7 +263,7 @@ void test_scatter(ACCL::ACCL &accl, options_t &options, int root) {
 
   if (errors > 0) {
     std::cout << std::to_string(errors) + " errors!" << std::endl;
-    MPI_Abort(MPI_COMM_WORLD, 1);
+    failed_tests++;
   } else {
     std::cout << "Test is successful!" << std::endl;
   }
@@ -308,7 +309,7 @@ void test_gather(ACCL::ACCL &accl, options_t &options, int root) {
 
     if (errors > 0) {
       std::cout << std::to_string(errors) + " errors!" << std::endl;
-      MPI_Abort(MPI_COMM_WORLD, 1);
+      failed_tests++;
     } else {
       std::cout << "Test is successful!" << std::endl;
     }
@@ -344,7 +345,7 @@ void test_allgather(ACCL::ACCL &accl, options_t &options) {
 
   if (errors > 0) {
     std::cout << std::to_string(errors) + " errors!" << std::endl;
-    MPI_Abort(MPI_COMM_WORLD, 1);
+    failed_tests++;
   } else {
     std::cout << "Test is successful!" << std::endl;
   }
@@ -386,7 +387,7 @@ void test_reduce(ACCL::ACCL &accl, options_t &options, int root,
 
     if (errors > 0) {
       std::cout << std::to_string(errors) + " errors!" << std::endl;
-      MPI_Abort(MPI_COMM_WORLD, 1);
+      failed_tests++;
     } else {
       std::cout << "Test is successful!" << std::endl;
     }
@@ -431,7 +432,7 @@ void test_reduce_scatter(ACCL::ACCL &accl, options_t &options,
 
   if (errors > 0) {
     std::cout << std::to_string(errors) + " errors!" << std::endl;
-    MPI_Abort(MPI_COMM_WORLD, 1);
+    failed_tests++;
   } else {
     std::cout << "Test is successful!" << std::endl;
   }
@@ -470,7 +471,7 @@ void test_allreduce(ACCL::ACCL &accl, options_t &options,
 
   if (errors > 0) {
     std::cout << std::to_string(errors) + " errors!" << std::endl;
-    MPI_Abort(MPI_COMM_WORLD, 1);
+    failed_tests++;
   } else {
     std::cout << "Test is successful!" << std::endl;
   }
@@ -486,6 +487,7 @@ inline bool hardware_set(options_t options) {
 
 void start_test(options_t options) {
   std::vector<rank_t> ranks = {};
+  failed_tests = 0;
   for (int i = 0; i < size; ++i) {
     rank_t new_rank = {"127.0.0.1", options.start_port + i, i,
                        options.rxbuf_size};
@@ -553,6 +555,12 @@ void start_test(options_t options) {
     MPI_Barrier(MPI_COMM_WORLD);
     test_reduce(*accl, options, root, reduceFunction::SUM);
     MPI_Barrier(MPI_COMM_WORLD);
+  }
+
+  std::cout << failed_tests << " tests failed on rank " << rank << "." << std::endl;
+  MPI_Barrier(MPI_COMM_WORLD);
+  if (failed_tests > 1) {
+    MPI_Abort(MPI_COMM_WORLD, 1);
   }
 }
 
