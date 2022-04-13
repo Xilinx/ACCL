@@ -34,7 +34,7 @@ ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
            const arithConfigMap &arith_config)
     : arith_config(arith_config), protocol(protocol), sim_mode(false),
       sim_sock(""), devicemem(devicemem), rxbufmem(rxbufmem),
-      networkmem(networkmem), device(&device) {
+      networkmem(networkmem), device(device) {
   cclo = new FPGADevice(cclo_ip, hostctrl_ip);
   initialize_accl(ranks, local_rank, nbufs, bufsize);
 }
@@ -755,9 +755,9 @@ void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
 #ifdef ACCL_HARDWARE_SUPPORT
     if (!sim_mode) {
       tx_buf_network = new FPGABuffer<int8_t>(NETWORK_BUF_SIZE, dataType::int8,
-                                              *device, networkmem);
+                                              device, networkmem);
       rx_buf_network = new FPGABuffer<int8_t>(NETWORK_BUF_SIZE, dataType::int8,
-                                              *device, networkmem);
+                                              device, networkmem);
       tx_buf_network->sync_to_device();
       rx_buf_network->sync_to_device();
     }
@@ -803,7 +803,7 @@ void ACCL::setup_rx_buffers(size_t nbufs, addr_t bufsize,
     }
 #ifdef ACCL_HARDWARE_SUPPORT
     else {
-      buf = new FPGABuffer<int8_t>(bufsize, dataType::int8, *device,
+      buf = new FPGABuffer<int8_t>(bufsize, dataType::int8, device,
                                    devicemem[i % devicemem.size()]);
     }
 #endif
@@ -839,7 +839,7 @@ void ACCL::setup_rx_buffers(size_t nbufs, addr_t bufsize,
 #ifdef ACCL_HARDWARE_SUPPORT
   else {
     utility_spare =
-        new FPGABuffer<int8_t>(bufsize, dataType::int8, *device, devicemem[0]);
+        new FPGABuffer<int8_t>(bufsize, dataType::int8, device, devicemem[0]);
   }
 #endif
 }

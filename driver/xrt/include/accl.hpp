@@ -221,7 +221,7 @@ public:
 #ifdef ACCL_HARDWARE_SUPPORT
     else {
       return std::unique_ptr<Buffer<dtype>>(new FPGABuffer<dtype>(
-          host_buffer, length, type, *device, (xrt::memory_group)mem_grp));
+          host_buffer, length, type, device, (xrt::memory_group)mem_grp));
     }
 #endif
     return std::unique_ptr<Buffer<dtype>>(nullptr);
@@ -237,7 +237,7 @@ public:
 #ifdef ACCL_HARDWARE_SUPPORT
     else {
       return std::unique_ptr<Buffer<dtype>>(new FPGABuffer<dtype>(
-          length, type, *device, (xrt::memory_group)mem_grp));
+          length, type, device, (xrt::memory_group)mem_grp));
     }
 #endif
     return std::unique_ptr<Buffer<dtype>>(nullptr);
@@ -300,7 +300,7 @@ private:
   const std::vector<int> rxbufmem;
   const int networkmem;
 #ifdef ACCL_HARDWARE_SUPPORT
-  xrt::device *device{};
+  xrt::device device;
 #endif
 
   void initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
