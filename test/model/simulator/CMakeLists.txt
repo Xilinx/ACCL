@@ -20,11 +20,11 @@ project(accl_simulation)
 
 set(CMAKE_CXX_STANDARD 17)
 
-set(ACCL_REPO_ROOT ${CMAKE_CURRENT_LIST_DIR}/../..)
+set(ACCL_REPO_ROOT ${CMAKE_CURRENT_LIST_DIR}/../../../)
 set(HLSLIB_INCLUDE ${ACCL_REPO_ROOT}/hlslib/include/hlslib/xilinx/)
 set(CCLO_HLS_ROOT ${ACCL_REPO_ROOT}/kernels/cclo/hls)
 set(MB_FW_DIR ${ACCL_REPO_ROOT}/kernels/cclo/fw/sw_apps/ccl_offload_control/src)
-set(ZMQ_INTF_DIR ${ACCL_REPO_ROOT}/test/zmq)
+set(ZMQ_INTF_DIR ${ACCL_REPO_ROOT}/test/model/zmq)
 set(LOG_DIR ${ACCL_REPO_ROOT}/test/log)
 
 if (NOT EXISTS $ENV{XILINX_HLS})

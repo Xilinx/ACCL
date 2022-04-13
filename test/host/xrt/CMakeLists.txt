@@ -1,7 +1,5 @@
-#!/bin/sh
-
 # /*******************************************************************************
-#  Copyright (C) 2021 Xilinx, Inc
+#  Copyright (C) 2022 Xilinx, Inc
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -17,8 +15,26 @@
 #
 # *******************************************************************************/
 
-#alveo3b 10.1.212.126
-#alveo3c 10.1.212.127
-#alveo4b 10.1.212.129
-#alveo4c 10.1.212.130 
-mpiexec --host 10.1.212.130,10.1.212.129 -- bash mpiscript.sh
+cmake_minimum_required(VERSION 3.9)
+project(xrt_test)
+
+set(CMAKE_CXX_STANDARD 17)
+
+if (NOT CMAKE_LIBRARY_OUTPUT_DIRECTORY)
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib")
+endif()
+
+if (NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
+endif()
+
+set(CMAKE_BUILD_TYPE Debug)
+
+set(ACCL_DEBUG 1)
+
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../driver/xrt "CMakeFiles/accl")
+
+find_package(MPI REQUIRED)
+add_executable(test test.cpp)
+target_include_directories(test PUBLIC ${MPI_CXX_INCLUDE_PATH} ${ACCL_INCLUDE_PATH} cxxopts/include)
+target_link_libraries(test PUBLIC MPI::MPI_CXX accl)
