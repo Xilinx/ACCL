@@ -15,13 +15,11 @@
 #
 # *******************************************************************************/
 
-#include "zmq_intf.h"
-#include <jsoncpp/json/json.h>
+#include "zmq_server.h"
 #include <iostream>
 #include <chrono>
 #include <thread>
 #include "ccl_offload_control.h"
-#include "log.hpp"
 
 using namespace std;
 using namespace hlslib;
@@ -30,7 +28,7 @@ namespace {
     Log *logger;
 }
 
-zmq_intf_context zmq_intf(unsigned int starting_port, unsigned int local_rank, unsigned int world_size, bool kernel_loopback, Log &log)
+zmq_intf_context zmq_server_intf(unsigned int starting_port, unsigned int local_rank, unsigned int world_size, bool kernel_loopback, Log &log)
 {
     zmq_intf_context ctx;
 

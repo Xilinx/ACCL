@@ -489,9 +489,7 @@ void start_test(options_t options) {
     ranks.emplace_back(new_rank);
   }
 
-  ACCL::ACCL accl(ranks, rank,
-                  "tcp://localhost:" +
-                      std::to_string(options.start_port + rank),
+  ACCL::ACCL accl(ranks, rank, options.start_port,
                   networkProtocol::TCP, 16, options.rxbuf_size);
   accl.set_timeout(1e8);
 

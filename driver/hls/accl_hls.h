@@ -20,6 +20,7 @@
 #include "hls_stream.h"
 #include "ap_int.h"
 #include "ap_utils.h"
+#include "ap_axi_sdata.h"
 
 namespace accl_hls {
 
@@ -43,8 +44,9 @@ class ACCLCommand{
                     ap_uint<32> comm_adr, ap_uint<32> dpcfg_adr,
                     ap_uint<32> cflags, ap_uint<32> sflags) : 
                     cmd(cmd), sts(sts), comm_adr(comm_adr), dpcfg_adr(dpcfg_adr), cflags(cflags), sflags(sflags) {}
+
         ACCLCommand(hls::stream<ap_uint<32> > &cmd, hls::stream<ap_uint<32> > &sts) : 
-                    cmd(cmd), sts(sts), comm_adr(0), dpcfg_adr(0), cflags(0), sflags(0) {}
+                    ACCLCommand(cmd, sts, 0, 0, 0, 0) {}
 
     protected:
         hls::stream<ap_uint<32> > &cmd;
@@ -105,7 +107,7 @@ class ACCLCommand{
         }
 
         void finalize_call(){
-            sts.read(); 
+            sts.read();
         }
 
         void copy(  ap_uint<32> len,
@@ -247,6 +249,29 @@ class ACCLCommand{
                 src_addr, 0, dst_addr
             );
             finalize_call();
+        }
+};
+
+class ACCLData{
+    public:
+        ACCLData(hls::stream<ap_axiu<512, 0, 0, 8> > &krnl2cclo, hls::stream<ap_axiu<512, 0, 0, 8> > &cclo2krnl) : 
+                    cclo2krnl(cclo2krnl), krnl2cclo(krnl2cclo){}
+
+    protected:
+        hls::stream<ap_axiu<512, 0, 0, 8> > &krnl2cclo;
+        hls::stream<ap_axiu<512, 0, 0, 8> > &cclo2krnl;
+
+    public:
+        void push(ap_uint<512> data, ap_uint<8> dest){
+            ap_axiu<512, 0, 0, 8> tmp;
+            tmp.data = data;
+            tmp.dest = dest;
+            tmp.keep = -1;
+            krnl2cclo.write(tmp);
+        }
+
+        ap_axiu<512, 0, 0, 8> pull(){
+            return cclo2krnl.read();   
         }
 };
 

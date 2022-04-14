@@ -14,27 +14,17 @@
 #  limitations under the License.
 #
 # *******************************************************************************/
+
 #pragma once
-#include <zmqpp/zmqpp.hpp>
 #include "streamdefines.h"
 #include "Stream.h"
 #include "ap_int.h"
 #include "ap_axi_sdata.h"
 #include "log.hpp"
 #include <vector>
+#include "zmq_common.h"
 
-struct zmq_intf_context{
-    zmqpp::context context;
-    zmqpp::socket *cmd_socket;
-    zmqpp::socket *eth_tx_socket;
-    zmqpp::socket *eth_rx_socket;
-    zmqpp::socket *krnl_tx_socket;
-    zmqpp::socket *krnl_rx_socket;
-    bool stop = false;
-    zmq_intf_context() : context() {}
-};
-
-zmq_intf_context zmq_intf(unsigned int starting_port, unsigned int local_rank, unsigned int world_size, bool use_krnl_sockets, Log &log);
+zmq_intf_context zmq_server_intf(unsigned int starting_port, unsigned int local_rank, unsigned int world_size, bool use_krnl_sockets, Log &log);
 void serve_zmq(zmq_intf_context *ctx, uint32_t *cfgmem, std::vector<char> &devicemem, hlslib::Stream<ap_axiu<32,0,0,0> > &cmd, hlslib::Stream<ap_axiu<32,0,0,0> > &sts);
 void eth_endpoint_ingress_port(zmq_intf_context *ctx, hlslib::Stream<stream_word > &out);
 void eth_endpoint_egress_port(zmq_intf_context *ctx, hlslib::Stream<stream_word > &in, unsigned int local_rank, bool remap_dest);
@@ -51,3 +41,4 @@ void zmq_eth_ingress_server(zmq_intf_context *ctx, hlslib::Stream<stream_word > 
 void zmq_eth_egress_server(zmq_intf_context *ctx, hlslib::Stream<stream_word > &in, unsigned int local_rank, bool remap_dest);
 void zmq_krnl_egress_server(zmq_intf_context *ctx, hlslib::Stream<stream_word > &in);
 void zmq_krnl_ingress_server(zmq_intf_context *ctx, hlslib::Stream<stream_word > &out);
+

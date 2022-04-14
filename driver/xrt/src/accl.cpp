@@ -31,7 +31,7 @@ ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank, int board_idx,
            int devicemem, std::vector<int> &rxbufmem, int networkmem,
            networkProtocol protocol, int nbufs, addr_t bufsize,
            const arithConfigMap &arith_config)
-    : protocol(protocol), sim_mode(false), sim_sock(""), devicemem(devicemem),
+    : protocol(protocol), sim_mode(false), devicemem(devicemem),
       rxbufmem(rxbufmem), networkmem(networkmem), arith_config(arith_config) {
   // TODO: Create hardware constructor.
   throw std::logic_error("Hardware constructor currently not supported");
@@ -40,11 +40,11 @@ ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank, int board_idx,
 
 // Simulation constructor
 ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
-           const std::string &sim_sock, networkProtocol protocol, int nbufs,
+           unsigned int sim_start_port, networkProtocol protocol, int nbufs,
            addr_t bufsize, const arithConfigMap &arith_config)
-    : protocol(protocol), sim_mode(true), sim_sock(sim_sock), devicemem(0),
+    : protocol(protocol), sim_mode(true), devicemem(0),
       rxbufmem({}), networkmem(0), arith_config(arith_config) {
-  cclo = new SimDevice(sim_sock);
+  cclo = new SimDevice(sim_start_port, local_rank);
   initialize_accl(ranks, local_rank, nbufs, bufsize);
 }
 
@@ -787,7 +787,7 @@ void ACCL::setup_rx_buffers(size_t nbufs, addr_t bufsize,
 
     if (sim_mode) {
       buf = new SimBuffer(new int8_t[bufsize](), bufsize, dataType::int8,
-                          static_cast<SimDevice *>(cclo)->get_socket());
+                          static_cast<SimDevice *>(cclo)->get_context());
     }
 #ifdef ACCL_HARDWARE_SUPPORT
     else {
@@ -821,7 +821,7 @@ void ACCL::setup_rx_buffers(size_t nbufs, addr_t bufsize,
   if (sim_mode) {
     utility_spare =
         new SimBuffer(new int8_t[bufsize](), bufsize, dataType::int8,
-                      static_cast<SimDevice *>(cclo)->get_socket());
+                      static_cast<SimDevice *>(cclo)->get_context());
   }
 #ifdef ACCL_HARDWARE_SUPPORT
   else {

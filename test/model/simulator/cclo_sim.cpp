@@ -32,7 +32,7 @@
 #include "Axi.h"
 #include "cclo_sim.h"
 #include <filesystem>
-#include "zmq_intf.h"
+#include "zmq_server.h"
 #include "log.hpp"
 
 #ifndef DEFAULT_LOG_LEVEL
@@ -504,7 +504,7 @@ int main(int argc, char **argv)
         krnl_loopback = true;
     }
 
-    zmq_intf_context ctx = zmq_intf(starting_port, local_rank, world_size, krnl_loopback, logger);
+    zmq_intf_context ctx = zmq_server_intf(starting_port, local_rank, world_size, krnl_loopback, logger);
 
     int status = 0;
 
