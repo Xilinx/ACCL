@@ -33,6 +33,7 @@ set(RXBUF_OFFLOAD_DIR ${CCLO_HLS_ROOT}/rxbuf_offload)
 set(DMA_MOVER_DIR ${CCLO_HLS_ROOT}/dma_mover)
 set(MB_FW_DIR ${ACCL_REPO_ROOT}/kernels/cclo/fw/sw_apps/ccl_offload_control/src)
 set(ZMQ_INTF_DIR ${ACCL_REPO_ROOT}/test/zmq)
+set(LOG_DIR ${ACCL_REPO_ROOT}/test/log)
 
 find_package(MPI REQUIRED)
 find_package(jsoncpp REQUIRED)
@@ -43,7 +44,7 @@ endif (NOT EXISTS $ENV{XILINX_HLS})
 
 set_source_files_properties(${MB_FW_DIR}/ccl_offload_control.c PROPERTIES LANGUAGE CXX)
 
-set(EMU_INCLUDES ${HLSLIB_INCLUDE} $ENV{XILINX_HLS}/include/ ${REDUCTION_DIR} ${COMPRESSOR_DIR} ${DECOMPRESSOR_DIR} ${CCLO_ETH_DIR} ${SEGMENTER_DIR} ${MB_FW_DIR} ${CCLO_HLS_ROOT} ${DMA_MOVER_DIR} ${RXBUF_OFFLOAD_DIR} ${DUMMY_TCP_DIR} ${ZMQ_INTF_DIR})
+set(EMU_INCLUDES ${HLSLIB_INCLUDE} $ENV{XILINX_HLS}/include/ ${REDUCTION_DIR} ${COMPRESSOR_DIR} ${DECOMPRESSOR_DIR} ${CCLO_ETH_DIR} ${SEGMENTER_DIR} ${MB_FW_DIR} ${CCLO_HLS_ROOT} ${DMA_MOVER_DIR} ${RXBUF_OFFLOAD_DIR} ${DUMMY_TCP_DIR} ${ZMQ_INTF_DIR} ${LOG_DIR})
 set(EMU_SOURCES cclo_emu.cpp ${MB_FW_DIR}/ccl_offload_control.c ${REDUCTION_DIR}/reduce_sum.cpp ${COMPRESSOR_DIR}/fp_hp_stream_conv.cpp ${DECOMPRESSOR_DIR}/hp_fp_stream_conv.cpp
                 ${CCLO_ETH_DIR}/udp_depacketizer.cpp ${CCLO_ETH_DIR}/tcp_txHandler.cpp ${CCLO_ETH_DIR}/tcp_sessionHandler.cpp ${CCLO_ETH_DIR}/tcp_rxHandler.cpp ${CCLO_ETH_DIR}/udp_packetizer.cpp ${CCLO_ETH_DIR}/tcp_packetizer.cpp ${CCLO_ETH_DIR}/tcp_depacketizer.cpp
                 ${SEGMENTER_DIR}/stream_segmenter.cpp ${RXBUF_OFFLOAD_DIR}/rxbuf_dequeue.cpp ${RXBUF_OFFLOAD_DIR}/rxbuf_enqueue.cpp ${RXBUF_OFFLOAD_DIR}/rxbuf_seek.cpp ${RXBUF_OFFLOAD_DIR}/rxbuf_session.cpp

@@ -68,35 +68,15 @@ else (EXISTS $ENV{XILINX_XRT})
   message(WARNING "Xilinx XRT not found, compiling without hardware support")
 endif (EXISTS $ENV{XILINX_XRT})
 
-if (ACCL_OLD_ABI)
-  if (ACCL_HARDWARE_SUPPORT)
-    message(FATAL_ERROR "Can't compile with old ABI when using hardware "
-                        "support. Please unload Xilinx XRT to compile "
-                        "using the old ABI.")
-  endif (ACCL_HARDWARE_SUPPORT)
-
-  message(WARNING "Using old ABI")
-  target_compile_definitions(accl PUBLIC _GLIBCXX_USE_CXX11_ABI=0)
-endif (ACCL_OLD_ABI)
-
 target_link_libraries(accl PUBLIC zmq)
 target_include_directories(accl PUBLIC ${ACCL_INCLUDE_PATH})
 
 # Json
-if (ACCL_OLD_ABI)
-  set(JSON_PATH ${CMAKE_CURRENT_LIST_DIR}/../../jsoncpp)
-  target_sources(accl PRIVATE ${JSON_PATH}/src/lib_json/json_reader.cpp
-                              ${JSON_PATH}/src/lib_json/json_value.cpp
-                              ${JSON_PATH}/src/lib_json/json_writer.cpp
-                              )
-  target_include_directories(accl PRIVATE ${JSON_PATH}/src/lib_json)
-  target_include_directories(accl PUBLIC ${JSON_PATH}/include)
-else (ACCL_OLD_ABI)
-  find_package(jsoncpp REQUIRED)
-  target_link_libraries(accl PUBLIC jsoncpp_lib)
-  get_target_property(JSON_INC_PATH jsoncpp_lib INTERFACE_INCLUDE_DIRECTORIES)
-  target_include_directories(accl PUBLIC ${JSON_INC_PATH})
-endif (ACCL_OLD_ABI)
+
+find_package(jsoncpp REQUIRED)
+target_link_libraries(accl PUBLIC jsoncpp_lib)
+get_target_property(JSON_INC_PATH jsoncpp_lib INTERFACE_INCLUDE_DIRECTORIES)
+target_include_directories(accl PUBLIC ${JSON_INC_PATH})
 
 
 if (ACCL_DEBUG)

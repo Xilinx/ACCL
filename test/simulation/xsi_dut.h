@@ -22,6 +22,7 @@
 #include <string>
 #include <cstdint>
 #include "ap_int.h"
+#include "log.hpp"
 
 typedef struct{
     int port_id;
@@ -32,10 +33,10 @@ typedef struct{
 class XSI_DUT{
 
 public:
-    XSI_DUT(const std::string& design_libname, const std::string& simkernel_libname, 
-            const std::string& reset_name, bool reset_active_low, 
-            const std::string& clock_name, float clock_period_ns, 
-            const std::string& wdb_name);
+    XSI_DUT(const std::string& design_libname, const std::string& simkernel_libname,
+            const std::string& reset_name, bool reset_active_low,
+            const std::string& clock_name, float clock_period_ns,
+            const std::string& wdb_name, Log &log);
     ~XSI_DUT();
     void list_ports();
     int num_ports();
@@ -69,7 +70,7 @@ void XSI_DUT::write(const std::string &port_name, ap_uint<W> val){
         throw std::invalid_argument("Value bitwidth does not match port bitwidth");
     }
     constexpr int nwords = (W+31)/32; //find how many 32-bit chunks we need
-    s_xsi_vlog_logicval logic_val[nwords]; 
+    s_xsi_vlog_logicval logic_val[nwords];
     for(int i=0; i<nwords; i++){
         logic_val[i] = (s_xsi_vlog_logicval){(XSI_UINT32)val(std::min((unsigned int)(32*(i+1)-1), W-1), 32*i), 0};//only two-valued logic
     }

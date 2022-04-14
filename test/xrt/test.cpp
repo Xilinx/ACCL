@@ -510,12 +510,14 @@ void start_test(options_t options) {
     std::vector<int> mem = {rank * 6 + 1};
 
     accl = new ACCL::ACCL(ranks, rank, device, cclo_ip, hostctrl_ip, rank * 6,
-                          mem, rank * 6 + 2);
+                          mem, rank * 6 + 2, networkProtocol::TCP, 16,
+                          options.rxbuf_size);
 #endif
   } else {
     accl = new ACCL::ACCL(ranks, rank,
                           "tcp://localhost:" +
-                              std::to_string(options.start_port + rank));
+                              std::to_string(options.start_port + rank),
+                          networkProtocol::TCP, 16, options.rxbuf_size);
   }
   accl->set_timeout(1e8);
 
@@ -547,7 +549,8 @@ void start_test(options_t options) {
     MPI_Barrier(MPI_COMM_WORLD);
   }
 
-  std::cout << failed_tests << " tests failed on rank " << rank << "." << std::endl;
+  std::cout << failed_tests << " tests failed on rank " << rank << "."
+            << std::endl;
   MPI_Barrier(MPI_COMM_WORLD);
   if (failed_tests > 1) {
     MPI_Abort(MPI_COMM_WORLD, 1);
