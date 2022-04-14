@@ -48,8 +48,8 @@ public:
 
   FPGABuffer(addr_t length, dataType type, xrt::device &device,
              xrt::memory_group mem_grp)
-      : Buffer<dtype>(nullptr, length, type, 0x0),
-        bo(device, length * sizeof(dtype), mem_grp), is_aligned(true) {
+      : Buffer<dtype>(nullptr, length, type, 0x0), is_aligned(true),
+        bo(device, length * sizeof(dtype), mem_grp) {
     set_buffer();
     // Initialize memory to zero
     memset(this->_buffer, 0, this->_size);
@@ -58,8 +58,8 @@ public:
   // copy constructor
   FPGABuffer(xrt::bo bo_, addr_t length, dataType type, bool is_aligned_,
              dtype *unaligned_buffer_)
-      : Buffer<dtype>(nullptr, length, type, 0x0), bo(bo_),
-        is_aligned(is_aligned_), aligned_buffer(bo.map<dtype *>()),
+      : Buffer<dtype>(nullptr, length, type, 0x0), is_aligned(is_aligned_),
+        bo(bo_), aligned_buffer(bo.map<dtype *>()),
         unaligned_buffer(unaligned_buffer_) {
     set_buffer();
   }
@@ -105,9 +105,9 @@ public:
   }
 
 private:
-  xrt::bo bo;
   bool is_aligned;
   bool own_unaligned{};
+  xrt::bo bo;
   dtype *aligned_buffer;
   dtype *unaligned_buffer;
 
