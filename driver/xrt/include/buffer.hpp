@@ -43,6 +43,9 @@ public:
       : _byte_array(byte_array), _size(size), _type(type),
         _physical_address(physical_address) {}
 
+
+  virtual ~BaseBuffer() {}
+
   /**
    * Sync the host buffer to the device buffer.
    *
@@ -120,7 +123,7 @@ public:
                    physical_address),
         _buffer(buffer), _length(length){};
 
-  virtual ~Buffer() {};
+  virtual ~Buffer(){};
 
   /**
    * Get the length of the host buffer.
