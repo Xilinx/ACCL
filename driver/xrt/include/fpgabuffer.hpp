@@ -24,6 +24,13 @@
 #include <xrt/xrt_bo.h>
 #include <xrt/xrt_device.h>
 
+// Use posix_memalign if C++17 is not available
+#if (__cplusplus >= 201703L)
+#include <cstdlib>
+#else
+#include <stdlib.h>
+#endif
+
 #define ALIGNMENT 4096
 
 /** @file fpgabuffer.hpp */
@@ -57,7 +64,15 @@ public:
     set_buffer();
   }
 
-  ~FPGABuffer() override {}
+  ~FPGABuffer() override {
+    if (!is_aligned) {
+#if (__cplusplus >= 201703L)
+      std::free(aligned_buffer);
+#else
+      free(aligned_buffer);
+#endif
+    }
+  }
 
   void sync_from_device() override {
     bo.sync(xclBOSyncDirection::XCL_BO_SYNC_BO_FROM_DEVICE);
@@ -105,8 +120,13 @@ private:
           ((size_t)ceil(length * sizeof(dtype) / (double)ALIGNMENT)) *
           ALIGNMENT;
       is_aligned = false;
+#if  (__cplusplus >= 201703L)
       aligned_buffer =
           static_cast<dtype *>(std::aligned_alloc(ALIGNMENT, aligned_size));
+#else
+      dtype *aligned_buffer;
+      posix_memalign(static_cast<void **>(&aligned_buffer), ALIGNMENT, aligned_size));
+#endif
       unaligned_buffer = host_buffer;
       return aligned_buffer;
     }
