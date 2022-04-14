@@ -76,7 +76,7 @@ public:
    */
   CCLO() {}
 
-  virtual ~CCLO() {};
+  virtual ~CCLO() {}
 
   /**
    * Call a CCLO operation based on the options.

@@ -62,7 +62,7 @@ public:
             zmq::socket_t *const socket)
       : SimBuffer(create_internal_buffer(length), length, type, socket) {}
 
-  ~SimBuffer() override {
+  virtual ~SimBuffer() {
     if (own_buffer) {
       delete this->_buffer;
     }

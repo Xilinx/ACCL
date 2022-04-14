@@ -57,14 +57,14 @@ public:
 
   // copy constructor
   FPGABuffer(xrt::bo bo_, addr_t length, dataType type, bool is_aligned_,
-             dtype *unaligned_buffer_, bool own_unaligned_)
+             dtype *unaligned_buffer_)
       : Buffer<dtype>(nullptr, length, type, 0x0), bo(bo_),
-        is_aligned(is_aligned_), own_unaligned(own_unaligned_),
-        aligned_buffer(bo.map<dtype *>()), unaligned_buffer(unaligned_buffer_) {
+        is_aligned(is_aligned_), aligned_buffer(bo.map<dtype *>()),
+        unaligned_buffer(unaligned_buffer_) {
     set_buffer();
   }
 
-  ~FPGABuffer() override {
+  virtual ~FPGABuffer() {
     if (!is_aligned && own_unaligned) {
 #if (__cplusplus >= 201703L)
       std::free(aligned_buffer);
@@ -101,7 +101,7 @@ public:
 
     return std::unique_ptr<BaseBuffer>(new FPGABuffer(
         xrt::bo(bo, end_bytes - start_bytes, start_bytes), end - start,
-        this->_type, this->is_aligned, offset_unaligned_buffer, false));
+        this->_type, this->is_aligned, offset_unaligned_buffer));
   }
 
 private:
@@ -130,6 +130,7 @@ private:
                      aligned_size);
 #endif
       unaligned_buffer = host_buffer;
+      own_unaligned = true;
       return aligned_buffer;
     }
 

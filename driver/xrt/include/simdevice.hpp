@@ -38,7 +38,7 @@ public:
    */
   SimDevice(std::string zmqadr = "tcp://localhost:5555");
 
-  ~SimDevice() override {}
+  virtual ~SimDevice() {}
 
   /**
    * See ACCL::CCLO::call().

@@ -123,7 +123,7 @@ public:
                    physical_address),
         _buffer(buffer), _length(length){};
 
-  virtual ~Buffer(){};
+  virtual ~Buffer() {}
 
   /**
    * Get the length of the host buffer.
