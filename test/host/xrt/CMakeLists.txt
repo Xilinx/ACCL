@@ -36,5 +36,5 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../driver/xrt "CMakeFiles/acc
 
 find_package(MPI REQUIRED)
 add_executable(test test.cpp)
-target_include_directories(test PUBLIC ${MPI_CXX_INCLUDE_PATH} ${ACCL_INCLUDE_PATH} cxxopts/include)
+target_include_directories(test PUBLIC ${MPI_CXX_INCLUDE_PATH} ${ACCL_INCLUDE_PATH})
 target_link_libraries(test PUBLIC MPI::MPI_CXX accl)

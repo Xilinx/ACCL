@@ -41,56 +41,42 @@ zmq_intf_context zmq_client_cmd_intf(unsigned int starting_port, unsigned int lo
     return ctx;
 }
 
-zmq_intf_context zmq_client_krnl_intf(unsigned int starting_port, unsigned int local_rank, unsigned int world_size, unsigned int krnl_dest){
+zmq_intf_context zmq_client_krnl_intf(unsigned int starting_port, unsigned int local_rank, unsigned int world_size, unsigned int krnl_dest)
+{
+    zmq_intf_context ctx;
+    const string endpoint_base = "tcp://127.0.0.1:";
+
+    ctx.krnl_tx_socket = new zmqpp::socket(ctx.context, zmqpp::socket_type::sub);
+    ctx.krnl_rx_socket = new zmqpp::socket(ctx.context, zmqpp::socket_type::pub);
+
+    //bind to tx socket
+    string krnl_endpoint = endpoint_base + to_string(starting_port+2*world_size+local_rank);
+    cout << "Rank " << local_rank << " connecting to " << krnl_endpoint << " (KRNL)" << endl;
+    ctx.krnl_tx_socket->connect(krnl_endpoint);
+    this_thread::sleep_for(chrono::milliseconds(1000));
+    //subscribe to dst == local_rank
+    string krnl_subscribe = (krnl_dest > 0) ? to_string(krnl_dest) : "";
+    cout << "Rank " << local_rank << " subscribing to " << ((krnl_dest > 0) ? krnl_subscribe : "all") << " (KRNL)" << endl;
+    ctx.krnl_tx_socket->subscribe(krnl_subscribe);
+    this_thread::sleep_for(chrono::milliseconds(1000));
+    //connect to rx socket
+    krnl_endpoint = endpoint_base + to_string(starting_port+3*world_size+local_rank);
+    cout << "Rank " << local_rank << " binding to " << krnl_endpoint << " (KRNL)" << endl;
+    ctx.krnl_rx_socket->bind(krnl_endpoint);
+    this_thread::sleep_for(chrono::milliseconds(1000));
+
+    cout << "ZMQ Client Kernel Context established for rank " << local_rank << endl;
+
+    return ctx;
+}
+
+zmq_intf_context zmq_client_intf(unsigned int starting_port, unsigned int local_rank, unsigned int world_size, unsigned int krnl_dest){
     zmq_intf_context ctx = zmq_client_cmd_intf(starting_port, local_rank);
     if(krnl_dest > 0){
         zmq_intf_context krnl_ctx = zmq_client_krnl_intf(starting_port, local_rank, world_size, krnl_dest);
         ctx.krnl_tx_socket = krnl_ctx.krnl_tx_socket;
         ctx.krnl_rx_socket = krnl_ctx.krnl_rx_socket;
     }
-    return ctx;
-}
-
-zmq_intf_context zmq_client_intf(unsigned int starting_port, unsigned int local_rank, unsigned int world_size, unsigned int krnl_dest)
-{
-    zmq_intf_context ctx;
-    const string endpoint_base = "tcp://127.0.0.1:";
-
-    ctx.cmd_socket = new zmqpp::socket(ctx.context, zmqpp::socket_type::request);
-
-    string cmd_endpoint = endpoint_base + to_string(starting_port + local_rank);
-    cout << "Endpoint: " << cmd_endpoint << endl;
-
-    // bind to the socket(s)
-    cout << "Rank " << local_rank << " binding to " << cmd_endpoint << " (CMD)" << endl;
-    ctx.cmd_socket->connect(cmd_endpoint);
-
-    this_thread::sleep_for(chrono::milliseconds(1000));
-
-    //kernel interface
-    if(krnl_dest > 0){
-        ctx.krnl_tx_socket = new zmqpp::socket(ctx.context, zmqpp::socket_type::sub);
-        ctx.krnl_rx_socket = new zmqpp::socket(ctx.context, zmqpp::socket_type::pub);
-
-        //bind to tx socket
-        string krnl_endpoint = endpoint_base + to_string(starting_port+2*world_size+local_rank);
-        cout << "Rank " << local_rank << " connecting to " << krnl_endpoint << " (KRNL)" << endl;
-        ctx.krnl_tx_socket->connect(krnl_endpoint);
-        this_thread::sleep_for(chrono::milliseconds(1000));
-        //subscribe to dst == local_rank
-        string krnl_subscribe = to_string(krnl_dest);
-        cout << "Rank " << local_rank << " subscribing to " << krnl_subscribe << " (KRNL)" << endl;
-        ctx.krnl_tx_socket->subscribe(krnl_subscribe);
-        this_thread::sleep_for(chrono::milliseconds(1000));
-        //connect to rx socket
-        krnl_endpoint = endpoint_base + to_string(starting_port+3*world_size+local_rank);
-        cout << "Rank " << local_rank << " binding to " << krnl_endpoint << " (KRNL)" << endl;
-        ctx.krnl_rx_socket->bind(krnl_endpoint);
-        this_thread::sleep_for(chrono::milliseconds(1000));
-    }
-
-    cout << "ZMQ Client Context established for rank " << local_rank << endl;
-
     return ctx;
 }
 
@@ -206,4 +192,27 @@ void zmq_client_memwrite(zmq_intf_context *ctx, uint64_t adr, unsigned int size,
     if (reply_json["status"] != 0) {
         throw std::runtime_error("ZMQ mem write error (" + std::to_string(reply_json["status"].asUInt()) + ")");
     }
+}
+
+std::vector<uint8_t> zmq_client_strmread(zmq_intf_context *ctx){
+    zmqpp::message msg;
+    ctx->krnl_tx_socket->receive(msg);
+    Json::Value msg_json = to_json(msg);
+    std::vector<uint8_t> ret;
+    size_t array_size = msg_json["data"].size();
+    for (size_t i = 0; i < array_size; ++i) {
+        ret.push_back((uint8_t)msg_json["data"][(Json::ArrayIndex)i].asInt());
+    }
+    return ret;
+}
+
+void zmq_client_strmwrite(zmq_intf_context *ctx, std::vector<uint8_t> val){
+    Json::Value msg_json;
+    zmqpp::message msg;
+    ctx->krnl_tx_socket->receive(msg);
+    for (int i = 0; i < val.size(); ++i) {
+        msg_json["data"][i] = val.at(i);
+    }
+    to_message(msg_json, msg);
+    ctx->krnl_rx_socket->send(msg);
 }

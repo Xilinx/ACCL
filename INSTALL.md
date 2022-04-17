@@ -10,7 +10,7 @@ git submodule update --init --recursive
 The project has been tested with Xilinx Vitis 2021.2 on Ubuntu 20.04.
 ```sh
 sudo apt update
-sudo apt install python3 cmake libzmqpp-dev libjsoncpp-dev libopenmpi-dev xvfb
+sudo apt install python3 cmake libzmqpp-dev libjsoncpp-dev libtclap-dev libopenmpi-dev xvfb
 pip3 install numpy pynq zmq mpi4py
 ```
 

@@ -17,12 +17,12 @@
 *******************************************************************************/
 
 #include <accl.hpp>
-#include <cxxopts.hpp>
 #include <functional>
 #include <mpi.h>
 #include <random>
 #include <sstream>
 #include <vector>
+#include <tclap/CmdLine.h>
 
 using namespace ACCL;
 
@@ -523,20 +523,20 @@ void start_test(options_t options) {
 }
 
 options_t parse_options(int argc, char *argv[]) {
-  cxxopts::Options options("test", "Test ACCL C++ driver");
-  options.add_options()("n,nruns", "How many times to run each test",
-                        cxxopts::value<unsigned int>()->default_value("1"))(
-      "s,start-port", "Start of range of ports usable for sim",
-      cxxopts::value<uint16_t>()->default_value("5500"))(
-      "c,count", "how many bytes per buffer",
-      cxxopts::value<unsigned int>()->default_value("16"))(
-      "rxbuf-size", "How many KB per RX buffer",
-      cxxopts::value<unsigned int>()->default_value("1"))(
-      "d,debug", "enable debug mode")("h,help", "Print usage");
-  cxxopts::ParseResult result;
+  TCLAP::CmdLine cmd("Test ACCL C++ driver");
+  TCLAP::ValueArg<unsigned int> nruns_arg("n", "nruns", "How many times to run each test", false, 1, "positive integer");
+  cmd.add(nruns_arg);
+  TCLAP::ValueArg<uint16_t> start_port_arg("s", "start-port", "Start of range of ports usable for sim", false, 5500, "positive integer");
+	cmd.add(start_port_arg);
+  TCLAP::ValueArg<uint16_t> count_arg("c", "count", "How many bytes per buffer", false, 16, "positive integer");
+	cmd.add(count_arg);
+  TCLAP::ValueArg<uint16_t> bufsize_arg("b", "rxbuf-size", "How many KB per RX buffer", false, 1, "positive integer");
+	cmd.add(bufsize_arg);
+  TCLAP::SwitchArg debug_arg("d","debug","Enable debug mode", cmd, false);	
+
   try {
-    result = options.parse(argc, argv);
-  } catch (cxxopts::OptionException e) {
+    cmd.parse(argc, argv);
+  } catch (std::exception e) {
     if (rank == 0) {
       std::cout << "Error: " << e.what() << std::endl;
     }
@@ -545,21 +545,12 @@ options_t parse_options(int argc, char *argv[]) {
     exit(1);
   }
 
-  if (result.count("help")) {
-    if (rank == 0) {
-      std::cout << options.help() << std::endl;
-    }
-    MPI_Finalize();
-    exit(0);
-  }
-
   options_t opts;
-  opts.start_port = result["start-port"].as<uint16_t>();
-  opts.count = result["count"].as<unsigned int>();
-  opts.rxbuf_size =
-      result["rxbuf-size"].as<unsigned int>() * 1024; // convert to bytes
-  opts.nruns = result["nruns"].as<unsigned int>();
-  opts.debug = result.count("debug") > 0;
+  opts.start_port = start_port_arg.getValue();
+  opts.count = count_arg.getValue();
+  opts.rxbuf_size = bufsize_arg.getValue() * 1024; // convert to bytes
+  opts.nruns = nruns_arg.getValue();
+  opts.debug = debug_arg.getValue();
 
   return opts;
 }

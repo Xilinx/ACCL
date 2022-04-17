@@ -17,6 +17,7 @@
 
 #pragma once
 #include "zmq_common.h"
+#include <vector>
 
 zmq_intf_context zmq_client_cmd_intf(unsigned int starting_port, unsigned int local_rank);
 zmq_intf_context zmq_client_krnl_intf(  unsigned int starting_port, unsigned int local_rank, 
@@ -33,3 +34,5 @@ unsigned int zmq_client_cfgread(zmq_intf_context *ctx, unsigned int offset);
 void zmq_client_cfgwrite(zmq_intf_context *ctx, unsigned int offset, unsigned int val);
 void zmq_client_memread(zmq_intf_context *ctx, uint64_t adr, unsigned int size, uint8_t *data);
 void zmq_client_memwrite(zmq_intf_context *ctx, uint64_t adr, unsigned int size, uint8_t *data);
+std::vector<uint8_t> zmq_client_strmread(zmq_intf_context *ctx);
+void zmq_client_strmwrite(zmq_intf_context *ctx, std::vector<uint8_t> val);
