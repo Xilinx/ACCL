@@ -126,7 +126,7 @@ private:
           static_cast<dtype *>(std::aligned_alloc(ALIGNMENT, aligned_size));
 #else
       dtype *aligned_buffer;
-      posix_memalign(static_cast<void **>(&aligned_buffer), ALIGNMENT,
+      posix_memalign(reinterpret_cast<void **>(&aligned_buffer), ALIGNMENT,
                      aligned_size);
 #endif
       unaligned_buffer = host_buffer;
