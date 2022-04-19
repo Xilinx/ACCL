@@ -20,7 +20,7 @@ First start up either the emulator or simulator.
   <summary>Emulator</summary>
 
   ```sh
-  cd "test/emulation"
+  cd "test/model/emulation"
   source <VITIS_INSTALL>/settings64.sh
   /bin/cmake .
   python3 run.py -n <RANKS>
@@ -34,7 +34,7 @@ First start up either the emulator or simulator.
   cd "kernels/cclo"
   source <VIVADO_INSTALL>/settings64.sh
   make STACK_TYPE=TCP EN_FANIN=1 simdll
-  cd "../../test/simulation"
+  cd "../../test/model/simulation"
   source <VITIS_INSTALL>/settings64.sh
   /bin/cmake .
   python3 run.py -n <RANKS>
@@ -43,7 +43,7 @@ First start up either the emulator or simulator.
 
 Now open a new terminal and run the tests:
 ```sh
-cd "test/xrt"
+cd "test/host/xrt"
 /bin/cmake .
 make
 mpirun -np <RANKS> bin/test
