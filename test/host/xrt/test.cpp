@@ -574,11 +574,9 @@ options_t parse_options(int argc, char *argv[]) {
                                         "positive integer");
   cmd.add(bufsize_arg);
   TCLAP::SwitchArg debug_arg("d", "debug", "Enable debug mode", cmd, false);
-  cmd.add(debug_arg);
 #ifdef ACCL_HARDWARE_SUPPORT
   TCLAP::SwitchArg hardware_arg("f", "hardware", "enable hardware mode", cmd,
                                 false);
-  cmd.add(hardware_arg);
   TCLAP::ValueArg<std::string> xclbin_arg(
       "x", "xclbin", "xclbin of accl driver if hardware mode is used", false,
       "accl.xclbin", "file");
