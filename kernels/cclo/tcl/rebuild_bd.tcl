@@ -360,21 +360,15 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
 
   if { $enableArithmetic == 1 } {
 
-    set m_axis_arith_op [ create_bd_intf_port -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_arith_op]
-    set_property -dict [ list CONFIG.FREQ_HZ {250000000} CONFIG.HAS_TKEEP {1} CONFIG.HAS_TLAST {1} CONFIG.HAS_TREADY {1} CONFIG.HAS_TSTRB {0} CONFIG.LAYERED_METADATA {undef} CONFIG.TDATA_NUM_BYTES {128} CONFIG.TDEST_WIDTH {4} CONFIG.TID_WIDTH {0} CONFIG.TUSER_WIDTH {0} ] $m_axis_arith_op
-  
+    set m_axis_arith_op0 [ create_bd_intf_port -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_arith_op0]
+    set_property -dict [ list CONFIG.FREQ_HZ {250000000} CONFIG.HAS_TKEEP {1} CONFIG.HAS_TLAST {1} CONFIG.HAS_TREADY {1} CONFIG.HAS_TSTRB {0} CONFIG.LAYERED_METADATA {undef} CONFIG.TDATA_NUM_BYTES {64} CONFIG.TDEST_WIDTH {4} CONFIG.TID_WIDTH {0} CONFIG.TUSER_WIDTH {0} ] $m_axis_arith_op0
+    set m_axis_arith_op1 [ create_bd_intf_port -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_arith_op1]
+    set_property -dict [ list CONFIG.FREQ_HZ {250000000} CONFIG.HAS_TKEEP {1} CONFIG.HAS_TLAST {1} CONFIG.HAS_TREADY {1} CONFIG.HAS_TSTRB {0} CONFIG.LAYERED_METADATA {undef} CONFIG.TDATA_NUM_BYTES {64} CONFIG.TDEST_WIDTH {4} CONFIG.TID_WIDTH {0} CONFIG.TUSER_WIDTH {0} ] $m_axis_arith_op1
     set s_axis_arith_res [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 s_axis_arith_res ]
     set_property -dict [ list CONFIG.FREQ_HZ {250000000} CONFIG.HAS_TKEEP {1} CONFIG.HAS_TLAST {1} CONFIG.HAS_TREADY {1} CONFIG.HAS_TSTRB {0} CONFIG.LAYERED_METADATA {undef} CONFIG.TDATA_NUM_BYTES {64} CONFIG.TDEST_WIDTH {0} CONFIG.TID_WIDTH {0} CONFIG.TUSER_WIDTH {0} ] $s_axis_arith_res
 
-    set interfaces "$interfaces:m_axis_arith_op:s_axis_arith_res"
+    set interfaces "$interfaces:m_axis_arith_op0:m_axis_arith_op1:s_axis_arith_res"
 
-    # Combine arithmetic op streams into one stream
-    create_bd_cell -type ip -vlnv xilinx.com:ip:axis_combiner:1.1 ext_arith_comb
-    set_property -dict [list CONFIG.TDATA_NUM_BYTES.VALUE_SRC USER CONFIG.HAS_TLAST.VALUE_SRC USER] [get_bd_cells ext_arith_comb]
-    set_property -dict [list CONFIG.TDATA_NUM_BYTES {64} CONFIG.HAS_TLAST {1}] [get_bd_cells ext_arith_comb]
-    set_property -dict [list CONFIG.TDEST_WIDTH.VALUE_SRC USER CONFIG.HAS_TKEEP.VALUE_SRC USER] [get_bd_cells ext_arith_comb]
-    set_property -dict [list CONFIG.TDEST_WIDTH {16} CONFIG.HAS_TKEEP {1}] [get_bd_cells ext_arith_comb]
-  
     # Segmenter for result
     create_bd_cell -type ip -vlnv xilinx.com:hls:stream_segmenter:1.0 sseg_arith_res
     create_bd_cell -type ip -vlnv xilinx.com:hls:stream_segmenter:1.0 sseg_arith_op0
@@ -382,28 +376,25 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
 
     # Arithmetic-specific connections
     connect_bd_intf_net [get_bd_intf_pins axis_switch_0/M03_AXIS] [get_bd_intf_pins sseg_arith_op0/in_r]
-    connect_bd_intf_net [get_bd_intf_pins sseg_arith_op0/out_r] [get_bd_intf_pins ext_arith_comb/S00_AXIS]
+    connect_bd_intf_net [get_bd_intf_pins sseg_arith_op0/out_r] [get_bd_intf_ports m_axis_arith_op0]
     connect_bd_intf_net [get_bd_intf_pins sseg_arith_op0/cmd] [get_bd_intf_pins control/arith_op0_seg_cmd]
     connect_bd_intf_net [get_bd_intf_pins axis_switch_0/M04_AXIS] [get_bd_intf_pins sseg_arith_op1/in_r]
-    connect_bd_intf_net [get_bd_intf_pins sseg_arith_op1/out_r] [get_bd_intf_pins ext_arith_comb/S01_AXIS]
+    connect_bd_intf_net [get_bd_intf_pins sseg_arith_op1/out_r] [get_bd_intf_ports m_axis_arith_op1]
     connect_bd_intf_net [get_bd_intf_pins sseg_arith_op1/cmd] [get_bd_intf_pins control/arith_op1_seg_cmd]
     connect_bd_intf_net [get_bd_intf_ports s_axis_arith_res] [get_bd_intf_pins sseg_arith_res/in_r]
     connect_bd_intf_net [get_bd_intf_pins sseg_arith_res/out_r] [get_bd_intf_pins axis_switch_0/S03_AXIS]
     connect_bd_intf_net [get_bd_intf_pins sseg_arith_res/cmd] [get_bd_intf_pins control/arith_res_seg_cmd]
-    connect_bd_intf_net [get_bd_intf_pins ext_arith_comb/M_AXIS] [get_bd_intf_ports m_axis_arith_op]
 
     connect_bd_net [get_bd_ports ap_clk] \
                    [get_bd_pins sseg_arith_res/ap_clk] \
                    [get_bd_pins sseg_arith_op0/ap_clk] \
                    [get_bd_pins sseg_arith_op1/ap_clk] \
-                   [get_bd_pins ext_arith_comb/aclk] \
                    [get_bd_pins ss_cmd_op_bcast/aclk]
 
     connect_bd_net [get_bd_pins control/encore_aresetn] \
                    [get_bd_pins sseg_arith_res/ap_rst_n] \
                    [get_bd_pins sseg_arith_op0/ap_rst_n] \
                    [get_bd_pins sseg_arith_op1/ap_rst_n] \
-                   [get_bd_pins ext_arith_comb/aresetn] \
                    [get_bd_pins ss_cmd_op_bcast/aresetn]
   }
 
@@ -572,8 +563,7 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
   # put everything into proper hierarchy
   create_bd_cell -type hier routing_subsystem
   move_bd_cells [get_bd_cells routing_subsystem] [get_bd_cells sseg*] 
-  move_bd_cells [get_bd_cells routing_subsystem] [get_bd_cells axis_switch*] 
-  move_bd_cells [get_bd_cells routing_subsystem] [get_bd_cells ext_arith_comb]
+  move_bd_cells [get_bd_cells routing_subsystem] [get_bd_cells axis_switch*]
 
   create_bd_cell -type hier cclo
   move_bd_cells [get_bd_cells cclo] [get_bd_cells control] 

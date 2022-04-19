@@ -25,11 +25,11 @@ EN_EXT_KRNL ?= 1
 EN_FANIN ?= 0
 MB_DEBUG_LEVEL ?= 0
 SIM_MEMSIZE ?= 256K
-XCCL_ELF=vitis_ws/ccl_offload_control/Debug/ccl_offload_control.elf
-XCCL_SIMDLL=ccl_offload_ex/ccl_offload_ex.sim/sim_1/behav/xsim/xsim.dir/ccl_offload_behav/xsimk.so
-XCCL_XSA=ccl_offload_ex/ccl_offload.xsa
-XCCL_DCP=ccl_offload_ex/ccl_offload_ex.runs/synth_1/packaged.dcp
-XCCL_XO=ccl_offload.xo
+CCLO_ELF=vitis_ws/ccl_offload_control/Debug/ccl_offload_control.elf
+CCLO_SIMDLL=ccl_offload_ex/ccl_offload_ex.sim/sim_1/behav/xsim/xsim.dir/ccl_offload_behav/xsimk.so
+CCLO_XSA=ccl_offload_ex/ccl_offload.xsa
+CCLO_DCP=ccl_offload_ex/ccl_offload_ex.runs/synth_1/packaged.dcp
+CCLO_XO=ccl_offload.xo
 
 FW_SOURCES = $(shell find fw -name '*.c') $(shell find fw -name '*.h') $(shell find fw -name '*.tcl')
 
@@ -44,14 +44,14 @@ endif
 GEN_KERNEL_TCL := tcl/generate_kernel.tcl
 REBUILD_BD_TCL := tcl/rebuild_bd.tcl tcl/control_bd.tcl tcl/rx_bd.tcl tcl/tx_bd.tcl
 
-all: $(XCCL_XO)
+all: $(CCLO_XO)
 
 .PHONY: xsa
-xsa: $(XCCL_XSA)
+xsa: $(CCLO_XSA)
 
-$(XCCL_XSA): $(GEN_KERNEL_TCL) $(REBUILD_BD_TCL)
+$(CCLO_XSA): $(GEN_KERNEL_TCL) $(REBUILD_BD_TCL)
 	$(MAKE) -C hls/ DEVICE=$(FPGAPART)
-	vivado -mode batch -source $< -tclargs $(FPGAPART) $(HW_DEBUG) $(XCCL_XSA) $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) $(MB_DEBUG_LEVEL) $(EN_FANIN)
+	vivado -mode batch -source $< -tclargs $(FPGAPART) $(HW_DEBUG) $(CCLO_XSA) $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) $(MB_DEBUG_LEVEL) $(EN_FANIN)
 
 OPTIMIZATION=3
 #valid values 0,1,2,3,s,g
@@ -69,31 +69,31 @@ endif
 
 .PHONY: elf simdll xo distclean dcp
 
-elf: $(XCCL_ELF)
+elf: $(CCLO_ELF)
 
-$(XCCL_ELF): tcl/generate_sw.tcl tcl/associate_elf.tcl $(FW_SOURCES) $(XCCL_XSA)
+$(CCLO_ELF): tcl/generate_sw.tcl tcl/associate_elf.tcl $(FW_SOURCES) $(CCLO_XSA)
 	rm -rf vitis_ws && mkdir vitis_ws
-	xsct $< ccl_offload $(XCCL_XSA) ./fw $(OPTIMIZATION_STRING)
-	vivado -mode batch -source tcl/associate_elf.tcl -tclargs $(XCCL_ELF)
+	xsct $< ccl_offload $(CCLO_XSA) ./fw $(OPTIMIZATION_STRING)
+	vivado -mode batch -source tcl/associate_elf.tcl -tclargs $(CCLO_ELF)
 
-simdll: $(XCCL_SIMDLL)
+simdll: $(CCLO_SIMDLL)
 
-$(XCCL_SIMDLL): tcl/generate_sim.tcl elf
+$(CCLO_SIMDLL): tcl/generate_sim.tcl elf
 	$(MAKE) -C ../plugins PLATFORM=$(PLATFORM)
 	vivado -mode batch -source $< -tclargs $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) $(SIM_MEMSIZE)
 	cd ccl_offload_ex/ccl_offload_ex.sim/sim_1/behav/xsim/ && ./compile.sh && ./elaborate.sh
 
-dcp: $(XCCL_DCP)
+dcp: $(CCLO_DCP)
 
-$(XCCL_DCP): tcl/generate_dcp.tcl $(XCCL_ELF)
+$(CCLO_DCP): tcl/generate_dcp.tcl $(CCLO_ELF)
 	vivado -mode batch -source $< -tclargs $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) $(MB_DEBUG_LEVEL)
 
-xo: $(XCCL_XO)
+xo: $(CCLO_XO)
 
 ccl_offload.xml:
 	python gen_xml.py $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) 
 
-$(XCCL_XO): tcl/generate_xo.tcl ccl_offload.xml $(XCCL_DCP)
+$(CCLO_XO): tcl/generate_xo.tcl ccl_offload.xml $(CCLO_DCP)
 	rm -rf ccl_offload_ex/ccl_offload
 	vivado -mode batch -source $< -tclargs $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) $(MB_DEBUG_LEVEL)
 

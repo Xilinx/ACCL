@@ -23,6 +23,8 @@
 #include "cclo.hpp"
 #include "communicator.hpp"
 #include "constants.hpp"
+#include "fpgabuffer.hpp"
+#include "fpgadevice.hpp"
 #include "simbuffer.hpp"
 #include "simdevice.hpp"
 #include <stdexcept>
@@ -54,8 +56,9 @@ public:
    * @param bufsize       Size of buffers
    * @param arith_config  Arithmetic configuration to use
    */
-  ACCL(const std::vector<rank_t> &ranks, int local_rank, int board_idx,
-       int devicemem, std::vector<int> &rxbufmem, int networkmem,
+  ACCL(const std::vector<rank_t> &ranks, int local_rank, xrt::device &device,
+       xrt::ip &cclo_ip, xrt::kernel &hostctrl_ip, int devicemem,
+       const std::vector<int> &rxbufmem, int networkmem,
        networkProtocol protocol = networkProtocol::TCP, int nbufs = 16,
        addr_t bufsize = 1024,
        const arithConfigMap &arith_config = DEFAULT_ARITH_CONFIG);
@@ -65,7 +68,7 @@ public:
    *
    * @param ranks         All ranks on the network
    * @param local_rank    Rank of this process
-   * @param sim_sock      ZMQ socket of emulator/simulator.
+   * @param start_port    Rank of this process
    * @param protocol      Network protocol to use
    * @param nbufs         Amount of buffers to use
    * @param bufsize       Size of buffers
@@ -73,9 +76,8 @@ public:
 
    */
   ACCL(const std::vector<rank_t> &ranks, int local_rank,
-       const std::string &sim_sock,
-       networkProtocol protocol = networkProtocol::TCP, int nbufs = 16,
-       addr_t bufsize = 1024,
+       unsigned int start_port, networkProtocol protocol = networkProtocol::TCP,
+       int nbufs = 16, addr_t bufsize = 1024,
        const arithConfigMap &arith_config = DEFAULT_ARITH_CONFIG);
 
   /**
@@ -207,19 +209,48 @@ public:
                        std::vector<CCLO *> waitfor = {});
 
   template <typename dtype>
-  std::unique_ptr<Buffer<dtype>> create_buffer(dtype *host_buffer, size_t size,
-                                               dataType type) {
+  std::unique_ptr<Buffer<dtype>> create_buffer(dtype *host_buffer,
+                                               size_t length, dataType type,
+                                               unsigned mem_grp) {
     if (sim_mode) {
       return std::unique_ptr<Buffer<dtype>>(
-          new SimBuffer<dtype>(host_buffer, size, type,
-                               static_cast<SimDevice *>(cclo)->get_socket()));
+          new SimBuffer<dtype>(host_buffer, length, type,
+                               static_cast<SimDevice *>(cclo)->get_context()));
     }
 #ifdef ACCL_HARDWARE_SUPPORT
     else {
-      throw std::runtime_error("TODO: create hardware buffer");
+      return std::unique_ptr<Buffer<dtype>>(new FPGABuffer<dtype>(
+          host_buffer, length, type, device, (xrt::memory_group)mem_grp));
     }
 #endif
     return std::unique_ptr<Buffer<dtype>>(nullptr);
+  }
+
+  template <typename dtype>
+  std::unique_ptr<Buffer<dtype>> create_buffer(size_t length, dataType type,
+                                               unsigned mem_grp) {
+    if (sim_mode) {
+      return std::unique_ptr<Buffer<dtype>>(new SimBuffer<dtype>(
+          length, type, static_cast<SimDevice *>(cclo)->get_context()));
+    }
+#ifdef ACCL_HARDWARE_SUPPORT
+    else {
+      return std::unique_ptr<Buffer<dtype>>(new FPGABuffer<dtype>(
+          length, type, device, (xrt::memory_group)mem_grp));
+    }
+#endif
+    return std::unique_ptr<Buffer<dtype>>(nullptr);
+  }
+
+  template <typename dtype>
+  std::unique_ptr<Buffer<dtype>> create_buffer(dtype *host_buffer,
+                                               size_t length, dataType type) {
+    return create_buffer(host_buffer, length, type, devicemem);
+  }
+
+  template <typename dtype>
+  std::unique_ptr<Buffer<dtype>> create_buffer(size_t length, dataType type) {
+    return create_buffer<dtype>(length, type, devicemem);
   }
 
   std::string dump_exchange_memory();
@@ -262,11 +293,13 @@ private:
   bool config_rdy{};
   // flag to indicate whether we're simulating
   const bool sim_mode;
-  const std::string sim_sock;
   // memory banks for hardware
   const int devicemem;
   const std::vector<int> rxbufmem;
   const int networkmem;
+#ifdef ACCL_HARDWARE_SUPPORT
+  xrt::device device;
+#endif
 
   void initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
                        int nbufs, addr_t bufsize);

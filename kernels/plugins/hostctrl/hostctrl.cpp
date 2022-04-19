@@ -15,9 +15,7 @@
 #
 # *******************************************************************************/
 
-#include "hls_stream.h"
-#include "ap_int.h"
-#include "ap_utils.h"
+#include "accl_hls.h"
 
 using namespace hls;
 using namespace std;
@@ -53,39 +51,12 @@ void hostctrl(	ap_uint<32> scenario,
 #pragma HLS INTERFACE axis port=sts
 #pragma HLS INTERFACE s_axilite port=return
 
-io_section:{
-	#pragma HLS protocol fixed
-	cmd.write(scenario);
-	ap_wait();
-	cmd.write(len);
-	ap_wait();
-	cmd.write(comm);
-	ap_wait();
-	cmd.write(root_src_dst);
-	ap_wait();
-	cmd.write(function);
-	ap_wait();
-	cmd.write(msg_tag);
-	ap_wait();
-	cmd.write(datapath_cfg);
-	ap_wait();
-	cmd.write(compression_flags);
-	ap_wait();
-	cmd.write(stream_flags);
-	ap_wait();
-	cmd.write(addra(31,0));
-	ap_wait();
-	cmd.write(addra(63,32));
-	ap_wait();
-	cmd.write(addrb(31,0));
-	ap_wait();
-	cmd.write(addrb(63,32));
-	ap_wait();
-	cmd.write(addrc(31,0));
-	ap_wait();
-	cmd.write(addrc(63,32));
-	ap_wait();
-	sts.read();
-}
+	accl_hls::ACCLCommand accl(cmd, sts);
+	accl.start_call(
+		scenario, len, comm, root_src_dst, function,
+		msg_tag, datapath_cfg, compression_flags, stream_flags,
+		addra, addrb, addrc
+	);
+	accl.finalize_call();
 
 }

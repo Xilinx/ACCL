@@ -21,26 +21,13 @@
 #include "cclo.hpp"
 #include "constants.hpp"
 #include <iostream>
-#include <jsoncpp/json/json.h>
-#include <zmq.hpp>
+#include <sstream>
 
 /** @file common.hpp */
 
 #define ACCL_SEND_LOG_FILE(i) "accl_send" + i + ".log"
 
 namespace ACCL {
-template <typename Iterable>
-inline Json::Value iterable_to_json(Iterable const &iter) {
-  Json::Value list;
-
-  for (auto &&value : iter) {
-    list.append(value);
-  }
-
-  return list;
-}
-
-Json::Value arithcfg_to_json(ArithConfig const &arithcfg);
 
 #ifdef ACCL_DEBUG
 inline void debug(std::string message) { std::cerr << message << std::endl; }
@@ -80,11 +67,5 @@ inline void reset_log() {
  * @param addr     Address on the FPGA to write arithmetic configuration to.
  */
 void write_arithconfig(CCLO &cclo, ArithConfig &arithcfg, addr_t *addr);
-
-Json::Value parse_json(const std::string &raw_json);
-
-void check_return_status(const Json::Value &status);
-
-void check_return_status(const zmq::message_t &reply);
 
 } // namespace ACCL

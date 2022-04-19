@@ -21,6 +21,7 @@
 #include "constants.hpp"
 #include <string>
 #include <zmq.hpp>
+#include "zmq_client.h"
 
 /** @file simdevice.hpp */
 
@@ -36,7 +37,9 @@ public:
    *
    * @param zmqadr  Address of simulator or emulator to connect to.
    */
-  SimDevice(std::string zmqadr = "tcp://localhost:5555");
+  SimDevice(unsigned int zmqport, unsigned int local_rank);
+
+  virtual ~SimDevice() {}
 
   /**
    * See ACCL::CCLO::call().
@@ -58,10 +61,9 @@ public:
 
   addr_t get_base_addr() override { return 0x0; }
 
-  zmq::socket_t *get_socket() { return &socket; }
+  zmq_intf_context *get_context() { return &zmq_ctx; }
 
 private:
-  zmq::context_t context;
-  zmq::socket_t socket;
+  zmq_intf_context zmq_ctx;
 };
 } // namespace ACCL

@@ -17,34 +17,36 @@
 *******************************************************************************/
 
 #include "accl.hpp"
-#include "common.hpp"
 #include "dummybuffer.hpp"
-#include "simbuffer.hpp"
-#include "simdevice.hpp"
 #include <cmath>
 #include <jsoncpp/json/json.h>
 #include <set>
 
+// 64 MB
+#define NETWORK_BUF_SIZE (64 << 20)
+
 namespace ACCL {
 #ifdef ACCL_HARDWARE_SUPPORT
-ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank, int board_idx,
-           int devicemem, std::vector<int> &rxbufmem, int networkmem,
+ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
+           xrt::device &device, xrt::ip &cclo_ip, xrt::kernel &hostctrl_ip,
+           int devicemem, const std::vector<int> &rxbufmem, int networkmem,
            networkProtocol protocol, int nbufs, addr_t bufsize,
            const arithConfigMap &arith_config)
-    : protocol(protocol), sim_mode(false), sim_sock(""), devicemem(devicemem),
-      rxbufmem(rxbufmem), networkmem(networkmem), arith_config(arith_config) {
-  // TODO: Create hardware constructor.
-  throw std::logic_error("Hardware constructor currently not supported");
+    : arith_config(arith_config), protocol(protocol), sim_mode(false),
+      devicemem(devicemem), rxbufmem(rxbufmem),
+      networkmem(networkmem), device(device) {
+  cclo = new FPGADevice(cclo_ip, hostctrl_ip);
+  initialize_accl(ranks, local_rank, nbufs, bufsize);
 }
 #endif
 
 // Simulation constructor
 ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
-           const std::string &sim_sock, networkProtocol protocol, int nbufs,
+           unsigned int sim_start_port, networkProtocol protocol, int nbufs,
            addr_t bufsize, const arithConfigMap &arith_config)
-    : protocol(protocol), sim_mode(true), sim_sock(sim_sock), devicemem(0),
-      rxbufmem({}), networkmem(0), arith_config(arith_config) {
-  cclo = new SimDevice(sim_sock);
+    : arith_config(arith_config), protocol(protocol), sim_mode(true),
+      devicemem(0), rxbufmem({}), networkmem(0) {
+  cclo = new SimDevice(sim_start_port, local_rank);
   initialize_accl(ranks, local_rank, nbufs, bufsize);
 }
 
@@ -636,15 +638,18 @@ CCLO *ACCL::reduce_scatter(unsigned int comm_id, BaseBuffer &sendbuf,
 
 std::string ACCL::dump_exchange_memory() {
   std::stringstream stream;
-  stream << "exchange mem:" << std::endl;
+  stream << "exchange mem:" << std::hex << std::endl;
   size_t num_word_per_line = 4;
   for (size_t i = 0; i < EXCHANGE_MEM_ADDRESS_RANGE;
        i += 4 * num_word_per_line) {
-    stream << std::hex << EXCHANGE_MEM_OFFSET_ADDRESS + i << ": ";
+    stream << "0x" << EXCHANGE_MEM_OFFSET_ADDRESS + i << ": [";
     for (size_t j = 0; j < num_word_per_line; ++j) {
-      stream << std::hex << cclo->read(EXCHANGE_MEM_OFFSET_ADDRESS + i + j * 4);
+      stream << "0x" << cclo->read(EXCHANGE_MEM_OFFSET_ADDRESS + i + j * 4);
+      if (j != num_word_per_line - 1) {
+        stream << ", ";
+      }
     }
-    stream << std::endl;
+    stream << "]" << std::endl;
   }
 
   return stream.str();
@@ -692,15 +697,20 @@ std::string ACCL::dump_rx_buffers(size_t nbufs) {
     rx_buffer_spares[i]->sync_from_device();
 
     stream << "Spare RX Buffer " << i << ":\t address: 0x" << std::hex
-           << addrh * (1UL << 32) + addrl << " \t status: " << status
-           << " \t occupancy: " << rxlen << "/" << maxsize
-           << " \t MPI tag: " << std::hex << rxtag << " \t seq: " << seq
-           << " \t src: " << rxsrc << " \t data: ";
+           << addrh * (1UL << 32) + addrl << std::dec
+           << " \t status: " << status << " \t occupancy: " << rxlen << "/"
+           << maxsize << " \t MPI tag: " << std::hex << rxtag << std::dec
+           << " \t seq: " << seq << " \t src: " << rxsrc
+           << " \t data: " << std::hex << "[";
     for (size_t j = 0; j < rx_buffer_spares[i]->size(); ++j) {
-      stream << std::hex
-             << static_cast<uint8_t *>(rx_buffer_spares[i]->byte_array())[j];
+      stream << "0x"
+             << static_cast<uint16_t>(static_cast<uint8_t *>(
+                    rx_buffer_spares[i]->byte_array())[j]);
+      if (j != rx_buffer_spares[i]->size() - 1) {
+        stream << ", ";
+      }
     }
-    stream << std::endl;
+    stream << "]" << std::dec << std::endl;
   }
 
   return stream.str();
@@ -745,7 +755,10 @@ void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
   case networkProtocol::TCP:
 #ifdef ACCL_HARDWARE_SUPPORT
     if (!sim_mode) {
-      throw new std::runtime_error("TODO: Allocate buffers.");
+      tx_buf_network = new FPGABuffer<int8_t>(NETWORK_BUF_SIZE, dataType::int8,
+                                              device, networkmem);
+      rx_buf_network = new FPGABuffer<int8_t>(NETWORK_BUF_SIZE, dataType::int8,
+                                              device, networkmem);
       tx_buf_network->sync_to_device();
       rx_buf_network->sync_to_device();
     }
@@ -787,11 +800,12 @@ void ACCL::setup_rx_buffers(size_t nbufs, addr_t bufsize,
 
     if (sim_mode) {
       buf = new SimBuffer(new int8_t[bufsize](), bufsize, dataType::int8,
-                          static_cast<SimDevice *>(cclo)->get_socket());
+                          static_cast<SimDevice *>(cclo)->get_context());
     }
 #ifdef ACCL_HARDWARE_SUPPORT
     else {
-      std::runtime_error("TODO: allocate hw buffer.");
+      buf = new FPGABuffer<int8_t>(bufsize, dataType::int8, device,
+                                   devicemem[i % devicemem.size()]);
     }
 #endif
 
@@ -821,11 +835,12 @@ void ACCL::setup_rx_buffers(size_t nbufs, addr_t bufsize,
   if (sim_mode) {
     utility_spare =
         new SimBuffer(new int8_t[bufsize](), bufsize, dataType::int8,
-                      static_cast<SimDevice *>(cclo)->get_socket());
+                      static_cast<SimDevice *>(cclo)->get_context());
   }
 #ifdef ACCL_HARDWARE_SUPPORT
   else {
-    std::runtime_error("TODO: allocate hw buffer.");
+    utility_spare =
+        new FPGABuffer<int8_t>(bufsize, dataType::int8, device, devicemem[0]);
   }
 #endif
 }
