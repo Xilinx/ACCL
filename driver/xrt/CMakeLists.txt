@@ -33,6 +33,8 @@ endif()
 get_directory_property(HAS_PARENT PARENT_DIRECTORY)
 
 set(ACCL_SOURCE_PATH ${CMAKE_CURRENT_LIST_DIR}/src)
+set(ACCL_REPO_ROOT ${CMAKE_CURRENT_LIST_DIR}/../../)
+set(ZMQ_INTF_DIR ${ACCL_REPO_ROOT}/test/model/zmq)
 
 set(ACCL_SOURCES
     ${ACCL_SOURCE_PATH}/accl.cpp
@@ -41,11 +43,13 @@ set(ACCL_SOURCES
     ${ACCL_SOURCE_PATH}/simdevice.cpp
     ${ACCL_SOURCE_PATH}/simbuffer.cpp
     ${ACCL_SOURCE_PATH}/fpgadevice.cpp
+    ${ZMQ_INTF_DIR}/zmq_client.cpp
+    ${ZMQ_INTF_DIR}/zmq_common.cpp
 )
 
-set(ACCL_INCLUDE_PATH ${CMAKE_CURRENT_LIST_DIR}/include)
+set(ACCL_INCLUDE_PATH ${CMAKE_CURRENT_LIST_DIR}/include ${ZMQ_INTF_DIR})
 if (HAS_PARENT)
-  set(ACCL_INCLUDE_PATH ${CMAKE_CURRENT_LIST_DIR}/include PARENT_SCOPE)
+  set(ACCL_INCLUDE_PATH ${CMAKE_CURRENT_LIST_DIR}/include ${ZMQ_INTF_DIR} PARENT_SCOPE)
 endif (HAS_PARENT)
 
 add_library(accl SHARED ${ACCL_SOURCES})
@@ -68,7 +72,7 @@ else (EXISTS $ENV{XILINX_XRT})
   message(WARNING "Xilinx XRT not found, compiling without hardware support")
 endif (EXISTS $ENV{XILINX_XRT})
 
-target_link_libraries(accl PUBLIC zmq)
+target_link_libraries(accl PUBLIC zmqpp)
 target_include_directories(accl PUBLIC ${ACCL_INCLUDE_PATH})
 
 # Json

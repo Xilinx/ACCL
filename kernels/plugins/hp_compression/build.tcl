@@ -50,16 +50,14 @@ switch $command {
     }
 }
 
+open_project build_hp_compression
 
-open_project build_hostctrl
+add_files hp_compression.cpp -cflags "-std=c++14 -I[pwd]/../../cclo/hls -DACCL_SYNTHESIS"
 
-add_files hostctrl.cpp -cflags "-std=c++14 -I../../../driver/hls/"
-add_files -tb tb_hostctrl.cpp -cflags "-std=c++14 -I../../../driver/hls/"
-
-set_top hostctrl
+set_top hp_compression
 
 open_solution sol1
-config_export -format xo -library ACCL -output [pwd]/hostctrl.xo
+config_export -format xo -library ACCL -output [pwd]/hp_compression.xo
 
 if {$do_sim} {
     csim_design -clean

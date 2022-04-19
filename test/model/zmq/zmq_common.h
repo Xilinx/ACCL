@@ -1,4 +1,4 @@
-# /*******************************************************************************
+/*******************************************************************************
 #  Copyright (C) 2021 Xilinx, Inc
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,13 +14,20 @@
 #  limitations under the License.
 #
 # *******************************************************************************/
+#pragma once
+#include <jsoncpp/json/json.h>
+#include <zmqpp/zmqpp.hpp>
 
-[submodule "demo/build/xup_vitis_network_example"]
-	path = test/hardware/xup_vitis_network_example
-	url = https://github.com/Xilinx/xup_vitis_network_example.git
-[submodule "demo/build/Vitis_with_100Gbps_TCP-IP"]
-	path = test/hardware/Vitis_with_100Gbps_TCP-IP
-	url = https://github.com/fpgasystems/Vitis_with_100Gbps_TCP-IP.git
-[submodule "hlslib"]
-	path = hlslib
-	url = https://github.com/quetric/hlslib.git
+struct zmq_intf_context{
+    zmqpp::context context;
+    zmqpp::socket *cmd_socket;
+    zmqpp::socket *eth_tx_socket;
+    zmqpp::socket *eth_rx_socket;
+    zmqpp::socket *krnl_tx_socket;
+    zmqpp::socket *krnl_rx_socket;
+    bool stop = false;
+    zmq_intf_context() : context() {}
+};
+
+Json::Value to_json(zmqpp::message &message);
+void to_message(Json::Value &request_json, zmqpp::message &request);

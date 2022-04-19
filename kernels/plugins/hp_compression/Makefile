@@ -1,4 +1,3 @@
-
 # /*******************************************************************************
 #  Copyright (C) 2021 Xilinx, Inc
 #
@@ -16,22 +15,12 @@
 #
 # *******************************************************************************/
 
-PERIPHERAL_IPS = hostctrl loopback reduce_sum hp_compression dummy_tcp_stack
 TARGET=ip
-PLATFORM ?= xilinx_u280_xdma_201920_3
-DEBUG ?= none
+DEVICE=xcu250-figd2104-2L-e
+REDUCE_IP=hp_compression.xo
 
-ifeq (u250,$(findstring u250, $(PLATFORM)))
-	FPGAPART=xcu250-figd2104-2L-e
-else ifeq (u280,$(findstring u280, $(PLATFORM)))
-	FPGAPART=xcu280-fsvh2892-2L-e
-else
-	$(error Unsupported PLATFORM)
-endif
+all: $(REDUCE_IP)
 
-all: $(PERIPHERAL_IPS)
+$(REDUCE_IP): build.tcl hp_compression.cpp 
+	vitis_hls $< -tclargs $(TARGET) $(DEVICE)
 
-.PHONY: hostctrl loopback reduce_sum hp_compression dummy_tcp_stack
-
-$(PERIPHERAL_IPS):
-	$(MAKE) -C $@ DEVICE=$(FPGAPART) TARGET=$(TARGET)

@@ -68,7 +68,7 @@ public:
    *
    * @param ranks         All ranks on the network
    * @param local_rank    Rank of this process
-   * @param sim_sock      ZMQ socket of emulator/simulator.
+   * @param start_port    Rank of this process
    * @param protocol      Network protocol to use
    * @param nbufs         Amount of buffers to use
    * @param bufsize       Size of buffers
@@ -76,9 +76,8 @@ public:
 
    */
   ACCL(const std::vector<rank_t> &ranks, int local_rank,
-       const std::string &sim_sock,
-       networkProtocol protocol = networkProtocol::TCP, int nbufs = 16,
-       addr_t bufsize = 1024,
+       unsigned int start_port, networkProtocol protocol = networkProtocol::TCP,
+       int nbufs = 16, addr_t bufsize = 1024,
        const arithConfigMap &arith_config = DEFAULT_ARITH_CONFIG);
 
   /**
@@ -216,7 +215,7 @@ public:
     if (sim_mode) {
       return std::unique_ptr<Buffer<dtype>>(
           new SimBuffer<dtype>(host_buffer, length, type,
-                               static_cast<SimDevice *>(cclo)->get_socket()));
+                               static_cast<SimDevice *>(cclo)->get_context()));
     }
 #ifdef ACCL_HARDWARE_SUPPORT
     else {
@@ -232,7 +231,7 @@ public:
                                                unsigned mem_grp) {
     if (sim_mode) {
       return std::unique_ptr<Buffer<dtype>>(new SimBuffer<dtype>(
-          length, type, static_cast<SimDevice *>(cclo)->get_socket()));
+          length, type, static_cast<SimDevice *>(cclo)->get_context()));
     }
 #ifdef ACCL_HARDWARE_SUPPORT
     else {
@@ -294,7 +293,6 @@ private:
   bool config_rdy{};
   // flag to indicate whether we're simulating
   const bool sim_mode;
-  const std::string sim_sock;
   // memory banks for hardware
   const int devicemem;
   const std::vector<int> rxbufmem;

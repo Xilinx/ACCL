@@ -33,7 +33,7 @@ ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
            networkProtocol protocol, int nbufs, addr_t bufsize,
            const arithConfigMap &arith_config)
     : arith_config(arith_config), protocol(protocol), sim_mode(false),
-      sim_sock(""), devicemem(devicemem), rxbufmem(rxbufmem),
+      devicemem(devicemem), rxbufmem(rxbufmem),
       networkmem(networkmem), device(device) {
   cclo = new FPGADevice(cclo_ip, hostctrl_ip);
   initialize_accl(ranks, local_rank, nbufs, bufsize);
@@ -42,11 +42,11 @@ ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
 
 // Simulation constructor
 ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
-           const std::string &sim_sock, networkProtocol protocol, int nbufs,
+           unsigned int sim_start_port, networkProtocol protocol, int nbufs,
            addr_t bufsize, const arithConfigMap &arith_config)
     : arith_config(arith_config), protocol(protocol), sim_mode(true),
-      sim_sock(sim_sock), devicemem(0), rxbufmem({}), networkmem(0) {
-  cclo = new SimDevice(sim_sock);
+      devicemem(0), rxbufmem({}), networkmem(0) {
+  cclo = new SimDevice(sim_start_port, local_rank);
   initialize_accl(ranks, local_rank, nbufs, bufsize);
 }
 
@@ -703,8 +703,9 @@ std::string ACCL::dump_rx_buffers(size_t nbufs) {
            << " \t seq: " << seq << " \t src: " << rxsrc
            << " \t data: " << std::hex << "[";
     for (size_t j = 0; j < rx_buffer_spares[i]->size(); ++j) {
-      stream << "0x" << static_cast<uint16_t>(
-          static_cast<uint8_t *>(rx_buffer_spares[i]->byte_array())[j]);
+      stream << "0x"
+             << static_cast<uint16_t>(static_cast<uint8_t *>(
+                    rx_buffer_spares[i]->byte_array())[j]);
       if (j != rx_buffer_spares[i]->size() - 1) {
         stream << ", ";
       }
@@ -799,7 +800,7 @@ void ACCL::setup_rx_buffers(size_t nbufs, addr_t bufsize,
 
     if (sim_mode) {
       buf = new SimBuffer(new int8_t[bufsize](), bufsize, dataType::int8,
-                          static_cast<SimDevice *>(cclo)->get_socket());
+                          static_cast<SimDevice *>(cclo)->get_context());
     }
 #ifdef ACCL_HARDWARE_SUPPORT
     else {
@@ -834,7 +835,7 @@ void ACCL::setup_rx_buffers(size_t nbufs, addr_t bufsize,
   if (sim_mode) {
     utility_spare =
         new SimBuffer(new int8_t[bufsize](), bufsize, dataType::int8,
-                      static_cast<SimDevice *>(cclo)->get_socket());
+                      static_cast<SimDevice *>(cclo)->get_context());
   }
 #ifdef ACCL_HARDWARE_SUPPORT
   else {

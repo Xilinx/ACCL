@@ -19,9 +19,8 @@
 #pragma once
 #include "buffer.hpp"
 #include "common.hpp"
+#include "zmq_client.h"
 #include <cmath>
-#include <jsoncpp/json/json.h>
-#include <zmq.hpp>
 
 /** @file simbuffer.hpp */
 
@@ -30,7 +29,7 @@ extern addr_t next_free_address;
 
 template <typename dtype> class SimBuffer : public Buffer<dtype> {
 private:
-  zmq::socket_t *const socket;
+  zmq_intf_context *zmq_ctx;
   bool own_buffer{}; // Initialize to false
 
   addr_t get_next_free_address(size_t size) {
@@ -50,17 +49,17 @@ private:
 
 public:
   SimBuffer(dtype *buffer, size_t length, dataType type,
-            zmq::socket_t *const socket, const addr_t physical_address)
-      : Buffer<dtype>(buffer, length, type, physical_address), socket(socket) {}
+            zmq_intf_context *const context, const addr_t physical_address)
+      : Buffer<dtype>(buffer, length, type, physical_address),
+        zmq_ctx(context) {}
 
   SimBuffer(dtype *buffer, size_t length, dataType type,
-            zmq::socket_t *const socket)
-      : SimBuffer(buffer, length, type, socket,
+            zmq_intf_context *const context)
+      : SimBuffer(buffer, length, type, context,
                   this->get_next_free_address(length * sizeof(dtype))) {}
 
-  SimBuffer(size_t length, dataType type,
-            zmq::socket_t *const socket)
-      : SimBuffer(create_internal_buffer(length), length, type, socket) {}
+  SimBuffer(size_t length, dataType type, zmq_intf_context *const context)
+      : SimBuffer(create_internal_buffer(length), length, type, context) {}
 
   virtual ~SimBuffer() {
     if (own_buffer) {
@@ -69,52 +68,15 @@ public:
   }
 
   void sync_from_device() override {
-    Json::Value request_json;
-    request_json["type"] = 2;
-    request_json["addr"] = (Json::Value::UInt64)this->_physical_address;
-    request_json["len"] = (Json::Value::UInt64)this->_size;
-    Json::StreamWriterBuilder builder;
-    builder["indentation"] = ""; // minimize output
-    const std::string request = Json::writeString(builder, request_json);
-    accl_send_log("sync from device", request);
-    this->socket->send(zmq::const_buffer(request.c_str(), request.size()),
-                       zmq::send_flags::none);
-
-    zmq::message_t reply;
-    zmq::recv_result_t result =
-        this->socket->recv(reply, zmq::recv_flags::none);
-    Json::Value reply_json = parse_json(reply.to_string());
-    check_return_status(reply_json["status"]);
-
-    size_t array_size = reply_json["rdata"].size();
-    uint8_t *data = static_cast<uint8_t *>(this->_byte_array);
-    for (size_t i = 0; i < array_size; ++i) {
-      data[i] = (uint8_t)reply_json["rdata"][(Json::ArrayIndex)i].asInt();
-    }
+    zmq_client_memread(this->zmq_ctx, (uint64_t)this->_physical_address,
+                       (unsigned int)this->_size,
+                       static_cast<uint8_t *>(this->_byte_array));
   }
 
   void sync_to_device() override {
-    Json::Value request_json;
-    request_json["type"] = 3;
-    request_json["addr"] = (Json::Value::UInt64)this->_physical_address;
-
-    Json::Value array;
-    uint8_t *data = static_cast<uint8_t *>(this->_byte_array);
-    for (size_t i = 0; i < this->_size; ++i) {
-      array[(Json::ArrayIndex)i] = (Json::Value::Int)data[i];
-    }
-    request_json["wdata"] = array;
-    Json::StreamWriterBuilder builder;
-    builder["indentation"] = ""; // minimize output
-    const std::string request = Json::writeString(builder, request_json);
-    accl_send_log("sync to device", request);
-    this->socket->send(zmq::const_buffer(request.c_str(), request.size()),
-                       zmq::send_flags::none);
-
-    zmq::message_t reply;
-    zmq::recv_result_t result =
-        this->socket->recv(reply, zmq::recv_flags::none);
-    check_return_status(reply);
+    zmq_client_memwrite(this->zmq_ctx, (uint64_t)this->_physical_address,
+                        (unsigned int)this->_size,
+                        static_cast<uint8_t *>(this->_byte_array));
   }
 
   void free_buffer() override { return; }
@@ -122,7 +84,7 @@ public:
   std::unique_ptr<BaseBuffer> slice(size_t start, size_t end) override {
     return std::unique_ptr<BaseBuffer>(
         new SimBuffer(&this->_buffer[start], end - start, this->_type,
-                      this->socket, this->_physical_address + start));
+                      this->zmq_ctx, this->_physical_address + start));
   }
 };
 } // namespace ACCL

@@ -1,4 +1,4 @@
-# /*******************************************************************************
+/*******************************************************************************
 #  Copyright (C) 2021 Xilinx, Inc
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,12 +15,21 @@
 #
 # *******************************************************************************/
 
-[submodule "demo/build/xup_vitis_network_example"]
-	path = test/hardware/xup_vitis_network_example
-	url = https://github.com/Xilinx/xup_vitis_network_example.git
-[submodule "demo/build/Vitis_with_100Gbps_TCP-IP"]
-	path = test/hardware/Vitis_with_100Gbps_TCP-IP
-	url = https://github.com/fpgasystems/Vitis_with_100Gbps_TCP-IP.git
-[submodule "hlslib"]
-	path = hlslib
-	url = https://github.com/quetric/hlslib.git
+#include "zmq_common.h"
+#include <string>
+
+Json::Value to_json(zmqpp::message &message) {
+    std::string message_txt;
+    message >> message_txt;
+    Json::Reader reader;
+    Json::Value json;
+    reader.parse(message_txt, json);
+    return json;
+}
+
+void to_message(Json::Value &request_json, zmqpp::message &request){
+    Json::StreamWriterBuilder builder;
+    builder["indentation"] = ""; // minimize output
+    const std::string message = Json::writeString(builder, request_json);
+    request << message;
+}
