@@ -210,7 +210,7 @@ void zmq_client_strmwrite(zmq_intf_context *ctx, std::vector<uint8_t> val){
     Json::Value msg_json;
     zmqpp::message msg;
     ctx->krnl_tx_socket->receive(msg);
-    for (int i = 0; i < val.size(); ++i) {
+    for (int i = 0; i < static_cast<int>(val.size()); ++i) {
         msg_json["data"][i] = val.at(i);
     }
     to_message(msg_json, msg);

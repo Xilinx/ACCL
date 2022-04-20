@@ -42,6 +42,7 @@ set(ACCL_SOURCES
     ${ACCL_SOURCE_PATH}/communicator.cpp
     ${ACCL_SOURCE_PATH}/simdevice.cpp
     ${ACCL_SOURCE_PATH}/simbuffer.cpp
+    ${ACCL_SOURCE_PATH}/fpgadevice.cpp
     ${ZMQ_INTF_DIR}/zmq_client.cpp
     ${ZMQ_INTF_DIR}/zmq_common.cpp
 )

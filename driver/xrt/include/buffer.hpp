@@ -40,8 +40,11 @@ public:
    */
   BaseBuffer(void *byte_array, size_t size, dataType type,
              addr_t physical_address)
-      : _byte_array(byte_array), _type(type),
-        _physical_address(physical_address), _size(size) {}
+      : _byte_array(byte_array), _size(size), _type(type),
+        _physical_address(physical_address) {}
+
+
+  virtual ~BaseBuffer() {}
 
   /**
    * Sync the host buffer to the device buffer.
@@ -94,10 +97,10 @@ public:
   virtual std::unique_ptr<BaseBuffer> slice(size_t start, size_t end) = 0;
 
 protected:
-  void *const _byte_array;
+  void *_byte_array;
   const size_t _size;
   const dataType _type;
-  const addr_t _physical_address;
+  addr_t _physical_address;
 };
 
 /**
@@ -116,9 +119,11 @@ public:
    * @param physical_address  The location of the device buffer.
    */
   Buffer(dtype *buffer, size_t length, dataType type, addr_t physical_address)
-      : BaseBuffer((void *)buffer, length * sizeof(dtype), type,
+      : BaseBuffer(static_cast<void *>(buffer), length * sizeof(dtype), type,
                    physical_address),
-        buffer(buffer), _length(length){};
+        _buffer(buffer), _length(length){};
+
+  virtual ~Buffer() {}
 
   /**
    * Get the length of the host buffer.
@@ -127,12 +132,20 @@ public:
    */
   size_t length() const { return _length; }
 
-  dtype operator[](size_t i) { return this->buffer[i]; }
+  dtype *buffer() const { return _buffer; }
 
-  dtype &operator[](size_t i) const { return this->buffer[i]; }
+  dtype operator[](size_t i) { return this->_buffer[i]; }
+
+  dtype &operator[](size_t i) const { return this->_buffer[i]; }
 
 protected:
-  dtype *const buffer;
+  dtype *_buffer;
   const size_t _length;
+
+  void update_buffer(dtype *buffer, addr_t physical_address) {
+    _buffer = buffer;
+    _byte_array = static_cast<void *>(buffer);
+    _physical_address = physical_address;
+  }
 };
 } // namespace ACCL

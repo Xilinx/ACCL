@@ -17,40 +17,28 @@
 *******************************************************************************/
 
 #pragma once
+#ifdef ACCL_HARDWARE_SUPPORT
 #include "cclo.hpp"
 #include "constants.hpp"
+#include <experimental/xrt_ip.h>
 #include <string>
-#include <zmq.hpp>
-#include "zmq_client.h"
+#include <xrt/xrt_kernel.h>
 
-/** @file simdevice.hpp */
+/** @file fpgadevice.hpp */
 
 namespace ACCL {
 /**
  * Implementation of CCLO that uses an external CCLO simulator or emulator.
  *
  */
-class SimDevice : public CCLO {
+class FPGADevice : public CCLO {
 public:
-  /**
-   * Construct a new Simulated Device object.
-   *
-   * @param zmqadr  Address of simulator or emulator to connect to.
-   */
-  SimDevice(unsigned int zmqport, unsigned int local_rank);
+  FPGADevice(xrt::ip &cclo_ip, xrt::kernel &hostctrl_ip);
 
-  virtual ~SimDevice() {}
+  virtual ~FPGADevice() {}
 
-  /**
-   * See ACCL::CCLO::call().
-   *
-   */
   void call(const Options &options) override;
 
-  /**
-   * See ACCL::CCLO::start().
-   *
-   */
   void start(const Options &options) override;
 
   val_t read(addr_t offset) override;
@@ -59,11 +47,16 @@ public:
 
   void wait() override;
 
-  addr_t get_base_addr() override { return 0x0; }
-
-  zmq_intf_context *get_context() { return &zmq_ctx; }
+  addr_t get_base_addr() override {
+    // TODO: Find way to retrieve CCLO base address on FPGA
+    return 0x0;
+  }
 
 private:
-  zmq_intf_context zmq_ctx;
+  xrt::ip cclo;
+  xrt::kernel hostctrl;
+  xrt::run run{};
 };
 } // namespace ACCL
+
+#endif // ACCL_HARDWARE_SUPPORT
