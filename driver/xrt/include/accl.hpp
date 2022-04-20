@@ -41,7 +41,6 @@ namespace ACCL {
  */
 class ACCL {
 public:
-#ifdef ACCL_HARDWARE_SUPPORT
   /**
    * Construct a new ACCL object that talks to hardware.
    *
@@ -62,7 +61,7 @@ public:
        networkProtocol protocol = networkProtocol::TCP, int nbufs = 16,
        addr_t bufsize = 1024,
        const arithConfigMap &arith_config = DEFAULT_ARITH_CONFIG);
-#endif
+
   /**
    * Construct a new ACCL object that talks to emulator/simulator.
    *
@@ -216,13 +215,10 @@ public:
       return std::unique_ptr<Buffer<dtype>>(
           new SimBuffer<dtype>(host_buffer, length, type,
                                static_cast<SimDevice *>(cclo)->get_context()));
-    }
-#ifdef ACCL_HARDWARE_SUPPORT
-    else {
+    } else {
       return std::unique_ptr<Buffer<dtype>>(new FPGABuffer<dtype>(
           host_buffer, length, type, device, (xrt::memory_group)mem_grp));
     }
-#endif
     return std::unique_ptr<Buffer<dtype>>(nullptr);
   }
 
@@ -232,14 +228,22 @@ public:
     if (sim_mode) {
       return std::unique_ptr<Buffer<dtype>>(new SimBuffer<dtype>(
           length, type, static_cast<SimDevice *>(cclo)->get_context()));
-    }
-#ifdef ACCL_HARDWARE_SUPPORT
-    else {
+    } else {
       return std::unique_ptr<Buffer<dtype>>(new FPGABuffer<dtype>(
           length, type, device, (xrt::memory_group)mem_grp));
     }
-#endif
-    return std::unique_ptr<Buffer<dtype>>(nullptr);
+  }
+
+  template <typename dtype>
+  std::unique_ptr<Buffer<dtype>>
+  create_buffer(xrt::bo &bo, size_t length, dataType type) {
+    if (sim_mode) {
+      return std::unique_ptr<Buffer<dtype>>(new SimBuffer<dtype>(
+          bo, length, type, static_cast<SimDevice *>(cclo)->get_context()));
+    } else {
+      return std::unique_ptr<Buffer<dtype>>(new FPGABuffer<dtype>(
+          bo, length, type));
+    }
   }
 
   template <typename dtype>
@@ -297,9 +301,7 @@ private:
   const int devicemem;
   const std::vector<int> rxbufmem;
   const int networkmem;
-#ifdef ACCL_HARDWARE_SUPPORT
   xrt::device device;
-#endif
 
   void initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
                        int nbufs, addr_t bufsize);

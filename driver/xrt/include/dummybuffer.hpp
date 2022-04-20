@@ -29,6 +29,7 @@ public:
 
   virtual ~DummyBuffer() {}
 
+  xrt::bo *bo() override { return nullptr; }
   void sync_from_device() override {}
   void sync_to_device() override {}
   void free_buffer() override {}

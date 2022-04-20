@@ -21,6 +21,7 @@
 #include "common.hpp"
 #include "zmq_client.h"
 #include <cmath>
+#include <xrt/xrt_bo.h>
 
 /** @file simbuffer.hpp */
 
@@ -31,6 +32,8 @@ template <typename dtype> class SimBuffer : public Buffer<dtype> {
 private:
   zmq_intf_context *zmq_ctx;
   bool own_buffer{}; // Initialize to false
+  xrt::bo _bo;       // Only set if constructed using bo.
+  bool bo_valid{};
 
   addr_t get_next_free_address(size_t size) {
     addr_t address = next_free_address;
@@ -49,14 +52,26 @@ private:
 
 public:
   SimBuffer(dtype *buffer, size_t length, dataType type,
+            zmq_intf_context *const context, const addr_t physical_address,
+            xrt::bo &bo, bool bo_valid_)
+      : Buffer<dtype>(buffer, length, type, physical_address), zmq_ctx(context),
+        _bo(bo), bo_valid(bo_valid_) {}
+
+  SimBuffer(dtype *buffer, size_t length, dataType type,
             zmq_intf_context *const context, const addr_t physical_address)
-      : Buffer<dtype>(buffer, length, type, physical_address),
-        zmq_ctx(context) {}
+      : Buffer<dtype>(buffer, length, type, physical_address), zmq_ctx(context),
+        _bo(xrt::bo()) {}
 
   SimBuffer(dtype *buffer, size_t length, dataType type,
             zmq_intf_context *const context)
       : SimBuffer(buffer, length, type, context,
                   this->get_next_free_address(length * sizeof(dtype))) {}
+
+  SimBuffer(xrt::bo &bo, size_t length, dataType type,
+            zmq_intf_context *const context)
+      : SimBuffer(bo.map<dtype>(), length, type, context,
+                  this->get_next_free_address(length * sizeof(dtype)), bo,
+                  true) {}
 
   SimBuffer(size_t length, dataType type, zmq_intf_context *const context)
       : SimBuffer(create_internal_buffer(length), length, type, context) {}
@@ -65,6 +80,14 @@ public:
     if (own_buffer) {
       delete this->_buffer;
     }
+  }
+
+  xrt::bo *bo() override {
+    if (bo_valid) {
+      return &_bo;
+    }
+
+    return nullptr;
   }
 
   void sync_from_device() override {
@@ -82,9 +105,9 @@ public:
   void free_buffer() override { return; }
 
   std::unique_ptr<BaseBuffer> slice(size_t start, size_t end) override {
-    return std::unique_ptr<BaseBuffer>(
-        new SimBuffer(&this->_buffer[start], end - start, this->_type,
-                      this->zmq_ctx, this->_physical_address + start));
+    return std::unique_ptr<BaseBuffer>(new SimBuffer(
+        &this->_buffer[start], end - start, this->_type, this->zmq_ctx,
+        this->_physical_address + start, _bo, bo_valid));
   }
 };
 } // namespace ACCL

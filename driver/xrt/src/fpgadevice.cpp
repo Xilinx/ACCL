@@ -20,7 +20,6 @@
 #include "common.hpp"
 #include <jsoncpp/json/json.h>
 
-#ifdef ACCL_HARDWARE_SUPPORT
 
 namespace ACCL {
 FPGADevice::FPGADevice(xrt::ip &cclo_ip, xrt::kernel &hostctrl_ip)
@@ -69,5 +68,3 @@ void FPGADevice::write(addr_t offset, val_t val) {
   return cclo.write_register(offset, val);
 }
 } // namespace ACCL
-
-#endif // ACCL_HARDWARE_SUPPORT

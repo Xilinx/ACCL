@@ -26,7 +26,6 @@
 #define NETWORK_BUF_SIZE (64 << 20)
 
 namespace ACCL {
-#ifdef ACCL_HARDWARE_SUPPORT
 ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
            xrt::device &device, xrt::ip &cclo_ip, xrt::kernel &hostctrl_ip,
            int devicemem, const std::vector<int> &rxbufmem, int networkmem,
@@ -38,7 +37,6 @@ ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
   cclo = new FPGADevice(cclo_ip, hostctrl_ip);
   initialize_accl(ranks, local_rank, nbufs, bufsize);
 }
-#endif
 
 // Simulation constructor
 ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
@@ -753,7 +751,6 @@ void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
     use_udp();
     break;
   case networkProtocol::TCP:
-#ifdef ACCL_HARDWARE_SUPPORT
     if (!sim_mode) {
       tx_buf_network = new FPGABuffer<int8_t>(NETWORK_BUF_SIZE, dataType::int8,
                                               device, networkmem);
@@ -762,7 +759,6 @@ void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
       tx_buf_network->sync_to_device();
       rx_buf_network->sync_to_device();
     }
-#endif
     use_tcp();
     break;
   default:
@@ -802,12 +798,10 @@ void ACCL::setup_rx_buffers(size_t nbufs, addr_t bufsize,
       buf = new SimBuffer(new int8_t[bufsize](), bufsize, dataType::int8,
                           static_cast<SimDevice *>(cclo)->get_context());
     }
-#ifdef ACCL_HARDWARE_SUPPORT
     else {
       buf = new FPGABuffer<int8_t>(bufsize, dataType::int8, device,
                                    devicemem[i % devicemem.size()]);
     }
-#endif
 
     buf->sync_to_device();
     rx_buffer_spares.emplace_back(buf);
@@ -837,12 +831,10 @@ void ACCL::setup_rx_buffers(size_t nbufs, addr_t bufsize,
         new SimBuffer(new int8_t[bufsize](), bufsize, dataType::int8,
                       static_cast<SimDevice *>(cclo)->get_context());
   }
-#ifdef ACCL_HARDWARE_SUPPORT
   else {
     utility_spare =
         new FPGABuffer<int8_t>(bufsize, dataType::int8, device, devicemem[0]);
   }
-#endif
 }
 
 void ACCL::check_return_value(const std::string function_name) {

@@ -22,11 +22,9 @@
 #include <random>
 #include <sstream>
 #include <vector>
-#ifdef ACCL_HARDWARE_SUPPORT
 #include <experimental/xrt_ip.h>
 #include <xrt/xrt_device.h>
 #include <xrt/xrt_kernel.h>
-#endif
 #include <tclap/CmdLine.h>
 
 using namespace ACCL;
@@ -40,11 +38,9 @@ struct options_t {
   unsigned int count;
   unsigned int nruns;
   bool debug;
-#ifdef ACCL_HARDWARE_SUPPORT
   bool hardware;
   unsigned int device_index;
   std::string xclbin;
-#endif
 };
 
 void test_debug(std::string message, options_t &options) {
@@ -477,14 +473,6 @@ void test_allreduce(ACCL::ACCL &accl, options_t &options,
   }
 }
 
-inline bool hardware_set(options_t options) {
-#ifdef ACCL_HARDWARE_SUPPORT
-  return options.hardware;
-#else
-  return false;
-#endif
-}
-
 void start_test(options_t options) {
   std::vector<rank_t> ranks = {};
   failed_tests = 0;
@@ -496,8 +484,7 @@ void start_test(options_t options) {
 
   ACCL::ACCL *accl;
 
-  if (hardware_set(options)) {
-#ifdef ACCL_HARDWARE_SUPPORT
+  if (options.hardware) {
     auto device = xrt::device(options.device_index);
     auto xclbin_uuid = device.load_xclbin(options.xclbin);
     auto cclo_ip =
@@ -512,7 +499,6 @@ void start_test(options_t options) {
     accl = new ACCL::ACCL(ranks, rank, device, cclo_ip, hostctrl_ip, rank * 6,
                           mem, rank * 6 + 2, networkProtocol::TCP, 16,
                           options.rxbuf_size);
-#endif
   } else {
     accl = new ACCL::ACCL(ranks, rank, options.start_port, networkProtocol::TCP,
                           16, options.rxbuf_size);
@@ -574,7 +560,6 @@ options_t parse_options(int argc, char *argv[]) {
                                         "positive integer");
   cmd.add(bufsize_arg);
   TCLAP::SwitchArg debug_arg("d", "debug", "Enable debug mode", cmd, false);
-#ifdef ACCL_HARDWARE_SUPPORT
   TCLAP::SwitchArg hardware_arg("f", "hardware", "enable hardware mode", cmd,
                                 false);
   TCLAP::ValueArg<std::string> xclbin_arg(
@@ -585,7 +570,6 @@ options_t parse_options(int argc, char *argv[]) {
       "i", "device-index", "device index of FPGA if hardware mode is used",
       false, 0, "positive integer");
   cmd.add(device_index_arg);
-#endif
 
   try {
     cmd.parse(argc, argv);
@@ -604,11 +588,9 @@ options_t parse_options(int argc, char *argv[]) {
   opts.rxbuf_size = bufsize_arg.getValue() * 1024; // convert to bytes
   opts.nruns = nruns_arg.getValue();
   opts.debug = debug_arg.getValue();
-#ifdef ACCL_HARDWARE_SUPPORT
   opts.hardware = hardware_arg.getValue();
   opts.device_index = device_index_arg.getValue();
   opts.xclbin = xclbin_arg.getValue();
-#endif
   return opts;
 }
 

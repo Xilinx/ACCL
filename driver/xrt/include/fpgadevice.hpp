@@ -17,7 +17,6 @@
 *******************************************************************************/
 
 #pragma once
-#ifdef ACCL_HARDWARE_SUPPORT
 #include "cclo.hpp"
 #include "constants.hpp"
 #include <experimental/xrt_ip.h>
@@ -58,5 +57,3 @@ private:
   xrt::run run{};
 };
 } // namespace ACCL
-
-#endif // ACCL_HARDWARE_SUPPORT

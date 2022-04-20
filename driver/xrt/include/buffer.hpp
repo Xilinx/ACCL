@@ -18,6 +18,7 @@
 
 #pragma once
 #include "constants.hpp"
+#include <xrt/xrt_bo.h>
 #include <memory>
 
 /** @file buffer.hpp */
@@ -65,6 +66,13 @@ public:
   virtual void free_buffer() = 0;
 
   /**
+   * Get internal bo buffer, or nullptr if it does not exists.
+   *
+   * @return xrt::bo*  The internal bo buffer, or nullptr if it does not exists.
+   */
+  virtual xrt::bo *bo() = 0;
+
+  /**
    * Get the size of the buffer in bytes.
    *
    * @return size_t  The size of the buffer.
@@ -78,6 +86,11 @@ public:
    */
   dataType type() const { return _type; }
 
+  /**
+   * Get the host buffer as void pointer.
+   *
+   * @return void*  The host buffer as void pointer.
+   */
   void *byte_array() const { return _byte_array; }
 
   /**
