@@ -18,8 +18,8 @@
 
 #pragma once
 #include "constants.hpp"
-#include <xrt/xrt_bo.h>
 #include <memory>
+#include <xrt/xrt_bo.h>
 
 /** @file buffer.hpp */
 
@@ -43,7 +43,6 @@ public:
              addr_t physical_address)
       : _byte_array(byte_array), _size(size), _type(type),
         _physical_address(physical_address) {}
-
 
   virtual ~BaseBuffer() {}
 
@@ -71,6 +70,26 @@ public:
    * @return xrt::bo*  The internal bo buffer, or nullptr if it does not exists.
    */
   virtual xrt::bo *bo() = 0;
+
+  /**
+   * Check if buffer is an actual fpga buffer, or a simulated buffer.
+   *
+   * @return true   The buffer is simulated.
+   * @return false  The buffer is not simulated.
+   */
+  virtual bool is_simulated() const = 0;
+
+  /**
+   * Sync bo to device if necessary for simulated buffers.
+   *
+   */
+  virtual void sync_bo_to_device() {}
+
+  /**
+   * Sync bo from device if necessary for simulated buffers.
+   *
+   */
+  virtual void sync_bo_from_device() {}
 
   /**
    * Get the size of the buffer in bytes.

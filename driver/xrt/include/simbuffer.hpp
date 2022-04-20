@@ -31,8 +31,9 @@ extern addr_t next_free_address;
 template <typename dtype> class SimBuffer : public Buffer<dtype> {
 private:
   zmq_intf_context *zmq_ctx;
-  bool own_buffer{}; // Initialize to false
-  xrt::bo _bo;       // Only set if constructed using bo.
+  bool own_buffer{};             // Initialize to false
+  xrt::bo _bo;                   // Only set if constructed using bo.
+  dtype *internal_copy_buffer{}; // Used to sync bo over zmq
   bool bo_valid{};
 
   addr_t get_next_free_address(size_t size) {
@@ -55,7 +56,11 @@ public:
             zmq_intf_context *const context, const addr_t physical_address,
             xrt::bo &bo, bool bo_valid_)
       : Buffer<dtype>(buffer, length, type, physical_address), zmq_ctx(context),
-        _bo(bo), bo_valid(bo_valid_) {}
+        _bo(bo), bo_valid(bo_valid_) {
+    if (bo_valid) {
+      internal_copy_buffer = new dtype[length];
+    }
+  }
 
   SimBuffer(dtype *buffer, size_t length, dataType type,
             zmq_intf_context *const context, const addr_t physical_address)
@@ -80,6 +85,10 @@ public:
     if (own_buffer) {
       delete this->_buffer;
     }
+
+    if (bo_valid) {
+      delete this->internal_copy_buffer;
+    }
   }
 
   xrt::bo *bo() override {
@@ -90,7 +99,28 @@ public:
     return nullptr;
   }
 
+  bool is_simulated() const override { return true; }
+
+  void sync_bo_to_device() override {
+    if (bo_valid) {
+      _bo.read(internal_copy_buffer);
+      zmq_client_memwrite(this->zmq_ctx, (uint64_t)this->_physical_address,
+                          (unsigned int)this->_size,
+                          reinterpret_cast<uint8_t *>(internal_copy_buffer));
+    }
+  }
+
+  void sync_bo_from_device() override {
+    if (bo_valid) {
+      zmq_client_memread(this->zmq_ctx, (uint64_t)this->_physical_address,
+                          (unsigned int)this->_size,
+                          reinterpret_cast<uint8_t *>(internal_copy_buffer));
+      _bo.write(internal_copy_buffer);
+    }
+  }
+
   void sync_from_device() override {
+    sync_bo_to_device();
     zmq_client_memread(this->zmq_ctx, (uint64_t)this->_physical_address,
                        (unsigned int)this->_size,
                        static_cast<uint8_t *>(this->_byte_array));
@@ -100,6 +130,9 @@ public:
     zmq_client_memwrite(this->zmq_ctx, (uint64_t)this->_physical_address,
                         (unsigned int)this->_size,
                         static_cast<uint8_t *>(this->_byte_array));
+    if (bo_valid) {
+      _bo.sync(XCL_BO_SYNC_BO_TO_DEVICE);
+    }
   }
 
   void free_buffer() override { return; }

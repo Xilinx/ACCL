@@ -65,5 +65,8 @@ public:
 
 private:
   zmq_intf_context zmq_ctx;
+  BaseBuffer *addr_0_cache;
+  BaseBuffer *addr_1_cache;
+  BaseBuffer *addr_2_cache;
 };
 } // namespace ACCL

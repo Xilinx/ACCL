@@ -81,6 +81,8 @@ public:
 
   xrt::bo *bo() override { return &_bo; }
 
+  bool is_simulated() const override { return false; }
+
   void sync_from_device() override {
     _bo.sync(xclBOSyncDirection::XCL_BO_SYNC_BO_FROM_DEVICE);
     if (!is_aligned) {
