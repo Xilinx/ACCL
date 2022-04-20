@@ -18,6 +18,10 @@
 #include <jsoncpp/json/json.h>
 #include <zmqpp/zmqpp.hpp>
 
+/**
+ * @brief ZMQ interface context, consisting of ZMQ sockets
+ * 
+ */
 struct zmq_intf_context{
     zmqpp::context context;
     zmqpp::socket *cmd_socket;
@@ -29,5 +33,18 @@ struct zmq_intf_context{
     zmq_intf_context() : context() {}
 };
 
+/**
+ * @brief Convert a ZMQ message to JSON
+ * 
+ * @param message Reference to the ZMQ message, as received from the socket
+ * @return Json::Value The JSON equivalent
+ */
 Json::Value to_json(zmqpp::message &message);
+
+/**
+ * @brief Convert a JSON to a ZMQ message
+ * 
+ * @param request_json The JSON input
+ * @param request Reference to the ZMQ message, ready for sending
+ */
 void to_message(Json::Value &request_json, zmqpp::message &request);
