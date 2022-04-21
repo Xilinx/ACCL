@@ -103,7 +103,7 @@ public:
 
   void sync_bo_to_device() override {
     if (bo_valid) {
-      _bo.read(internal_copy_buffer);
+      _bo.read(internal_copy_buffer, this->_size, 0);
       zmq_client_memwrite(this->zmq_ctx, (uint64_t)this->_physical_address,
                           (unsigned int)this->_size,
                           reinterpret_cast<uint8_t *>(internal_copy_buffer));
@@ -115,7 +115,7 @@ public:
       zmq_client_memread(this->zmq_ctx, (uint64_t)this->_physical_address,
                           (unsigned int)this->_size,
                           reinterpret_cast<uint8_t *>(internal_copy_buffer));
-      _bo.write(internal_copy_buffer);
+      _bo.write(internal_copy_buffer, this->_size, 0);
     }
   }
 
@@ -138,9 +138,17 @@ public:
   void free_buffer() override { return; }
 
   std::unique_ptr<BaseBuffer> slice(size_t start, size_t end) override {
+    xrt::bo bo_slice;
+    if (bo_valid) {
+      size_t start_bytes = start * sizeof(dtype);
+      size_t end_bytes = end * sizeof(dtype);
+      bo_slice = xrt::bo(_bo, end_bytes - start_bytes, start_bytes);
+    } else {
+      bo_slice = _bo;
+    }
     return std::unique_ptr<BaseBuffer>(new SimBuffer(
         &this->_buffer[start], end - start, this->_type, this->zmq_ctx,
-        this->_physical_address + start, _bo, bo_valid));
+        this->_physical_address + start, bo_slice, bo_valid));
   }
 };
 } // namespace ACCL
