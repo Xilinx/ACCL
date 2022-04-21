@@ -46,7 +46,7 @@ public:
   }
 
   FPGABuffer(xrt::bo &bo, addr_t length, dataType type)
-      : Buffer<dtype>(bo.map<dtype>(), length, type, bo.address()),
+      : Buffer<dtype>(bo.map<dtype *>(), length, type, bo.address()),
         _bo(bo) {
     set_buffer();
   }

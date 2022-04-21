@@ -74,7 +74,7 @@ public:
 
   SimBuffer(xrt::bo &bo, size_t length, dataType type,
             zmq_intf_context *const context)
-      : SimBuffer(bo.map<dtype>(), length, type, context,
+      : SimBuffer(bo.map<dtype *>(), length, type, context,
                   this->get_next_free_address(length * sizeof(dtype)), bo,
                   true) {}
 
