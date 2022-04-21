@@ -83,11 +83,11 @@ public:
 
   virtual ~SimBuffer() {
     if (own_buffer) {
-      delete this->_buffer;
+      delete[] this->_buffer;
     }
 
     if (bo_valid) {
-      delete this->internal_copy_buffer;
+      delete[] this->internal_copy_buffer;
     }
   }
 
