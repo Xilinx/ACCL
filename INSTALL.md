@@ -62,7 +62,7 @@ mpirun -np <RANKS> bin/test
   ```sh
   source <VITIS_INSTALL>/settings64.sh
   cd "kernels/cclo"
-  make STACK_TYPE=TCP EN_FANIN=1 MB_DEBUG_LEVEL=2
+  make STACK_TYPE=TCP EN_FANIN=1 MB_DEBUG_LEVEL=2 PLATFORM=<Alveo Platform Name>
   cd "../../test/hardware"
   make MODE=tcp PLATFORM=<Alveo Platform Name>
   ```
@@ -73,7 +73,7 @@ mpirun -np <RANKS> bin/test
   ```sh
   source <VITIS_INSTALL>/settings64.sh
   cd "kernels/cclo"
-  make STACK_TYPE=UDP MB_DEBUG_LEVEL=2
+  make STACK_TYPE=UDP MB_DEBUG_LEVEL=2 PLATFORM=<Alveo Platform Name>
   cd "../../test/hardware"
   make MODE=udp PLATFORM=<Alveo Platform Name>
   ```
@@ -84,8 +84,15 @@ mpirun -np <RANKS> bin/test
   ```sh
   source <VITIS_INSTALL>/settings64.sh
   cd "kernels/cclo"
-  make STACK_TYPE=TCP EN_FANIN=1 MB_DEBUG_LEVEL=2
+  make STACK_TYPE=TCP EN_FANIN=1 MB_DEBUG_LEVEL=2 PLATFORM=<Alveo U280 or U250 Platform Name>
   cd "../../test/hardware"
   make MODE=tri PLATFORM=<Alveo U280 or U250 Platform Name>
   ```
 </details>
+
+The following Alveo platforms are supported:
+| Alveo | Development Target Platform(s)         |
+|-------|----------------------------------------|
+| U55C  | xilinx_u55c_gen3x16_xdma_2_202110_1    |
+| U250  | xilinx_u250_gen3x16_xdma_3_1_202020_1  |
+| U280  | xilinx_u280_xdma_201920_3              |
