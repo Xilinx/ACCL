@@ -41,7 +41,6 @@ namespace ACCL {
  */
 class ACCL {
 public:
-#ifdef ACCL_HARDWARE_SUPPORT
   /**
    * Construct a new ACCL object that talks to hardware.
    *
@@ -62,7 +61,7 @@ public:
        networkProtocol protocol = networkProtocol::TCP, int nbufs = 16,
        addr_t bufsize = 1024,
        const arithConfigMap &arith_config = DEFAULT_ARITH_CONFIG);
-#endif
+
   /**
    * Construct a new ACCL object that talks to emulator/simulator.
    *
@@ -78,6 +77,25 @@ public:
   ACCL(const std::vector<rank_t> &ranks, int local_rank,
        unsigned int start_port, networkProtocol protocol = networkProtocol::TCP,
        int nbufs = 16, addr_t bufsize = 1024,
+       const arithConfigMap &arith_config = DEFAULT_ARITH_CONFIG);
+
+  /**
+   * Construct a new ACCL object that talks to emulator/simulator and is
+   compatible with the Vitis emulator.
+   *
+   * @param ranks         All ranks on the network
+   * @param local_rank    Rank of this process
+   * @param start_port    Rank of this process
+   * @param protocol      Network protocol to use
+   * @param nbufs         Amount of buffers to use
+   * @param bufsize       Size of buffers
+   * @param arith_config  Arithmetic configuration to use
+
+   */
+  ACCL(const std::vector<rank_t> &ranks, int local_rank,
+       unsigned int start_port, xrt::device &device,
+       networkProtocol protocol = networkProtocol::TCP, int nbufs = 16,
+       addr_t bufsize = 1024,
        const arithConfigMap &arith_config = DEFAULT_ARITH_CONFIG);
 
   /**
@@ -216,13 +234,10 @@ public:
       return std::unique_ptr<Buffer<dtype>>(
           new SimBuffer<dtype>(host_buffer, length, type,
                                static_cast<SimDevice *>(cclo)->get_context()));
-    }
-#ifdef ACCL_HARDWARE_SUPPORT
-    else {
+    } else {
       return std::unique_ptr<Buffer<dtype>>(new FPGABuffer<dtype>(
           host_buffer, length, type, device, (xrt::memory_group)mem_grp));
     }
-#endif
     return std::unique_ptr<Buffer<dtype>>(nullptr);
   }
 
@@ -232,14 +247,23 @@ public:
     if (sim_mode) {
       return std::unique_ptr<Buffer<dtype>>(new SimBuffer<dtype>(
           length, type, static_cast<SimDevice *>(cclo)->get_context()));
-    }
-#ifdef ACCL_HARDWARE_SUPPORT
-    else {
+    } else {
       return std::unique_ptr<Buffer<dtype>>(new FPGABuffer<dtype>(
           length, type, device, (xrt::memory_group)mem_grp));
     }
-#endif
-    return std::unique_ptr<Buffer<dtype>>(nullptr);
+  }
+
+  template <typename dtype>
+  std::unique_ptr<Buffer<dtype>> create_buffer(xrt::bo &bo, size_t length,
+                                               dataType type) {
+    if (sim_mode) {
+      return std::unique_ptr<Buffer<dtype>>(
+          new SimBuffer<dtype>(bo, device, length, type,
+                               static_cast<SimDevice *>(cclo)->get_context()));
+    } else {
+      return std::unique_ptr<Buffer<dtype>>(
+          new FPGABuffer<dtype>(bo, length, type));
+    }
   }
 
   template <typename dtype>
@@ -297,9 +321,7 @@ private:
   const int devicemem;
   const std::vector<int> rxbufmem;
   const int networkmem;
-#ifdef ACCL_HARDWARE_SUPPORT
   xrt::device device;
-#endif
 
   void initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
                        int nbufs, addr_t bufsize);

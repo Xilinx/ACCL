@@ -22,11 +22,9 @@
 #include <random>
 #include <sstream>
 #include <vector>
-#ifdef ACCL_HARDWARE_SUPPORT
 #include <experimental/xrt_ip.h>
 #include <xrt/xrt_device.h>
 #include <xrt/xrt_kernel.h>
-#endif
 #include <tclap/CmdLine.h>
 
 using namespace ACCL;
@@ -40,11 +38,9 @@ struct options_t {
   unsigned int count;
   unsigned int nruns;
   bool debug;
-#ifdef ACCL_HARDWARE_SUPPORT
   bool hardware;
   unsigned int device_index;
   std::string xclbin;
-#endif
 };
 
 void test_debug(std::string message, options_t &options) {
@@ -81,8 +77,6 @@ void test_copy(ACCL::ACCL &accl, options_t &options) {
   auto res_buf = accl.create_buffer<float>(count, dataType::float32);
   random_array(op_buf->buffer(), count);
 
-  (*op_buf).sync_to_device();
-  (*res_buf).sync_to_device();
   accl.copy(*op_buf, *res_buf, count);
   int errors = 0;
   for (unsigned int i = 0; i < count; ++i) {
@@ -112,9 +106,7 @@ void test_combine(ACCL::ACCL &accl, options_t &options) {
   auto res_buf = accl.create_buffer<float>(count, dataType::float32);
   random_array(op_buf1->buffer(), count);
   random_array(op_buf2->buffer(), count);
-  (*op_buf1).sync_to_device();
-  (*op_buf2).sync_to_device();
-  (*res_buf).sync_to_device();
+
   accl.combine(count, reduceFunction::SUM, *op_buf1, *op_buf2, *res_buf);
   int errors = 0;
   for (unsigned int i = 0; i < count; ++i) {
@@ -136,6 +128,68 @@ void test_combine(ACCL::ACCL &accl, options_t &options) {
   }
 }
 
+void test_sendrcv_bo(ACCL::ACCL &accl, xrt::device &dev, options_t &options) {
+  std::cout << "Start send recv test bo..." << std::endl;
+  unsigned int count = options.count;
+
+  // Initialize bo
+  float* data, *validation_data;
+  posix_memalign(reinterpret_cast<void**>(&data), 4096, count * sizeof(float));
+  posix_memalign(reinterpret_cast<void**>(&validation_data), 4096, count * sizeof(float));
+  random_array(data, count);
+  xrt::bo send_bo(dev, data, count * sizeof(float), 0);
+  xrt::bo recv_bo(dev, validation_data, count * sizeof(float), 0);
+  auto op_buf = accl.create_buffer<float>(send_bo, count, dataType::float32);
+  auto res_buf = accl.create_buffer<float>(recv_bo, count, dataType::float32);
+  int next_rank = (rank + 1) % size;
+  int prev_rank = (rank + size - 1) % size;
+
+  test_debug("Syncing buffers...", options);
+  (*op_buf).sync_to_device();
+
+  test_debug("Sending data on " + std::to_string(rank) + " to " +
+                 std::to_string(next_rank) + "...",
+             options);
+  accl.send(0, *op_buf, count, next_rank, 0, true);
+
+  test_debug("Receiving data on " + std::to_string(rank) + " from " +
+                 std::to_string(prev_rank) + "...",
+             options);
+  accl.recv(0, *op_buf, count, prev_rank, 0, true);
+
+  test_debug("Sending data on " + std::to_string(rank) + " to " +
+                 std::to_string(prev_rank) + "...",
+             options);
+  accl.send(0, *op_buf, count, prev_rank, 1, true);
+
+  test_debug("Receiving data on " + std::to_string(rank) + " from " +
+                 std::to_string(next_rank) + "...",
+             options);
+  accl.recv(0, *op_buf, count, next_rank, 1, true);
+
+  accl.copy(*op_buf, *res_buf, count, true, true);
+  
+  recv_bo.sync(XCL_BO_SYNC_BO_FROM_DEVICE);
+  int errors = 0;
+  for (unsigned int i = 0; i < count; ++i) {
+    float ref = validation_data[i];
+    float res = data[i];
+    if (res != ref) {
+      std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
+                       std::to_string(res) + " != " + std::to_string(ref) + ")"
+                << std::endl;
+      errors += 1;
+    }
+  }
+
+  if (errors > 0) {
+    std::cout << std::to_string(errors) + " errors!" << std::endl;
+    failed_tests++;
+  } else {
+    std::cout << "Test is successful!" << std::endl;
+  }
+}
+
 void test_sendrcv(ACCL::ACCL &accl, options_t &options) {
   std::cout << "Start send recv test..." << std::endl;
   unsigned int count = options.count;
@@ -145,9 +199,6 @@ void test_sendrcv(ACCL::ACCL &accl, options_t &options) {
   int next_rank = (rank + 1) % size;
   int prev_rank = (rank + size - 1) % size;
 
-  test_debug("Syncing buffers...", options);
-  (*op_buf).sync_to_device();
-  (*res_buf).sync_to_device();
 
   test_debug("Sending data on " + std::to_string(rank) + " to " +
                  std::to_string(next_rank) + "...",
@@ -197,10 +248,6 @@ void test_bcast(ACCL::ACCL &accl, options_t &options, int root) {
   auto res_buf = accl.create_buffer<float>(count, dataType::float32);
   random_array(op_buf->buffer(), count);
 
-  test_debug("Syncing buffers...", options);
-  (*op_buf).sync_to_device();
-  (*res_buf).sync_to_device();
-
   if (rank == root) {
     test_debug("Broadcasting data from " + std::to_string(rank) + "...",
                options);
@@ -242,10 +289,6 @@ void test_scatter(ACCL::ACCL &accl, options_t &options, int root) {
   auto res_buf = accl.create_buffer<float>(count, dataType::float32);
   random_array(op_buf->buffer(), count * size);
 
-  test_debug("Syncing buffers...", options);
-  (*op_buf).sync_to_device();
-  (*res_buf).sync_to_device();
-
   test_debug("Scatter data from " + std::to_string(rank) + "...", options);
   accl.scatter(0, *op_buf, *res_buf, count, root);
 
@@ -283,13 +326,6 @@ void test_gather(ACCL::ACCL &accl, options_t &options, int root) {
     res_buf = std::unique_ptr<ACCL::Buffer<float>>(nullptr);
   }
 
-  test_debug("Syncing buffers...", options);
-  (*op_buf).sync_to_device();
-
-  if (rank == root) {
-    (*res_buf).sync_to_device();
-  }
-
   test_debug("Gather data from " + std::to_string(rank) + "...", options);
   accl.gather(0, *op_buf, *res_buf, count, root);
 
@@ -324,10 +360,6 @@ void test_allgather(ACCL::ACCL &accl, options_t &options) {
                                    dataType::float32);
   auto res_buf = accl.create_buffer<float>(count * size, dataType::float32);
 
-  test_debug("Syncing buffers...", options);
-  (*op_buf).sync_to_device();
-  (*res_buf).sync_to_device();
-
   test_debug("Gathering data...", options);
   accl.allgather(0, *op_buf, *res_buf, count);
 
@@ -361,10 +393,6 @@ void test_reduce(ACCL::ACCL &accl, options_t &options, int root,
   auto op_buf = accl.create_buffer<float>(count, dataType::float32);
   auto res_buf = accl.create_buffer<float>(count, dataType::float32);
   random_array(op_buf->buffer(), count);
-
-  test_debug("Syncing buffers...", options);
-  (*op_buf).sync_to_device();
-  (*res_buf).sync_to_device();
 
   test_debug("Reduce data to " + std::to_string(root) + "...", options);
   accl.reduce(0, *op_buf, *res_buf, count, root, function);
@@ -403,10 +431,6 @@ void test_reduce_scatter(ACCL::ACCL &accl, options_t &options,
   auto op_buf = accl.create_buffer<float>(count * size, dataType::float32);
   auto res_buf = accl.create_buffer<float>(count, dataType::float32);
   random_array(op_buf->buffer(), count * size);
-
-  test_debug("Syncing buffers...", options);
-  (*op_buf).sync_to_device();
-  (*res_buf).sync_to_device();
 
   test_debug("Reducing data...", options);
   accl.reduce_scatter(0, *op_buf, *res_buf, count, function);
@@ -448,10 +472,6 @@ void test_allreduce(ACCL::ACCL &accl, options_t &options,
   auto res_buf = accl.create_buffer<float>(count, dataType::float32);
   random_array(op_buf->buffer(), count);
 
-  test_debug("Syncing buffers...", options);
-  (*op_buf).sync_to_device();
-  (*res_buf).sync_to_device();
-
   test_debug("Reducing data...", options);
   accl.allreduce(0, *op_buf, *res_buf, count, function);
 
@@ -477,14 +497,6 @@ void test_allreduce(ACCL::ACCL &accl, options_t &options,
   }
 }
 
-inline bool hardware_set(options_t options) {
-#ifdef ACCL_HARDWARE_SUPPORT
-  return options.hardware;
-#else
-  return false;
-#endif
-}
-
 void start_test(options_t options) {
   std::vector<rank_t> ranks = {};
   failed_tests = 0;
@@ -496,9 +508,8 @@ void start_test(options_t options) {
 
   ACCL::ACCL *accl;
 
-  if (hardware_set(options)) {
-#ifdef ACCL_HARDWARE_SUPPORT
-    auto device = xrt::device(options.device_index);
+  auto device = xrt::device(options.device_index);
+  if (options.hardware) {
     auto xclbin_uuid = device.load_xclbin(options.xclbin);
     auto cclo_ip =
         xrt::ip(device, xclbin_uuid,
@@ -512,16 +523,17 @@ void start_test(options_t options) {
     accl = new ACCL::ACCL(ranks, rank, device, cclo_ip, hostctrl_ip, rank * 6,
                           mem, rank * 6 + 2, networkProtocol::TCP, 16,
                           options.rxbuf_size);
-#endif
   } else {
-    accl = new ACCL::ACCL(ranks, rank, options.start_port, networkProtocol::TCP,
-                          16, options.rxbuf_size);
+    accl = new ACCL::ACCL(ranks, rank, options.start_port, device, networkProtocol::TCP,
+                              16, options.rxbuf_size);
   }
   accl->set_timeout(1e8);
 
   // barrier here to make sure all the devices are configured before testing
   MPI_Barrier(MPI_COMM_WORLD);
   accl->nop();
+  MPI_Barrier(MPI_COMM_WORLD);
+  test_sendrcv_bo(*accl, device, options);
   MPI_Barrier(MPI_COMM_WORLD);
   test_copy(*accl, options);
   MPI_Barrier(MPI_COMM_WORLD);
@@ -574,7 +586,6 @@ options_t parse_options(int argc, char *argv[]) {
                                         "positive integer");
   cmd.add(bufsize_arg);
   TCLAP::SwitchArg debug_arg("d", "debug", "Enable debug mode", cmd, false);
-#ifdef ACCL_HARDWARE_SUPPORT
   TCLAP::SwitchArg hardware_arg("f", "hardware", "enable hardware mode", cmd,
                                 false);
   TCLAP::ValueArg<std::string> xclbin_arg(
@@ -585,7 +596,6 @@ options_t parse_options(int argc, char *argv[]) {
       "i", "device-index", "device index of FPGA if hardware mode is used",
       false, 0, "positive integer");
   cmd.add(device_index_arg);
-#endif
 
   try {
     cmd.parse(argc, argv);
@@ -604,11 +614,9 @@ options_t parse_options(int argc, char *argv[]) {
   opts.rxbuf_size = bufsize_arg.getValue() * 1024; // convert to bytes
   opts.nruns = nruns_arg.getValue();
   opts.debug = debug_arg.getValue();
-#ifdef ACCL_HARDWARE_SUPPORT
   opts.hardware = hardware_arg.getValue();
   opts.device_index = device_index_arg.getValue();
   opts.xclbin = xclbin_arg.getValue();
-#endif
   return opts;
 }
 

@@ -53,30 +53,21 @@ if (HAS_PARENT)
 endif (HAS_PARENT)
 
 add_library(accl SHARED ${ACCL_SOURCES})
-
-# XRT
-if (EXISTS $ENV{XILINX_XRT})
-  set(ACCL_HARDWARE_SUPPORT TRUE)
-  if (HAS_PARENT)
-    set(ACCL_HARDWARE_SUPPORT TRUE PARENT_SCOPE)
-  endif (HAS_PARENT)
-  target_link_directories(accl PUBLIC $ENV{XILINX_XRT}/lib)
-  target_link_libraries(accl PUBLIC xilinxopencl xrt_coreutil xrt_core)
-  target_include_directories(accl PUBLIC $ENV{XILINX_XRT}/include)
-  target_compile_definitions(accl PUBLIC ACCL_HARDWARE_SUPPORT)
-else (EXISTS $ENV{XILINX_XRT})
-  set(ACCL_HARDWARE_SUPPORT FALSE)
-  if (HAS_PARENT)
-    set(ACCL_HARDWARE_SUPPORT FALSE PARENT_SCOPE)
-  endif (HAS_PARENT)
-  message(WARNING "Xilinx XRT not found, compiling without hardware support")
-endif (EXISTS $ENV{XILINX_XRT})
-
-target_link_libraries(accl PUBLIC zmqpp)
 target_include_directories(accl PUBLIC ${ACCL_INCLUDE_PATH})
 
-# Json
+# XRT
+if (NOT EXISTS $ENV{XILINX_XRT})
+  message(FATAL_ERROR "Xilinx XRT not found, make sure to source setup.sh")
+endif ()
 
+target_link_directories(accl PUBLIC $ENV{XILINX_XRT}/lib)
+target_link_libraries(accl PUBLIC xilinxopencl xrt_coreutil xrt_core)
+target_include_directories(accl PUBLIC $ENV{XILINX_XRT}/include)
+
+# ZMQ
+target_link_libraries(accl PUBLIC zmqpp)
+
+# Json
 find_package(jsoncpp REQUIRED)
 target_link_libraries(accl PUBLIC jsoncpp_lib)
 get_target_property(JSON_INC_PATH jsoncpp_lib INTERFACE_INCLUDE_DIRECTORIES)

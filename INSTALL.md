@@ -52,7 +52,7 @@ Now open a new terminal and run the tests:
 cd "test/host/xrt"
 /bin/cmake .
 make
-mpirun -np <RANKS> bin/test
+XCL_EMULATION_MODE=sw_emu mpirun -np <RANKS> bin/test
 ```
 
 ## Build a hardware design with ACCL

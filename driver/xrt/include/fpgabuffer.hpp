@@ -17,7 +17,6 @@
 *******************************************************************************/
 
 #pragma once
-#ifdef ACCL_HARDWARE_SUPPORT
 #include "buffer.hpp"
 #include "common.hpp"
 #include <math.h>
@@ -41,15 +40,21 @@ public:
   FPGABuffer(dtype *buffer, addr_t length, dataType type, xrt::device &device,
              xrt::memory_group mem_grp)
       : Buffer<dtype>(nullptr, length, type, 0x0),
-        bo(device, get_aligned_buffer(buffer, length * sizeof(dtype)),
-           length * sizeof(dtype), mem_grp) {
+        _bo(device, get_aligned_buffer(buffer, length * sizeof(dtype)),
+            length * sizeof(dtype), mem_grp) {
+    set_buffer();
+  }
+
+  FPGABuffer(xrt::bo &bo, addr_t length, dataType type)
+      : Buffer<dtype>(bo.map<dtype *>(), length, type, bo.address()),
+        _bo(bo) {
     set_buffer();
   }
 
   FPGABuffer(addr_t length, dataType type, xrt::device &device,
              xrt::memory_group mem_grp)
       : Buffer<dtype>(nullptr, length, type, 0x0), is_aligned(true),
-        bo(device, length * sizeof(dtype), mem_grp) {
+        _bo(device, length * sizeof(dtype), mem_grp) {
     set_buffer();
     // Initialize memory to zero
     memset(this->_buffer, 0, this->_size);
@@ -59,7 +64,7 @@ public:
   FPGABuffer(xrt::bo bo_, addr_t length, dataType type, bool is_aligned_,
              dtype *unaligned_buffer_)
       : Buffer<dtype>(nullptr, length, type, 0x0), is_aligned(is_aligned_),
-        bo(bo_), aligned_buffer(bo.map<dtype *>()),
+        _bo(bo_), aligned_buffer(_bo.map<dtype *>()),
         unaligned_buffer(unaligned_buffer_) {
     set_buffer();
   }
@@ -74,8 +79,12 @@ public:
     }
   }
 
+  xrt::bo *bo() override { return &_bo; }
+
+  bool is_simulated() const override { return false; }
+
   void sync_from_device() override {
-    bo.sync(xclBOSyncDirection::XCL_BO_SYNC_BO_FROM_DEVICE);
+    _bo.sync(xclBOSyncDirection::XCL_BO_SYNC_BO_FROM_DEVICE);
     if (!is_aligned) {
       memcpy(unaligned_buffer, aligned_buffer, this->size());
     }
@@ -85,7 +94,7 @@ public:
     if (!is_aligned) {
       memcpy(aligned_buffer, unaligned_buffer, this->size());
     }
-    bo.sync(xclBOSyncDirection::XCL_BO_SYNC_BO_TO_DEVICE);
+    _bo.sync(xclBOSyncDirection::XCL_BO_SYNC_BO_TO_DEVICE);
   }
 
   void free_buffer() override { return; }
@@ -100,14 +109,14 @@ public:
     }
 
     return std::unique_ptr<BaseBuffer>(new FPGABuffer(
-        xrt::bo(bo, end_bytes - start_bytes, start_bytes), end - start,
+        xrt::bo(_bo, end_bytes - start_bytes, start_bytes), end - start,
         this->_type, this->is_aligned, offset_unaligned_buffer));
   }
 
 private:
   bool is_aligned;
   bool own_unaligned{};
-  xrt::bo bo;
+  xrt::bo _bo;
   dtype *aligned_buffer;
   dtype *unaligned_buffer;
 
@@ -140,8 +149,6 @@ private:
 
   // Set the buffer after initialization since bo needs to be initialized first,
   // but base constructor is called beforehand.
-  void set_buffer() { this->update_buffer(bo.map<dtype *>(), bo.address()); }
+  void set_buffer() { this->update_buffer(_bo.map<dtype *>(), _bo.address()); }
 };
 } // namespace ACCL
-
-#endif // ACCL_HARDWARE_SUPPORT
