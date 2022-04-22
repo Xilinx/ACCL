@@ -128,6 +128,68 @@ void test_combine(ACCL::ACCL &accl, options_t &options) {
   }
 }
 
+void test_sendrcv_bo(ACCL::ACCL &accl, xrt::device &dev, options_t &options) {
+  std::cout << "Start send recv test bo..." << std::endl;
+  unsigned int count = options.count;
+
+  // Initialize bo
+  float* data, *validation_data;
+  posix_memalign(reinterpret_cast<void**>(&data), 4096, count * sizeof(float));
+  posix_memalign(reinterpret_cast<void**>(&validation_data), 4096, count * sizeof(float));
+  random_array(data, count);
+  xrt::bo send_bo(dev, data, count * sizeof(float), 0);
+  xrt::bo recv_bo(dev, validation_data, count * sizeof(float), 0);
+  auto op_buf = accl.create_buffer<float>(send_bo, count, dataType::float32);
+  auto res_buf = accl.create_buffer<float>(recv_bo, count, dataType::float32);
+  int next_rank = (rank + 1) % size;
+  int prev_rank = (rank + size - 1) % size;
+
+  test_debug("Syncing buffers...", options);
+  (*op_buf).sync_to_device();
+
+  test_debug("Sending data on " + std::to_string(rank) + " to " +
+                 std::to_string(next_rank) + "...",
+             options);
+  accl.send(0, *op_buf, count, next_rank, 0, true);
+
+  test_debug("Receiving data on " + std::to_string(rank) + " from " +
+                 std::to_string(prev_rank) + "...",
+             options);
+  accl.recv(0, *op_buf, count, prev_rank, 0, true);
+
+  test_debug("Sending data on " + std::to_string(rank) + " to " +
+                 std::to_string(prev_rank) + "...",
+             options);
+  accl.send(0, *op_buf, count, prev_rank, 1, true);
+
+  test_debug("Receiving data on " + std::to_string(rank) + " from " +
+                 std::to_string(next_rank) + "...",
+             options);
+  accl.recv(0, *op_buf, count, next_rank, 1, true);
+
+  accl.copy(*op_buf, *res_buf, count, true, true);
+  
+  recv_bo.sync(XCL_BO_SYNC_BO_FROM_DEVICE);
+  int errors = 0;
+  for (unsigned int i = 0; i < count; ++i) {
+    float ref = validation_data[i];
+    float res = data[i];
+    if (res != ref) {
+      std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
+                       std::to_string(res) + " != " + std::to_string(ref) + ")"
+                << std::endl;
+      errors += 1;
+    }
+  }
+
+  if (errors > 0) {
+    std::cout << std::to_string(errors) + " errors!" << std::endl;
+    failed_tests++;
+  } else {
+    std::cout << "Test is successful!" << std::endl;
+  }
+}
+
 void test_sendrcv(ACCL::ACCL &accl, options_t &options) {
   std::cout << "Start send recv test..." << std::endl;
   unsigned int count = options.count;
@@ -446,8 +508,8 @@ void start_test(options_t options) {
 
   ACCL::ACCL *accl;
 
+  auto device = xrt::device(options.device_index);
   if (options.hardware) {
-    auto device = xrt::device(options.device_index);
     auto xclbin_uuid = device.load_xclbin(options.xclbin);
     auto cclo_ip =
         xrt::ip(device, xclbin_uuid,
@@ -462,14 +524,16 @@ void start_test(options_t options) {
                           mem, rank * 6 + 2, networkProtocol::TCP, 16,
                           options.rxbuf_size);
   } else {
-    accl = new ACCL::ACCL(ranks, rank, options.start_port, networkProtocol::TCP,
-                          16, options.rxbuf_size);
+    accl = new ACCL::ACCL(ranks, rank, options.start_port, device, networkProtocol::TCP,
+                              16, options.rxbuf_size);
   }
   accl->set_timeout(1e8);
 
   // barrier here to make sure all the devices are configured before testing
   MPI_Barrier(MPI_COMM_WORLD);
   accl->nop();
+  MPI_Barrier(MPI_COMM_WORLD);
+  test_sendrcv_bo(*accl, device, options);
   MPI_Barrier(MPI_COMM_WORLD);
   test_copy(*accl, options);
   MPI_Barrier(MPI_COMM_WORLD);
