@@ -80,6 +80,25 @@ public:
        const arithConfigMap &arith_config = DEFAULT_ARITH_CONFIG);
 
   /**
+   * Construct a new ACCL object that talks to emulator/simulator and is
+   compatible with the Vitis emulator.
+   *
+   * @param ranks         All ranks on the network
+   * @param local_rank    Rank of this process
+   * @param start_port    Rank of this process
+   * @param protocol      Network protocol to use
+   * @param nbufs         Amount of buffers to use
+   * @param bufsize       Size of buffers
+   * @param arith_config  Arithmetic configuration to use
+
+   */
+  ACCL(const std::vector<rank_t> &ranks, int local_rank,
+       unsigned int start_port, xrt::device &device,
+       networkProtocol protocol = networkProtocol::TCP, int nbufs = 16,
+       addr_t bufsize = 1024,
+       const arithConfigMap &arith_config = DEFAULT_ARITH_CONFIG);
+
+  /**
    * Destroy the ACCL object. Automatically deinitializes the CCLO.
    *
    */
@@ -235,14 +254,15 @@ public:
   }
 
   template <typename dtype>
-  std::unique_ptr<Buffer<dtype>>
-  create_buffer(xrt::bo &bo, size_t length, dataType type) {
+  std::unique_ptr<Buffer<dtype>> create_buffer(xrt::bo &bo, size_t length,
+                                               dataType type) {
     if (sim_mode) {
-      return std::unique_ptr<Buffer<dtype>>(new SimBuffer<dtype>(
-          bo, length, type, static_cast<SimDevice *>(cclo)->get_context()));
+      return std::unique_ptr<Buffer<dtype>>(
+          new SimBuffer<dtype>(bo, device, length, type,
+                               static_cast<SimDevice *>(cclo)->get_context()));
     } else {
-      return std::unique_ptr<Buffer<dtype>>(new FPGABuffer<dtype>(
-          bo, length, type));
+      return std::unique_ptr<Buffer<dtype>>(
+          new FPGABuffer<dtype>(bo, length, type));
     }
   }
 

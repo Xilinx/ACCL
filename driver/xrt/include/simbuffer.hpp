@@ -22,8 +22,11 @@
 #include "zmq_client.h"
 #include <cmath>
 #include <xrt/xrt_bo.h>
+#include <xrt/xrt_device.h>
 
 /** @file simbuffer.hpp */
+
+#define DEFAULT_SIMBUFFER_MEMGRP 0
 
 namespace ACCL {
 extern addr_t next_free_address;
@@ -31,9 +34,10 @@ extern addr_t next_free_address;
 template <typename dtype> class SimBuffer : public Buffer<dtype> {
 private:
   zmq_intf_context *zmq_ctx;
-  bool own_buffer{};             // Initialize to false
-  xrt::bo _bo;                   // Only set if constructed using bo.
-  dtype *internal_copy_buffer{}; // Used to sync bo over zmq
+  bool own_buffer{};        // Initialize to false
+  xrt::bo _bo;              // Only set if constructed using bo.
+  xrt::bo internal_copy_bo; // Used to sync bo over zmq
+  xrt::device _device{};    // Used to create copy buffers
   bool bo_valid{};
 
   addr_t get_next_free_address(size_t size) {
@@ -54,11 +58,12 @@ private:
 public:
   SimBuffer(dtype *buffer, size_t length, dataType type,
             zmq_intf_context *const context, const addr_t physical_address,
-            xrt::bo &bo, bool bo_valid_)
+            xrt::bo &bo, xrt::device &device, bool bo_valid_)
       : Buffer<dtype>(buffer, length, type, physical_address), zmq_ctx(context),
-        _bo(bo), bo_valid(bo_valid_) {
+        _bo(bo), _device(device), bo_valid(bo_valid_) {
     if (bo_valid) {
-      internal_copy_buffer = new dtype[length];
+      internal_copy_bo = xrt::bo(_device, this->_size,
+                                 (xrt::memory_group)DEFAULT_SIMBUFFER_MEMGRP);
     }
   }
 
@@ -72,7 +77,7 @@ public:
       : SimBuffer(buffer, length, type, context,
                   this->get_next_free_address(length * sizeof(dtype))) {}
 
-  SimBuffer(xrt::bo &bo, size_t length, dataType type,
+  SimBuffer(xrt::bo &bo, xrt::device &device, size_t length, dataType type,
             zmq_intf_context *const context)
       : SimBuffer(bo.map<dtype *>(), length, type, context,
                   this->get_next_free_address(length * sizeof(dtype)), bo,
@@ -84,10 +89,6 @@ public:
   virtual ~SimBuffer() {
     if (own_buffer) {
       delete[] this->_buffer;
-    }
-
-    if (bo_valid) {
-      delete[] this->internal_copy_buffer;
     }
   }
 
@@ -103,19 +104,21 @@ public:
 
   void sync_bo_to_device() override {
     if (bo_valid) {
-      _bo.read(internal_copy_buffer, this->_size, 0);
+      internal_copy_bo.copy(_bo, this->_size);
+      internal_copy_bo.sync(xclBOSyncDirection::XCL_BO_SYNC_BO_FROM_DEVICE);
       zmq_client_memwrite(this->zmq_ctx, (uint64_t)this->_physical_address,
                           (unsigned int)this->_size,
-                          reinterpret_cast<uint8_t *>(internal_copy_buffer));
+                          internal_copy_bo.map<uint8_t *>());
     }
   }
 
   void sync_bo_from_device() override {
     if (bo_valid) {
       zmq_client_memread(this->zmq_ctx, (uint64_t)this->_physical_address,
-                          (unsigned int)this->_size,
-                          reinterpret_cast<uint8_t *>(internal_copy_buffer));
-      _bo.write(internal_copy_buffer, this->_size, 0);
+                         (unsigned int)this->_size,
+                         internal_copy_bo.map<uint8_t *>());
+      internal_copy_bo.sync(xclBOSyncDirection::XCL_BO_SYNC_BO_TO_DEVICE);
+      _bo.copy(internal_copy_bo, this->_size);
     }
   }
 
@@ -139,6 +142,7 @@ public:
 
   std::unique_ptr<BaseBuffer> slice(size_t start, size_t end) override {
     xrt::bo bo_slice;
+
     if (bo_valid) {
       size_t start_bytes = start * sizeof(dtype);
       size_t end_bytes = end * sizeof(dtype);
@@ -146,9 +150,10 @@ public:
     } else {
       bo_slice = _bo;
     }
+
     return std::unique_ptr<BaseBuffer>(new SimBuffer(
         &this->_buffer[start], end - start, this->_type, this->zmq_ctx,
-        this->_physical_address + start, bo_slice, bo_valid));
+        this->_physical_address + start, bo_slice, _device, bo_valid));
   }
 };
 } // namespace ACCL

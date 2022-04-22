@@ -32,8 +32,8 @@ ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
            networkProtocol protocol, int nbufs, addr_t bufsize,
            const arithConfigMap &arith_config)
     : arith_config(arith_config), protocol(protocol), sim_mode(false),
-      devicemem(devicemem), rxbufmem(rxbufmem),
-      networkmem(networkmem), device(device) {
+      devicemem(devicemem), rxbufmem(rxbufmem), networkmem(networkmem),
+      device(device) {
   cclo = new FPGADevice(cclo_ip, hostctrl_ip);
   initialize_accl(ranks, local_rank, nbufs, bufsize);
 }
@@ -44,6 +44,16 @@ ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
            addr_t bufsize, const arithConfigMap &arith_config)
     : arith_config(arith_config), protocol(protocol), sim_mode(true),
       devicemem(0), rxbufmem({}), networkmem(0) {
+  cclo = new SimDevice(sim_start_port, local_rank);
+  initialize_accl(ranks, local_rank, nbufs, bufsize);
+}
+
+ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
+           unsigned int sim_start_port, xrt::device &device,
+           networkProtocol protocol, int nbufs, addr_t bufsize,
+           const arithConfigMap &arith_config)
+    : arith_config(arith_config), protocol(protocol), sim_mode(true),
+      devicemem(0), rxbufmem({}), networkmem(0), device(device) {
   cclo = new SimDevice(sim_start_port, local_rank);
   initialize_accl(ranks, local_rank, nbufs, bufsize);
 }
@@ -797,8 +807,7 @@ void ACCL::setup_rx_buffers(size_t nbufs, addr_t bufsize,
     if (sim_mode) {
       buf = new SimBuffer(new int8_t[bufsize](), bufsize, dataType::int8,
                           static_cast<SimDevice *>(cclo)->get_context());
-    }
-    else {
+    } else {
       buf = new FPGABuffer<int8_t>(bufsize, dataType::int8, device,
                                    devicemem[i % devicemem.size()]);
     }
@@ -830,8 +839,7 @@ void ACCL::setup_rx_buffers(size_t nbufs, addr_t bufsize,
     utility_spare =
         new SimBuffer(new int8_t[bufsize](), bufsize, dataType::int8,
                       static_cast<SimDevice *>(cclo)->get_context());
-  }
-  else {
+  } else {
     utility_spare =
         new FPGABuffer<int8_t>(bufsize, dataType::int8, device, devicemem[0]);
   }
