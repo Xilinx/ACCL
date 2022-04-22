@@ -81,7 +81,7 @@ public:
             zmq_intf_context *const context)
       : SimBuffer(bo.map<dtype *>(), length, type, context,
                   this->get_next_free_address(length * sizeof(dtype)), bo,
-                  true) {}
+                  device, true) {}
 
   SimBuffer(size_t length, dataType type, zmq_intf_context *const context)
       : SimBuffer(create_internal_buffer(length), length, type, context) {}
