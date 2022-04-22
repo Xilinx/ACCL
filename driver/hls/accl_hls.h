@@ -38,13 +38,33 @@ namespace accl_hls {
 #define ACCL_ALLREDUCE      10
 #define ACCL_REDUCE_SCATTER 11
 
+/**
+ * @brief Class encapsulating ACCL command streams
+ * 
+ */
 class ACCLCommand{
     public:
+        /**
+         * @brief Construct a new ACCLCommand object
+         * 
+         * @param cmd Reference to command stream to CCLO
+         * @param sts Reference to status stream to CCLO
+         * @param comm_adr Communicator ID
+         * @param dpcfg_adr Address of datapath configuration in CCLO memory
+         * @param cflags Compression flags
+         * @param sflags Stream flags
+         */
         ACCLCommand(hls::stream<ap_uint<32> > &cmd, hls::stream<ap_uint<32> > &sts,
                     ap_uint<32> comm_adr, ap_uint<32> dpcfg_adr,
                     ap_uint<32> cflags, ap_uint<32> sflags) : 
                     cmd(cmd), sts(sts), comm_adr(comm_adr), dpcfg_adr(dpcfg_adr), cflags(cflags), sflags(sflags) {}
 
+        /**
+         * @brief Construct a new ACCLCommand object
+         * 
+         * @param cmd Reference to command stream to CCLO
+         * @param sts Reference to status stream to CCLO
+         */
         ACCLCommand(hls::stream<ap_uint<32> > &cmd, hls::stream<ap_uint<32> > &sts) : 
                     ACCLCommand(cmd, sts, 0, 0, 0, 0) {}
 
@@ -57,6 +77,23 @@ class ACCLCommand{
         ap_uint<32> sflags;
 
     public:
+
+        /**
+         * @brief Launch an ACCL call
+         * 
+         * @param scenario Indicates type of call (see defines)
+         * @param len Length of buffers involved in call, in elements (not bytes)
+         * @param comm ID of communicator
+         * @param root_src_dst Either root, source or destination rank, depending on scenario
+         * @param function Function ID for reduction-type scenarios
+         * @param msg_tag Message tag
+         * @param datapath_cfg Address of datapath configuration structure
+         * @param compression_flags Compression flags
+         * @param stream_flags Stream flags
+         * @param addra Address of first operand, or zero if not in use
+         * @param addrb Address of second operand, or zero if not in use
+         * @param addrc Address of result, or zero if not in use
+         */
         void start_call(
             ap_uint<32> scenario,
             ap_uint<32> len,
@@ -106,10 +143,21 @@ class ACCLCommand{
             }  
         }
 
+        /**
+         * @brief Wait for a previously-launched call to finish
+         * 
+         */
         void finalize_call(){
             sts.read();
         }
 
+        /**
+         * @brief Perform ACCL local array copy
+         * 
+         * @param len Number of array elements
+         * @param src_addr Source array address
+         * @param dst_addr Destination array address
+         */
         void copy(  ap_uint<32> len,
                     ap_uint<64> src_addr,
                     ap_uint<64> dst_addr
@@ -122,6 +170,14 @@ class ACCLCommand{
             finalize_call();
         }
 
+        /**
+         * @brief Perform ACCL local array combine
+         * 
+         * @param len Number of array elements
+         * @param op0_addr Address of first operand array
+         * @param op1_addr Address of second operand array
+         * @param res_addr Address of result array
+         */
         void combine(   ap_uint<32> len,
                         ap_uint<64> op0_addr,
                         ap_uint<64> op1_addr,
@@ -135,6 +191,14 @@ class ACCLCommand{
             finalize_call();
         }
 
+        /**
+         * @brief 
+         * 
+         * @param len Number of array elements
+         * @param tag Message tag
+         * @param dst_rank Rank ID of destination
+         * @param src_addr Source array address
+         */
         void send(  ap_uint<32> len,
                     ap_uint<32> tag,
                     ap_uint<32> dst_rank,
@@ -148,6 +212,14 @@ class ACCLCommand{
             finalize_call();
         }
 
+        /**
+         * @brief 
+         * 
+         * @param len Number of array elements
+         * @param tag Message tag
+         * @param src_rank Rank ID of sender
+         * @param dst_addr Destination array address
+         */
         void recv(  ap_uint<32> len,
                     ap_uint<32> tag,
                     ap_uint<32> src_rank,
@@ -161,6 +233,13 @@ class ACCLCommand{
             finalize_call();
         }
 
+        /**
+         * @brief 
+         * 
+         * @param len Number of array elements
+         * @param root Rank ID of root node
+         * @param src_addr Source array address
+         */
         void bcast( ap_uint<32> len,
                     ap_uint<32> root,
                     ap_uint<64> src_addr
@@ -173,6 +252,14 @@ class ACCLCommand{
             finalize_call();
         }
 
+        /**
+         * @brief 
+         * 
+         * @param len Number of array elements
+         * @param root Rank ID of root node
+         * @param src_addr Source array address
+         * @param dst_addr Destination array address
+         */
         void scatter( ap_uint<32> len,
                     ap_uint<32> root,
                     ap_uint<64> src_addr,
@@ -186,6 +273,14 @@ class ACCLCommand{
             finalize_call();
         }
 
+        /**
+         * @brief 
+         * 
+         * @param len Number of array elements
+         * @param root Rank ID of root node
+         * @param src_addr Source array address
+         * @param dst_addr Destination array address
+         */
         void gather(ap_uint<32> len,
                     ap_uint<32> root,
                     ap_uint<64> src_addr,
@@ -199,6 +294,13 @@ class ACCLCommand{
             finalize_call();
         }
 
+        /**
+         * @brief 
+         * 
+         * @param len Number of array elements
+         * @param src_addr Source array address
+         * @param dst_addr Destination array address
+         */
         void all_gather(ap_uint<32> len,
                         ap_uint<64> src_addr,
                         ap_uint<64> dst_addr
@@ -211,6 +313,15 @@ class ACCLCommand{
             finalize_call();
         }
 
+        /**
+         * @brief 
+         * 
+         * @param len Number of array elements
+         * @param root Rank ID of root node
+         * @param function Reduction function ID
+         * @param src_addr Source array address
+         * @param dst_addr Destination array address
+         */
         void reduce(ap_uint<32> len,
                     ap_uint<32> root,
                     ap_uint<32> function,
@@ -225,6 +336,14 @@ class ACCLCommand{
             finalize_call();
         }
 
+        /**
+         * @brief 
+         * 
+         * @param len Number of array elements
+         * @param function Reduction function ID
+         * @param src_addr Source array address
+         * @param dst_addr Destination array address
+         */
         void reduce_scatter(ap_uint<32> len,
                             ap_uint<32> function,
                             ap_uint<64> src_addr,
@@ -238,6 +357,14 @@ class ACCLCommand{
             finalize_call();
         }
 
+        /**
+         * @brief 
+         * 
+         * @param len Number of array elements
+         * @param function Reduction function ID
+         * @param src_addr Source array address
+         * @param dst_addr Destination array address
+         */
         void all_reduce(ap_uint<32> len,
                         ap_uint<32> function,
                         ap_uint<64> src_addr,
@@ -252,8 +379,18 @@ class ACCLCommand{
         }
 };
 
+/**
+ * @brief Class encapsulating ACCL data streams
+ * 
+ */
 class ACCLData{
     public:
+        /**
+         * @brief Construct a new ACCLData object
+         * 
+         * @param krnl2cclo Reference to data stream from user kernel to CCLO
+         * @param cclo2krnl Reference to data stream from CCLO to user kernel
+         */
         ACCLData(hls::stream<ap_axiu<512, 0, 0, 8> > &krnl2cclo, hls::stream<ap_axiu<512, 0, 0, 8> > &cclo2krnl) : 
                     cclo2krnl(cclo2krnl), krnl2cclo(krnl2cclo){}
 
@@ -262,6 +399,12 @@ class ACCLData{
         hls::stream<ap_axiu<512, 0, 0, 8> > &cclo2krnl;
 
     public:
+        /**
+         * @brief Push user data to the CCLO
+         * 
+         * @param data Data word (64B)
+         * @param dest Destination value (potentially used in routing)
+         */
         void push(ap_uint<512> data, ap_uint<8> dest){
             ap_axiu<512, 0, 0, 8> tmp;
             tmp.data = data;
@@ -270,6 +413,11 @@ class ACCLData{
             krnl2cclo.write(tmp);
         }
 
+        /**
+         * @brief Pull data from CCLO stream
+         * 
+         * @return ap_axiu<512, 0, 0, 8> 
+         */
         ap_axiu<512, 0, 0, 8> pull(){
             return cclo2krnl.read();   
         }
