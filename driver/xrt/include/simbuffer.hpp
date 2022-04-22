@@ -58,19 +58,26 @@ private:
 public:
   SimBuffer(dtype *buffer, size_t length, dataType type,
             zmq_intf_context *const context, const addr_t physical_address,
-            xrt::bo &bo, xrt::device &device, bool bo_valid_)
+            xrt::bo &bo, xrt::device &device, bool bo_valid_,
+            bool is_slice = false)
       : Buffer<dtype>(buffer, length, type, physical_address), zmq_ctx(context),
         _bo(bo), _device(device), bo_valid(bo_valid_) {
     if (bo_valid) {
       internal_copy_bo = xrt::bo(_device, this->_size,
                                  (xrt::memory_group)DEFAULT_SIMBUFFER_MEMGRP);
     }
+
+    if (!is_slice) {
+      sync_to_device();
+    }
   }
 
   SimBuffer(dtype *buffer, size_t length, dataType type,
             zmq_intf_context *const context, const addr_t physical_address)
       : Buffer<dtype>(buffer, length, type, physical_address), zmq_ctx(context),
-        _bo(xrt::bo()) {}
+        _bo(xrt::bo()) {
+    sync_to_device();
+  }
 
   SimBuffer(dtype *buffer, size_t length, dataType type,
             zmq_intf_context *const context)
@@ -153,7 +160,7 @@ public:
 
     return std::unique_ptr<BaseBuffer>(new SimBuffer(
         &this->_buffer[start], end - start, this->_type, this->zmq_ctx,
-        this->_physical_address + start, bo_slice, _device, bo_valid));
+        this->_physical_address + start, bo_slice, _device, bo_valid, true));
   }
 };
 } // namespace ACCL

@@ -77,8 +77,6 @@ void test_copy(ACCL::ACCL &accl, options_t &options) {
   auto res_buf = accl.create_buffer<float>(count, dataType::float32);
   random_array(op_buf->buffer(), count);
 
-  (*op_buf).sync_to_device();
-  (*res_buf).sync_to_device();
   accl.copy(*op_buf, *res_buf, count);
   int errors = 0;
   for (unsigned int i = 0; i < count; ++i) {
@@ -108,9 +106,7 @@ void test_combine(ACCL::ACCL &accl, options_t &options) {
   auto res_buf = accl.create_buffer<float>(count, dataType::float32);
   random_array(op_buf1->buffer(), count);
   random_array(op_buf2->buffer(), count);
-  (*op_buf1).sync_to_device();
-  (*op_buf2).sync_to_device();
-  (*res_buf).sync_to_device();
+
   accl.combine(count, reduceFunction::SUM, *op_buf1, *op_buf2, *res_buf);
   int errors = 0;
   for (unsigned int i = 0; i < count; ++i) {
@@ -141,9 +137,6 @@ void test_sendrcv(ACCL::ACCL &accl, options_t &options) {
   int next_rank = (rank + 1) % size;
   int prev_rank = (rank + size - 1) % size;
 
-  test_debug("Syncing buffers...", options);
-  (*op_buf).sync_to_device();
-  (*res_buf).sync_to_device();
 
   test_debug("Sending data on " + std::to_string(rank) + " to " +
                  std::to_string(next_rank) + "...",
@@ -193,10 +186,6 @@ void test_bcast(ACCL::ACCL &accl, options_t &options, int root) {
   auto res_buf = accl.create_buffer<float>(count, dataType::float32);
   random_array(op_buf->buffer(), count);
 
-  test_debug("Syncing buffers...", options);
-  (*op_buf).sync_to_device();
-  (*res_buf).sync_to_device();
-
   if (rank == root) {
     test_debug("Broadcasting data from " + std::to_string(rank) + "...",
                options);
@@ -238,10 +227,6 @@ void test_scatter(ACCL::ACCL &accl, options_t &options, int root) {
   auto res_buf = accl.create_buffer<float>(count, dataType::float32);
   random_array(op_buf->buffer(), count * size);
 
-  test_debug("Syncing buffers...", options);
-  (*op_buf).sync_to_device();
-  (*res_buf).sync_to_device();
-
   test_debug("Scatter data from " + std::to_string(rank) + "...", options);
   accl.scatter(0, *op_buf, *res_buf, count, root);
 
@@ -279,13 +264,6 @@ void test_gather(ACCL::ACCL &accl, options_t &options, int root) {
     res_buf = std::unique_ptr<ACCL::Buffer<float>>(nullptr);
   }
 
-  test_debug("Syncing buffers...", options);
-  (*op_buf).sync_to_device();
-
-  if (rank == root) {
-    (*res_buf).sync_to_device();
-  }
-
   test_debug("Gather data from " + std::to_string(rank) + "...", options);
   accl.gather(0, *op_buf, *res_buf, count, root);
 
@@ -320,10 +298,6 @@ void test_allgather(ACCL::ACCL &accl, options_t &options) {
                                    dataType::float32);
   auto res_buf = accl.create_buffer<float>(count * size, dataType::float32);
 
-  test_debug("Syncing buffers...", options);
-  (*op_buf).sync_to_device();
-  (*res_buf).sync_to_device();
-
   test_debug("Gathering data...", options);
   accl.allgather(0, *op_buf, *res_buf, count);
 
@@ -357,10 +331,6 @@ void test_reduce(ACCL::ACCL &accl, options_t &options, int root,
   auto op_buf = accl.create_buffer<float>(count, dataType::float32);
   auto res_buf = accl.create_buffer<float>(count, dataType::float32);
   random_array(op_buf->buffer(), count);
-
-  test_debug("Syncing buffers...", options);
-  (*op_buf).sync_to_device();
-  (*res_buf).sync_to_device();
 
   test_debug("Reduce data to " + std::to_string(root) + "...", options);
   accl.reduce(0, *op_buf, *res_buf, count, root, function);
@@ -399,10 +369,6 @@ void test_reduce_scatter(ACCL::ACCL &accl, options_t &options,
   auto op_buf = accl.create_buffer<float>(count * size, dataType::float32);
   auto res_buf = accl.create_buffer<float>(count, dataType::float32);
   random_array(op_buf->buffer(), count * size);
-
-  test_debug("Syncing buffers...", options);
-  (*op_buf).sync_to_device();
-  (*res_buf).sync_to_device();
 
   test_debug("Reducing data...", options);
   accl.reduce_scatter(0, *op_buf, *res_buf, count, function);
@@ -443,10 +409,6 @@ void test_allreduce(ACCL::ACCL &accl, options_t &options,
   auto op_buf = accl.create_buffer<float>(count, dataType::float32);
   auto res_buf = accl.create_buffer<float>(count, dataType::float32);
   random_array(op_buf->buffer(), count);
-
-  test_debug("Syncing buffers...", options);
-  (*op_buf).sync_to_device();
-  (*res_buf).sync_to_device();
 
   test_debug("Reducing data...", options);
   accl.allreduce(0, *op_buf, *res_buf, count, function);
