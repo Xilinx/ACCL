@@ -24,6 +24,7 @@
 #include "communicator.hpp"
 #include "constants.hpp"
 #include "fpgabuffer.hpp"
+#include "fpgabufferp2p.hpp"
 #include "fpgadevice.hpp"
 #include "simbuffer.hpp"
 #include "simdevice.hpp"
@@ -275,6 +276,37 @@ public:
   template <typename dtype>
   std::unique_ptr<Buffer<dtype>> create_buffer(size_t length, dataType type) {
     return create_buffer<dtype>(length, type, devicemem);
+  }
+
+  template <typename dtype>
+  std::unique_ptr<Buffer<dtype>> create_buffer_p2p(size_t length, dataType type,
+                                                   unsigned mem_grp) {
+    if (sim_mode) {
+      return std::unique_ptr<Buffer<dtype>>(new SimBuffer<dtype>(
+          length, type, static_cast<SimDevice *>(cclo)->get_context()));
+    } else {
+      return std::unique_ptr<Buffer<dtype>>(new FPGABufferP2P<dtype>(
+          length, type, device, (xrt::memory_group)mem_grp));
+    }
+  }
+
+  template <typename dtype>
+  std::unique_ptr<Buffer<dtype>> create_buffer_p2p(size_t length,
+                                                   dataType type) {
+    return create_buffer_p2p<dtype>(length, type, devicemem);
+  }
+
+  template <typename dtype>
+  std::unique_ptr<Buffer<dtype>> create_buffer_p2p(xrt::bo &bo, size_t length,
+                                                   dataType type) {
+    if (sim_mode) {
+      return std::unique_ptr<Buffer<dtype>>(
+          new SimBuffer<dtype>(bo, device, length, type,
+                               static_cast<SimDevice *>(cclo)->get_context()));
+    } else {
+      return std::unique_ptr<Buffer<dtype>>(
+          new FPGABufferP2P<dtype>(bo, length, type));
+    }
   }
 
   std::string dump_exchange_memory();

@@ -17,15 +17,16 @@
 *******************************************************************************/
 
 #include <accl.hpp>
+#include <cstdlib>
+#include <experimental/xrt_ip.h>
 #include <functional>
 #include <mpi.h>
 #include <random>
 #include <sstream>
+#include <tclap/CmdLine.h>
 #include <vector>
-#include <experimental/xrt_ip.h>
 #include <xrt/xrt_device.h>
 #include <xrt/xrt_kernel.h>
-#include <tclap/CmdLine.h>
 
 using namespace ACCL;
 
@@ -98,6 +99,34 @@ void test_copy(ACCL::ACCL &accl, options_t &options) {
   }
 }
 
+void test_copy_p2p(ACCL::ACCL &accl, options_t &options) {
+  std::cout << "Start copy p2p test..." << std::endl;
+  unsigned int count = options.count;
+  auto op_buf = accl.create_buffer<float>(count, dataType::float32);
+  auto p2p_buf = accl.create_buffer_p2p<float>(count, dataType::float32);
+  random_array(op_buf->buffer(), count);
+
+  accl.copy(*op_buf, *p2p_buf, count);
+  int errors = 0;
+  for (unsigned int i = 0; i < count; ++i) {
+    float ref = (*op_buf)[i];
+    float res = (*p2p_buf)[i];
+    if (res != ref) {
+      std::cout << i + 1
+                << "th item is incorrect! (" + std::to_string(res) +
+                       " != " + std::to_string(ref) + ")"
+                << std::endl;
+      errors += 1;
+    }
+  }
+
+  if (errors > 0) {
+    std::cout << errors << " errors!" << std::endl;
+  } else {
+    std::cout << "Test succesfull!" << std::endl;
+  }
+}
+
 void test_combine(ACCL::ACCL &accl, options_t &options) {
   std::cout << "Start combine test..." << std::endl;
   unsigned int count = options.count;
@@ -133,10 +162,12 @@ void test_sendrcv_bo(ACCL::ACCL &accl, xrt::device &dev, options_t &options) {
   unsigned int count = options.count;
 
   // Initialize bo
-  float* data, *validation_data;
-  posix_memalign(reinterpret_cast<void**>(&data), 4096, count * sizeof(float));
-  posix_memalign(reinterpret_cast<void**>(&validation_data), 4096, count * sizeof(float));
+  float *data =
+      static_cast<float *>(std::aligned_alloc(4096, count * sizeof(float)));
+  float *validation_data =
+      static_cast<float *>(std::aligned_alloc(4096, count * sizeof(float)));
   random_array(data, count);
+
   xrt::bo send_bo(dev, data, count * sizeof(float), 0);
   xrt::bo recv_bo(dev, validation_data, count * sizeof(float), 0);
   auto op_buf = accl.create_buffer<float>(send_bo, count, dataType::float32);
@@ -145,7 +176,7 @@ void test_sendrcv_bo(ACCL::ACCL &accl, xrt::device &dev, options_t &options) {
   int prev_rank = (rank + size - 1) % size;
 
   test_debug("Syncing buffers...", options);
-  (*op_buf).sync_to_device();
+  send_bo.sync(XCL_BO_SYNC_BO_TO_DEVICE);
 
   test_debug("Sending data on " + std::to_string(rank) + " to " +
                  std::to_string(next_rank) + "...",
@@ -168,7 +199,7 @@ void test_sendrcv_bo(ACCL::ACCL &accl, xrt::device &dev, options_t &options) {
   accl.recv(0, *op_buf, count, next_rank, 1, true);
 
   accl.copy(*op_buf, *res_buf, count, true, true);
-  
+
   recv_bo.sync(XCL_BO_SYNC_BO_FROM_DEVICE);
   int errors = 0;
   for (unsigned int i = 0; i < count; ++i) {
@@ -188,6 +219,9 @@ void test_sendrcv_bo(ACCL::ACCL &accl, xrt::device &dev, options_t &options) {
   } else {
     std::cout << "Test is successful!" << std::endl;
   }
+
+  std::free(data);
+  std::free(validation_data);
 }
 
 void test_sendrcv(ACCL::ACCL &accl, options_t &options) {
@@ -198,7 +232,6 @@ void test_sendrcv(ACCL::ACCL &accl, options_t &options) {
   random_array(op_buf->buffer(), count);
   int next_rank = (rank + 1) % size;
   int prev_rank = (rank + size - 1) % size;
-
 
   test_debug("Sending data on " + std::to_string(rank) + " to " +
                  std::to_string(next_rank) + "...",
@@ -524,8 +557,8 @@ void start_test(options_t options) {
                           mem, rank * 6 + 2, networkProtocol::TCP, 16,
                           options.rxbuf_size);
   } else {
-    accl = new ACCL::ACCL(ranks, rank, options.start_port, device, networkProtocol::TCP,
-                              16, options.rxbuf_size);
+    accl = new ACCL::ACCL(ranks, rank, options.start_port, device,
+                          networkProtocol::TCP, 16, options.rxbuf_size);
   }
   accl->set_timeout(1e8);
 
@@ -533,13 +566,15 @@ void start_test(options_t options) {
   MPI_Barrier(MPI_COMM_WORLD);
   accl->nop();
   MPI_Barrier(MPI_COMM_WORLD);
-  test_sendrcv_bo(*accl, device, options);
-  MPI_Barrier(MPI_COMM_WORLD);
   test_copy(*accl, options);
+  MPI_Barrier(MPI_COMM_WORLD);
+  test_copy_p2p(*accl, options);
   MPI_Barrier(MPI_COMM_WORLD);
   test_combine(*accl, options);
   MPI_Barrier(MPI_COMM_WORLD);
   test_sendrcv(*accl, options);
+  MPI_Barrier(MPI_COMM_WORLD);
+  test_sendrcv_bo(*accl, device, options);
   MPI_Barrier(MPI_COMM_WORLD);
   test_allgather(*accl, options);
   MPI_Barrier(MPI_COMM_WORLD);
