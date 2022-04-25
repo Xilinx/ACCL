@@ -168,8 +168,9 @@ void test_sendrcv_bo(ACCL::ACCL &accl, xrt::device &dev, options_t &options) {
       static_cast<float *>(std::aligned_alloc(4096, count * sizeof(float)));
   random_array(data, count);
 
-  xrt::bo send_bo(dev, data, count * sizeof(float), 0);
-  xrt::bo recv_bo(dev, validation_data, count * sizeof(float), 0);
+  xrt::bo send_bo(dev, data, count * sizeof(float), accl.devicemem());
+  xrt::bo recv_bo(dev, validation_data, count * sizeof(float),
+                  accl.devicemem());
   auto op_buf = accl.create_buffer<float>(send_bo, count, dataType::float32);
   auto res_buf = accl.create_buffer<float>(recv_bo, count, dataType::float32);
   int next_rank = (rank + 1) % size;

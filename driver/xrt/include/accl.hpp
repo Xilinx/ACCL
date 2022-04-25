@@ -270,12 +270,12 @@ public:
   template <typename dtype>
   std::unique_ptr<Buffer<dtype>> create_buffer(dtype *host_buffer,
                                                size_t length, dataType type) {
-    return create_buffer(host_buffer, length, type, devicemem);
+    return create_buffer(host_buffer, length, type, _devicemem);
   }
 
   template <typename dtype>
   std::unique_ptr<Buffer<dtype>> create_buffer(size_t length, dataType type) {
-    return create_buffer<dtype>(length, type, devicemem);
+    return create_buffer<dtype>(length, type, _devicemem);
   }
 
   template <typename dtype>
@@ -293,7 +293,7 @@ public:
   template <typename dtype>
   std::unique_ptr<Buffer<dtype>> create_buffer_p2p(size_t length,
                                                    dataType type) {
-    return create_buffer_p2p<dtype>(length, type, devicemem);
+    return create_buffer_p2p<dtype>(length, type, _devicemem);
   }
 
   template <typename dtype>
@@ -320,6 +320,10 @@ public:
   }
 
   std::string dump_communicator();
+
+  int devicemem() {
+    return _devicemem;
+  }
 
 private:
   CCLO *cclo{};
@@ -350,7 +354,7 @@ private:
   // flag to indicate whether we're simulating
   const bool sim_mode;
   // memory banks for hardware
-  const int devicemem;
+  const int _devicemem;
   const std::vector<int> rxbufmem;
   const int networkmem;
   xrt::device device;
