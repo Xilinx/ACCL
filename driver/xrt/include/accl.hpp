@@ -227,6 +227,8 @@ public:
                        bool to_fpga = false, bool run_async = false,
                        std::vector<CCLO *> waitfor = {});
 
+  bool is_simulated() const { return sim_mode; }
+
   template <typename dtype>
   std::unique_ptr<Buffer<dtype>> create_buffer(dtype *host_buffer,
                                                size_t length, dataType type,
