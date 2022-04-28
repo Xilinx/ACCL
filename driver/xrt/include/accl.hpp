@@ -24,6 +24,7 @@
 #include "communicator.hpp"
 #include "constants.hpp"
 #include "fpgabuffer.hpp"
+#include "fpgabufferp2p.hpp"
 #include "fpgadevice.hpp"
 #include "simbuffer.hpp"
 #include "simdevice.hpp"
@@ -226,6 +227,8 @@ public:
                        bool to_fpga = false, bool run_async = false,
                        std::vector<CCLO *> waitfor = {});
 
+  bool is_simulated() const { return sim_mode; }
+
   template <typename dtype>
   std::unique_ptr<Buffer<dtype>> create_buffer(dtype *host_buffer,
                                                size_t length, dataType type,
@@ -269,12 +272,43 @@ public:
   template <typename dtype>
   std::unique_ptr<Buffer<dtype>> create_buffer(dtype *host_buffer,
                                                size_t length, dataType type) {
-    return create_buffer(host_buffer, length, type, devicemem);
+    return create_buffer(host_buffer, length, type, _devicemem);
   }
 
   template <typename dtype>
   std::unique_ptr<Buffer<dtype>> create_buffer(size_t length, dataType type) {
-    return create_buffer<dtype>(length, type, devicemem);
+    return create_buffer<dtype>(length, type, _devicemem);
+  }
+
+  template <typename dtype>
+  std::unique_ptr<Buffer<dtype>> create_buffer_p2p(size_t length, dataType type,
+                                                   unsigned mem_grp) {
+    if (sim_mode) {
+      return std::unique_ptr<Buffer<dtype>>(new SimBuffer<dtype>(
+          length, type, static_cast<SimDevice *>(cclo)->get_context()));
+    } else {
+      return std::unique_ptr<Buffer<dtype>>(new FPGABufferP2P<dtype>(
+          length, type, device, (xrt::memory_group)mem_grp));
+    }
+  }
+
+  template <typename dtype>
+  std::unique_ptr<Buffer<dtype>> create_buffer_p2p(size_t length,
+                                                   dataType type) {
+    return create_buffer_p2p<dtype>(length, type, _devicemem);
+  }
+
+  template <typename dtype>
+  std::unique_ptr<Buffer<dtype>> create_buffer_p2p(xrt::bo &bo, size_t length,
+                                                   dataType type) {
+    if (sim_mode) {
+      return std::unique_ptr<Buffer<dtype>>(
+          new SimBuffer<dtype>(bo, device, length, type,
+                               static_cast<SimDevice *>(cclo)->get_context()));
+    } else {
+      return std::unique_ptr<Buffer<dtype>>(
+          new FPGABufferP2P<dtype>(bo, length, type));
+    }
   }
 
   std::string dump_exchange_memory();
@@ -288,6 +322,10 @@ public:
   }
 
   std::string dump_communicator();
+
+  int devicemem() {
+    return _devicemem;
+  }
 
 private:
   CCLO *cclo{};
@@ -318,7 +356,7 @@ private:
   // flag to indicate whether we're simulating
   const bool sim_mode;
   // memory banks for hardware
-  const int devicemem;
+  const int _devicemem;
   const std::vector<int> rxbufmem;
   const int networkmem;
   xrt::device device;
