@@ -171,8 +171,8 @@ public:
    * @return CCLO*         CCLO object that can be waited on and passed to
    *                       waitfor; nullptr if run_async is false.
    */
-  CCLO *send(unsigned int comm_id, BaseBuffer &srcbuf, unsigned int count,
-             unsigned int dst, unsigned int tag = TAG_ANY,
+  CCLO *send(BaseBuffer &srcbuf, unsigned int count, unsigned int dst,
+             unsigned int tag = TAG_ANY, CommunicatorId comm_id = GLOBAL_COMM,
              bool from_fpga = false,
              streamFlags stream_flags = streamFlags::NO_STREAM,
              dataType compress_dtype = dataType::none, bool run_async = false,
@@ -181,12 +181,12 @@ public:
   /**
    * Performs the receive operation on the FPGA.
    *
-   * @param comm_id        Index of communicator to use.
    * @param dstbuf         Buffer where the data should be stored to. Create a
    *                       buffer using ACCL::create_buffer.
    * @param count          Amount of elements to receive.
    * @param src            Source rank to receive data from.
    * @param tag            Tag of receive operation.
+   * @param comm_id        Index of communicator to use.
    * @param to_fpga        Set to true if the data will be used on the FPGA
    *                       only.
    * @param stream_flags   Stream flags to use.
@@ -197,8 +197,9 @@ public:
    * @return CCLO*         CCLO object that can be waited on and passed to
    *                       waitfor; nullptr if run_async is false.
    */
-  CCLO *recv(unsigned int comm_id, BaseBuffer &dstbuf, unsigned int count,
-             unsigned int src, unsigned int tag = TAG_ANY, bool to_fpga = false,
+  CCLO *recv(BaseBuffer &dstbuf, unsigned int count, unsigned int src,
+             unsigned int tag = TAG_ANY, CommunicatorId comm_id = GLOBAL_COMM,
+             bool to_fpga = false,
              streamFlags stream_flags = streamFlags::NO_STREAM,
              dataType compress_dtype = dataType::none, bool run_async = false,
              std::vector<CCLO *> waitfor = {});
@@ -283,7 +284,8 @@ public:
    *                       waitfor; nullptr if run_async is false.
    */
   CCLO *bcast(unsigned int comm_id, BaseBuffer &buf, unsigned int count,
-              unsigned int root, bool from_fpga = false, bool to_fpga = false,
+              unsigned int root, CommunicatorId comm_id = GLOBAL_COMM,
+              bool from_fpga = false, bool to_fpga = false,
               dataType compress_dtype = dataType::none, bool run_async = false,
               std::vector<CCLO *> waitfor = {});
 
@@ -311,7 +313,8 @@ public:
    *                       waitfor; nullptr if run_async is false.
    */
   CCLO *scatter(unsigned int comm_id, BaseBuffer &sendbuf, BaseBuffer &recvbuf,
-                unsigned int count, unsigned int root, bool from_fpga = false,
+                unsigned int count, unsigned int root,
+                CommunicatorId comm_id = GLOBAL_COMM, bool from_fpga = false,
                 bool to_fpga = false, dataType compress_dtype = dataType::none,
                 bool run_async = false, std::vector<CCLO *> waitfor = {});
 
@@ -339,7 +342,8 @@ public:
    *                       waitfor; nullptr if run_async is false.
    */
   CCLO *gather(unsigned int comm_id, BaseBuffer &sendbuf, BaseBuffer &recvbuf,
-               unsigned int count, unsigned int root, bool from_fpga = false,
+               unsigned int count, unsigned int root,
+               CommunicatorId comm_id = GLOBAL_COMM, bool from_fpga = false,
                bool to_fpga = false, dataType compress_dtype = dataType::none,
                bool run_async = false, std::vector<CCLO *> waitfor = {});
 
@@ -366,7 +370,8 @@ public:
    */
   CCLO *allgather(unsigned int comm_id, BaseBuffer &sendbuf,
                   BaseBuffer &recvbuf, unsigned int count,
-                  bool from_fpga = false, bool to_fpga = false,
+                  CommunicatorId comm_id = GLOBAL_COMM, bool from_fpga = false,
+                  bool to_fpga = false,
                   dataType compress_dtype = dataType::none,
                   bool run_async = false, std::vector<CCLO *> waitfor = {});
 
@@ -394,20 +399,20 @@ public:
    */
   CCLO *reduce(unsigned int comm_id, BaseBuffer &sendbuf, BaseBuffer &recvbuf,
                unsigned int count, unsigned int root, reduceFunction func,
-               bool from_fpga = false, bool to_fpga = false,
-               dataType compress_dtype = dataType::none, bool run_async = false,
-               std::vector<CCLO *> waitfor = {});
+               CommunicatorId comm_id = GLOBAL_COMM, bool from_fpga = false,
+               bool to_fpga = false, dataType compress_dtype = dataType::none,
+               bool run_async = false, std::vector<CCLO *> waitfor = {});
 
   /**
    * Performs the allreduce operation on the FPGA.
    *
-   * @param comm_id        Index of communicator to use.
    * @param sendbuf        Buffer that contains the data to be reduced. Create a
    *                       buffer using ACCL::create_buffer.
    * @param recvbuf        Buffer to where the data should be reduced. Create a
    *                       buffer using ACCL::create_buffer.
    * @param count          Amount of elements to reduce.
    * @param func           Reduce function to use.
+   * @param comm_id        Index of communicator to use.
    * @param from_fpga      Set to true if the data is already on the FPGA.
    * @param to_fpga        Set to true if the reduced data will be used on the
    *                       FPGA only.
@@ -418,8 +423,8 @@ public:
    * @return CCLO*         CCLO object that can be waited on and passed to
    *                       waitfor; nullptr if run_async is false.
    */
-  CCLO *allreduce(unsigned int comm_id, BaseBuffer &sendbuf,
-                  BaseBuffer &recvbuf, unsigned int count, reduceFunction func,
+  CCLO *allreduce(BaseBuffer &sendbuf, BaseBuffer &recvbuf, unsigned int count,
+                  reduceFunction func, CommunicatorId comm_id = GLOBAL_COMM,
                   bool from_fpga = false, bool to_fpga = false,
                   dataType compress_dtype = dataType::none,
                   bool run_async = false, std::vector<CCLO *> waitfor = {});
@@ -427,7 +432,6 @@ public:
   /**
    * Performs the reduce_scatter operation on the FPGA.
    *
-   * @param comm_id        Index of communicator to use.
    * @param sendbuf        Buffer of count × world size elements that contains
    *                       the data to be reduced. Create a buffer using
    *                       ACCL::create_buffer.
@@ -435,6 +439,7 @@ public:
    *                       reduced. Create a buffer using ACCL::create_buffer.
    * @param count          Amount of elements to reduce per rank.
    * @param func           Reduce function to use.
+   * @param comm_id        Index of communicator to use.
    * @param from_fpga      Set to true if the data is already on the FPGA.
    * @param to_fpga        Set to true if the reduced data will be used on the
    *                       FPGA only.
@@ -445,13 +450,13 @@ public:
    * @return CCLO*         CCLO object that can be waited on and passed to
    *                       waitfor; nullptr if run_async is false.
    */
-  CCLO *reduce_scatter(unsigned int comm_id, BaseBuffer &sendbuf,
-                       BaseBuffer &recvbuf, unsigned int count,
-                       reduceFunction func, bool from_fpga = false,
-                       bool to_fpga = false,
-                       dataType compress_dtype = dataType::none,
-                       bool run_async = false,
-                       std::vector<CCLO *> waitfor = {});
+  CCLO *
+  reduce_scatter(unsigned int comm_id, BaseBuffer &sendbuf, BaseBuffer &recvbuf,
+                 unsigned int count, reduceFunction func,
+                 CommunicatorId comm_id = GLOBAL_COMM, bool from_fpga = false,
+                 bool to_fpga = false, dataType compress_dtype = dataType::none,
+                 bool run_async = false, std::vector<CCLO *> waitfor = {});
+
 
   /**
    * Check if ACCL is being run in simulated mode or not.
@@ -460,6 +465,13 @@ public:
    * @return false ACCL is running on hardware.
    */
   bool is_simulated() const { return sim_mode; }
+
+  std::vector<rank_t> get_comm_group(CommunicatorId comm_id);
+
+  unsigned int get_comm_rank(CommunicatorId comm_id);
+
+  CommunicatorId configure_communicator(const std::vector<rank_t> &ranks,
+                                        int local_rank);
 
   /**
    * Construct a new buffer object without an existing host buffer.
@@ -786,8 +798,6 @@ private:
   void use_tcp(unsigned int comm_id = 0);
 
   void set_max_segment_size(unsigned int value = 0);
-
-  void configure_communicator(const std::vector<rank_t> &ranks, int local_rank);
 };
 
 } // namespace ACCL

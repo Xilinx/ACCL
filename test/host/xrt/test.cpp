@@ -193,22 +193,22 @@ void test_sendrcv_bo(ACCL::ACCL &accl, xrt::device &dev, options_t &options) {
   test_debug("Sending data on " + std::to_string(rank) + " to " +
                  std::to_string(next_rank) + "...",
              options);
-  accl.send(0, *op_buf, count, next_rank, 0, true);
+  accl.send(*op_buf, count, next_rank, 0, GLOBAL_COMM, true);
 
   test_debug("Receiving data on " + std::to_string(rank) + " from " +
                  std::to_string(prev_rank) + "...",
              options);
-  accl.recv(0, *op_buf, count, prev_rank, 0, true);
+  accl.recv(*op_buf, count, prev_rank, 0, GLOBAL_COMM, true);
 
   test_debug("Sending data on " + std::to_string(rank) + " to " +
                  std::to_string(prev_rank) + "...",
              options);
-  accl.send(0, *op_buf, count, prev_rank, 1, true);
+  accl.send(*op_buf, count, prev_rank, 1, GLOBAL_COMM, true);
 
   test_debug("Receiving data on " + std::to_string(rank) + " from " +
                  std::to_string(next_rank) + "...",
              options);
-  accl.recv(0, *op_buf, count, next_rank, 1, true);
+  accl.recv(*op_buf, count, next_rank, 1, GLOBAL_COMM, true);
 
   accl.copy(*op_buf, *res_buf, count, true, true);
 
@@ -248,22 +248,22 @@ void test_sendrcv(ACCL::ACCL &accl, options_t &options) {
   test_debug("Sending data on " + std::to_string(rank) + " to " +
                  std::to_string(next_rank) + "...",
              options);
-  accl.send(0, *op_buf, count, next_rank, 0);
+  accl.send(*op_buf, count, next_rank, 0);
 
   test_debug("Receiving data on " + std::to_string(rank) + " from " +
                  std::to_string(prev_rank) + "...",
              options);
-  accl.recv(0, *res_buf, count, prev_rank, 0);
+  accl.recv(*res_buf, count, prev_rank, 0);
 
   test_debug("Sending data on " + std::to_string(rank) + " to " +
                  std::to_string(prev_rank) + "...",
              options);
-  accl.send(0, *res_buf, count, prev_rank, 1);
+  accl.send(*res_buf, count, prev_rank, 1);
 
   test_debug("Receiving data on " + std::to_string(rank) + " from " +
                  std::to_string(next_rank) + "...",
              options);
-  accl.recv(0, *res_buf, count, next_rank, 1);
+  accl.recv(*res_buf, count, next_rank, 1);
 
   int errors = 0;
   for (unsigned int i = 0; i < count; ++i) {
@@ -361,11 +361,11 @@ void test_bcast(ACCL::ACCL &accl, options_t &options, int root) {
   if (rank == root) {
     test_debug("Broadcasting data from " + std::to_string(rank) + "...",
                options);
-    accl.bcast(0, *op_buf, count, root);
+    accl.bcast(*op_buf, count, root);
   } else {
     test_debug("Getting broadcast data from " + std::to_string(root) + "...",
                options);
-    accl.bcast(0, *res_buf, count, root);
+    accl.bcast(*res_buf, count, root);
   }
 
   if (rank != root) {
@@ -442,7 +442,7 @@ void test_scatter(ACCL::ACCL &accl, options_t &options, int root) {
   random_array(op_buf->buffer(), count * size);
 
   test_debug("Scatter data from " + std::to_string(rank) + "...", options);
-  accl.scatter(0, *op_buf, *res_buf, count, root);
+  accl.scatter(*op_buf, *res_buf, count, root);
 
   int errors = 0;
   for (unsigned int i = 0; i < count; ++i) {
@@ -512,7 +512,7 @@ void test_gather(ACCL::ACCL &accl, options_t &options, int root) {
   }
 
   test_debug("Gather data from " + std::to_string(rank) + "...", options);
-  accl.gather(0, *op_buf, *res_buf, count, root);
+  accl.gather(*op_buf, *res_buf, count, root);
 
   if (rank == root) {
     int errors = 0;
@@ -588,7 +588,7 @@ void test_allgather(ACCL::ACCL &accl, options_t &options) {
   auto res_buf = accl.create_buffer<float>(count * size, dataType::float32);
 
   test_debug("Gathering data...", options);
-  accl.allgather(0, *op_buf, *res_buf, count);
+  accl.allgather(*op_buf, *res_buf, count);
 
   int errors = 0;
   for (unsigned int i = 0; i < count * size; ++i) {
@@ -617,7 +617,7 @@ void test_allgather_compressed(ACCL::ACCL &accl, options_t &options) {
   auto op_buf = accl.create_buffer(host_op_buf.get() + count * rank, count,
                                    dataType::float32);
   auto res_buf = accl.create_buffer<float>(count * size, dataType::float32);
-
+  
   test_debug("Gathering data...", options);
   accl.allgather(0, *op_buf, *res_buf, count, false, false, dataType::float16);
 
@@ -626,6 +626,66 @@ void test_allgather_compressed(ACCL::ACCL &accl, options_t &options) {
     float res = (*res_buf)[i];
     float ref = host_op_buf.get()[i];
     if (!is_close(res, ref, FLOAT16RTOL, FLOAT16ATOL)) {
+      std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
+                       std::to_string(res) + " != " + std::to_string(ref) + ")"
+                << std::endl;
+      errors += 1;
+    }
+  }
+
+  if (errors > 0) {
+    std::cout << std::to_string(errors) + " errors!" << std::endl;
+    failed_tests++;
+  } else {
+    std::cout << "Test is successful!" << std::endl;
+  }
+}
+
+void test_allgather_comms(ACCL::ACCL &accl, options_t &options) {
+  std::cout << "Start allgather test with communicators..." << std::endl;
+  unsigned int count = options.count;
+  std::unique_ptr<float> host_op_buf = random_array(count * size);
+  auto op_buf = accl.create_buffer(host_op_buf.get() + count * rank, count,
+                                   dataType::float32);
+  auto res_buf = accl.create_buffer<float>(count * size, dataType::float32);
+
+  std::fill(res_buf->buffer(), res_buf->buffer() + count * size, 0);
+
+  test_debug("Setting up communicators...", options);
+  auto group = accl.get_comm_group(GLOBAL_COMM);
+  unsigned int own_rank = accl.get_comm_rank(GLOBAL_COMM);
+  unsigned int split = group.size() / 2;
+  test_debug("Split is " + std::to_string(split) , options);
+  std::vector<rank_t>::iterator new_group_start;
+  std::vector<rank_t>::iterator new_group_end;
+  unsigned int new_rank = own_rank;
+  bool is_in_lower_part = own_rank < split;
+  if (is_in_lower_part) {
+    new_group_start = group.begin();
+    new_group_end = group.begin() + split;
+  }
+  else {
+    new_group_start = group.begin() + split;
+    new_group_end = group.end();
+    new_rank = own_rank - split;
+  }
+  std::vector<rank_t> new_group(new_group_start, new_group_end);
+  CommunicatorId new_comm = accl.configure_communicator(new_group, new_rank);
+
+  test_debug("Gathering data...", options);
+  accl.allgather(*op_buf, *res_buf, count, new_comm);
+
+  int errors = 0;
+  for (unsigned int i = 0; i < count * size; ++i) {
+    float res = (*res_buf)[i];
+    float ref;
+    if (i < count * split) {
+      ref = host_op_buf.get()[is_in_lower_part ? i : i + count * split];
+    }
+    else {
+      ref = 0.0;
+    }
+    if (res != ref) {
       std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
                        std::to_string(res) + " != " + std::to_string(ref) + ")"
                 << std::endl;
@@ -653,7 +713,7 @@ void test_reduce(ACCL::ACCL &accl, options_t &options, int root,
   random_array(op_buf->buffer(), count);
 
   test_debug("Reduce data to " + std::to_string(root) + "...", options);
-  accl.reduce(0, *op_buf, *res_buf, count, root, function);
+  accl.reduce(*op_buf, *res_buf, count, root, function);
 
   if (rank == root) {
     int errors = 0;
@@ -731,7 +791,7 @@ void test_reduce_scatter(ACCL::ACCL &accl, options_t &options,
   random_array(op_buf->buffer(), count * size);
 
   test_debug("Reducing data...", options);
-  accl.reduce_scatter(0, *op_buf, *res_buf, count, function);
+  accl.reduce_scatter(*op_buf, *res_buf, count, function);
 
   int errors = 0;
   int rank_prod = 0;
@@ -812,7 +872,7 @@ void test_allreduce(ACCL::ACCL &accl, options_t &options,
   random_array(op_buf->buffer(), count);
 
   test_debug("Reducing data...", options);
-  accl.allreduce(0, *op_buf, *res_buf, count, function);
+  accl.allreduce(*op_buf, *res_buf, count, function);
 
   int errors = 0;
 
@@ -932,6 +992,8 @@ void start_test(options_t options) {
   MPI_Barrier(MPI_COMM_WORLD);
   // test_reduce_scatter_compressed(*accl, options, reduceFunction::SUM);
   // MPI_Barrier(MPI_COMM_WORLD);
+  test_allgather_comms(*accl, options);
+  MPI_Barrier(MPI_COMM_WORLD);
 
   for (int root = 0; root < size; ++root) {
     test_bcast(*accl, options, root);
