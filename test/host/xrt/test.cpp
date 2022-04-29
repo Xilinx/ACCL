@@ -671,15 +671,17 @@ void test_allgather_comms(ACCL::ACCL &accl, options_t &options) {
   }
   std::vector<rank_t> new_group(new_group_start, new_group_end);
   CommunicatorId new_comm = accl.configure_communicator(new_group, new_rank);
-
+  test_debug(accl.dump_communicator(), options);
   test_debug("Gathering data...", options);
   accl.allgather(*op_buf, *res_buf, count, new_comm);
+  test_debug("Validate data...", options);
 
+  unsigned int data_split = is_in_lower_part ? count * split : count * size - count * split;
   int errors = 0;
   for (unsigned int i = 0; i < count * size; ++i) {
     float res = (*res_buf)[i];
     float ref;
-    if (i < count * split) {
+    if (i < data_split) {
       ref = host_op_buf.get()[is_in_lower_part ? i : i + count * split];
     }
     else {
