@@ -737,7 +737,9 @@ private:
   CCLO *cclo{};
   // Supported types and corresponding arithmetic config
   arithConfigMap arith_config;
-  addr_t arithcfg_addr{};
+  // Address to put new configurations like arithmetic configs
+  // and communicators
+  addr_t current_config_address{};
   // RX spare buffers
   std::vector<Buffer<int8_t> *> rx_buffer_spares;
   addr_t rx_buffer_size{};
@@ -749,7 +751,6 @@ private:
   Buffer<int8_t> *utility_spare{};
   // List of communicators, to which users will add
   std::vector<Communicator> communicators;
-  addr_t communicators_addr{};
   // safety checks
   bool check_return_value_flag{};
   bool ignore_safety_checks{};

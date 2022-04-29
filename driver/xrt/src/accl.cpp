@@ -819,9 +819,8 @@ void ACCL::configure_arithmetic() {
                                  "configure_communicator() first");
   }
 
-  addr_t address = arithcfg_addr;
   for (auto &[_key, arithcfg] : arith_config) {
-    write_arithconfig(*cclo, arithcfg, &address);
+    write_arithconfig(*cclo, arithcfg, &current_config_address);
   }
 }
 
@@ -863,7 +862,7 @@ void ACCL::setup_rx_buffers(size_t nbufs, addr_t bufsize,
   // NOTE: the buffer count HAS to be written last (offload checks for this)
   cclo->write(rx_buffers_adr, nbufs);
 
-  communicators_addr = address + 4;
+  current_config_address = address + 4;
   if (sim_mode) {
     utility_spare =
         new SimBuffer(new int8_t[bufsize](), bufsize, dataType::int8,
@@ -1091,18 +1090,8 @@ CommunicatorId ACCL::configure_communicator(const std::vector<rank_t> &ranks,
     throw std::runtime_error(
         "RX buffers unconfigured, please call setup_rx_buffers() first.");
   }
-
-  addr_t addr;
-
-  if (communicators.empty()) {
-    addr = communicators_addr;
-  } else {
-    addr = communicators.back().communicators_addr();
-  }
-
-  communicators.emplace_back(Communicator(cclo, ranks, local_rank, &addr));
-  arithcfg_addr = addr + 4;
-
+  communicators.emplace_back(
+      Communicator(cclo, ranks, local_rank, &current_config_address));
   return communicators.size() - 1;
 }
 

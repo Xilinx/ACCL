@@ -72,6 +72,7 @@ Communicator::Communicator(CCLO *cclo, const std::vector<rank_t> &ranks,
     *addr += 4;
     cclo->write(*addr, r.max_segment_size);
   }
+  *addr += 4;
 }
 
 std::string Communicator::dump() {
