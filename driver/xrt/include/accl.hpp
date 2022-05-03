@@ -470,7 +470,7 @@ public:
 
   unsigned int get_comm_rank(CommunicatorId comm_id);
 
-  CommunicatorId configure_communicator(const std::vector<rank_t> &ranks,
+  CommunicatorId create_communicator(const std::vector<rank_t> &ranks,
                                         int local_rank);
 
   /**
@@ -799,6 +799,8 @@ private:
   void use_tcp(unsigned int comm_id = 0);
 
   void set_max_segment_size(unsigned int value = 0);
+
+  void configure_communicator(const std::vector<rank_t> &ranks, int local_rank);
 };
 
 } // namespace ACCL

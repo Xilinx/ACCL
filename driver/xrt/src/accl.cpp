@@ -672,6 +672,19 @@ unsigned int ACCL::get_comm_rank(CommunicatorId comm_id) {
   return communicators[comm_id].local_rank();
 }
 
+CommunicatorId ACCL::create_communicator(const std::vector<rank_t> &ranks,
+                                            int local_rank) {
+  configure_communicator(ranks, local_rank);
+  // Communicator ID is the index of the communicator in the 
+  // vector of communicators
+  CommunicatorId new_comm_id = communicators.size() - 1;
+  if (protocol == networkProtocol::TCP) {
+    debug("Starting connections to new communicator ranks");
+    init_connection(new_comm_id);
+  }
+  return communicators.size() - 1;
+}
+
 std::string ACCL::dump_exchange_memory() {
   std::stringstream stream;
   stream << "exchange mem:" << std::hex << std::endl;
@@ -1084,7 +1097,7 @@ void ACCL::set_max_segment_size(unsigned int value) {
   check_return_value("set_max_segment_size");
 }
 
-CommunicatorId ACCL::configure_communicator(const std::vector<rank_t> &ranks,
+void ACCL::configure_communicator(const std::vector<rank_t> &ranks,
                                             int local_rank) {
   if (rx_buffer_spares.empty()) {
     throw std::runtime_error(
@@ -1092,7 +1105,6 @@ CommunicatorId ACCL::configure_communicator(const std::vector<rank_t> &ranks,
   }
   communicators.emplace_back(
       Communicator(cclo, ranks, local_rank, &current_config_address));
-  return communicators.size() - 1;
 }
 
 std::string ACCL::dump_communicator() {

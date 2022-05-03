@@ -670,9 +670,12 @@ void test_allgather_comms(ACCL::ACCL &accl, options_t &options) {
     new_rank = own_rank - split;
   }
   std::vector<rank_t> new_group(new_group_start, new_group_end);
-  CommunicatorId new_comm = accl.configure_communicator(new_group, new_rank);
+  for (int i=0; i < new_group.size(); i++) {
+    new_group[i].session_id = group.size() + i;
+  }
+  CommunicatorId new_comm = accl.create_communicator(new_group, new_rank);
   test_debug(accl.dump_communicator(), options);
-  test_debug("Gathering data...", options);
+  test_debug("Gathering data... count=" + std::to_string(count) + ", comm=" + std::to_string(new_comm), options);
   accl.allgather(*op_buf, *res_buf, count, new_comm);
   test_debug("Validate data...", options);
 
