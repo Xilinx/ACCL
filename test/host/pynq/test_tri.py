@@ -18,8 +18,7 @@
 import sys
 import numpy as np
 import time
-sys.path.append('../../../driver/pynq/')
-from accl import accl, ACCLReduceFunctions, ACCLStreamFlags
+from pyaccl.accl import accl, ACCLReduceFunctions, ACCLStreamFlags
 import pynq
 import argparse
 import itertools
