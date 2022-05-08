@@ -248,6 +248,74 @@ class ACCLStreamFlags(IntEnum):
     OP0_STREAM = 1
     RES_STREAM = 2
 
+class ACCLCommunicator():
+    def __init__(self, ranks, local_rank, index):
+        #address where stored in exchange memory
+        self.exchmem_addr = None
+        self.ranks = ranks
+        self.local_rank = local_rank
+        self.index = index
+
+    @property
+    def addr(self):
+        assert self.exchmem_addr is not None
+        return self.exchmem_addr
+
+    def write(self, mmio, addr):
+        self.exchmem_addr = addr
+        mmio.write(addr, len(self.ranks))
+        addr += 4
+        mmio.write(addr, self.local_rank)
+        addr += 4
+        for i in range(len(self.ranks)):
+            #ip string to int conversion from here:
+            #https://stackoverflow.com/questions/5619685/conversion-from-ip-string-to-integer-and-backward-in-python
+            mmio.write(addr, int(ipaddress.IPv4Address(self.ranks[i]["ip"])))
+            addr += 4
+            mmio.write(addr, self.ranks[i]["port"])
+            #leave 2 32 bit space for inbound/outbound_seq_number
+            addr += 4
+            mmio.write(addr,0)
+            addr +=4
+            mmio.write(addr,0)
+            addr += 4
+            if "session_id" in self.ranks[i]:
+                sess_id = self.ranks[i]["session_id"]
+            else:
+                sess_id = 0xFFFFFFFF
+            mmio.write(addr, sess_id)
+            addr += 4
+            mmio.write(addr, self.ranks[i]["max_segment_size"])
+            addr += 4
+        return addr
+
+    def readback(self, mmio):
+        addr = self.addr
+        nr_ranks = mmio.read(addr)
+        addr +=4
+        local_rank = mmio.read(addr)
+        print(f"Communicator. local_rank: {local_rank} \t number of ranks: {nr_ranks}.")
+        for i in range(nr_ranks):
+            addr +=4
+            #ip string to int conversion from here:
+            #https://stackoverflow.com/questions/5619685/conversion-from-ip-string-to-integer-and-backward-in-python
+            ip_addr_rank = str(ipaddress.IPv4Address(mmio.read(addr)))
+            addr += 4
+            #when using the UDP stack, write the rank number into the port register
+            #the actual port is programmed into the stack itself
+            port = mmio.read(addr)
+            #leave 2 32 bit space for inbound/outbound_seq_number
+            addr += 4
+            inbound_seq_number  = mmio.read(addr)
+            addr +=4
+            outbound_seq_number = mmio.read(addr)
+            #a 32 bit integer is dedicated to session id 
+            addr += 4
+            session = mmio.read(addr)
+            addr += 4
+            max_seg_size = mmio.read(addr)
+            print(f"> rank {i} (ip {ip_addr_rank}:{port} ; session {session} ; max segment size {max_seg_size}) : <- inbound_seq_number {inbound_seq_number}, -> outbound_seq_number {outbound_seq_number}")
+
 class ACCLArithConfig():
     def __init__(self, uncompressed_elem_bytes, compressed_elem_bytes, elem_ratio_log, 
                     compressor_tdest, decompressor_tdest, arith_is_compressed, arith_tdest):
@@ -341,9 +409,6 @@ class accl():
     def __init__(self, ranks, local_rank, protocol="TCP", nbufs=16, bufsize=1024, mem=None, overlay=None, cclo_ip=None, hostctrl_ip=None, arith_config=ACCL_DEFAULT_ARITH_CONFIG, sim_sock=None):
         assert overlay is not None or sim_sock is not None, "Either simulation socket or FPGA overlay must be provided"
         self.cclo = None
-        #define supported types and corresponding arithmetic config
-        self.arith_config = {}
-        self.arithcfg_addr = 0
         #define an empty list of RX spare buffers
         self.rx_buffer_spares = []
         self.rx_buffer_size = 0
@@ -353,9 +418,14 @@ class accl():
         self.rx_buf_network = None
         #define another spare for general use (e.g. as accumulator for reduce/allreduce)
         self.utility_spare = None
+
+        #this will increment as we add config options (communicators, arithmetic configs)
+        self.next_free_exchmem_addr = self.rx_buffers_adr
         #define an empty list of communicators, to which users will add
         self.communicators = []
-        self.communicators_addr = self.rx_buffers_adr
+        #define supported types and corresponding arithmetic config
+        self.arith_config = {}
+
         self.check_return_value_flag = True
         #enable safety checks by default
         self.ignore_safety_checks = False
@@ -382,7 +452,7 @@ class accl():
 
         print("Configuring RX Buffers")
         self.setup_rx_buffers(nbufs, bufsize)
-        print("Configuring a communicator")
+        print("Configuring the global communicator")
         self.configure_communicator(ranks, local_rank)
         print("Configuring arithmetic")
         self.configure_arithmetic(configs=arith_config)
@@ -453,14 +523,20 @@ class accl():
         del self.utility_spare
         self.utility_spare = None 
 
+    #define communicator
+    def configure_communicator(self, ranks, local_rank):
+        assert len(self.rx_buffer_spares) > 0, "RX buffers unconfigured, please call setup_rx_buffers() first"
+        communicator = ACCLCommunicator(ranks, local_rank, len(self.communicators))
+        self.next_free_exchmem_addr = communicator.write(self.cclo.mmio, self.next_free_exchmem_addr)
+        self.communicators.append(communicator)
+
     #define CCLO arithmetic configurations
     def configure_arithmetic(self, configs=ACCL_DEFAULT_ARITH_CONFIG):
-        assert len(self.communicators) > 0, "Communicators unconfigured, please call configure_communicator() first"
-        addr = self.arithcfg_addr
+        assert len(self.rx_buffer_spares) > 0, "RX buffers unconfigured, please call setup_rx_buffers() first"
         self.arith_config = configs
         for key in self.arith_config.keys():
             #write configuration into exchange memory
-            addr = self.arith_config[key].write(self.cclo.mmio, addr)
+            self.next_free_exchmem_addr = self.arith_config[key].write(self.cclo.mmio, self.next_free_exchmem_addr)
 
     def setup_rx_buffers(self, nbufs, bufsize):
         addr = self.rx_buffers_adr
@@ -495,7 +571,7 @@ class accl():
         #NOTE: the buffer count HAS to be written last (offload checks for this) 
         self.cclo.write(self.rx_buffers_adr, nbufs)
 
-        self.communicators_addr = addr+4
+        self.next_free_exchmem_addr = addr+4
         if not self.sim_mode:
             self.utility_spare = pynq.allocate((bufsize,), dtype=np.int8, target=mem[0])
         else:
@@ -660,11 +736,11 @@ class accl():
     
     @self_check_return_value
     def open_port(self, comm_id=0):
-        self.call_sync(scenario=CCLOp.config, comm=self.communicators[comm_id]["addr"], function=CCLOCfgFunc.open_port)
+        self.call_sync(scenario=CCLOp.config, comm=self.communicators[comm_id].addr, function=CCLOCfgFunc.open_port)
     
     @self_check_return_value
     def open_con(self, comm_id=0):
-        self.call_sync(scenario=CCLOp.config, comm=self.communicators[comm_id]["addr"], function=CCLOCfgFunc.open_con)
+        self.call_sync(scenario=CCLOp.config, comm=self.communicators[comm_id].addr, function=CCLOCfgFunc.open_con)
     
     @self_check_return_value
     def use_udp(self, comm_id=0):
@@ -685,75 +761,6 @@ class accl():
         self.segment_size = value
 
     @self_check_return_value
-    def set_max_dma_in_flight(self, value=0):
-     
-        if value > 20:
-            warnings.warn("ACCL: transaction size should be less or equal to configured buffer size!")
-            return
-        self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.set_max_dma_transactions, count=value)   
-
-    def configure_communicator(self, ranks, local_rank):
-        assert len(self.rx_buffer_spares) > 0, "RX buffers unconfigured, please call setup_rx_buffers() first"
-        if len(self.communicators) == 0:
-            addr = self.communicators_addr
-        else:
-            addr = self.communicators[-1]["addr"]
-        communicator = {"local_rank": local_rank, "addr": addr, "ranks": ranks}
-        self.cclo.write(addr,len(ranks))
-        addr += 4
-        self.cclo.write(addr,local_rank)
-        for i in range(len(ranks)):
-            addr += 4
-            #ip string to int conversion from here:
-            #https://stackoverflow.com/questions/5619685/conversion-from-ip-string-to-integer-and-backward-in-python
-            self.cclo.write(addr, int(ipaddress.IPv4Address(ranks[i]["ip"])))
-            addr += 4
-            self.cclo.write(addr,ranks[i]["port"])
-            #leave 2 32 bit space for inbound/outbound_seq_number
-            addr += 4
-            self.cclo.write(addr,0)
-            addr +=4
-            self.cclo.write(addr,0)
-            addr += 4
-            if "session_id" in ranks[i]:
-                sess_id = ranks[i]["session_id"]
-            else:
-                sess_id = 0xFFFFFFFF
-            self.cclo.write(addr, sess_id)
-            addr += 4
-            self.cclo.write(addr, ranks[i]["max_segment_size"])
-        self.communicators.append(communicator)
-        self.arithcfg_addr = addr + 4
-        
-    def dump_communicator(self):
-        addr    = self.communicators_addr
-        nr_ranks    = self.cclo.read(addr)
-        addr +=4
-        local_rank  = self.cclo.read(addr)
-        print(f"Communicator. local_rank: {local_rank} \t number of ranks: {nr_ranks}.")
-        for i in range(nr_ranks):
-            addr +=4
-            #ip string to int conversion from here:
-            #https://stackoverflow.com/questions/5619685/conversion-from-ip-string-to-integer-and-backward-in-python
-            ip_addr_rank = str(ipaddress.IPv4Address(self.cclo.read(addr)))
-            addr += 4
-            #when using the UDP stack, write the rank number into the port register
-            #the actual port is programmed into the stack itself
-            port = self.cclo.read(addr)
-            #leave 2 32 bit space for inbound/outbound_seq_number
-            addr += 4
-            inbound_seq_number  = self.cclo.read(addr)
-            addr +=4
-            outbound_seq_number = self.cclo.read(addr)
-            #a 32 bit integer is dedicated to session id 
-            addr += 4
-            session = self.cclo.read(addr)
-            addr += 4
-            max_seg_size = self.cclo.read(addr)
-            print(f"> rank {i} (ip {ip_addr_rank}:{port} ; session {session} ; max segment size {max_seg_size}) : <- inbound_seq_number {inbound_seq_number}, -> outbound_seq_number {outbound_seq_number}")
-   
-
-    @self_check_return_value
     def nop(self, run_async=False):
         #calls the accelerator with no work. Useful for measuring call latency
         handle = self.call_async(scenario=CCLOp.nop)
@@ -766,7 +773,7 @@ class accl():
     def send(self, comm_id, srcbuf, count, dst, tag=TAG_ANY, from_fpga=False, stream_flags=ACCLStreamFlags.NO_STREAM, run_async=False):
         if not from_fpga:
             srcbuf.sync_to_device()
-        handle = self.call_async(scenario=CCLOp.send, count=count, comm=self.communicators[comm_id]["addr"], root_src_dst=dst, tag=tag, stream_flags=stream_flags, addr_0=srcbuf)
+        handle = self.call_async(scenario=CCLOp.send, count=count, comm=self.communicators[comm_id].addr, root_src_dst=dst, tag=tag, stream_flags=stream_flags, addr_0=srcbuf)
         if run_async:
             return handle 
         else:
@@ -776,7 +783,7 @@ class accl():
     def recv(self, comm_id, dstbuf, count, src, tag=TAG_ANY, to_fpga=False, run_async=False):
         if not to_fpga and run_async:
             warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
-        handle = self.call_async(scenario=CCLOp.recv, count=count, comm=self.communicators[comm_id]["addr"], root_src_dst=src, tag=tag, addr_2=dstbuf)
+        handle = self.call_async(scenario=CCLOp.recv, count=count, comm=self.communicators[comm_id].addr, root_src_dst=src, tag=tag, addr_2=dstbuf)
         if run_async:
             return handle
         else:
@@ -839,7 +846,7 @@ class accl():
     @self_check_return_value
     def bcast(self, comm_id, buf, count, root, from_fpga=False, to_fpga=False, run_async=False):
         comm = self.communicators[comm_id]
-        is_root = comm["local_rank"] == root
+        is_root = (comm.local_rank == root)
         if not to_fpga and not(is_root) and run_async:
             warnings.warn("ACCL: async run returns data on FPGA, user must sync_from_device() after waiting")
         if count == 0:
@@ -849,7 +856,7 @@ class accl():
         if not from_fpga and is_root:
             buf.sync_to_device()
 
-        prevcall = [self.call_async(scenario=CCLOp.bcast, count=count, comm=self.communicators[comm_id]["addr"], root_src_dst=root, addr_0=buf)]
+        prevcall = [self.call_async(scenario=CCLOp.bcast, count=count, comm=self.communicators[comm_id].addr, root_src_dst=root, addr_0=buf)]
         
         if run_async:
             return prevcall[0]
@@ -866,13 +873,13 @@ class accl():
             warnings.warn("zero size buffer")
             return
         comm        = self.communicators[comm_id]
-        local_rank  = comm["local_rank"]
-        p           = len(comm["ranks"])
+        local_rank  = comm.local_rank
+        p           = len(comm.ranks)
 
         if not from_fpga and local_rank == root:
             sbuf[:count*p].sync_to_device()
 
-        prevcall = [self.call_async(scenario=CCLOp.scatter, count=count, comm=comm["addr"], root_src_dst=root, addr_0=sbuf, addr_2=rbuf[0:count])]
+        prevcall = [self.call_async(scenario=CCLOp.scatter, count=count, comm=comm.addr, root_src_dst=root, addr_0=sbuf, addr_2=rbuf[0:count])]
 
         if run_async:
             return prevcall[0]
@@ -889,8 +896,8 @@ class accl():
             warnings.warn("zero size buffer")
             return
         comm        = self.communicators[comm_id]
-        local_rank  = comm["local_rank"]
-        p           = len(comm["ranks"])
+        local_rank  = comm.local_rank
+        p           = len(comm.ranks)
 
         if not self.ignore_safety_checks and (count + self.segment_size-1)//self.segment_size * p > len(self.rx_buffer_spares):
             warnings.warn("gather can't be executed safely with this number of spare buffers")
@@ -899,7 +906,7 @@ class accl():
         if not from_fpga:
             sbuf[0:count].sync_to_device()
             
-        prevcall = [self.call_async(scenario=CCLOp.gather, count=count, comm=comm["addr"], root_src_dst=root, addr_0=sbuf, addr_2=rbuf)]
+        prevcall = [self.call_async(scenario=CCLOp.gather, count=count, comm=comm.addr, root_src_dst=root, addr_0=sbuf, addr_2=rbuf)]
             
         if run_async:
             return prevcall[0]
@@ -915,7 +922,7 @@ class accl():
         if count == 0:
             return
         comm    = self.communicators[comm_id]
-        p       = len(comm["ranks"])
+        p       = len(comm.ranks)
 
         if not self.ignore_safety_checks and (count + self.segment_size-1)//self.segment_size * p > len(self.rx_buffer_spares):
             warnings.warn("All gather can't be executed safely with this number of spare buffers")
@@ -924,7 +931,7 @@ class accl():
         if not from_fpga:
             sbuf[0:count].sync_to_device()
 
-        prevcall = [self.call_async(scenario=CCLOp.allgather, count=count, comm=comm["addr"], addr_0=sbuf, addr_2=rbuf)]
+        prevcall = [self.call_async(scenario=CCLOp.allgather, count=count, comm=comm.addr, addr_0=sbuf, addr_2=rbuf)]
 
         if run_async:
             return prevcall[0]
@@ -944,13 +951,13 @@ class accl():
             return
 
         comm        = self.communicators[comm_id]
-        p           = len(comm["ranks"])
-        local_rank  = comm["local_rank"]
+        p           = len(comm.ranks)
+        local_rank  = comm.local_rank
 
         if not from_fpga:
             sbuf[0:count].sync_to_device()
 
-        prevcall = [self.call_async(scenario=CCLOp.reduce, count=count, comm=self.communicators[comm_id]["addr"], root_src_dst=root, function=func, addr_0=sbuf, addr_2=rbuf)]
+        prevcall = [self.call_async(scenario=CCLOp.reduce, count=count, comm=self.communicators[comm_id].addr, root_src_dst=root, function=func, addr_0=sbuf, addr_2=rbuf)]
 
         if run_async:
             return prevcall[0]
@@ -969,7 +976,7 @@ class accl():
         if not from_fpga:
             sbuf[0:count].sync_to_device()
 
-        prevcall = [self.call_async(scenario=CCLOp.allreduce, count=count, comm=self.communicators[comm_id]["addr"], function=func, addr_0=sbuf, addr_2=rbuf)]
+        prevcall = [self.call_async(scenario=CCLOp.allreduce, count=count, comm=self.communicators[comm_id].addr, function=func, addr_0=sbuf, addr_2=rbuf)]
 
         if run_async:
             return prevcall[0]
@@ -987,13 +994,13 @@ class accl():
             return
 
         comm        = self.communicators[comm_id]
-        p           = len(comm["ranks"])
-        local_rank  = comm["local_rank"]
+        p           = len(comm.ranks)
+        local_rank  = comm.local_rank
 
         if not from_fpga:
             sbuf[0:count*p].sync_to_device()
 
-        prevcall = [self.call_async(scenario=CCLOp.reduce_scatter, count=count, comm=self.communicators[comm_id]["addr"], function=func, addr_0=sbuf, addr_2=rbuf)]
+        prevcall = [self.call_async(scenario=CCLOp.reduce_scatter, count=count, comm=self.communicators[comm_id].addr, function=func, addr_0=sbuf, addr_2=rbuf)]
 
         if run_async:
             return prevcall[0]
