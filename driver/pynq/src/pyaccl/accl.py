@@ -256,6 +256,16 @@ class ACCLCommunicator():
         self.local_rank = local_rank
         self.index = index
 
+    def __str__(self):
+        description = f'Communicator {self.index} at address {self.addr}, '
+        description += f'rank {self.local_rank} of {len(self.ranks)}:\n'
+        for i in range(len(self.ranks)):
+            description += (f'Rank {i} -> IP: {self.ranks[i]["ip"]}, Port: {self.ranks[i]["port"]}, '
+                            f'Session: {self.ranks[i]["session_id"]}, SegSize: {self.ranks[i]["max_segment_size"]}, '
+                            f'ISeq: {self.ranks[i]["inbound_seq_number"]}, OSeq: {self.ranks[i]["outbound_seq_number"]}\n'
+            )
+        return description
+
     @property
     def addr(self):
         assert self.exchmem_addr is not None
@@ -290,31 +300,42 @@ class ACCLCommunicator():
         return addr
 
     def readback(self, mmio):
-        addr = self.addr
+        addr = self.exchmem_addr
         nr_ranks = mmio.read(addr)
         addr +=4
         local_rank = mmio.read(addr)
-        print(f"Communicator. local_rank: {local_rank} \t number of ranks: {nr_ranks}.")
+        print(f"Communicator readback on local_rank {local_rank} of {nr_ranks}.")
         for i in range(nr_ranks):
             addr +=4
             #ip string to int conversion from here:
             #https://stackoverflow.com/questions/5619685/conversion-from-ip-string-to-integer-and-backward-in-python
-            ip_addr_rank = str(ipaddress.IPv4Address(mmio.read(addr)))
+            self.ranks[i]["ip"] = str(ipaddress.IPv4Address(mmio.read(addr)))
             addr += 4
             #when using the UDP stack, write the rank number into the port register
             #the actual port is programmed into the stack itself
-            port = mmio.read(addr)
+            self.ranks[i]["port"] = mmio.read(addr)
             #leave 2 32 bit space for inbound/outbound_seq_number
             addr += 4
-            inbound_seq_number  = mmio.read(addr)
+            self.ranks[i]["inbound_seq_number"] = mmio.read(addr)
             addr +=4
-            outbound_seq_number = mmio.read(addr)
+            self.ranks[i]["outbound_seq_number"] = mmio.read(addr)
             #a 32 bit integer is dedicated to session id 
             addr += 4
-            session = mmio.read(addr)
+            self.ranks[i]["session_id"] = mmio.read(addr)
             addr += 4
-            max_seg_size = mmio.read(addr)
-            print(f"> rank {i} (ip {ip_addr_rank}:{port} ; session {session} ; max segment size {max_seg_size}) : <- inbound_seq_number {inbound_seq_number}, -> outbound_seq_number {outbound_seq_number}")
+            self.ranks[i]["max_segment_size"] = mmio.read(addr)
+
+    def split(self, indices):
+        assert self.local_rank in indices, "Local rank must be part of the new communicator"
+        # make list sorted and unique
+        indices = sorted(set(indices))
+        # create a new communicator from the existing one
+        new_comm = ACCLCommunicator([self.ranks[i] for i in indices], indices.index(self.local_rank), self.index+1)
+        # reset its sequence numbers and return
+        for i in range(len(new_comm.ranks)):
+            new_comm.ranks[i]["inbound_seq_number"] = 0
+            new_comm.ranks[i]["outbound_seq_number"] = 0
+        return new_comm
 
 class ACCLArithConfig():
     def __init__(self, uncompressed_elem_bytes, compressed_elem_bytes, elem_ratio_log, 
@@ -523,10 +544,18 @@ class accl():
         del self.utility_spare
         self.utility_spare = None 
 
-    #define communicator
+    #define communicator 
     def configure_communicator(self, ranks, local_rank):
         assert len(self.rx_buffer_spares) > 0, "RX buffers unconfigured, please call setup_rx_buffers() first"
         communicator = ACCLCommunicator(ranks, local_rank, len(self.communicators))
+        self.next_free_exchmem_addr = communicator.write(self.cclo.mmio, self.next_free_exchmem_addr)
+        self.communicators.append(communicator)
+
+    #split global communicator
+    def split_communicator(self, indices):
+        assert len(self.communicators) > 0, "No global communicator defined"
+        self.communicators[0].readback(self.cclo.mmio)
+        communicator = self.communicators[0].split(indices)
         self.next_free_exchmem_addr = communicator.write(self.cclo.mmio, self.next_free_exchmem_addr)
         self.communicators.append(communicator)
 
