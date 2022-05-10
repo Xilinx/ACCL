@@ -279,6 +279,32 @@ def test_multicomm(cclo_inst, world_size, local_rank, count):
     else:
         print("Multi-communicator test failed")
 
+def test_multicomm_allgather(cclo_inst, world_size, local_rank, count):
+    err_count = 0
+    if local_rank < world_size // 2:
+        new_group = [i for i in range(world_size // 2)]
+    else:
+        new_group = [i for i in range(world_size // 2, world_size, 1)]
+    print("Assigned to subgroup:",new_group)
+    cclo_inst.split_communicator(new_group)
+    for comm in cclo_inst.communicators:
+        print(comm)
+    op_buf, _, res_buf = get_buffers(count * world_size, np.float32, np.float32, np.float32, cclo_inst)
+    op_buf[:] = [1.0*(local_rank+i) for i in range(op_buf.size)]
+
+    cclo_inst.allgather(1, op_buf, res_buf, count)
+
+    for i, g in enumerate(new_group):
+        if not np.isclose(res_buf.data[i*count:(i+1)*count], [1.0*(g+j) for j in range(count)]).all():
+            err_count += 1
+            print("Allgather failed for src rank", g)
+        else:
+            print("Allgather succeeded for src rank", g)
+    if err_count == 0:
+        print("Multi-communicator allgather test succeeded")
+    else:
+        print("Multi-communicator allgather test failed")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Tests for ACCL (emulation mode)')
     parser.add_argument('--nruns',      type=int,            default=1,     help='How many times to run each test')
@@ -300,6 +326,7 @@ if __name__ == "__main__":
     parser.add_argument('--reduce_scatter', action='store_true', default=False, help='Run reduce-scatter test')
     parser.add_argument('--allreduce',  action='store_true', default=False, help='Run all-reduce test')
     parser.add_argument('--multicomm',  action='store_true', default=False, help='Run multi-communicator test')
+    parser.add_argument('--multicomm_allgather',  action='store_true', default=False, help='Run multi-communicator test with allgather')
     parser.add_argument('--reduce_func', type=int,           default=0,     help='Function index for reduce')
     parser.add_argument('--compression', action='store_true', default=False, help='Run test using compression')
     parser.add_argument('--fp16', action='store_true', default=False, help='Run test using fp16')
@@ -324,6 +351,7 @@ if __name__ == "__main__":
         args.reduce_scatter = True
         args.allreduce = True
         args.multicomm = True
+        args.multicomm_allgather = True
 
     # get communicator size and our local rank in it
     comm = MPI.COMM_WORLD
@@ -408,6 +436,9 @@ if __name__ == "__main__":
                     comm.barrier()
                 if args.multicomm:
                     test_multicomm(cclo_inst, world_size, local_rank, args.count)
+                    comm.barrier()
+                if args.multicomm_allgather:
+                    test_multicomm_allgather(cclo_inst, world_size, local_rank, args.count)
                     comm.barrier()
 
     except KeyboardInterrupt:
