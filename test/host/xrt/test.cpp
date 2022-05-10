@@ -706,6 +706,73 @@ void test_allgather_comms(ACCL::ACCL &accl, options_t &options) {
   }
 }
 
+void test_multicomm(ACCL::ACCL &accl, options_t &options) {
+  std::cout << "Start multi communicator test..." << std::endl;
+  unsigned int count = options.count;
+  auto group = accl.get_comm_group(GLOBAL_COMM);
+  unsigned int own_rank = accl.get_comm_rank(GLOBAL_COMM);
+  int errors = 0;
+  if (group.size() < 4) {
+    return;
+  }
+  if (own_rank == 1 || own_rank > 3) {
+    return;
+  }
+  std::vector<rank_t> new_group;
+  new_group.push_back(group[0]);
+  new_group.push_back(group[2]);
+  new_group.push_back(group[3]);
+  unsigned int new_rank = (own_rank == 0) ? 0 : own_rank - 1;
+  CommunicatorId new_comm = accl.create_communicator(new_group, new_rank);
+  test_debug(accl.dump_communicator(), options);
+  std::unique_ptr<float> host_op_buf = random_array(count);
+  auto op_buf = accl.create_buffer(host_op_buf.get(), count,
+                                  dataType::float32);
+  auto res_buf = accl.create_buffer<float>(count, dataType::float32);
+  // start with a send/recv between ranks 0 and 2 (0 and 1 in the new communicator)
+  if (new_rank == 0) {
+    accl.send(*op_buf, count, 1, 0, new_comm);
+    accl.recv(*res_buf, count, 1, 1, new_comm);
+    test_debug("Second recv completed", options);
+    for (unsigned int i = 0; i < count; ++i) {
+      float res = (*res_buf)[i];
+      float ref = host_op_buf.get()[i];
+      if (res != ref) {
+        std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
+                        std::to_string(res) + " != " + std::to_string(ref) + ")"
+                  << std::endl;
+        errors += 1;
+      }
+    }
+  } else if (new_rank == 1) {
+    accl.recv(*res_buf, count, 0, 0, new_comm);
+    test_debug("First recv completed", options);
+    accl.send(*op_buf, count, 0, 1, new_comm);
+  }
+  std::cout << "Send/Recv with comms succeeded" << std::endl;
+  // do an all-reduce on the new communicator
+  for (unsigned int i = 0; i < count; ++i) {
+    host_op_buf.get()[i] = i;
+  }
+  accl.allreduce(*op_buf, *res_buf, count, ACCL::reduceFunction::SUM, new_comm);
+  for (unsigned int i = 0; i < count; ++i) {
+    float res = (*res_buf)[i];
+    float ref = 3 * host_op_buf.get()[i];
+    if (res != ref) {
+      std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
+                      std::to_string(res) + " != " + std::to_string(ref) + ")"
+                << std::endl;
+      errors += 1;
+    }
+  }
+  if (errors > 0) {
+    std::cout << std::to_string(errors) + " errors!" << std::endl;
+    failed_tests++;
+  } else {
+    std::cout << "Test is successful!" << std::endl;
+  }
+}
+
 void test_reduce(ACCL::ACCL &accl, options_t &options, int root,
                  reduceFunction function) {
   std::cout << "Start reduce test with root " + std::to_string(root) +
@@ -923,13 +990,10 @@ void test_allreduce_compressed(ACCL::ACCL &accl, options_t &options,
 
     if (!is_close(res, ref, FLOAT16RTOL, FLOAT16ATOL)) {
       std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
-                       std::to_string(res) + " != " + std::to_string(ref) + ")"
                 << std::endl;
       errors += 1;
-    }
   }
 
-  if (errors > 0) {
     std::cout << std::to_string(errors) + " errors!" << std::endl;
     failed_tests++;
   } else {
@@ -997,6 +1061,8 @@ void start_test(options_t options) {
   MPI_Barrier(MPI_COMM_WORLD);
   // test_reduce_scatter_compressed(*accl, options, reduceFunction::SUM);
   // MPI_Barrier(MPI_COMM_WORLD);
+  test_multicomm(*accl, options);
+  MPI_Barrier(MPI_COMM_WORLD);
   test_allgather_comms(*accl, options);
   MPI_Barrier(MPI_COMM_WORLD);
 
