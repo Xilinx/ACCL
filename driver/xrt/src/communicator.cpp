@@ -75,6 +75,32 @@ Communicator::Communicator(CCLO *cclo, const std::vector<rank_t> &ranks,
   *addr += 4;
 }
 
+void Communicator::readback() {
+  addr_t addr = this->_communicators_addr;
+  int nr_ranks = cclo->read(addr);
+  addr += 4;
+  this->_rank = cclo->read(addr);
+
+  if (nr_ranks != _ranks.size()) {
+    std::cerr << "ACCL: Number of ranks on device does not match number of "
+                 "ranks specified on host!"
+              << std::endl;
+  }
+  for (auto &r : _ranks) {
+    addr += 4;
+    r.ip = ip_decode(cclo->read(addr));
+    addr += 4;
+    r.port = cclo->read(addr);
+    // leave 2 32 bit space for inbound/outbound_seq_number
+    addr += 4;
+    addr += 4;
+    addr += 4;
+    r.session_id = cclo->read(addr);
+    addr += 4;
+    r.max_segment_size = cclo->read(addr);
+  }
+}
+
 std::string Communicator::dump() {
   std::stringstream stream;
   addr_t addr = _communicators_addr;

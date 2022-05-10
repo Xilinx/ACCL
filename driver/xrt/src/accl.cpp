@@ -665,6 +665,7 @@ CCLO *ACCL::reduce_scatter(unsigned int comm_id, BaseBuffer &sendbuf,
 }
 
 std::vector<rank_t> ACCL::get_comm_group(CommunicatorId comm_id) {
+  communicators[comm_id].readback();
   return *communicators[comm_id].get_ranks();
 }
 
@@ -678,10 +679,6 @@ CommunicatorId ACCL::create_communicator(const std::vector<rank_t> &ranks,
   // Communicator ID is the index of the communicator in the 
   // vector of communicators
   CommunicatorId new_comm_id = communicators.size() - 1;
-  if (protocol == networkProtocol::TCP) {
-    debug("Starting connections to new communicator ranks");
-    init_connection(new_comm_id);
-  }
   return communicators.size() - 1;
 }
 
