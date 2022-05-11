@@ -68,9 +68,9 @@ bool is_close(T a, T b, double rtol = 1e-5, double atol = 1e-8) {
 }
 
 template <typename T> static void random_array(T *data, size_t count) {
-  static std::uniform_real_distribution<T> distribution(-1000, 1000);
-  static std::mt19937 engine;
-  static auto generator = std::bind(distribution, engine);
+  std::uniform_real_distribution<T> distribution(-1000, 1000);
+  std::mt19937 engine;
+  auto generator = std::bind(distribution, engine);
   for (size_t i = 0; i < count; ++i) {
     data[i] = generator();
   }
@@ -644,11 +644,14 @@ void test_allgather_compressed(ACCL::ACCL &accl, options_t &options) {
 void test_allgather_comms(ACCL::ACCL &accl, options_t &options) {
   std::cout << "Start allgather test with communicators..." << std::endl;
   unsigned int count = options.count;
-  std::unique_ptr<float> host_op_buf = random_array(count * size);
-  auto op_buf = accl.create_buffer(host_op_buf.get() + count * rank, count,
+  std::unique_ptr<float> host_op_buf(new float[count * size]);
+  auto op_buf = accl.create_buffer(host_op_buf.get(), count,
                                    dataType::float32);
   auto res_buf = accl.create_buffer<float>(count * size, dataType::float32);
 
+  for (int i=0; i < count * size; i++) {
+    host_op_buf.get()[i] = rank + i;
+  }
   std::fill(res_buf->buffer(), res_buf->buffer() + count * size, 0);
 
   test_debug("Setting up communicators...", options);
@@ -682,7 +685,8 @@ void test_allgather_comms(ACCL::ACCL &accl, options_t &options) {
     float res = (*res_buf)[i];
     float ref;
     if (i < data_split) {
-      ref = host_op_buf.get()[is_in_lower_part ? i : i + count * split];
+      ref = is_in_lower_part ? 0 : split;
+      ref += (i / count) + (i % count);
     }
     else {
       ref = 0.0;
