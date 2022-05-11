@@ -251,25 +251,26 @@ def test_multicomm(cclo_inst, world_size, local_rank, count):
         return
     err_count = 0
     cclo_inst.split_communicator([0, 2, 3])
+    used_comm = len(cclo_inst.communicators) - 1
     for comm in cclo_inst.communicators:
         print(comm)
     op_buf, _, res_buf = get_buffers(count, np.float32, np.float32, np.float32, cclo_inst)
     # start with a send/recv between ranks 0 and 2 (0 and 1 in the new communicator)
     if local_rank == 0:
-        cclo_inst.send(1, op_buf, count, 1, tag=0)
-        cclo_inst.recv(1, res_buf, count, 1, tag=1)
+        cclo_inst.send(used_comm, op_buf, count, 1, tag=0)
+        cclo_inst.recv(used_comm, res_buf, count, 1, tag=1)
         if not np.isclose(res_buf.data, op_buf.data).all():
             err_count += 1
             print("Multi-communicator send/recv failed on rank ", local_rank)
         else:
             print("Multi-communicator send/recv succeded on rank ", local_rank)
     elif local_rank == 2:
-        cclo_inst.recv(1, res_buf, count, 0, tag=0)
-        cclo_inst.send(1, res_buf, count, 0, tag=1)
+        cclo_inst.recv(used_comm, res_buf, count, 0, tag=0)
+        cclo_inst.send(used_comm, res_buf, count, 0, tag=1)
         print("Multi-communicator send/recv succeded on rank ", local_rank)
     # do an all-reduce on the new communicator
     op_buf[:] = [1.0*i for i in range(op_buf.size)]
-    cclo_inst.allreduce(1, op_buf, res_buf, count, 0)
+    cclo_inst.allreduce(used_comm, op_buf, res_buf, count, 0)
     expected_allreduce_result = 3*op_buf.data
     if not np.isclose(res_buf.data, expected_allreduce_result).all():
         err_count += 1
@@ -289,10 +290,11 @@ def test_multicomm_allgather(cclo_inst, world_size, local_rank, count):
     cclo_inst.split_communicator(new_group)
     for comm in cclo_inst.communicators:
         print(comm)
+    used_comm = len(cclo_inst.communicators) - 1
     op_buf, _, res_buf = get_buffers(count * world_size, np.float32, np.float32, np.float32, cclo_inst)
     op_buf[:] = [1.0*(local_rank+i) for i in range(op_buf.size)]
 
-    cclo_inst.allgather(1, op_buf, res_buf, count)
+    cclo_inst.allgather(used_comm, op_buf, res_buf, count)
 
     for i, g in enumerate(new_group):
         if not np.isclose(res_buf.data[i*count:(i+1)*count], [1.0*(g+j) for j in range(count)]).all():
@@ -300,6 +302,16 @@ def test_multicomm_allgather(cclo_inst, world_size, local_rank, count):
             print("Allgather failed for src rank", g)
         else:
             print("Allgather succeeded for src rank", g)
+    op_buf[:] = [1.0 * local_rank for i in range(op_buf.size)]
+    cclo_inst.bcast(0, op_buf, count, root=0)
+    if local_rank == 0:
+        print("Bcast succeeded")
+    else:
+        if not np.isclose(op_buf.data, [0.0 for i in range(op_buf.size)]).all():
+            err_count += 1
+            print("Bcast failed")
+        else:
+            print("Bcast succeeded")
     if err_count == 0:
         print("Multi-communicator allgather test succeeded")
     else:
