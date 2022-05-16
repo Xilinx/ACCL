@@ -317,6 +317,66 @@ def test_multicomm_allgather(cclo_inst, world_size, local_rank, count):
     else:
         print("Multi-communicator allgather test failed")
 
+def test_eth_compression(cclo_inst, world_size, local_rank, count):
+    if world_size < 2:
+        return
+
+    op_buf, _, res_buf = get_buffers(count, np.float32, np.float32, np.float32, cclo_inst)
+    # paint source buffer
+    op_buf[:] = [3.14159*i for i in range(op_buf.size)]
+
+    # send data, with compression, from 0 to 1
+    if local_rank == 0:
+        cclo_inst.send(0, op_buf, count, 1, tag=0, compress_dtype=np.dtype('float16'))
+    elif local_rank == 1:
+        cclo_inst.recv(0, res_buf, count, 0, tag=0, compress_dtype=np.dtype('float16'))
+        # check data; since there seems to be some difference between 
+        # numpy and FPGA fp32 <-> fp16 conversion, allow 1% relative error, and 0.01 absolute error 
+        if not np.isclose(op_buf.data.astype(np.float16).astype(np.float32), res_buf.data, rtol=1e-02, atol=1e-02).all():
+            print("Compressed send/recv failed")
+        else:
+            print("Compressed send/recv succeeded")
+
+    cclo_inst.bcast(0, op_buf if local_rank == 0 else res_buf, count, root=0, compress_dtype=np.dtype('float16'))
+    if local_rank > 0:
+        if not np.isclose(op_buf.data.astype(np.float16).astype(np.float32), res_buf.data, rtol=1e-02, atol=1e-02).all():
+            print("Compressed bcast failed")
+        else:
+            print("Compressed bcast succeeded")
+
+    cclo_inst.reduce(0, op_buf, res_buf, count, 0, ACCLReduceFunctions.SUM, compress_dtype=np.dtype('float16'))
+    if local_rank == 0:
+        if not np.isclose(res_buf.data, world_size*op_buf.data, rtol=1e-02, atol=1e-02).all():
+            print("Compressed reduce failed")
+        else:
+            print("Compressed reduce succeeded")
+
+    # re-generate buffers for asymmetric size collectives - (reduce-)scatter, (all-)gather
+    op_buf, _, res_buf = get_buffers(count*world_size, np.float32, np.float32, np.float32, cclo_inst)
+    # paint source buffer
+    op_buf[:] = [3.14159*i for i in range(op_buf.size)]
+    cclo_inst.scatter(0, op_buf, res_buf, count, 0, compress_dtype=np.dtype('float16'))
+    if local_rank > 0:
+        if not np.isclose(op_buf.data[local_rank*count:(local_rank+1)*count].astype(np.float16).astype(np.float32), res_buf.data[0:count], rtol=1e-02, atol=1e-02).all():
+            print("Compressed scatter failed")
+        else:
+            print("Compressed scatter succeeded")
+    cclo_inst.gather(0, op_buf, res_buf, count, 0, compress_dtype=np.dtype('float16'))
+    if local_rank == 0:
+        error_count = 0
+        for i in range(world_size):
+            if not np.isclose(op_buf.data[0:count].astype(np.float16).astype(np.float32), res_buf.data[i*count:(i+1)*count], rtol=1e-02, atol=1e-02).all():
+                error_count += 1
+        if error_count > 0:
+            print("Compressed gather failed")
+        else:
+            print("Compressed gather succeeded")
+    cclo_inst.allgather(0, op_buf[local_rank*count:(local_rank+1)*count], res_buf, count, compress_dtype=np.dtype('float16'))
+    if not np.isclose(op_buf.data.astype(np.float16).astype(np.float32), res_buf.data, rtol=1e-02, atol=1e-02).all():
+        print("Compressed allgather failed")
+    else:
+        print("Compressed allgather succeeded")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Tests for ACCL (emulation mode)')
     parser.add_argument('--nruns',      type=int,            default=1,     help='How many times to run each test')
@@ -338,14 +398,14 @@ if __name__ == "__main__":
     parser.add_argument('--reduce_scatter', action='store_true', default=False, help='Run reduce-scatter test')
     parser.add_argument('--allreduce',  action='store_true', default=False, help='Run all-reduce test')
     parser.add_argument('--multicomm',  action='store_true', default=False, help='Run multi-communicator test')
-    parser.add_argument('--multicomm_allgather',  action='store_true', default=False, help='Run multi-communicator test with allgather')
     parser.add_argument('--reduce_func', type=int,           default=0,     help='Function index for reduce')
-    parser.add_argument('--compression', action='store_true', default=False, help='Run test using compression')
+    parser.add_argument('--arg_compression', action='store_true', default=False, help='Run test using for one of the arguments')
+    parser.add_argument('--eth_compression', action='store_true', default=False, help='Run test using compression of transmitted data')
     parser.add_argument('--fp16', action='store_true', default=False, help='Run test using fp16')
     parser.add_argument('--fp64', action='store_true', default=False, help='Run test using fp64')
     parser.add_argument('--int32', action='store_true', default=False, help='Run test using int32')
     parser.add_argument('--int64', action='store_true', default=False, help='Run test using int64')
-    parser.add_argument('--tcp',        action='store_true', default=False, help='Run test using TCP')
+    parser.add_argument('--tcp', action='store_true', default=False, help='Run test using TCP')
 
     args = parser.parse_args()
     args.rxbuf_size = 1024*args.rxbuf_size #convert from KB to B
@@ -363,7 +423,7 @@ if __name__ == "__main__":
         args.reduce_scatter = True
         args.allreduce = True
         args.multicomm = True
-        args.multicomm_allgather = True
+        args.eth_compression = True
 
     # get communicator size and our local rank in it
     comm = MPI.COMM_WORLD
@@ -397,7 +457,7 @@ if __name__ == "__main__":
         types = [[np.int32]]
     if args.int64:
         types = [[np.int64]]
-    if args.compression:
+    if args.arg_compression:
         types = [[np.float32, np.float16]]
 
     try:
@@ -449,8 +509,10 @@ if __name__ == "__main__":
                 if args.multicomm:
                     test_multicomm(cclo_inst, world_size, local_rank, args.count)
                     comm.barrier()
-                if args.multicomm_allgather:
                     test_multicomm_allgather(cclo_inst, world_size, local_rank, args.count)
+                    comm.barrier()
+                if args.eth_compression:
+                    test_eth_compression(cclo_inst, world_size, local_rank, args.count)
                     comm.barrier()
 
     except KeyboardInterrupt:
