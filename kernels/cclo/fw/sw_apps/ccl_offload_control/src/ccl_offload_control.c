@@ -346,6 +346,8 @@ int send(
     unsigned int compression,
     unsigned int stream
 ){
+    //if ETH_COMPRESSED is set, also set RES_COMPRESSED
+    compression |= (compression & ETH_COMPRESSED) >> 1;
     //TODO: when doing a one-sided send to a remote stream, check:
     //dst_tag is > 8 (for correct routing on remote side)
     //destination compression == Ethernet compression
@@ -369,6 +371,8 @@ int recv(	unsigned int src_rank,
             unsigned int arcfg_offset,
             unsigned int src_tag,
             unsigned int compression){
+    //if ETH_COMPRESSED is set, also set OP1_COMPRESSED
+    compression |= (compression & ETH_COMPRESSED) >> 2;
     return move(
         MOVE_NONE,
         MOVE_ON_RECV, 
@@ -452,6 +456,11 @@ int fused_recv_reduce(
     {
     unsigned int err = NO_ERROR;
 
+    //figure out compression
+    //if ETH_COMPRESSED flag is set, then we need to set OP1_COMPRESSED (for the recv)
+    //keep OP0_COMPRESSED and RES_COMPRESSED as-is
+    compression = compression | ((compression & ETH_COMPRESSED) >> 2);
+
     err |= move(
         (stream & OP0_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE, 
         MOVE_ON_RECV,
@@ -484,6 +493,12 @@ int fused_recv_reduce_send(
     {
 
     unsigned int err = NO_ERROR;
+
+    //figure out compression
+    //if ETH_COMPRESSED flag is set, then we need to set OP1_COMPRESSED (for the recv)
+    //and RES_COMPRESSED (for the send)
+    //keep OP0_COMPRESSED as-is
+    compression = (compression & OP0_COMPRESSED) | ((compression & ETH_COMPRESSED) >> 1) | ((compression & ETH_COMPRESSED) >> 2);
 
     err |= move(
         (stream & OP0_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE, 
@@ -532,7 +547,7 @@ int broadcast(  unsigned int count,
         if(src_rank == world.local_rank){
             //on the root we only care about ETH_COMPRESSED and OP0_COMPRESSED
             //so replace RES_COMPRESSED with ETH_COMPRESSED
-            compression = compression | (compression >> 1);
+            compression = compression | ((compression & ETH_COMPRESSED) >> 1);
 
             //send a segment to each of the ranks (excluding self)
             for(int i=0; i < world.size; i++){
@@ -551,9 +566,9 @@ int broadcast(  unsigned int count,
                 err |= end_move();
             }
         } else{
-            //on non-root odes we only care about ETH_COMPRESSED and RES_COMPRESSED
-            //so replace OP0_COMPRESSED with the value of ETH_COMPRESSED
-            compression = compression | (compression >> 3);
+            //on non-root nodes we only care about ETH_COMPRESSED and RES_COMPRESSED
+            //so replace OP1_COMPRESSED with the value of ETH_COMPRESSED
+            compression = compression | ((compression & ETH_COMPRESSED) >> 2);
             err |= move(
                 MOVE_NONE,
                 MOVE_ON_RECV, 
@@ -590,7 +605,7 @@ int scatter(unsigned int count,
     if(src_rank == world.local_rank){
         //on the root we only care about ETH_COMPRESSED and OP0_COMPRESSED
         //so replace RES_COMPRESSED with ETH_COMPRESSED
-        compression = compression | (compression >> 1);
+        compression = compression | ((compression & ETH_COMPRESSED) >> 1);
 
         for(int i=0; i < world.size; i++){
             start_move(
@@ -610,7 +625,7 @@ int scatter(unsigned int count,
     } else{
         //on non-root odes we only care about ETH_COMPRESSED and RES_COMPRESSED
         //so replace OP0_COMPRESSED with the value of ETH_COMPRESSED
-        compression = compression | (compression >> 3);
+        compression = compression | ((compression & ETH_COMPRESSED) >> 2);
         err |= move(
             MOVE_NONE,
             MOVE_ON_RECV, 
@@ -650,7 +665,9 @@ int gather( unsigned int count,
 
         //we need to compute correct compression schemes from the input compression flags
         //copy to self: keep all flags except ETH_COMPRESSED, which should be reset for safety
-        //recv: keep RES_COMPRESSED and ETH_COMPRESSED, reset OP0_COMPRESSED
+        //recv: keep RES_COMPRESSED and replace OP0_COMPRESSED with value of ETH_COMPRESSED
+        unsigned int copy_compression = compression & ~ETH_COMPRESSED;
+        unsigned int recv_compression = compression | ((compression & ETH_COMPRESSED) >> 2);
 
         //initialize destination address in offload core
         start_move(
@@ -671,7 +688,7 @@ int gather( unsigned int count,
                 (i==0) ? MOVE_IMMEDIATE : MOVE_NONE,
                 (i==0) ? MOVE_NONE : MOVE_ON_RECV, 
                 MOVE_STRIDE,
-                NO_COMPRESSION, RES_LOCAL, NO_STREAM,
+                (i==0) ? copy_compression : recv_compression, RES_LOCAL, NO_STREAM,
                 count,
                 comm_offset, arcfg_offset,
                 src_buf_addr, 0, 0, 0, 0, count*((i==0) ? curr_pos : ((curr_pos==(world.size-1)) ? (world.size-1) : -1)),
@@ -690,13 +707,15 @@ int gather( unsigned int count,
         //we need to compute correct compression schemes from the input compression flags
         //send: keep all flags except RES_COMPRESSED, which should be reset for safety
         //relay: keep ETH_COMPRESSED, reset everything else
+        unsigned int send_compression = compression | ((compression & ETH_COMPRESSED) >> 1);
+        unsigned int relay_compression = ((compression & ETH_COMPRESSED) >> 1) | ((compression & ETH_COMPRESSED) >> 2);
 
         //first send our own data
         start_move(
             MOVE_IMMEDIATE, 
             MOVE_NONE,
             MOVE_IMMEDIATE, 
-            NO_COMPRESSION, RES_REMOTE, NO_STREAM,
+            send_compression, RES_REMOTE, NO_STREAM,
             count, 
             comm_offset, arcfg_offset, 
             src_buf_addr, 0, 0, 0, 0, 0,
@@ -709,7 +728,7 @@ int gather( unsigned int count,
                 MOVE_NONE, 
                 MOVE_ON_RECV,
                 MOVE_IMMEDIATE, 
-                NO_COMPRESSION, RES_REMOTE, NO_STREAM,
+                relay_compression, RES_REMOTE, NO_STREAM,
                 count, 
                 comm_offset, arcfg_offset, 
                 0, 0, 0, 0, 0, 0,
@@ -748,7 +767,7 @@ int allgather(
     //prime the address slot for the destination, so we can subsequently stride against it
     start_move(
         MOVE_NONE, MOVE_NONE, MOVE_IMMEDIATE, 
-        compression, RES_LOCAL, 0,
+        NO_COMPRESSION, RES_LOCAL, 0,
         0,
         0, arcfg_offset, 
         src_buf_addr, 0, dst_buf_addr, 0, 0, 0,
@@ -766,9 +785,10 @@ int allgather(
     );
 
     //send to next in ring
+    //ETH_COMPRESSED flag overwrites RES_COMPRESSED
     start_move(
         MOVE_IMMEDIATE, MOVE_NONE, MOVE_IMMEDIATE, 
-        compression & ~(RES_COMPRESSED), RES_REMOTE, 0,
+        compression | ((compression & ETH_COMPRESSED) >> 1), RES_REMOTE, 0,
         count, 
         comm_offset, arcfg_offset, 
         src_buf_addr, 0, 0, 0, 0, 0,
@@ -789,9 +809,10 @@ int allgather(
         //TODO: avoid this; we either need to solve the RAW dependency in hardware (the generic approach),
         //or a way to reuse a rx buffer (solves this problem in particular but does not extend to e.g. reduces)
         //e.g. MOVE_ON_RECV_KEEP which would keep the RX buffer in the pending state
+        // on compression: ETH_COMPRESSED flag overwrites OP1_COMPRESSED
         err |= move(
             MOVE_NONE, MOVE_ON_RECV, MOVE_STRIDE, 
-            compression & ~(OP0_COMPRESSED), RES_LOCAL, 0,
+            compression | ((compression & ETH_COMPRESSED) >> 2), RES_LOCAL, 0,
             count, 
             comm_offset, arcfg_offset, 
             0, 0, 0, 0, 0, rel_stride,
@@ -802,16 +823,19 @@ int allgather(
             //first prime the address 
             start_move(
                 MOVE_NONE, MOVE_IMMEDIATE, MOVE_NONE, 
-                relay_compression, RES_REMOTE, 0,
+                NO_COMPRESSION, RES_REMOTE, 0,
                 0, 
                 comm_offset, arcfg_offset, 
                 0, dst_buf_addr, 0, 0, 0, 0,
                 0, 0, next_in_ring, TAG_ANY
             );
             //send
+            //here we're copying from the result buffer back into the network, so
+            //RES_COMPRESSED flag overwrites OP0_COMPRESSED, and 
+            //ETH_COMPRESSED flag overwrites RES_COMPRESSED
             start_move(
                 MOVE_NONE, MOVE_STRIDE, MOVE_IMMEDIATE, 
-                relay_compression, RES_REMOTE, 0,
+                ((compression & RES_COMPRESSED) >> 2) | ((compression & ETH_COMPRESSED) >> 1), RES_REMOTE, 0,
                 count, 
                 comm_offset, arcfg_offset, 
                 0, 0, 0, 0, abs_stride, 0,
@@ -843,7 +867,7 @@ int reduce( unsigned int count,
     unsigned int prev_in_ring = (world.local_rank + world.size-1) % world.size;
 
     //determine if we're sending or receiving
-    if( prev_in_ring == root_rank){ 
+    if( prev_in_ring == root_rank){
         //non root ranks immediately after the root sends
         return send(next_in_ring, count, src_addr, comm_offset, arcfg_offset, TAG_ANY, compression, stream);
     }else if (world.local_rank != root_rank){

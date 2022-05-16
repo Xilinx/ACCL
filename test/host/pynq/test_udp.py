@@ -18,9 +18,8 @@
 import sys
 import numpy as np
 import time
-sys.path.append('../../../driver/pynq/')
+from pyaccl.accl import accl, ACCLReduceFunctions, ACCLStreamFlags
 sys.path.append('../../hardware/xup_vitis_network_example/Notebooks/')
-from accl import accl, ACCLReduceFunctions, ACCLStreamFlags
 from vnx_utils import *
 import pynq
 import argparse
