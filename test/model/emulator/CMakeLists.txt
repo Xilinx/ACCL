@@ -20,6 +20,8 @@ project(accl_emulation)
 
 set(CMAKE_CXX_STANDARD 17)
 
+# Consider using cmake_path from CMake 3.20 (2021) for better error messages:
+# https://cmake.org/cmake/help/latest/command/cmake_path.html
 set(ACCL_REPO_ROOT ${CMAKE_CURRENT_LIST_DIR}/../../../)
 set(HLSLIB_INCLUDE ${ACCL_REPO_ROOT}/hlslib/include/hlslib/xilinx/)
 set(CCLO_HLS_ROOT ${ACCL_REPO_ROOT}/kernels/cclo/hls)
@@ -36,6 +38,10 @@ set(LOG_DIR ${ACCL_REPO_ROOT}/test/log)
 
 find_package(MPI REQUIRED)
 find_package(jsoncpp REQUIRED)
+
+if (NOT EXISTS ${HLSLIB_INCLUDE})
+  message(FATAL_ERROR "hlslib submodule not loaded! Run git submodule update --init --recursive in ${ACCL_REPO_ROOT}")
+endif (NOT EXISTS ${HLSLIB_INCLUDE})
 
 if (NOT EXISTS $ENV{XILINX_HLS})
   message(FATAL_ERROR "Xilinx HLS not loaded!")
