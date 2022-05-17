@@ -13,7 +13,7 @@ sudo apt update
 sudo apt install python3 cmake libzmqpp-dev libjsoncpp-dev libtclap-dev libopenmpi-dev xvfb
 pip3 install numpy pynq zmq mpi4py
 ```
-Optionally, install the Xiling Run-Time libraries (XRT)
+Optionally, install the Xilinx Run-Time libraries (XRT)
 ```
 wget https://www.xilinx.com/bin/public/openDownload?filename=xrt_202120.2.12.427_20.04-amd64-xrt.deb
 sudo dpkg -i xrt_202120.2.12.427_20.04-amd64-xrt.deb
