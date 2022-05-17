@@ -116,8 +116,8 @@ CCLO *ACCL::nop(bool run_async, std::vector<CCLO *> waitfor) {
 
 CCLO *ACCL::send(unsigned int comm_id, BaseBuffer &srcbuf, unsigned int count,
                  unsigned int dst, unsigned int tag, bool from_fpga,
-                 streamFlags stream_flags, bool run_async,
-                 std::vector<CCLO *> waitfor) {
+                 streamFlags stream_flags, dataType compress_dtype,
+                 bool run_async, std::vector<CCLO *> waitfor) {
   CCLO::Options options = CCLO::Options();
   if (from_fpga == false) {
     srcbuf.sync_to_device();
@@ -129,6 +129,7 @@ CCLO *ACCL::send(unsigned int comm_id, BaseBuffer &srcbuf, unsigned int count,
   options.root_src_dst = dst;
   options.tag = tag;
   options.stream_flags = stream_flags;
+  options.compress_dtype = compress_dtype;
   options.waitfor = waitfor;
   CCLO *handle = call_async(options);
 
@@ -144,8 +145,8 @@ CCLO *ACCL::send(unsigned int comm_id, BaseBuffer &srcbuf, unsigned int count,
 
 CCLO *ACCL::recv(unsigned int comm_id, BaseBuffer &dstbuf, unsigned int count,
                  unsigned int src, unsigned int tag, bool to_fpga,
-                 streamFlags stream_flags, bool run_async,
-                 std::vector<CCLO *> waitfor) {
+                 streamFlags stream_flags, dataType compress_dtype,
+                 bool run_async, std::vector<CCLO *> waitfor) {
   CCLO::Options options = CCLO::Options();
 
   if (to_fpga == false && run_async == true) {
@@ -161,6 +162,7 @@ CCLO *ACCL::recv(unsigned int comm_id, BaseBuffer &dstbuf, unsigned int count,
   options.root_src_dst = src;
   options.tag = tag;
   options.stream_flags = stream_flags;
+  options.compress_dtype = compress_dtype;
   options.waitfor = waitfor;
   CCLO *handle = call_async(options);
 
@@ -295,7 +297,8 @@ CCLO *ACCL::external_stream_kernel(BaseBuffer &srcbuf, BaseBuffer &dstbuf,
 
 CCLO *ACCL::bcast(unsigned int comm_id, BaseBuffer &buf, unsigned int count,
                   unsigned int root, bool from_fpga, bool to_fpga,
-                  bool run_async, std::vector<CCLO *> waitfor) {
+                  dataType compress_dtype, bool run_async,
+                  std::vector<CCLO *> waitfor) {
   CCLO::Options options = CCLO::Options();
 
   const Communicator &communicator = communicators[comm_id];
@@ -322,6 +325,7 @@ CCLO *ACCL::bcast(unsigned int comm_id, BaseBuffer &buf, unsigned int count,
   options.addr_0 = &buf;
   options.count = count;
   options.root_src_dst = root;
+  options.compress_dtype = compress_dtype;
   options.waitfor = waitfor;
   CCLO *handle = call_async(options);
 
@@ -340,8 +344,8 @@ CCLO *ACCL::bcast(unsigned int comm_id, BaseBuffer &buf, unsigned int count,
 
 CCLO *ACCL::scatter(unsigned int comm_id, BaseBuffer &sendbuf,
                     BaseBuffer &recvbuf, unsigned int count, unsigned int root,
-                    bool from_fpga, bool to_fpga, bool run_async,
-                    std::vector<CCLO *> waitfor) {
+                    bool from_fpga, bool to_fpga, dataType compress_dtype,
+                    bool run_async, std::vector<CCLO *> waitfor) {
   CCLO::Options options = CCLO::Options();
 
   const Communicator &communicator = communicators[comm_id];
@@ -389,8 +393,8 @@ CCLO *ACCL::scatter(unsigned int comm_id, BaseBuffer &sendbuf,
 
 CCLO *ACCL::gather(unsigned int comm_id, BaseBuffer &sendbuf,
                    BaseBuffer &recvbuf, unsigned int count, unsigned int root,
-                   bool from_fpga, bool to_fpga, bool run_async,
-                   std::vector<CCLO *> waitfor) {
+                   bool from_fpga, bool to_fpga, dataType compress_dtype,
+                   bool run_async, std::vector<CCLO *> waitfor) {
   CCLO::Options options = CCLO::Options();
 
   const Communicator &communicator = communicators[comm_id];
@@ -428,6 +432,7 @@ CCLO *ACCL::gather(unsigned int comm_id, BaseBuffer &sendbuf,
   options.addr_2 = &recvbuf;
   options.count = count;
   options.root_src_dst = root;
+  options.compress_dtype = compress_dtype;
   options.waitfor = waitfor;
   CCLO *handle = call_async(options);
 
@@ -447,7 +452,7 @@ CCLO *ACCL::gather(unsigned int comm_id, BaseBuffer &sendbuf,
 
 CCLO *ACCL::allgather(unsigned int comm_id, BaseBuffer &sendbuf,
                       BaseBuffer &recvbuf, unsigned int count, bool from_fpga,
-                      bool to_fpga, bool run_async,
+                      bool to_fpga, dataType compress_dtype, bool run_async,
                       std::vector<CCLO *> waitfor) {
   CCLO::Options options = CCLO::Options();
 
@@ -483,6 +488,7 @@ CCLO *ACCL::allgather(unsigned int comm_id, BaseBuffer &sendbuf,
   options.addr_0 = &sendbuf;
   options.addr_2 = &recvbuf;
   options.count = count;
+  options.compress_dtype = compress_dtype;
   options.waitfor = waitfor;
   CCLO *handle = call_async(options);
 
@@ -503,7 +509,8 @@ CCLO *ACCL::allgather(unsigned int comm_id, BaseBuffer &sendbuf,
 CCLO *ACCL::reduce(unsigned int comm_id, BaseBuffer &sendbuf,
                    BaseBuffer &recvbuf, unsigned int count, unsigned int root,
                    reduceFunction func, bool from_fpga, bool to_fpga,
-                   bool run_async, std::vector<CCLO *> waitfor) {
+                   dataType compress_dtype, bool run_async,
+                   std::vector<CCLO *> waitfor) {
   CCLO::Options options = CCLO::Options();
 
   const Communicator &communicator = communicators[comm_id];
@@ -533,6 +540,7 @@ CCLO *ACCL::reduce(unsigned int comm_id, BaseBuffer &sendbuf,
   options.count = count;
   options.reduce_function = func;
   options.root_src_dst = root;
+  options.compress_dtype = compress_dtype;
   options.waitfor = waitfor;
   CCLO *handle = call_async(options);
 
@@ -553,7 +561,8 @@ CCLO *ACCL::reduce(unsigned int comm_id, BaseBuffer &sendbuf,
 CCLO *ACCL::allreduce(unsigned int comm_id, BaseBuffer &sendbuf,
                       BaseBuffer &recvbuf, unsigned int count,
                       reduceFunction func, bool from_fpga, bool to_fpga,
-                      bool run_async, std::vector<CCLO *> waitfor) {
+                      dataType compress_dtype, bool run_async,
+                      std::vector<CCLO *> waitfor) {
   CCLO::Options options = CCLO::Options();
 
   const Communicator &communicator = communicators[comm_id];
@@ -580,6 +589,7 @@ CCLO *ACCL::allreduce(unsigned int comm_id, BaseBuffer &sendbuf,
   options.addr_2 = &recvbuf;
   options.count = count;
   options.reduce_function = func;
+  options.compress_dtype = compress_dtype;
   options.waitfor = waitfor;
   CCLO *handle = call_async(options);
 
@@ -600,7 +610,8 @@ CCLO *ACCL::allreduce(unsigned int comm_id, BaseBuffer &sendbuf,
 CCLO *ACCL::reduce_scatter(unsigned int comm_id, BaseBuffer &sendbuf,
                            BaseBuffer &recvbuf, unsigned int count,
                            reduceFunction func, bool from_fpga, bool to_fpga,
-                           bool run_async, std::vector<CCLO *> waitfor) {
+                           dataType compress_dtype, bool run_async,
+                           std::vector<CCLO *> waitfor) {
   CCLO::Options options = CCLO::Options();
 
   const Communicator &communicator = communicators[comm_id];
@@ -627,6 +638,7 @@ CCLO *ACCL::reduce_scatter(unsigned int comm_id, BaseBuffer &sendbuf,
   options.addr_2 = &recvbuf;
   options.count = count;
   options.reduce_function = func;
+  options.compress_dtype = compress_dtype;
   options.waitfor = waitfor;
   CCLO *handle = call_async(options);
 
