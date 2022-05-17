@@ -351,6 +351,12 @@ def test_eth_compression(cclo_inst, world_size, local_rank, count):
         else:
             print("Compressed reduce succeeded")
 
+    cclo_inst.allreduce(0, op_buf, res_buf, count, ACCLReduceFunctions.SUM, compress_dtype=np.dtype('float16'))
+    if not np.isclose(res_buf.data, world_size*op_buf.data, rtol=1e-02, atol=1e-02).all():
+        print("Compressed allreduce failed")
+    else:
+        print("Compressed allreduce succeeded")
+
     # re-generate buffers for asymmetric size collectives - (reduce-)scatter, (all-)gather
     op_buf, _, res_buf = get_buffers(count*world_size, np.float32, np.float32, np.float32, cclo_inst)
     # paint source buffer
@@ -376,6 +382,13 @@ def test_eth_compression(cclo_inst, world_size, local_rank, count):
         print("Compressed allgather failed")
     else:
         print("Compressed allgather succeeded")
+
+    cclo_inst.reduce_scatter(0, op_buf, res_buf, count, ACCLReduceFunctions.SUM)
+    expected_res = world_size*op_buf.data[local_rank*count:(local_rank+1)*count]
+    if not np.isclose(expected_res.astype(np.float16).astype(np.float32), res_buf.data[0:count], rtol=1e-02, atol=1e-02).all():
+        print("Compressed reduce-scatter failed")
+    else:
+        print("Compressed reduce-scatter succeeded")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Tests for ACCL (emulation mode)')
