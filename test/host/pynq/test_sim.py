@@ -383,7 +383,7 @@ def test_eth_compression(cclo_inst, world_size, local_rank, count):
     else:
         print("Compressed allgather succeeded")
 
-    cclo_inst.reduce_scatter(0, op_buf, res_buf, count, ACCLReduceFunctions.SUM)
+    cclo_inst.reduce_scatter(0, op_buf, res_buf, count, ACCLReduceFunctions.SUM, compress_dtype=np.dtype('float16'))
     expected_res = world_size*op_buf.data[local_rank*count:(local_rank+1)*count]
     if not np.isclose(expected_res.astype(np.float16).astype(np.float32), res_buf.data[0:count], rtol=1e-02, atol=1e-02).all():
         print("Compressed reduce-scatter failed")
