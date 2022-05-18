@@ -28,7 +28,7 @@ if (NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 endif()
 
-# Consider switching to PROJECT_IS_TOP_LEVEL from CMake 3.21
+# Consider switching to PROJECT_IS_TOP_LEVEL from CMake 3.21 (2021)
 # (https://cmake.org/cmake/help/latest/variable/PROJECT_IS_TOP_LEVEL.html)
 get_directory_property(HAS_PARENT PARENT_DIRECTORY)
 
