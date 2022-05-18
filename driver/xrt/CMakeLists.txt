@@ -40,6 +40,7 @@ set(ACCL_SOURCES
     ${ACCL_SOURCE_PATH}/accl.cpp
     ${ACCL_SOURCE_PATH}/common.cpp
     ${ACCL_SOURCE_PATH}/communicator.cpp
+    ${ACCL_SOURCE_PATH}/constants.cpp
     ${ACCL_SOURCE_PATH}/simdevice.cpp
     ${ACCL_SOURCE_PATH}/simbuffer.cpp
     ${ACCL_SOURCE_PATH}/fpgadevice.cpp

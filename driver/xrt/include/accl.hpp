@@ -170,12 +170,14 @@ public:
              unsigned int dst, unsigned int tag = TAG_ANY,
              bool from_fpga = false,
              streamFlags stream_flags = streamFlags::NO_STREAM,
-             bool run_async = false, std::vector<CCLO *> waitfor = {});
+             dataType compress_dtype = dataType::none, bool run_async = false,
+             std::vector<CCLO *> waitfor = {});
 
   CCLO *recv(unsigned int comm_id, BaseBuffer &dstbuf, unsigned int count,
              unsigned int src, unsigned int tag = TAG_ANY, bool to_fpga = false,
              streamFlags stream_flags = streamFlags::NO_STREAM,
-             bool run_async = false, std::vector<CCLO *> waitfor = {});
+             dataType compress_dtype = dataType::none, bool run_async = false,
+             std::vector<CCLO *> waitfor = {});
 
   CCLO *copy(BaseBuffer &srcbuf, BaseBuffer &dstbuf, unsigned int count,
              bool from_fpga = false, bool to_fpga = false,
@@ -194,37 +196,43 @@ public:
 
   CCLO *bcast(unsigned int comm_id, BaseBuffer &buf, unsigned int count,
               unsigned int root, bool from_fpga = false, bool to_fpga = false,
-              bool run_async = false, std::vector<CCLO *> waitfor = {});
+              dataType compress_dtype = dataType::none, bool run_async = false,
+              std::vector<CCLO *> waitfor = {});
 
   CCLO *scatter(unsigned int comm_id, BaseBuffer &sendbuf, BaseBuffer &recvbuf,
                 unsigned int count, unsigned int root, bool from_fpga = false,
-                bool to_fpga = false, bool run_async = false,
-                std::vector<CCLO *> waitfor = {});
+                bool to_fpga = false, dataType compress_dtype = dataType::none,
+                bool run_async = false, std::vector<CCLO *> waitfor = {});
 
   CCLO *gather(unsigned int comm_id, BaseBuffer &sendbuf, BaseBuffer &recvbuf,
                unsigned int count, unsigned int root, bool from_fpga = false,
-               bool to_fpga = false, bool run_async = false,
-               std::vector<CCLO *> waitfor = {});
+               bool to_fpga = false, dataType compress_dtype = dataType::none,
+               bool run_async = false, std::vector<CCLO *> waitfor = {});
 
   CCLO *allgather(unsigned int comm_id, BaseBuffer &sendbuf,
                   BaseBuffer &recvbuf, unsigned int count,
                   bool from_fpga = false, bool to_fpga = false,
+                  dataType compress_dtype = dataType::none,
                   bool run_async = false, std::vector<CCLO *> waitfor = {});
 
   CCLO *reduce(unsigned int comm_id, BaseBuffer &sendbuf, BaseBuffer &recvbuf,
                unsigned int count, unsigned int root, reduceFunction func,
                bool from_fpga = false, bool to_fpga = false,
-               bool run_async = false, std::vector<CCLO *> waitfor = {});
+               dataType compress_dtype = dataType::none, bool run_async = false,
+               std::vector<CCLO *> waitfor = {});
 
   CCLO *allreduce(unsigned int comm_id, BaseBuffer &sendbuf,
                   BaseBuffer &recvbuf, unsigned int count, reduceFunction func,
                   bool from_fpga = false, bool to_fpga = false,
+                  dataType compress_dtype = dataType::none,
                   bool run_async = false, std::vector<CCLO *> waitfor = {});
 
   CCLO *reduce_scatter(unsigned int comm_id, BaseBuffer &sendbuf,
                        BaseBuffer &recvbuf, unsigned int count,
                        reduceFunction func, bool from_fpga = false,
-                       bool to_fpga = false, bool run_async = false,
+                       bool to_fpga = false,
+                       dataType compress_dtype = dataType::none,
+                       bool run_async = false,
                        std::vector<CCLO *> waitfor = {});
 
   bool is_simulated() const { return sim_mode; }
@@ -323,9 +331,7 @@ public:
 
   std::string dump_communicator();
 
-  int devicemem() {
-    return _devicemem;
-  }
+  int devicemem() { return _devicemem; }
 
 private:
   CCLO *cclo{};

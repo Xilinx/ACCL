@@ -20,23 +20,18 @@
 #include "cclo.hpp"
 #include "constants.hpp"
 
-#include <arpa/inet.h>
 #include <iostream>
 #include <vector>
 
 /** @file communicator.hpp */
 
 namespace ACCL {
-
 struct rank_t {
   std::string ip;
   int port;
   int session_id;
   addr_t max_segment_size;
 };
-
-uint32_t ip_encode(std::string ip);
-std::string ip_decode(uint32_t ip);
 
 class Communicator {
 private:
@@ -51,13 +46,9 @@ public:
   Communicator(CCLO *cclo, const std::vector<rank_t> &ranks, unsigned int rank,
                addr_t *addr);
 
-  unsigned int local_rank() const {
-    return _rank;
-  }
+  unsigned int local_rank() const { return _rank; }
 
-  const std::vector<rank_t> *get_ranks() const {
-    return &_ranks;
-  }
+  const std::vector<rank_t> *get_ranks() const { return &_ranks; }
 
   std::string dump();
 };

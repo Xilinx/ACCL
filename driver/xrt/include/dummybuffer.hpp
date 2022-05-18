@@ -21,6 +21,8 @@
 #include "constants.hpp"
 #include <memory>
 
+/** @file dummybuffer.hpp */
+
 namespace ACCL {
 class DummyBuffer : public BaseBuffer {
 public:
