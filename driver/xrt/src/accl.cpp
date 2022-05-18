@@ -16,11 +16,13 @@
 #
 *******************************************************************************/
 
-#include "accl.hpp"
-#include "dummybuffer.hpp"
+#include <bitset>
 #include <cmath>
 #include <jsoncpp/json/json.h>
 #include <set>
+
+#include "accl.hpp"
+#include "dummybuffer.hpp"
 
 // 64 MB
 #define NETWORK_BUF_SIZE (64 << 20)
@@ -681,6 +683,7 @@ std::string ACCL::dump_rx_buffers(size_t nbufs) {
   nbufs = std::min(nbufs, rx_buffer_spares.size());
 
   addr_t address = rx_buffers_adr;
+  stream << "rx address: " << address << std::dec << std::endl;
   for (size_t i = 0; i < nbufs; ++i) {
     address += 4;
     std::string status;
@@ -861,11 +864,25 @@ void ACCL::check_return_value(const std::string function_name) {
   val_t retcode = get_retcode();
   if (retcode != 0) {
     std::stringstream stream;
-    stream << std::hex << cclo->get_base_addr();
-    throw std::runtime_error(
-        "CCLO @0x" + stream.str() + ": during " + function_name + " error " +
-        std::to_string(retcode) +
-        " occured. You should consider resetting mpi_offload.");
+    const std::bitset<error_code_bits> retcode_bitset{retcode};
+    stream << "CCLO @0x" << std::hex << cclo->get_base_addr() << std::dec
+           << ": during " << function_name
+           << " the following error(s) occured: ";
+
+    bool first = true;
+    for (size_t i = 0; i < retcode_bitset.size(); ++i) {
+      if (retcode_bitset[i]) {
+        if (first) {
+          first = false;
+        } else {
+          stream << ", ";
+        }
+        stream << error_code_to_string(static_cast<errorCode>(1 << i));
+      }
+    }
+
+    stream << " (" << retcode_bitset << ")";
+    throw std::runtime_error(stream.str());
   }
 }
 
@@ -1077,7 +1094,9 @@ void ACCL::configure_communicator(const std::vector<rank_t> &ranks,
 std::string ACCL::dump_communicator() {
   std::stringstream stream;
   for (size_t i = 0; i < communicators.size(); ++i) {
-    stream << "Communicator " << i << ":" << std::endl
+    stream << "Communicator " << i << " (0x" << std::hex
+           << communicators[i].communicators_addr() << std::dec << ")"
+           << ":" << std::endl
            << communicators[i].dump();
   }
 
