@@ -32,7 +32,7 @@
 
 #define ALIGNMENT 4096
 
-/** @file fpgabuffer.hpp */
+/** @file fpgabufferp2p.hpp */
 
 namespace ACCL {
 template <typename dtype> class FPGABufferP2P : public Buffer<dtype> {
