@@ -385,11 +385,11 @@ void test_bcast_compressed(ACCL::ACCL &accl, options_t &options, int root) {
   if (rank == root) {
     test_debug("Broadcasting data from " + std::to_string(rank) + "...",
                options);
-    accl.bcast(0, *op_buf, count, root, false, false, dataType::float16);
+    accl.bcast(0, *op_buf, count, root, false, false, dataType::float32);
   } else {
     test_debug("Getting broadcast data from " + std::to_string(root) + "...",
                options);
-    accl.bcast(0, *res_buf, count, root, false, false, dataType::float16);
+    accl.bcast(0, *res_buf, count, root, false, false, dataType::float32);
   }
 
   if (rank != root) {
