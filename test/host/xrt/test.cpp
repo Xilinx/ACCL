@@ -56,8 +56,13 @@ std::string prepend_process() {
   return "[process " + std::to_string(rank) + "] ";
 }
 
-static void random_array(float *data, size_t count) {
-  static std::uniform_real_distribution<float> distribution(-1000, 1000);
+template <typename T>
+bool is_close(T a, T b, double rtol = 1e-10, double atol = 1e-10) {
+  return abs(a - b) <= (atol + rtol * abs(b));
+}
+
+template <typename T> static void random_array(T *data, size_t count) {
+  static std::uniform_real_distribution<T> distribution(-1000, 1000);
   static std::mt19937 engine;
   static auto generator = std::bind(distribution, engine);
   for (size_t i = 0; i < count; ++i) {
@@ -65,8 +70,8 @@ static void random_array(float *data, size_t count) {
   }
 }
 
-std::unique_ptr<float> random_array(size_t count) {
-  std::unique_ptr<float> data(new float[count]);
+template <typename T> std::unique_ptr<T> random_array(size_t count) {
+  std::unique_ptr<T> data(new T[count]);
   random_array(data.get(), count);
   return data;
 }
@@ -256,9 +261,62 @@ void test_sendrcv(ACCL::ACCL &accl, options_t &options) {
 
   int errors = 0;
   for (unsigned int i = 0; i < count; ++i) {
-    float ref = (*res_buf)[i];
-    float res = (*op_buf)[i];
+    float res = (*res_buf)[i];
+    float ref = (*op_buf)[i];
     if (res != ref) {
+      std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
+                       std::to_string(res) + " != " + std::to_string(ref) + ")"
+                << std::endl;
+      errors += 1;
+    }
+  }
+
+  if (errors > 0) {
+    std::cout << std::to_string(errors) + " errors!" << std::endl;
+    failed_tests++;
+  } else {
+    std::cout << "Test is successful!" << std::endl;
+  }
+}
+
+void test_sendrcv_compressed(ACCL::ACCL &accl, options_t &options) {
+  std::cout << "Start send recv compression test..." << std::endl;
+  unsigned int count = options.count;
+  auto op_buf = accl.create_buffer<double>(count, dataType::float64);
+  auto res_buf = accl.create_buffer<double>(count, dataType::float64);
+  random_array(op_buf->buffer(), count);
+  int next_rank = (rank + 1) % size;
+  int prev_rank = (rank + size - 1) % size;
+
+  test_debug("Sending data on " + std::to_string(rank) + " to " +
+                 std::to_string(next_rank) + "...",
+             options);
+  accl.send(0, *op_buf, count, next_rank, 0, TAG_ANY, streamFlags::NO_STREAM,
+            dataType::float32);
+
+  test_debug("Receiving data on " + std::to_string(rank) + " from " +
+                 std::to_string(prev_rank) + "...",
+             options);
+  accl.recv(0, *res_buf, count, prev_rank, 0, TAG_ANY, streamFlags::NO_STREAM,
+            dataType::float32);
+
+  test_debug("Sending data on " + std::to_string(rank) + " to " +
+                 std::to_string(prev_rank) + "...",
+             options);
+  accl.send(0, *res_buf, count, prev_rank, 1, TAG_ANY, streamFlags::NO_STREAM,
+            dataType::float32);
+
+  test_debug("Receiving data on " + std::to_string(rank) + " from " +
+                 std::to_string(next_rank) + "...",
+             options);
+  accl.recv(0, *res_buf, count, next_rank, 1, TAG_ANY, streamFlags::NO_STREAM,
+            dataType::float32);
+
+  int errors = 0;
+  for (unsigned int i = 0; i < count; ++i) {
+    double res = (*res_buf)[i];
+    double ref = (double)((float)(*op_buf)[i]);
+    if (!is_close(res, ref)) {
       std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
                        std::to_string(res) + " != " + std::to_string(ref) + ")"
                 << std::endl;
@@ -315,6 +373,48 @@ void test_bcast(ACCL::ACCL &accl, options_t &options, int root) {
   }
 }
 
+void test_bcast_compressed(ACCL::ACCL &accl, options_t &options, int root) {
+  std::cout << "Start bcast compression test with root " +
+                   std::to_string(root) + " ..."
+            << std::endl;
+  unsigned int count = options.count;
+  auto op_buf = accl.create_buffer<double>(count, dataType::float64);
+  auto res_buf = accl.create_buffer<double>(count, dataType::float64);
+  random_array(op_buf->buffer(), count);
+
+  if (rank == root) {
+    test_debug("Broadcasting data from " + std::to_string(rank) + "...",
+               options);
+    accl.bcast(0, *op_buf, count, root, false, false, dataType::float16);
+  } else {
+    test_debug("Getting broadcast data from " + std::to_string(root) + "...",
+               options);
+    accl.bcast(0, *res_buf, count, root, false, false, dataType::float16);
+  }
+
+  if (rank != root) {
+    int errors = 0;
+    for (unsigned int i = 0; i < count; ++i) {
+      double res = (*res_buf)[i];
+      double ref = (double)((float)(*op_buf)[i]);
+      if (!is_close(res, ref)) {
+        std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
+                         std::to_string(res) + " != " + std::to_string(ref) +
+                         ")"
+                  << std::endl;
+        errors += 1;
+      }
+    }
+
+    if (errors > 0) {
+      std::cout << std::to_string(errors) + " errors!" << std::endl;
+      failed_tests++;
+    } else {
+      std::cout << "Test is successful!" << std::endl;
+    }
+  }
+}
+
 void test_scatter(ACCL::ACCL &accl, options_t &options, int root) {
   std::cout << "Start scatter test with root " + std::to_string(root) + " ..."
             << std::endl;
@@ -346,11 +446,44 @@ void test_scatter(ACCL::ACCL &accl, options_t &options, int root) {
   }
 }
 
+void test_scatter_compressed(ACCL::ACCL &accl, options_t &options, int root) {
+  std::cout << "Start scatter compression test with root " +
+                   std::to_string(root) + " ..."
+            << std::endl;
+  unsigned int count = options.count;
+  auto op_buf = accl.create_buffer<double>(count * size, dataType::float64);
+  auto res_buf = accl.create_buffer<double>(count, dataType::float64);
+  random_array(op_buf->buffer(), count * size);
+
+  test_debug("Scatter data from " + std::to_string(rank) + "...", options);
+  accl.scatter(0, *op_buf, *res_buf, count, root, false, false,
+               dataType::float32);
+
+  int errors = 0;
+  for (unsigned int i = 0; i < count; ++i) {
+    double res = (*res_buf)[i];
+    double ref = (double)((float)(*op_buf)[i + rank * count]);
+    if (!is_close(res, ref)) {
+      std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
+                       std::to_string(res) + " != " + std::to_string(ref) + ")"
+                << std::endl;
+      errors += 1;
+    }
+  }
+
+  if (errors > 0) {
+    std::cout << std::to_string(errors) + " errors!" << std::endl;
+    failed_tests++;
+  } else {
+    std::cout << "Test is successful!" << std::endl;
+  }
+}
+
 void test_gather(ACCL::ACCL &accl, options_t &options, int root) {
   std::cout << "Start gather test with root " + std::to_string(root) + "..."
             << std::endl;
   unsigned int count = options.count;
-  std::unique_ptr<float> host_op_buf = random_array(count * size);
+  std::unique_ptr<float> host_op_buf = random_array<float>(count * size);
   auto op_buf = accl.create_buffer(host_op_buf.get() + count * rank, count,
                                    dataType::float32);
   std::unique_ptr<ACCL::Buffer<float>> res_buf;
@@ -386,10 +519,52 @@ void test_gather(ACCL::ACCL &accl, options_t &options, int root) {
   }
 }
 
+void test_gather_compressed(ACCL::ACCL &accl, options_t &options, int root) {
+  std::cout << "Start gather compression test with root " +
+                   std::to_string(root) + "..."
+            << std::endl;
+  unsigned int count = options.count;
+  std::unique_ptr<double> host_op_buf = random_array<double>(count * size);
+  auto op_buf = accl.create_buffer(host_op_buf.get() + count * rank, count,
+                                   dataType::float64);
+  std::unique_ptr<ACCL::Buffer<double>> res_buf;
+  if (rank == root) {
+    res_buf = accl.create_buffer<double>(count * size, dataType::float64);
+  } else {
+    res_buf = std::unique_ptr<ACCL::Buffer<double>>(nullptr);
+  }
+
+  test_debug("Gather data from " + std::to_string(rank) + "...", options);
+  accl.gather(0, *op_buf, *res_buf, count, root, false, false,
+              dataType::float32);
+
+  if (rank == root) {
+    int errors = 0;
+    for (unsigned int i = 0; i < count * size; ++i) {
+      double res = (*res_buf)[i];
+      double ref = (double)((float)host_op_buf.get()[i]);
+      if (!is_close(res, ref)) {
+        std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
+                         std::to_string(res) + " != " + std::to_string(ref) +
+                         ")"
+                  << std::endl;
+        errors += 1;
+      }
+    }
+
+    if (errors > 0) {
+      std::cout << std::to_string(errors) + " errors!" << std::endl;
+      failed_tests++;
+    } else {
+      std::cout << "Test is successful!" << std::endl;
+    }
+  }
+}
+
 void test_allgather(ACCL::ACCL &accl, options_t &options) {
   std::cout << "Start allgather test..." << std::endl;
   unsigned int count = options.count;
-  std::unique_ptr<float> host_op_buf = random_array(count * size);
+  std::unique_ptr<float> host_op_buf = random_array<float>(count * size);
   auto op_buf = accl.create_buffer(host_op_buf.get() + count * rank, count,
                                    dataType::float32);
   auto res_buf = accl.create_buffer<float>(count * size, dataType::float32);
@@ -401,6 +576,37 @@ void test_allgather(ACCL::ACCL &accl, options_t &options) {
   for (unsigned int i = 0; i < count * size; ++i) {
     float res = (*res_buf)[i];
     float ref = host_op_buf.get()[i];
+    if (res != ref) {
+      std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
+                       std::to_string(res) + " != " + std::to_string(ref) + ")"
+                << std::endl;
+      errors += 1;
+    }
+  }
+
+  if (errors > 0) {
+    std::cout << std::to_string(errors) + " errors!" << std::endl;
+    failed_tests++;
+  } else {
+    std::cout << "Test is successful!" << std::endl;
+  }
+}
+
+void test_allgather_compressed(ACCL::ACCL &accl, options_t &options) {
+  std::cout << "Start allgather compression test..." << std::endl;
+  unsigned int count = options.count;
+  std::unique_ptr<double> host_op_buf = random_array<double>(count * size);
+  auto op_buf = accl.create_buffer(host_op_buf.get() + count * rank, count,
+                                   dataType::float64);
+  auto res_buf = accl.create_buffer<double>(count * size, dataType::float64);
+
+  test_debug("Gathering data...", options);
+  accl.allgather(0, *op_buf, *res_buf, count, false, false, dataType::float32);
+
+  int errors = 0;
+  for (unsigned int i = 0; i < count * size; ++i) {
+    double res = (*res_buf)[i];
+    double ref = (double)((float)host_op_buf.get()[i]);
     if (res != ref) {
       std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
                        std::to_string(res) + " != " + std::to_string(ref) + ")"
@@ -435,10 +641,50 @@ void test_reduce(ACCL::ACCL &accl, options_t &options, int root,
     int errors = 0;
 
     for (unsigned int i = 0; i < count; ++i) {
-      int res = (*res_buf)[i];
-      int ref = (*op_buf)[i] * size;
+      float res = (*res_buf)[i];
+      float ref = (*op_buf)[i] * size;
 
       if (res != ref) {
+        std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
+                         std::to_string(res) + " != " + std::to_string(ref) +
+                         ")"
+                  << std::endl;
+        errors += 1;
+      }
+    }
+
+    if (errors > 0) {
+      std::cout << std::to_string(errors) + " errors!" << std::endl;
+      failed_tests++;
+    } else {
+      std::cout << "Test is successful!" << std::endl;
+    }
+  }
+}
+
+void test_reduce_compressed(ACCL::ACCL &accl, options_t &options, int root,
+                            reduceFunction function) {
+  std::cout << "Start reduce compression test with root " +
+                   std::to_string(root) + " and reduce function " +
+                   std::to_string(static_cast<int>(function)) + "..."
+            << std::endl;
+  unsigned int count = options.count;
+  auto op_buf = accl.create_buffer<double>(count, dataType::float64);
+  auto res_buf = accl.create_buffer<double>(count, dataType::float64);
+  random_array(op_buf->buffer(), count);
+
+  test_debug("Reduce data to " + std::to_string(root) + "...", options);
+  accl.reduce(0, *op_buf, *res_buf, count, root, function, false, false,
+              dataType::float32);
+
+  if (rank == root) {
+    int errors = 0;
+
+    for (unsigned int i = 0; i < count; ++i) {
+      double res = (*res_buf)[i];
+      double ref = ((double)((float)(*op_buf)[i])) * size;
+
+      if (!is_close(res, ref)) {
         std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
                          std::to_string(res) + " != " + std::to_string(ref) +
                          ")"
@@ -477,10 +723,51 @@ void test_reduce_scatter(ACCL::ACCL &accl, options_t &options,
   }
 
   for (unsigned int i = 0; i < count; ++i) {
-    int res = (*res_buf)[i];
-    int ref = (*op_buf)[i + rank * count] * size;
+    float res = (*res_buf)[i];
+    float ref = (*op_buf)[i + rank * count] * size;
 
     if (res != ref) {
+      std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
+                       std::to_string(res) + " != " + std::to_string(ref) + ")"
+                << std::endl;
+      errors += 1;
+    }
+  }
+
+  if (errors > 0) {
+    std::cout << std::to_string(errors) + " errors!" << std::endl;
+    failed_tests++;
+  } else {
+    std::cout << "Test is successful!" << std::endl;
+  }
+}
+
+void test_reduce_scatter_compressed(ACCL::ACCL &accl, options_t &options,
+                                    reduceFunction function) {
+  std::cout << "Start reduce scatter compression test and reduce function " +
+                   std::to_string(static_cast<int>(function)) + "..."
+            << std::endl;
+  unsigned int count = options.count;
+  auto op_buf = accl.create_buffer<double>(count * size, dataType::float64);
+  auto res_buf = accl.create_buffer<double>(count, dataType::float64);
+  random_array(op_buf->buffer(), count * size);
+
+  test_debug("Reducing data...", options);
+  accl.reduce_scatter(0, *op_buf, *res_buf, count, function, false, false,
+                      dataType::float32);
+
+  int errors = 0;
+  int rank_prod = 0;
+
+  for (int i = 0; i < rank; ++i) {
+    rank_prod += i;
+  }
+
+  for (unsigned int i = 0; i < count; ++i) {
+    double res = (*res_buf)[i];
+    double ref = ((double)((float)(*op_buf)[i + rank * count])) * size;
+
+    if (!is_close(res, ref)) {
       std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
                        std::to_string(res) + " != " + std::to_string(ref) + ")"
                 << std::endl;
@@ -512,10 +799,46 @@ void test_allreduce(ACCL::ACCL &accl, options_t &options,
   int errors = 0;
 
   for (unsigned int i = 0; i < count; ++i) {
-    int res = (*res_buf)[i];
-    int ref = (*op_buf)[i] * size;
+    float res = (*res_buf)[i];
+    float ref = (*op_buf)[i] * size;
 
     if (res != ref) {
+      std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
+                       std::to_string(res) + " != " + std::to_string(ref) + ")"
+                << std::endl;
+      errors += 1;
+    }
+  }
+
+  if (errors > 0) {
+    std::cout << std::to_string(errors) + " errors!" << std::endl;
+    failed_tests++;
+  } else {
+    std::cout << "Test is successful!" << std::endl;
+  }
+}
+
+void test_allreduce_compressed(ACCL::ACCL &accl, options_t &options,
+                               reduceFunction function) {
+  std::cout << "Start allreduce compression test and reduce function " +
+                   std::to_string(static_cast<int>(function)) + "..."
+            << std::endl;
+  unsigned int count = options.count;
+  auto op_buf = accl.create_buffer<double>(count, dataType::float64);
+  auto res_buf = accl.create_buffer<double>(count, dataType::float64);
+  random_array(op_buf->buffer(), count);
+
+  test_debug("Reducing data...", options);
+  accl.allreduce(0, *op_buf, *res_buf, count, function, false, false,
+                 dataType::float32);
+
+  int errors = 0;
+
+  for (unsigned int i = 0; i < count; ++i) {
+    double res = (*res_buf)[i];
+    double ref = ((double)((float)(*op_buf)[i])) * size;
+
+    if (!is_close(res, ref)) {
       std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
                        std::to_string(res) + " != " + std::to_string(ref) + ")"
                 << std::endl;
@@ -577,21 +900,37 @@ void start_test(options_t options) {
   MPI_Barrier(MPI_COMM_WORLD);
   test_sendrcv_bo(*accl, device, options);
   MPI_Barrier(MPI_COMM_WORLD);
+  test_sendrcv_compressed(*accl, options);
+  MPI_Barrier(MPI_COMM_WORLD);
   test_allgather(*accl, options);
+  MPI_Barrier(MPI_COMM_WORLD);
+  test_allgather_compressed(*accl, options);
   MPI_Barrier(MPI_COMM_WORLD);
   test_allreduce(*accl, options, reduceFunction::SUM);
   MPI_Barrier(MPI_COMM_WORLD);
+  test_allreduce_compressed(*accl, options, reduceFunction::SUM);
+  MPI_Barrier(MPI_COMM_WORLD);
   test_reduce_scatter(*accl, options, reduceFunction::SUM);
+  MPI_Barrier(MPI_COMM_WORLD);
+  test_reduce_scatter_compressed(*accl, options, reduceFunction::SUM);
   MPI_Barrier(MPI_COMM_WORLD);
 
   for (int root = 0; root < size; ++root) {
     test_bcast(*accl, options, root);
     MPI_Barrier(MPI_COMM_WORLD);
+    test_bcast_compressed(*accl, options, root);
+    MPI_Barrier(MPI_COMM_WORLD);
     test_scatter(*accl, options, root);
+    MPI_Barrier(MPI_COMM_WORLD);
+    test_scatter_compressed(*accl, options, root);
     MPI_Barrier(MPI_COMM_WORLD);
     test_gather(*accl, options, root);
     MPI_Barrier(MPI_COMM_WORLD);
+    test_gather_compressed(*accl, options, root);
+    MPI_Barrier(MPI_COMM_WORLD);
     test_reduce(*accl, options, root, reduceFunction::SUM);
+    MPI_Barrier(MPI_COMM_WORLD);
+    test_reduce_compressed(*accl, options, root, reduceFunction::SUM);
     MPI_Barrier(MPI_COMM_WORLD);
   }
 
