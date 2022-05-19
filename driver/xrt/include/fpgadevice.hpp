@@ -27,13 +27,23 @@
 
 namespace ACCL {
 /**
- * Implementation of CCLO that uses an external CCLO simulator or emulator.
+ * Implementation of CCLO that uses a CCLO kernel on a FPGA.
  *
  */
 class FPGADevice : public CCLO {
 public:
+  /**
+   * Construct a new FPGADevice object
+   *
+   * @param cclo_ip      The CCLO kernel to use.
+   * @param hostctrl_ip  The hostctrl kernel to use.
+   */
   FPGADevice(xrt::ip &cclo_ip, xrt::kernel &hostctrl_ip);
 
+  /**
+   * Destroy the FPGADevice object
+   *
+   */
   virtual ~FPGADevice() {}
 
   void call(const Options &options) override;

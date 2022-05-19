@@ -44,6 +44,10 @@ public:
       : _byte_array(byte_array), _size(size), _type(type),
         _physical_address(physical_address) {}
 
+  /**
+   * Destroy the Base Buffer object.
+   *
+   */
   virtual ~BaseBuffer() {}
 
   /**
@@ -155,6 +159,10 @@ public:
                    physical_address),
         _buffer(buffer), _length(length){};
 
+  /**
+   * Destroy the Buffer object
+   *
+   */
   virtual ~Buffer() {}
 
   /**
@@ -164,6 +172,11 @@ public:
    */
   size_t length() const { return _length; }
 
+  /**
+   * Get the host buffer.
+   *
+   * @return dtype* The host buffer.
+   */
   dtype *buffer() const { return _buffer; }
 
   dtype operator[](size_t i) { return this->_buffer[i]; }

@@ -35,22 +35,19 @@ public:
   /**
    * Construct a new Simulated Device object.
    *
-   * @param zmqadr  Address of simulator or emulator to connect to.
+   * @param zmqport    Port of simulator or emulator to connect to.
+   * @param local_rank The local rank of this process.
    */
   SimDevice(unsigned int zmqport, unsigned int local_rank);
 
+  /**
+   * Destroy the Simulated Device object
+   *
+   */
   virtual ~SimDevice() {}
 
-  /**
-   * See ACCL::CCLO::call().
-   *
-   */
   void call(const Options &options) override;
 
-  /**
-   * See ACCL::CCLO::start().
-   *
-   */
   void start(const Options &options) override;
 
   val_t read(addr_t offset) override;
@@ -61,6 +58,11 @@ public:
 
   addr_t get_base_addr() override { return 0x0; }
 
+  /**
+   * Get the zmq server used by the CCLO emulator or simulator.
+   *
+   * @return zmq_intf_context* The zmq server used by the CCLO.
+   */
   zmq_intf_context *get_context() { return &zmq_ctx; }
 
 private:
