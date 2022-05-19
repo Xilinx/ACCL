@@ -464,6 +464,10 @@ public:
   /**
    * Construct a new buffer object without an existing host buffer.
    *
+   * Note that when running in simulated mode, this constructor will not create
+   * an underlying simulated BO buffer. If you need this functionality, use
+   * create_buffer(xrt::bo &, size_t, dataType).
+   *
    * @tparam dtype              Datatype of the buffer.
    * @param length              Amount of elements to allocate for.
    * @param type                ACCL datatype of the buffer.
@@ -480,6 +484,10 @@ public:
    *
    * Only use this function if you want to store the buffer on a different
    * memory bank than the devicemem bank specified during construction.
+   *
+   * Note that when running in simulated mode, this constructor will not create
+   * an underlying simulated BO buffer. If you need this functionality, use
+   * create_buffer(xrt::bo &, size_t, dataType).
    *
    * @tparam dtype              Datatype of the buffer.
    * @param length              Amount of elements to allocate for.
@@ -508,6 +516,10 @@ public:
    * unaligned and aligned host buffers when required. It is recommended to
    * provide an aligned host pointer to avoid unnecessary memory copies.
    *
+   * Note that when running in simulated mode, this constructor will not create
+   * an underlying simulated BO buffer. If you need this functionality, use
+   * create_buffer(xrt::bo &, size_t, dataType).
+   *
    * @tparam dtype              Datatype of the buffer.
    * @param host_buffer         The host pointer containing the data.
    * @param length              Amount of elements in the host buffer.
@@ -532,6 +544,10 @@ public:
    * ACCL will keep it's own aligned host buffer, and copy between the
    * unaligned and aligned host buffers when required. It is recommended to
    * provide an aligned host pointer to avoid unnecessary memory copies.
+   *
+   * Note that when running in simulated mode, this constructor will not create
+   * an underlying simulated BO buffer. If you need this functionality, use
+   * create_buffer(xrt::bo &, size_t, dataType).
    *
    * @tparam dtype              Datatype of the buffer.
    * @param host_buffer         The host pointer containing the data.
@@ -591,6 +607,10 @@ public:
    *
    * Will create a normal buffer when running in simulated mode.
    *
+   * Note that when running in simulated mode, this constructor will not create
+   * an underlying simulated BO buffer. If you need this functionality, use
+   * create_buffer_p2p(xrt::bo &, size_t, dataType).
+   *
    * @tparam dtype              Datatype of the buffer.
    * @param length              Amount of elements to allocate for.
    * @param type                ACCL datatype of the buffer.
@@ -609,6 +629,10 @@ public:
    *
    * Only use this function if you want to store the buffer on a different
    * memory bank than the devicemem bank specified during construction.
+   *
+   * Note that when running in simulated mode, this constructor will not create
+   * an underlying simulated BO buffer. If you need this functionality, use
+   * create_buffer_p2p(xrt::bo &, size_t, dataType).
    *
    * @tparam dtype              Datatype of the buffer.
    * @param length              Amount of elements to allocate for.
