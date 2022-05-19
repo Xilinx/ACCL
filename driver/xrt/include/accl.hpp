@@ -267,12 +267,12 @@ public:
   /**
    * Performs the broadcast operation on the FPGA.
    *
-   * @param comm_id        Index of communicator to use.
    * @param buf            Buffer that should contain the same data as the root
    *                       after the operation. Create a buffer using
    *                       ACCL::create_buffer.
    * @param count          Amount of elements in buffer to broadcast.
    * @param root           Rank to broadcast the data from.
+   * @param comm_id        Index of communicator to use.
    * @param from_fpga      Set to true if the data is already on the FPGA.
    * @param to_fpga        Set to true if the copied data will be used on the
    *                       FPGA only.
@@ -283,16 +283,14 @@ public:
    * @return CCLO*         CCLO object that can be waited on and passed to
    *                       waitfor; nullptr if run_async is false.
    */
-  CCLO *bcast(unsigned int comm_id, BaseBuffer &buf, unsigned int count,
-              unsigned int root, CommunicatorId comm_id = GLOBAL_COMM,
-              bool from_fpga = false, bool to_fpga = false,
-              dataType compress_dtype = dataType::none, bool run_async = false,
-              std::vector<CCLO *> waitfor = {});
+  CCLO *bcast(BaseBuffer &buf, unsigned int count, unsigned int root,
+              CommunicatorId comm_id = GLOBAL_COMM, bool from_fpga = false,
+              bool to_fpga = false, dataType compress_dtype = dataType::none,
+              bool run_async = false, std::vector<CCLO *> waitfor = {});
 
   /**
    * Performs the scatter operation on the FPGA.
    *
-   * @param comm_id        Index of communicator to use.
    * @param sendbuf        Buffer of count × world size elements that contains
    *                       the data to be scattered. Create a buffer using
    *                       ACCL::create_buffer. You can pass a DummyBuffer on
@@ -302,6 +300,7 @@ public:
    *                       ACCL::create_buffer.
    * @param count          Amount of elements to scatter per rank.
    * @param root           Rank to scatter the data from.
+   * @param comm_id        Index of communicator to use.
    * @param from_fpga      Set to true if the data is already on the FPGA.
    * @param to_fpga        Set to true if the scattered data will be used on the
    *                       FPGA only.
@@ -312,16 +311,15 @@ public:
    * @return CCLO*         CCLO object that can be waited on and passed to
    *                       waitfor; nullptr if run_async is false.
    */
-  CCLO *scatter(unsigned int comm_id, BaseBuffer &sendbuf, BaseBuffer &recvbuf,
-                unsigned int count, unsigned int root,
-                CommunicatorId comm_id = GLOBAL_COMM, bool from_fpga = false,
-                bool to_fpga = false, dataType compress_dtype = dataType::none,
+  CCLO *scatter(BaseBuffer &sendbuf, BaseBuffer &recvbuf, unsigned int count,
+                unsigned int root, CommunicatorId comm_id = GLOBAL_COMM,
+                bool from_fpga = false, bool to_fpga = false,
+                dataType compress_dtype = dataType::none,
                 bool run_async = false, std::vector<CCLO *> waitfor = {});
 
   /**
    * Performs the gather operation on the FPGA.
    *
-   * @param comm_id        Index of communicator to use.
    * @param sendbuf        Buffer of count elements that contains the data to
    *                       be gathered. Create a buffer using
    *                       ACCL::create_buffer.
@@ -331,6 +329,7 @@ public:
    *                       non-root ranks.
    * @param count          Amount of elements to gather per rank.
    * @param root           Rank to gather the data to.
+   * @param comm_id        Index of communicator to use.
    * @param from_fpga      Set to true if the data is already on the FPGA.
    * @param to_fpga        Set to true if the gathered data will be used on the
    *                       FPGA only.
@@ -341,16 +340,15 @@ public:
    * @return CCLO*         CCLO object that can be waited on and passed to
    *                       waitfor; nullptr if run_async is false.
    */
-  CCLO *gather(unsigned int comm_id, BaseBuffer &sendbuf, BaseBuffer &recvbuf,
-               unsigned int count, unsigned int root,
-               CommunicatorId comm_id = GLOBAL_COMM, bool from_fpga = false,
-               bool to_fpga = false, dataType compress_dtype = dataType::none,
-               bool run_async = false, std::vector<CCLO *> waitfor = {});
+  CCLO *gather(BaseBuffer &sendbuf, BaseBuffer &recvbuf, unsigned int count,
+               unsigned int root, CommunicatorId comm_id = GLOBAL_COMM,
+               bool from_fpga = false, bool to_fpga = false,
+               dataType compress_dtype = dataType::none, bool run_async = false,
+               std::vector<CCLO *> waitfor = {});
 
   /**
    * Performs the allgather operation on the FPGA.
    *
-   * @param comm_id        Index of communicator to use.
    * @param sendbuf        Buffer of count elements that contains the data to
    *                       be gathered. Create a buffer using
    *                       ACCL::create_buffer.
@@ -358,6 +356,7 @@ public:
    *                       data should be gathered. Create a buffer using
    *                       ACCL::create_buffer.
    * @param count          Amount of elements to gather per rank.
+   * @param comm_id        Index of communicator to use.
    * @param from_fpga      Set to true if the data is already on the FPGA.
    * @param to_fpga        Set to true if the gathered data will be used on the
    *                       FPGA only.
@@ -368,8 +367,7 @@ public:
    * @return CCLO*         CCLO object that can be waited on and passed to
    *                       waitfor; nullptr if run_async is false.
    */
-  CCLO *allgather(unsigned int comm_id, BaseBuffer &sendbuf,
-                  BaseBuffer &recvbuf, unsigned int count,
+  CCLO *allgather(BaseBuffer &sendbuf, BaseBuffer &recvbuf, unsigned int count,
                   CommunicatorId comm_id = GLOBAL_COMM, bool from_fpga = false,
                   bool to_fpga = false,
                   dataType compress_dtype = dataType::none,
@@ -378,7 +376,6 @@ public:
   /**
    * Performs the reduce operation on the FPGA.
    *
-   * @param comm_id        Index of communicator to use.
    * @param sendbuf        Buffer that contains the data to be reduced. Create a
    *                       buffer using ACCL::create_buffer.
    * @param recvbuf        Buffer to where the data should be reduced. Create a
@@ -387,6 +384,7 @@ public:
    * @param count          Amount of elements to reduce.
    * @param root           Rank to reduce the data to.
    * @param func           Reduce function to use.
+   * @param comm_id        Index of communicator to use.
    * @param from_fpga      Set to true if the data is already on the FPGA.
    * @param to_fpga        Set to true if the reduced data will be used on the
    *                       FPGA only.
@@ -397,8 +395,8 @@ public:
    * @return CCLO*         CCLO object that can be waited on and passed to
    *                       waitfor; nullptr if run_async is false.
    */
-  CCLO *reduce(unsigned int comm_id, BaseBuffer &sendbuf, BaseBuffer &recvbuf,
-               unsigned int count, unsigned int root, reduceFunction func,
+  CCLO *reduce(BaseBuffer &sendbuf, BaseBuffer &recvbuf, unsigned int count,
+               unsigned int root, reduceFunction func,
                CommunicatorId comm_id = GLOBAL_COMM, bool from_fpga = false,
                bool to_fpga = false, dataType compress_dtype = dataType::none,
                bool run_async = false, std::vector<CCLO *> waitfor = {});
@@ -450,12 +448,13 @@ public:
    * @return CCLO*         CCLO object that can be waited on and passed to
    *                       waitfor; nullptr if run_async is false.
    */
-  CCLO *
-  reduce_scatter(unsigned int comm_id, BaseBuffer &sendbuf, BaseBuffer &recvbuf,
-                 unsigned int count, reduceFunction func,
-                 CommunicatorId comm_id = GLOBAL_COMM, bool from_fpga = false,
-                 bool to_fpga = false, dataType compress_dtype = dataType::none,
-                 bool run_async = false, std::vector<CCLO *> waitfor = {});
+  CCLO *reduce_scatter(BaseBuffer &sendbuf, BaseBuffer &recvbuf,
+                       unsigned int count, reduceFunction func,
+                       CommunicatorId comm_id = GLOBAL_COMM,
+                       bool from_fpga = false, bool to_fpga = false,
+                       dataType compress_dtype = dataType::none,
+                       bool run_async = false,
+                       std::vector<CCLO *> waitfor = {});
 
 
   /**
@@ -471,7 +470,7 @@ public:
   unsigned int get_comm_rank(CommunicatorId comm_id);
 
   CommunicatorId create_communicator(const std::vector<rank_t> &ranks,
-                                        int local_rank);
+                                     int local_rank);
 
   /**
    * Construct a new buffer object without an existing host buffer.
