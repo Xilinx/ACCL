@@ -77,7 +77,7 @@ Communicator::Communicator(CCLO *cclo, const std::vector<rank_t> &ranks,
 
 void Communicator::readback() {
   addr_t addr = this->_communicators_addr;
-  int nr_ranks = cclo->read(addr);
+  size_t nr_ranks = cclo->read(addr);
   addr += 4;
   this->_rank = cclo->read(addr);
 
