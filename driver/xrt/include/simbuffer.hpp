@@ -82,6 +82,15 @@ private:
     return new dtype[length];
   }
 
+  /**
+   * Allocate the buffer on the simulated CCLO.
+   *
+   */
+  void allocate_buffer() {
+    zmq_client_memalloc(this->zmq_ctx, (uint64_t)this->_physical_address,
+                        (unsigned int)this->_size);
+  }
+
 public:
   /**
    * Construct a new simulated buffer from an existing host buffer.
@@ -138,8 +147,7 @@ public:
             zmq_intf_context *const context, const addr_t physical_address)
       : Buffer<dtype>(buffer, length, type, physical_address), zmq_ctx(context),
         _bo(xrt::bo()) {
-    // Sync to device immediately to allocate the buffer on the CCLO simulator
-    sync_to_device();
+    allocate_buffer();
   }
 
   /**
@@ -157,9 +165,7 @@ public:
                                  (xrt::memory_group)DEFAULT_SIMBUFFER_MEMGRP);
     }
 
-    if (!is_slice) {
-      sync_to_device();
-    }
+    allocate_buffer();
   }
 
   /**
