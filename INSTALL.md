@@ -26,7 +26,7 @@ First start up either the emulator or simulator.
   <summary>Emulator</summary>
 
   ```sh
-  cd "test/model/emulation"
+  cd "test/model/emulator"
   source <VITIS_INSTALL>/settings64.sh
   /bin/cmake .
   python3 run.py -n <RANKS>
