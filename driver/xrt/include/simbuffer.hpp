@@ -55,6 +55,11 @@ private:
     return new dtype[length];
   }
 
+  void allocate_buffer() {
+    zmq_client_memalloc(this->zmq_ctx, (uint64_t)this->_physical_address,
+                        (unsigned int)this->_size);
+  }
+
 public:
   SimBuffer(dtype *buffer, size_t length, dataType type,
             zmq_intf_context *const context, const addr_t physical_address,
@@ -67,16 +72,14 @@ public:
                                  (xrt::memory_group)DEFAULT_SIMBUFFER_MEMGRP);
     }
 
-    if (!is_slice) {
-      sync_to_device();
-    }
+    allocate_buffer();
   }
 
   SimBuffer(dtype *buffer, size_t length, dataType type,
             zmq_intf_context *const context, const addr_t physical_address)
       : Buffer<dtype>(buffer, length, type, physical_address), zmq_ctx(context),
         _bo(xrt::bo()) {
-    sync_to_device();
+    allocate_buffer();
   }
 
   SimBuffer(dtype *buffer, size_t length, dataType type,

@@ -59,7 +59,10 @@ class SimBuffer():
         else:
             self.physical_address = physical_address
         self.device_address = self.physical_address
-    
+
+        # Allocate buffer to prevent emulator from writing out of bounds
+        self.allocate()
+
     # Devicemem read request  {"type": 2, "addr": <uint>, "len": <uint>}
     # Devicemem read response {"status": OK|ERR, "rdata": <array of uint>}
     def sync_from_device(self):
@@ -72,6 +75,13 @@ class SimBuffer():
     # Devicemem write response {"status": OK|ERR}
     def sync_to_device(self):
         self.socket.send_json({"type": 3, "addr": self.physical_address, "wdata": self.data.view(np.uint8).tolist()})
+        ack = self.socket.recv_json()
+        assert ack["status"] == 0, "ZMQ mem buffer write error"
+
+    # Devicemem allocate request  {"type": 4, "addr": <uint>, "len": <uint>}
+    # Devicemem allocate response {"status": OK|ERR}
+    def allocate(self):
+        self.socket.send_json({"type": 4, "addr": self.physical_address, "len": self.data.nbytes})
         ack = self.socket.recv_json()
         assert ack["status"] == 0, "ZMQ mem buffer write error"
 
@@ -95,7 +105,7 @@ class SimBuffer():
             return SimBuffer(self.data[key], self.socket, physical_address=self.physical_address+offset)
         else:
             return self.data[key]
-    
+
     def __setitem__(self, key, value):
         self.data[key] = value
 
@@ -110,10 +120,10 @@ class SimDevice():
         self.networkmem = None
         print("SimDevice connected")
 
-    # Call request  {"type": 4, arg names and values}
+    # Call request  {"type": 5, arg names and values}
     # Call response {"status": OK|ERR}
     def call(self, scenario, count, comm, root_src_dst, function, tag, arithcfg, compression_flags, stream_flags, addr_0, addr_1, addr_2):
-        self.socket.send_json({ "type": 4,
+        self.socket.send_json({ "type": 5,
                                 "scenario": scenario,
                                 "count": count,
                                 "comm": comm,
@@ -130,7 +140,7 @@ class SimDevice():
         assert ack["status"] == 0, "ZMQ call error"
 
     def start(self, scenario, count, comm, root_src_dst, function, tag, arithcfg, compression_flags, stream_flags, addr_0, addr_1, addr_2):
-        self.socket.send_json({ "type": 4,
+        self.socket.send_json({ "type": 5,
                                 "scenario": scenario,
                                 "count": count,
                                 "comm": comm,
@@ -176,7 +186,7 @@ class AlveoDevice():
             elif local_alveo.name == 'xilinx_u280_xdma_201920_3':
                 print("Detected U280 (xilinx_u280_xdma_201920_3)")
                 self.devicemem   = self.ol.HBM0
-                self.rxbufmem    = [self.ol.HBM0, self.ol.HBM1, self.ol.HBM2, self.ol.HBM3, self.ol.HBM4, self.ol.HBM5] 
+                self.rxbufmem    = [self.ol.HBM0, self.ol.HBM1, self.ol.HBM2, self.ol.HBM3, self.ol.HBM4, self.ol.HBM5]
                 self.networkmem  = self.ol.HBM6
         else:
             print("Applying user-provided memory config")
@@ -318,7 +328,7 @@ class ACCLCommunicator():
             self.ranks[i]["inbound_seq_number"] = mmio.read(addr)
             addr +=4
             self.ranks[i]["outbound_seq_number"] = mmio.read(addr)
-            #a 32 bit integer is dedicated to session id 
+            #a 32 bit integer is dedicated to session id
             addr += 4
             self.ranks[i]["session_id"] = mmio.read(addr)
             addr += 4
@@ -337,7 +347,7 @@ class ACCLCommunicator():
         return new_comm
 
 class ACCLArithConfig():
-    def __init__(self, uncompressed_elem_bytes, compressed_elem_bytes, elem_ratio_log, 
+    def __init__(self, uncompressed_elem_bytes, compressed_elem_bytes, elem_ratio_log,
                     compressor_tdest, decompressor_tdest, arith_is_compressed, arith_tdest):
         self.uncompressed_elem_bytes = uncompressed_elem_bytes
         self.compressed_elem_bytes = compressed_elem_bytes
@@ -387,15 +397,15 @@ ACCL_DEFAULT_ARITH_CONFIG = {
 }
 
 @unique
-class ErrorCode(IntEnum): 
-    DMA_MISMATCH_ERROR                          = (1<< 0)    
-    DMA_INTERNAL_ERROR                          = (1<< 1)    
-    DMA_DECODE_ERROR                            = (1<< 2) 
+class ErrorCode(IntEnum):
+    DMA_MISMATCH_ERROR                          = (1<< 0)
+    DMA_INTERNAL_ERROR                          = (1<< 1)
+    DMA_DECODE_ERROR                            = (1<< 2)
     DMA_SLAVE_ERROR                             = (1<< 3)
-    DMA_NOT_OKAY_ERROR                          = (1<< 4)    
-    DMA_NOT_END_OF_PACKET_ERROR                 = (1<< 5)            
+    DMA_NOT_OKAY_ERROR                          = (1<< 4)
+    DMA_NOT_END_OF_PACKET_ERROR                 = (1<< 5)
     DMA_NOT_EXPECTED_BTT_ERROR                  = (1<< 6)
-    DMA_TIMEOUT_ERROR                           = (1<< 7)            
+    DMA_TIMEOUT_ERROR                           = (1<< 7)
     CONFIG_SWITCH_ERROR                         = (1<< 8)
     DEQUEUE_BUFFER_TIMEOUT_ERROR                = (1<< 9)
     DEQUEUE_BUFFER_SPARE_BUFFER_STATUS_ERROR    = (1<<10)
@@ -407,7 +417,7 @@ class ErrorCode(IntEnum):
     OPEN_PORT_NOT_SUCCEEDED                     = (1<<16)
     OPEN_CON_NOT_SUCCEEDED                      = (1<<17)
     DMA_SIZE_ERROR                              = (1<<18)
-    ARITH_ERROR                                 = (1<<19) 
+    ARITH_ERROR                                 = (1<<19)
     PACK_TIMEOUT_STS_ERROR                      = (1<<20)
     PACK_SEQ_NUMBER_ERROR                       = (1<<21)
     COMPRESSION_ERROR                           = (1<<22)
@@ -467,7 +477,7 @@ class accl():
             self.cclo = AlveoDevice(overlay, cclo_ip, hostctrl_ip, mem=mem)
 
         print("CCLO HWID: {} at {}".format(hex(self.get_hwid()), hex(self.cclo.mmio.base_addr)))
-        
+
         # check if the CCLO is configured
         assert self.cclo.read(CFGRDY_OFFSET) == 0, "CCLO appears configured, might be in use. Please reset the CCLO and retry"
 
@@ -542,9 +552,9 @@ class accl():
         if self.utility_spare is not None:
             self.utility_spare.freebuffer()
         del self.utility_spare
-        self.utility_spare = None 
+        self.utility_spare = None
 
-    #define communicator 
+    #define communicator
     def configure_communicator(self, ranks, local_rank):
         assert len(self.rx_buffer_spares) > 0, "RX buffers unconfigured, please call setup_rx_buffers() first"
         communicator = ACCLCommunicator(ranks, local_rank, len(self.communicators))
@@ -572,11 +582,11 @@ class accl():
         self.rx_buffer_size = bufsize
         mem = self.cclo.rxbufmem
         if not isinstance(mem, list):
-            mem = [mem] 
+            mem = [mem]
         for i in range(nbufs):
             # create, clear and sync buffers to device
             if not self.sim_mode:
-                #try to cycle through different banks 
+                #try to cycle through different banks
                 buf = pynq.allocate((bufsize,), dtype=np.int8, target=mem[i % len(mem)])
                 buf[:] = np.zeros((bufsize,), dtype=np.int8)
             else:
@@ -597,7 +607,7 @@ class accl():
             for _ in range(4,8):
                 addr += 4
                 self.cclo.write(addr, 0)
-        #NOTE: the buffer count HAS to be written last (offload checks for this) 
+        #NOTE: the buffer count HAS to be written last (offload checks for this)
         self.cclo.write(self.rx_buffers_adr, nbufs)
 
         self.next_free_exchmem_addr = addr+4
@@ -605,7 +615,7 @@ class accl():
             self.utility_spare = pynq.allocate((bufsize,), dtype=np.int8, target=mem[0])
         else:
             self.utility_spare = SimBuffer(np.zeros((bufsize,), dtype=np.int8), self.cclo.socket)
-    
+
     def dump_rx_buffers(self, nbufs=None):
         addr = self.rx_buffers_adr
         if nbufs is None:
@@ -631,7 +641,7 @@ class accl():
             rxsrc   = self.cclo.read(addr)
             addr   += 4
             seq     = self.cclo.read(addr)
-            
+
             if rstatus == 0 :
                 status =  "NOT USED"
             elif rstatus == 1:
@@ -721,12 +731,12 @@ class accl():
     def call_async(self, scenario=CCLOp.nop, count=1, comm=0, root_src_dst=0, function=0, tag=TAG_ANY, compress_dtype=None, stream_flags=ACCLStreamFlags.NO_STREAM, addr_0=None, addr_1=None, addr_2=None):
         assert self.config_rdy, "CCLO not configured, cannot call"
         arithcfg, compression_flags, addr_0, addr_1, addr_2 = self.prepare_call(addr_0, addr_1, addr_2, compress_dtype)
-        return self.cclo.start(scenario, count, comm, root_src_dst, function, tag, arithcfg, compression_flags, stream_flags, addr_0, addr_1, addr_2)        
+        return self.cclo.start(scenario, count, comm, root_src_dst, function, tag, arithcfg, compression_flags, stream_flags, addr_0, addr_1, addr_2)
 
     def call_sync(self, scenario=CCLOp.nop, count=1, comm=0, root_src_dst=0, function=0, tag=TAG_ANY, compress_dtype=None, stream_flags=ACCLStreamFlags.NO_STREAM, addr_0=None, addr_1=None, addr_2=None):
         assert self.config_rdy, "CCLO not configured, cannot call"
         arithcfg, compression_flags, addr_0, addr_1, addr_2 = self.prepare_call(addr_0, addr_1, addr_2, compress_dtype)
-        self.cclo.call(scenario, count, comm, root_src_dst, function, tag, arithcfg, compression_flags, stream_flags, addr_0, addr_1, addr_2)        
+        self.cclo.call(scenario, count, comm, root_src_dst, function, tag, arithcfg, compression_flags, stream_flags, addr_0, addr_1, addr_2)
 
     def get_retcode(self):
         return self.cclo.read(RETCODE_OFFSET)
@@ -740,7 +750,7 @@ class accl():
                 pass
             return handle
         return wrapper
-    
+
     def check_return_value(self, label=""):
         retcode = self.get_retcode()
         if retcode != 0:
@@ -757,7 +767,7 @@ class accl():
 
     def get_hwid(self):
         #TODO: add check
-        return self.cclo.read(IDCODE_OFFSET) 
+        return self.cclo.read(IDCODE_OFFSET)
 
     def set_timeout(self, value, run_async=False):
         self.call_sync(scenario=CCLOp.config, count=value, function=CCLOCfgFunc.set_timeout)
@@ -767,23 +777,23 @@ class accl():
         self.open_port(comm_id)
         print("Starting sessions to communicator ranks")
         self.open_con(comm_id)
-    
+
     @self_check_return_value
     def open_port(self, comm_id=0):
         self.call_sync(scenario=CCLOp.config, comm=self.communicators[comm_id].addr, function=CCLOCfgFunc.open_port)
-    
+
     @self_check_return_value
     def open_con(self, comm_id=0):
         self.call_sync(scenario=CCLOp.config, comm=self.communicators[comm_id].addr, function=CCLOCfgFunc.open_con)
-    
+
     @self_check_return_value
     def use_udp(self, comm_id=0):
         self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.set_stack_type, count=0)
-    
+
     @self_check_return_value
     def use_tcp(self, comm_id=0):
-        self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.set_stack_type, count=1)   
-    
+        self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.set_stack_type, count=1)
+
     @self_check_return_value
     def set_max_segment_size(self, value=0):
         if value % 8 != 0:
@@ -791,7 +801,7 @@ class accl():
         elif value > self.rx_buffer_size:
             warnings.warn("ACCL: transaction size should be less or equal to configured buffer size!")
             return
-        self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.set_max_segment_size, count=value)   
+        self.call_sync(scenario=CCLOp.config, function=CCLOCfgFunc.set_max_segment_size, count=value)
         self.segment_size = value
 
     @self_check_return_value
@@ -799,7 +809,7 @@ class accl():
         #calls the accelerator with no work. Useful for measuring call latency
         handle = self.call_async(scenario=CCLOp.nop)
         if run_async:
-            return handle 
+            return handle
         else:
             handle.wait()
 
@@ -809,10 +819,10 @@ class accl():
             srcbuf.sync_to_device()
         handle = self.call_async(scenario=CCLOp.send, count=count, comm=self.communicators[comm_id].addr, root_src_dst=dst, tag=tag, compress_dtype=compress_dtype, stream_flags=stream_flags, addr_0=srcbuf)
         if run_async:
-            return handle 
+            return handle
         else:
             handle.wait()
-    
+
     @self_check_return_value
     def recv(self, comm_id, dstbuf, count, src, tag=TAG_ANY, to_fpga=False, compress_dtype=None, run_async=False):
         if not to_fpga and run_async:
@@ -835,7 +845,7 @@ class accl():
         handle = self.call_async(scenario=CCLOp.copy, count=count, addr_0=srcbuf, addr_2=dstbuf)
         if run_async:
             return handle
-        
+
         handle.wait()
         if not to_fpga:
             dstbuf.sync_from_device()
@@ -853,7 +863,7 @@ class accl():
         handle = self.call_async(scenario=CCLOp.combine, count=count, function=func, addr_0=val1, addr_1=val2, addr_2=result)
         if run_async:
             return handle
-        
+
         handle.wait()
         if not to_fpga:
             result.sync_from_device()
@@ -872,10 +882,10 @@ class accl():
             buf.sync_to_device()
 
         prevcall = [self.call_async(scenario=CCLOp.bcast, count=count, comm=self.communicators[comm_id].addr, root_src_dst=root, compress_dtype=compress_dtype, addr_0=buf)]
-        
+
         if run_async:
             return prevcall[0]
-        
+
         prevcall[0].wait()
         if not to_fpga and not is_root:
             buf.sync_from_device()
@@ -917,15 +927,15 @@ class accl():
         if not self.ignore_safety_checks and (count + self.segment_size-1)//self.segment_size * p > len(self.rx_buffer_spares):
             warnings.warn("gather can't be executed safely with this number of spare buffers")
             return
-        
+
         if not from_fpga:
             sbuf[0:count].sync_to_device()
-            
+
         prevcall = [self.call_async(scenario=CCLOp.gather, count=count, comm=comm.addr, root_src_dst=root, compress_dtype=compress_dtype, addr_0=sbuf, addr_2=rbuf)]
-            
+
         if run_async:
             return prevcall[0]
-        
+
         prevcall[0].wait()
         if not to_fpga and local_rank == root:
             rbuf[:count*p].sync_from_device()
@@ -942,7 +952,7 @@ class accl():
         if not self.ignore_safety_checks and (count + self.segment_size-1)//self.segment_size * p > len(self.rx_buffer_spares):
             warnings.warn("All gather can't be executed safely with this number of spare buffers")
             return
-        
+
         if not from_fpga:
             sbuf[0:count].sync_to_device()
 
@@ -976,11 +986,11 @@ class accl():
 
         if run_async:
             return prevcall[0]
-        
+
         prevcall[0].wait()
         if not to_fpga and local_rank == root:
             rbuf[0:count].sync_from_device()
- 
+
     @self_check_return_value
     def allreduce(self, comm_id, sbuf, rbuf, count, func, from_fpga=False, to_fpga=False, compress_dtype=None, run_async=False):
         if not to_fpga and run_async:
@@ -999,7 +1009,7 @@ class accl():
         prevcall[0].wait()
         if not to_fpga:
             rbuf[0:count].sync_from_device()
-    
+
     @self_check_return_value
     def reduce_scatter(self, comm_id, sbuf, rbuf, count, func, from_fpga=False, to_fpga=False, compress_dtype=None, run_async=False):
         if not to_fpga and run_async:
@@ -1019,7 +1029,7 @@ class accl():
 
         if run_async:
             return prevcall[0]
-        
+
         prevcall[0].wait()
         if not to_fpga:
             rbuf[0:count].sync_from_device()

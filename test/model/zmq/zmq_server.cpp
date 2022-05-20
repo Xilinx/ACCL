@@ -275,7 +275,7 @@ void serve_zmq(zmq_intf_context *ctx, uint32_t *cfgmem, vector<char> &devicemem,
 
     // decompose the message
     string msg_text;
-    message >> msg_text;//message now is in a string
+    message >> msg_text; //message now is in a string
 
     *logger << log_level::debug << "Received: " << msg_text << endl;
 
@@ -344,9 +344,19 @@ void serve_zmq(zmq_intf_context *ctx, uint32_t *cfgmem, vector<char> &devicemem,
                 devicemem.at(adr+i) = dma_wdata[i].asUInt();
             }
             break;
-        // Call request  {"type": 4, arg names and values}
-        // Call response {"status": OK|ERR}
+        // Devicemem allocate request  {"type": 4, "addr": <uint>, "len": <uint>}
+        // Devicemem allocate response {"status": OK|ERR}
         case 4:
+            adr = request["addr"].asUInt();
+            len = request["len"].asUInt();
+            *logger << log_level::info << "Mem allocate " << adr << " len: " << len << endl;
+            if((adr+len) > devicemem.size()){
+                devicemem.resize(adr+len);
+            }
+            break;
+        // Call request  {"type": 5, arg names and values}
+        // Call response {"status": OK|ERR}
+        case 5:
             *logger << log_level::info << "Call with scenario " << request["scenario"].asUInt() << endl;
             cmd.Push((ap_axiu<32,0,0,0>){.data=request["scenario"].asUInt(), .last=0});
             cmd.Push((ap_axiu<32,0,0,0>){.data=request["count"].asUInt(), .last=0});
@@ -509,9 +519,19 @@ void serve_zmq(zmq_intf_context *ctx,
                 }
             }
             break;
-        // Call request  {"type": 4, arg names and values}
-        // Call response {"status": OK|ERR}
+        // Devicemem allocate request  {"type": 4, "addr": <uint>, "len": <uint>}
+        // Devicemem allocate response {"status": OK|ERR}
         case 4:
+            adr = request["addr"].asUInt();
+            len = request["len"].asUInt();
+            *logger << log_level::info << "Mem allocate " << adr << " len: " << len << endl;
+            if((adr+len) > 256*1024){
+                response["status"] = 1;
+            }
+            break;
+        // Call request  {"type": 5, arg names and values}
+        // Call response {"status": OK|ERR}
+        case 5:
             *logger << log_level::info << "Call with scenario " << request["scenario"].asUInt() << endl;
             callreq.Push(request["scenario"].asUInt());
             callreq.Push(request["count"].asUInt());

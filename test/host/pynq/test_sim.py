@@ -28,9 +28,7 @@ def get_buffers(count, op0_dt, op1_dt, res_dt, accl_inst):
     op0_buf = SimBuffer(np.zeros((count,), dtype=op0_dt), accl_inst.cclo.socket)
     op1_buf = SimBuffer(np.zeros((count,), dtype=op1_dt), accl_inst.cclo.socket)
     res_buf = SimBuffer(np.zeros((count,), dtype=res_dt), accl_inst.cclo.socket)
-    op0_buf.sync_to_device()
-    op1_buf.sync_to_device()
-    res_buf.sync_to_device()
+
     op0_buf.data[:] = np.random.randn(count).astype(op0_dt)
     op1_buf.data[:] = np.random.randn(count).astype(op1_dt)
     return op0_buf, op1_buf, res_buf
@@ -330,8 +328,8 @@ def test_eth_compression(cclo_inst, world_size, local_rank, count):
         cclo_inst.send(0, op_buf, count, 1, tag=0, compress_dtype=np.dtype('float16'))
     elif local_rank == 1:
         cclo_inst.recv(0, res_buf, count, 0, tag=0, compress_dtype=np.dtype('float16'))
-        # check data; since there seems to be some difference between 
-        # numpy and FPGA fp32 <-> fp16 conversion, allow 1% relative error, and 0.01 absolute error 
+        # check data; since there seems to be some difference between
+        # numpy and FPGA fp32 <-> fp16 conversion, allow 1% relative error, and 0.01 absolute error
         if not np.isclose(op_buf.data.astype(np.float16).astype(np.float32), res_buf.data, rtol=1e-02, atol=1e-02).all():
             print("Compressed send/recv failed")
         else:
@@ -451,10 +449,10 @@ if __name__ == "__main__":
         ranks.append({"ip": "127.0.0.1", "port": args.start_port+world_size+i, "session_id":i, "max_segment_size": args.rxbuf_size})
 
     #configure FPGA and CCLO cores with the default 16 RX buffers of size given by args.rxbuf_size
-    cclo_inst = accl(   ranks, 
-                        local_rank, 
-                        bufsize=args.rxbuf_size, 
-                        protocol=("TCP" if args.tcp else "UDP"), 
+    cclo_inst = accl(   ranks,
+                        local_rank,
+                        bufsize=args.rxbuf_size,
+                        protocol=("TCP" if args.tcp else "UDP"),
                         sim_sock="tcp://localhost:"+str(args.start_port+local_rank)
                     )
     cclo_inst.set_timeout(10**8)

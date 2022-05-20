@@ -86,7 +86,7 @@ void zmq_client_startcall(zmq_intf_context *ctx, unsigned int scenario, unsigned
                         uint64_t addr_0, uint64_t addr_1, uint64_t addr_2) {
     Json::Value request_json;
 
-    request_json["type"] = 4;
+    request_json["type"] = 5;
     request_json["scenario"] = scenario;
     request_json["tag"] = tag;
     request_json["count"] = count;
@@ -181,6 +181,24 @@ void zmq_client_memwrite(zmq_intf_context *ctx, uint64_t adr, unsigned int size,
         array[(Json::ArrayIndex)i] = (Json::Value::Int)data[i];
     }
     request_json["wdata"] = array;
+
+    zmqpp::message request;
+    to_message(request_json, request);
+    ctx->cmd_socket->send(request);
+
+    zmqpp::message reply;
+    ctx->cmd_socket->receive(reply);
+    Json::Value reply_json = to_json(reply);
+    if (reply_json["status"] != 0) {
+        throw std::runtime_error("ZMQ mem write error (" + std::to_string(reply_json["status"].asUInt()) + ")");
+    }
+}
+
+void zmq_client_memalloc(zmq_intf_context *ctx, uint64_t adr, unsigned int size){
+    Json::Value request_json;
+    request_json["type"] = 4;
+    request_json["addr"] = (Json::Value::UInt64)adr;
+    request_json["len"] = (Json::Value::UInt64)size;
 
     zmqpp::message request;
     to_message(request_json, request);
