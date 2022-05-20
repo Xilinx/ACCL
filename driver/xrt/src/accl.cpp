@@ -116,10 +116,11 @@ CCLO *ACCL::nop(bool run_async, std::vector<CCLO *> waitfor) {
   return nullptr;
 }
 
-CCLO *ACCL::send(unsigned int comm_id, BaseBuffer &srcbuf, unsigned int count,
-                 unsigned int dst, unsigned int tag, bool from_fpga,
-                 streamFlags stream_flags, dataType compress_dtype,
-                 bool run_async, std::vector<CCLO *> waitfor) {
+CCLO *ACCL::send(BaseBuffer &srcbuf, unsigned int count,
+                 unsigned int dst, unsigned int tag, communicatorId comm_id,
+                 bool from_fpga, streamFlags stream_flags,
+                 dataType compress_dtype, bool run_async,
+                 std::vector<CCLO *> waitfor) {
   CCLO::Options options = CCLO::Options();
   if (from_fpga == false) {
     srcbuf.sync_to_device();
@@ -145,10 +146,11 @@ CCLO *ACCL::send(unsigned int comm_id, BaseBuffer &srcbuf, unsigned int count,
   return nullptr;
 }
 
-CCLO *ACCL::recv(unsigned int comm_id, BaseBuffer &dstbuf, unsigned int count,
-                 unsigned int src, unsigned int tag, bool to_fpga,
-                 streamFlags stream_flags, dataType compress_dtype,
-                 bool run_async, std::vector<CCLO *> waitfor) {
+CCLO *ACCL::recv(BaseBuffer &dstbuf, unsigned int count,
+                 unsigned int src, unsigned int tag, communicatorId comm_id,
+                 bool to_fpga, streamFlags stream_flags,
+                 dataType compress_dtype, bool run_async,
+                 std::vector<CCLO *> waitfor) {
   CCLO::Options options = CCLO::Options();
 
   if (to_fpga == false && run_async == true) {
@@ -297,9 +299,9 @@ CCLO *ACCL::external_stream_kernel(BaseBuffer &srcbuf, BaseBuffer &dstbuf,
   return nullptr;
 }
 
-CCLO *ACCL::bcast(unsigned int comm_id, BaseBuffer &buf, unsigned int count,
-                  unsigned int root, bool from_fpga, bool to_fpga,
-                  dataType compress_dtype, bool run_async,
+CCLO *ACCL::bcast(BaseBuffer &buf, unsigned int count,
+                  unsigned int root, communicatorId comm_id, bool from_fpga,
+                  bool to_fpga, dataType compress_dtype, bool run_async,
                   std::vector<CCLO *> waitfor) {
   CCLO::Options options = CCLO::Options();
 
@@ -344,10 +346,11 @@ CCLO *ACCL::bcast(unsigned int comm_id, BaseBuffer &buf, unsigned int count,
   return nullptr;
 }
 
-CCLO *ACCL::scatter(unsigned int comm_id, BaseBuffer &sendbuf,
+CCLO *ACCL::scatter(BaseBuffer &sendbuf,
                     BaseBuffer &recvbuf, unsigned int count, unsigned int root,
-                    bool from_fpga, bool to_fpga, dataType compress_dtype,
-                    bool run_async, std::vector<CCLO *> waitfor) {
+                    communicatorId comm_id, bool from_fpga, bool to_fpga,
+                    dataType compress_dtype, bool run_async,
+                    std::vector<CCLO *> waitfor) {
   CCLO::Options options = CCLO::Options();
 
   const Communicator &communicator = communicators[comm_id];
@@ -393,10 +396,11 @@ CCLO *ACCL::scatter(unsigned int comm_id, BaseBuffer &sendbuf,
   return nullptr;
 }
 
-CCLO *ACCL::gather(unsigned int comm_id, BaseBuffer &sendbuf,
+CCLO *ACCL::gather(BaseBuffer &sendbuf,
                    BaseBuffer &recvbuf, unsigned int count, unsigned int root,
-                   bool from_fpga, bool to_fpga, dataType compress_dtype,
-                   bool run_async, std::vector<CCLO *> waitfor) {
+                   communicatorId comm_id, bool from_fpga, bool to_fpga,
+                   dataType compress_dtype, bool run_async,
+                   std::vector<CCLO *> waitfor) {
   CCLO::Options options = CCLO::Options();
 
   const Communicator &communicator = communicators[comm_id];
@@ -452,9 +456,10 @@ CCLO *ACCL::gather(unsigned int comm_id, BaseBuffer &sendbuf,
   return nullptr;
 }
 
-CCLO *ACCL::allgather(unsigned int comm_id, BaseBuffer &sendbuf,
-                      BaseBuffer &recvbuf, unsigned int count, bool from_fpga,
-                      bool to_fpga, dataType compress_dtype, bool run_async,
+CCLO *ACCL::allgather(BaseBuffer &sendbuf,
+                      BaseBuffer &recvbuf, unsigned int count,
+                      communicatorId comm_id, bool from_fpga, bool to_fpga,
+                      dataType compress_dtype, bool run_async,
                       std::vector<CCLO *> waitfor) {
   CCLO::Options options = CCLO::Options();
 
@@ -508,10 +513,10 @@ CCLO *ACCL::allgather(unsigned int comm_id, BaseBuffer &sendbuf,
   return nullptr;
 }
 
-CCLO *ACCL::reduce(unsigned int comm_id, BaseBuffer &sendbuf,
+CCLO *ACCL::reduce(BaseBuffer &sendbuf,
                    BaseBuffer &recvbuf, unsigned int count, unsigned int root,
-                   reduceFunction func, bool from_fpga, bool to_fpga,
-                   dataType compress_dtype, bool run_async,
+                   reduceFunction func, communicatorId comm_id, bool from_fpga,
+                   bool to_fpga, dataType compress_dtype, bool run_async,
                    std::vector<CCLO *> waitfor) {
   CCLO::Options options = CCLO::Options();
 
@@ -560,11 +565,11 @@ CCLO *ACCL::reduce(unsigned int comm_id, BaseBuffer &sendbuf,
   return nullptr;
 }
 
-CCLO *ACCL::allreduce(unsigned int comm_id, BaseBuffer &sendbuf,
+CCLO *ACCL::allreduce(BaseBuffer &sendbuf,
                       BaseBuffer &recvbuf, unsigned int count,
-                      reduceFunction func, bool from_fpga, bool to_fpga,
-                      dataType compress_dtype, bool run_async,
-                      std::vector<CCLO *> waitfor) {
+                      reduceFunction func, communicatorId comm_id,
+                      bool from_fpga, bool to_fpga, dataType compress_dtype,
+                      bool run_async, std::vector<CCLO *> waitfor) {
   CCLO::Options options = CCLO::Options();
 
   const Communicator &communicator = communicators[comm_id];
@@ -609,9 +614,10 @@ CCLO *ACCL::allreduce(unsigned int comm_id, BaseBuffer &sendbuf,
   return nullptr;
 }
 
-CCLO *ACCL::reduce_scatter(unsigned int comm_id, BaseBuffer &sendbuf,
+CCLO *ACCL::reduce_scatter(BaseBuffer &sendbuf,
                            BaseBuffer &recvbuf, unsigned int count,
-                           reduceFunction func, bool from_fpga, bool to_fpga,
+                           reduceFunction func, communicatorId comm_id,
+                           bool from_fpga, bool to_fpga,
                            dataType compress_dtype, bool run_async,
                            std::vector<CCLO *> waitfor) {
   CCLO::Options options = CCLO::Options();
@@ -656,6 +662,24 @@ CCLO *ACCL::reduce_scatter(unsigned int comm_id, BaseBuffer &sendbuf,
   }
 
   return nullptr;
+}
+
+std::vector<rank_t> ACCL::get_comm_group(communicatorId comm_id) {
+  communicators[comm_id].readback();
+  return *communicators[comm_id].get_ranks();
+}
+
+unsigned int ACCL::get_comm_rank(communicatorId comm_id) {
+  return communicators[comm_id].local_rank();
+}
+
+communicatorId ACCL::create_communicator(const std::vector<rank_t> &ranks,
+                                            int local_rank) {
+  configure_communicator(ranks, local_rank);
+  // Communicator ID is the index of the communicator in the 
+  // vector of communicators
+  communicatorId new_comm_id = communicators.size() - 1;
+  return communicators.size() - 1;
 }
 
 std::string ACCL::dump_exchange_memory() {
@@ -805,9 +829,8 @@ void ACCL::configure_arithmetic() {
                                  "configure_communicator() first");
   }
 
-  addr_t address = arithcfg_addr;
   for (auto &[_key, arithcfg] : arith_config) {
-    write_arithconfig(*cclo, arithcfg, &address);
+    write_arithconfig(*cclo, arithcfg, &current_config_address);
   }
 }
 
@@ -849,7 +872,7 @@ void ACCL::setup_rx_buffers(size_t nbufs, addr_t bufsize,
   // NOTE: the buffer count HAS to be written last (offload checks for this)
   cclo->write(rx_buffers_adr, nbufs);
 
-  communicators_addr = address + 4;
+  current_config_address = address + 4;
   if (sim_mode) {
     utility_spare =
         new SimBuffer(new int8_t[bufsize](), bufsize, dataType::int8,
@@ -1072,22 +1095,13 @@ void ACCL::set_max_segment_size(unsigned int value) {
 }
 
 void ACCL::configure_communicator(const std::vector<rank_t> &ranks,
-                                  int local_rank) {
+                                            int local_rank) {
   if (rx_buffer_spares.empty()) {
     throw std::runtime_error(
         "RX buffers unconfigured, please call setup_rx_buffers() first.");
   }
-
-  addr_t addr;
-
-  if (communicators.empty()) {
-    addr = communicators_addr;
-  } else {
-    addr = communicators.back().communicators_addr();
-  }
-
-  communicators.emplace_back(Communicator(cclo, ranks, local_rank, &addr));
-  arithcfg_addr = addr + 4;
+  communicators.emplace_back(
+      Communicator(cclo, ranks, local_rank, &current_config_address));
 }
 
 std::string ACCL::dump_communicator() {
