@@ -24,6 +24,10 @@
 /** @file timing.hpp */
 
 namespace ACCL {
+/**
+ * Timer object for useful for benchmarking.
+ *
+ */
 class Timer {
 private:
   std::chrono::steady_clock::time_point _start;
@@ -32,8 +36,16 @@ private:
   bool _ended;
 
 public:
+  /**
+   * Construct a new Timer object.
+   *
+   */
   Timer() { reset(); }
 
+  /**
+   * Starts the timer. Resets the timer if it was already started.
+   *
+   */
   void start() {
     if (_started == true) {
       reset();
@@ -43,6 +55,11 @@ public:
     _started = true;
   }
 
+  /**
+   * End the timer. Throws an exception if it was already ended or never
+   * started.
+   *
+   */
   void end() {
     if (_ended == true) {
       throw std::runtime_error("Timer already ended.");
@@ -56,11 +73,21 @@ public:
     _ended = true;
   }
 
+  /**
+   * Reset the timer.
+   *
+   */
   void reset() {
     _started = false;
     _ended = false;
   }
 
+  /**
+   * Get the elapsed in microseconds time. Throws an exception if the timer
+   * wasn't ended.
+   *
+   * @return unsigned long The elapsed time in microseconds.
+   */
   unsigned long elapsed() {
     if (!_started || !_ended) {
       throw std::runtime_error("You forgot to call start or end or both");

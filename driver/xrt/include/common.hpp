@@ -25,35 +25,58 @@
 
 /** @file common.hpp */
 
-#define ACCL_SEND_LOG_FILE(i) "accl_send" + i + ".log"
-
 namespace ACCL {
 
+/**
+ * Print debug message
+ *
+ * @param message Message to print.
+ */
+inline void debug(std::string message) {
 #ifdef ACCL_DEBUG
-inline void debug(std::string message) { std::cerr << message << std::endl; }
+  std::cerr << message << std::endl;
+#endif
+}
 
+/**
+ * Format value as hexadecimal number in string.
+ *
+ * @param value        Value to format.
+ * @return std::string Value formatted as hexadecimal number.
+ */
 inline std::string debug_hex(addr_t value) {
+#ifdef ACCL_DEBUG
   std::stringstream stream;
   stream << std::hex << value;
   return stream.str();
+#else
+  return "";
+#endif
 }
 
+/**
+ * Reset the log file.
+ *
+ */
+#ifdef ACCL_DEBUG
 void reset_log();
+#else
+inline void reset_log() {
+  // NOP
+}
+#endif
 
+/**
+ * Append message to log file.
+ *
+ * @param label   Label of message.
+ * @param message Message to write to log file.
+ */
+#ifdef ACCL_DEBUG
 void accl_send_log(const std::string &label, const std::string &message);
 #else
-inline void debug(std::string message) {
-  // NOP
-}
-
-inline std::string debug_hex(addr_t value) { return ""; }
-
 inline void accl_send_log(const std::string &label,
                           const std::string &message) {
-  // NOP
-}
-
-inline void reset_log() {
   // NOP
 }
 #endif

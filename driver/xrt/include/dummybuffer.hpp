@@ -24,11 +24,26 @@
 /** @file dummybuffer.hpp */
 
 namespace ACCL {
+/**
+ * The dummy buffer class represents a non existing buffer.
+ *
+ * Used in ACCL for unused buffers in calls.
+ *
+ */
 class DummyBuffer : public BaseBuffer {
 public:
+  /**
+   * Construct a new Dummy Buffer object
+   *
+   * @param physical_address Fake address of dummy buffer, 0x0 by default.
+   */
   DummyBuffer(addr_t physical_address = 0x0)
       : BaseBuffer(nullptr, 0, dataType::none, physical_address) {}
 
+  /**
+   * Destroy the Dummy Buffer object
+   *
+   */
   virtual ~DummyBuffer() {}
 
   xrt::bo *bo() override { return nullptr; }
