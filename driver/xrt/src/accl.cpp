@@ -888,7 +888,6 @@ void ACCL::check_return_value(const std::string function_name) {
 
 void ACCL::prepare_call(CCLO::Options &options) {
   const ArithConfig *arithcfg;
-  /* TODO: Does this work on hardware? */
   if (options.addr_0 == nullptr) {
     options.addr_0 = &dummy_buffer;
   }

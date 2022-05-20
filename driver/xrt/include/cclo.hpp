@@ -36,25 +36,30 @@ public:
   /**
    * CCLO options for call and start.
    *
-   * TODO: Describe options.
-   *
    */
   struct Options {
-    operation scenario;
-    unsigned int count;
-    unsigned int comm;
-    unsigned int root_src_dst;
-    cfgFunc cfg_function;
-    reduceFunction reduce_function;
-    unsigned int tag;
-    addr_t arithcfg_addr;
-    dataType compress_dtype;
-    compressionFlags compression_flags;
-    streamFlags stream_flags;
-    BaseBuffer *addr_0;
-    BaseBuffer *addr_1;
-    BaseBuffer *addr_2;
-    std::vector<CCLO *> waitfor;
+    operation scenario;                 /**< Operation to perform on CCLO. */
+    unsigned int count;                 /**< Amount of elements to perform
+                                             operation on. */
+    unsigned int comm;                  /**< Address of communicator to use. */
+    unsigned int root_src_dst;          /**< Rank to use as root for the
+                                             operation. */
+    cfgFunc cfg_function;               /**< Configuration function to use for
+                                             operation. */
+    reduceFunction reduce_function;     /**< Reduce function to use for
+                                             operation. */
+    unsigned int tag;                   /**< Tag to use for send or receive. */
+    addr_t arithcfg_addr;               /**< Address of the arithmetic
+                                             configuration to use. */
+    dataType compress_dtype;            /**< Compress buffers to this
+                                             datatype. */
+    compressionFlags compression_flags; /**< Compression configuration. */
+    streamFlags stream_flags;           /**< Stream configuration. */
+    BaseBuffer *addr_0;                 /**< ACCL buffer of operand 0. */
+    BaseBuffer *addr_1;                 /**< ACCL buffer of operand 1. */
+    BaseBuffer *addr_2;                 /**< ACCL buffer of result. */
+    std::vector<CCLO *> waitfor;        /**< Wait for these operations to
+                                             complete; currently unsupported. */
 
     /**
      * Construct a new CCLO Options object with default parameters.
@@ -115,6 +120,11 @@ public:
    */
   virtual void wait() = 0;
 
+  /**
+   * Get the base address of the CCLO, this currently returns 0x0 on hardware.
+   *
+   * @return addr_t The base address of the CCLO.
+   */
   virtual addr_t get_base_addr() = 0;
 };
 } // namespace ACCL

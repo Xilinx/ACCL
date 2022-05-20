@@ -42,7 +42,7 @@ const addr_t IDCODE_OFFSET = 0x1FF8;
 const addr_t CFGRDY_OFFSET = 0x1FF4;
 
 /**
- * Configuration function
+ * Configuration functions
  *
  */
 enum class cfgFunc {
@@ -56,54 +56,71 @@ enum class cfgFunc {
 };
 
 /**
- * ACCL operation
+ * Supported ACCL operations
  *
  */
 enum class operation {
   config = 0,           /**< Set CCLO config */
   copy = 1,             /**< Copy FPGA buffer */
   combine = 2,          /**< Perform reduce operator on FPGA buffers */
-  send = 3,             /**< MPI send */
-  recv = 4,             /**< MPI recv */
-  bcast = 5,            /**< MPI bcast */
-  scatter = 6,          /**< MPI scatter */
-  gather = 7,           /**< MPI gather */
-  reduce = 8,           /**< MPI reduce */
-  allgather = 9,        /**< MPI allgather */
-  allreduce = 10,       /**< MPI allreduce */
-  reduce_scatter = 11,  /**< MPI reduce_scatter */
+  send = 3,             /**< Send FPGA buffer to rank */
+  recv = 4,             /**< Recieve FPGA buffer from rank */
+  bcast = 5,            /**< Broadcast FPGA buffer from root */
+  scatter = 6,          /**< Scatter FPGA buffer from root */
+  gather = 7,           /**< Gather FPGA buffers on root */
+  reduce = 8,           /**< Perform reduce operator on remote FPGA buffers
+                             on root */
+  allgather = 9,        /**< Gather FPGA buffers on all ranks */
+  allreduce = 10,       /**< Perform reduce operator on remote FPGA buffers
+                             on all ranks */
+  reduce_scatter = 11,  /**< Perform reduce operator on remote FPGA buffers
+                             and scatter to all ranks */
   ext_stream_krnl = 12, /**< Stream kernel */
-  nop = 255             /**< NOP */
+  nop = 255             /**< NOP operation */
 };
 
 /**
- * ACCL reduce function
+ * ACCL reduce functions
  *
- * Used by  operation::combine, operation::reduce,
+ * Used by operation::combine, operation::reduce,
  * operation::allreduce and operation::reduce_scatter.
  */
-enum class reduceFunction { SUM = 0 };
+enum class reduceFunction {
+  SUM = 0 /**< Sum all values */
+};
 
 /**
- * ACCL data types
+ * ACCL supported data types
  *
  */
 enum class dataType {
-  none,    /**< No datatype, only used internally. */
-  int8,    /**< Unsupported datatype, only used internally. */
-  float16, /**< float16 */
-  float32, /**< float32 */
-  float64, /**< float64 */
-  int32,   /**< int32 */
-  int64    /**< int64 */
+  none,    /**< No datatype */
+  int8,    /**< 8-bit integer; unsupported datatype, only used internally. */
+  float16, /**< 16-bit floating-point number */
+  float32, /**< 32-bit floating-point number */
+  float64, /**< 64-bit floating-point number */
+  int32,   /**< 32-bit integer */
+  int64    /**< 64-bit integer */
 };
 
+/**
+ * Size of the datatypes in bits.
+ *
+ */
 const std::map<dataType, unsigned int> dataTypeSize = {
     {dataType::none, 0},     {dataType::int8, 8},     {dataType::float16, 16},
     {dataType::float32, 32}, {dataType::float64, 64}, {dataType::int32, 32},
     {dataType::int64, 64}};
 
-enum class streamFlags { NO_STREAM = 0, OP0_STREAM = 1, RES_STREAM = 2 };
+/**
+ * ACCL stream flags to specify streamed buffers.
+ *
+ */
+enum class streamFlags {
+  NO_STREAM = 0,  /**< No buffers are streamed */
+  OP0_STREAM = 1, /**< The first operand is streamed */
+  RES_STREAM = 2  /**< The result is streamed */
+};
 
 inline streamFlags operator|(streamFlags lhs, streamFlags rhs) {
   return static_cast<streamFlags>(static_cast<int>(lhs) |
@@ -115,15 +132,29 @@ inline streamFlags &operator|=(streamFlags &lhs, streamFlags rhs) {
   return lhs;
 }
 
+/**
+ * ACCL compression flags to specify compression configuration.
+ *
+ */
 enum class compressionFlags {
-  NO_COMPRESSION = 0,
-  OP0_COMPRESSED = 1,
-  OP1_COMPRESSED = 2,
-  RES_COMPRESSED = 4,
-  ETH_COMPRESSED = 8
+  NO_COMPRESSION = 0, /**< No compression should be used */
+  OP0_COMPRESSED = 1, /**< Operand 0 is already compressed */
+  OP1_COMPRESSED = 2, /**< Operand 1 is already compressed */
+  RES_COMPRESSED = 4, /**< Result should be compressed */
+  ETH_COMPRESSED = 8  /**< Ethernet compression should be used */
 };
 
-enum class networkProtocol { TCP, UDP, RDMA };
+/**
+ * ACCL supported network protocols.
+ *
+ * Should match the protocol used in the ACCL kernel.
+ *
+ */
+enum class networkProtocol {
+  TCP,  /**< The TCP protocol */
+  UDP,  /**< The UDP protocol */
+  RDMA  /**< Use RDMA for data transfers; currently unsupported */
+};
 
 inline compressionFlags operator|(compressionFlags lhs, compressionFlags rhs) {
   return static_cast<compressionFlags>(static_cast<int>(lhs) |
@@ -136,6 +167,10 @@ inline compressionFlags &operator|=(compressionFlags &lhs,
   return lhs;
 }
 
+/**
+ * ACCL error codes used internally.
+ *
+ */
 enum class errorCode {
   COLLECTIVE_OP_SUCCESS = 0,
   DMA_MISMATCH_ERROR = 1 << 0,
@@ -167,6 +202,9 @@ enum class errorCode {
   DMA_TAG_MISMATCH_ERROR = 1 << 26
 };
 
+/** Amount of bits used for error codes. */
+const size_t error_code_bits = 26;
+
 inline errorCode operator|(errorCode lhs, errorCode rhs) {
   return static_cast<errorCode>(static_cast<int>(lhs) | static_cast<int>(rhs));
 }
@@ -176,7 +214,11 @@ inline errorCode &operator|=(errorCode &lhs, errorCode rhs) {
   return lhs;
 }
 
-const size_t error_code_bits = 26;
-
+/**
+ * Convert an ACCL error code to a string.
+ *
+ * @param code          Error code to convert to string.
+ * @return const char*  Matching error code string.
+ */
 const char *error_code_to_string(errorCode code);
 } // namespace ACCL

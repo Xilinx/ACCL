@@ -29,8 +29,23 @@
 #define DEFAULT_SIMBUFFER_MEMGRP 0
 
 namespace ACCL {
+/** Stores the next free address on the simulated device. */
 extern addr_t next_free_address;
 
+/**
+ * A buffer that is allocated on a external CCLO emulator or simulator with an
+ * accompanying host pointer.
+ *
+ * Allocated memory on the external CCLO is currently not reused in simulation
+ * mode, so when allocating a lot of buffers on the CCLO the host might run out
+ * of memory.
+ *
+ * It is possible to pass a simulated BO buffer from the Vitis emulator,
+ * in this case a new internal BO buffer will also be allocated for copying data
+ * between the simulated BO buffer and the simulated ACCL buffer.
+ *
+ * @tparam dtype Datatype of the buffer.
+ */
 template <typename dtype> class SimBuffer : public Buffer<dtype> {
 private:
   zmq_intf_context *zmq_ctx;
@@ -40,6 +55,12 @@ private:
   xrt::device _device{};    // Used to create copy buffers
   bool bo_valid{};
 
+  /**
+   * Get the next free address available on the CCLO.
+   *
+   * @param size    Size of the buffer to allocate.
+   * @return addr_t Next free address on the CCLO.
+   */
   addr_t get_next_free_address(size_t size) {
     addr_t address = next_free_address;
     // allocate on 4K boundaries
@@ -50,17 +71,89 @@ private:
     return address;
   }
 
+  /**
+   * Create a new host buffer.
+   *
+   * @param length  Amount of elements in the buffer.
+   * @return dtype* The new host buffer.
+   */
   dtype *create_internal_buffer(size_t length) {
     own_buffer = true;
     return new dtype[length];
   }
 
+  /**
+   * Allocate the buffer on the simulated CCLO.
+   *
+   */
   void allocate_buffer() {
     zmq_client_memalloc(this->zmq_ctx, (uint64_t)this->_physical_address,
                         (unsigned int)this->_size);
   }
 
 public:
+  /**
+   * Construct a new simulated buffer from an existing host buffer.
+   *
+   * @param buffer  Host buffer to use.
+   * @param length  Amount of elements in the existing host buffer.
+   * @param type    ACCL datatype of buffer.
+   * @param context The zmq server of the CCLO to use.
+   */
+  SimBuffer(dtype *buffer, size_t length, dataType type,
+            zmq_intf_context *const context)
+      : SimBuffer(buffer, length, type, context,
+                  this->get_next_free_address(length * sizeof(dtype))) {}
+
+  /**
+   * Construct a new simulated buffer from a simulated BO buffer.
+   *
+   * This will create a new internal BO buffer as well to copy data between the
+   * simulated BO buffer and the simulated ACCL buffer.
+   *
+   * @param bo      Existing BO buffer to use.
+   * @param length  Amount of elements in the existing BO buffer.
+   * @param type    ACCL datatype of buffer.
+   * @param context The zmq server of the CCLO to use.
+   */
+  SimBuffer(xrt::bo &bo, xrt::device &device, size_t length, dataType type,
+            zmq_intf_context *const context)
+      : SimBuffer(bo.map<dtype *>(), length, type, context,
+                  this->get_next_free_address(length * sizeof(dtype)), bo,
+                  device, true) {}
+
+  /**
+   * Construct a new simulated buffer without an existing host pointer.
+   *
+   * @param length  Amount of elements to allocate for.
+   * @param type    ACCL datatype of buffer.
+   * @param context The zmq server of the CCLO to use.
+   */
+  SimBuffer(size_t length, dataType type, zmq_intf_context *const context)
+      : SimBuffer(create_internal_buffer(length), length, type, context) {}
+
+  /**
+   * Construct a new simulated buffer from an existing host pointer at a
+   * specific physical address. You should generally let ACCL itself decide
+   * which physical address to use.
+   *
+   * @param buffer           Host buffer to use.
+   * @param length           Amount of elements in host pointer.
+   * @param type             ACCL datatype of buffer.
+   * @param context          The zmq server of the CCLO to use.
+   * @param physical_address The physical address of the device buffer.
+   */
+  SimBuffer(dtype *buffer, size_t length, dataType type,
+            zmq_intf_context *const context, const addr_t physical_address)
+      : Buffer<dtype>(buffer, length, type, physical_address), zmq_ctx(context),
+        _bo(xrt::bo()) {
+    allocate_buffer();
+  }
+
+  /**
+   * Copy construct of a simulated buffer for internal use only.
+   *
+   */
   SimBuffer(dtype *buffer, size_t length, dataType type,
             zmq_intf_context *const context, const addr_t physical_address,
             xrt::bo &bo, xrt::device &device, bool bo_valid_,
@@ -75,33 +168,24 @@ public:
     allocate_buffer();
   }
 
-  SimBuffer(dtype *buffer, size_t length, dataType type,
-            zmq_intf_context *const context, const addr_t physical_address)
-      : Buffer<dtype>(buffer, length, type, physical_address), zmq_ctx(context),
-        _bo(xrt::bo()) {
-    allocate_buffer();
-  }
-
-  SimBuffer(dtype *buffer, size_t length, dataType type,
-            zmq_intf_context *const context)
-      : SimBuffer(buffer, length, type, context,
-                  this->get_next_free_address(length * sizeof(dtype))) {}
-
-  SimBuffer(xrt::bo &bo, xrt::device &device, size_t length, dataType type,
-            zmq_intf_context *const context)
-      : SimBuffer(bo.map<dtype *>(), length, type, context,
-                  this->get_next_free_address(length * sizeof(dtype)), bo,
-                  device, true) {}
-
-  SimBuffer(size_t length, dataType type, zmq_intf_context *const context)
-      : SimBuffer(create_internal_buffer(length), length, type, context) {}
-
+  /**
+   * Destroy the simulated buffer. Will not free anything on the CCLO.
+   *
+   */
   virtual ~SimBuffer() {
     if (own_buffer) {
       delete[] this->_buffer;
     }
   }
 
+  /**
+   * Return the underlying BO buffer. Will only return a BO buffer if the
+   * simulated buffer was constructed from an existing BO buffer. Otherwise it
+   * will return a nullptr.
+   *
+   * @return xrt::bo* The underlying BO buffer if it exists, otherwise a
+   * nullptr.
+   */
   xrt::bo *bo() override {
     if (bo_valid) {
       return &_bo;
@@ -110,10 +194,20 @@ public:
     return nullptr;
   }
 
+  /**
+   * Check if the buffer is simulated, always true.
+   *
+   */
   bool is_simulated() const override { return true; }
 
+  /**
+   * Sync the user BO buffer to the simulated buffer.
+   *
+   */
   void sync_bo_to_device() override {
     if (bo_valid) {
+      // Use the internal copy BO buffer to sync to the device, since we don't
+      // want to overwrite the host pointer of the user BO buffer.
       internal_copy_bo.copy(_bo, this->_size);
       internal_copy_bo.sync(xclBOSyncDirection::XCL_BO_SYNC_BO_FROM_DEVICE);
       zmq_client_memwrite(this->zmq_ctx, (uint64_t)this->_physical_address,
@@ -122,23 +216,43 @@ public:
     }
   }
 
+  /**
+   * Sync the user BO buffer from the simulated buffer.
+   *
+   */
   void sync_bo_from_device() override {
     if (bo_valid) {
       zmq_client_memread(this->zmq_ctx, (uint64_t)this->_physical_address,
                          (unsigned int)this->_size,
                          internal_copy_bo.map<uint8_t *>());
+      // Use the internal copy BO buffer to sync to the device, since we don't
+      // want to overwrite the host pointer of the user BO buffer.
       internal_copy_bo.sync(xclBOSyncDirection::XCL_BO_SYNC_BO_TO_DEVICE);
       _bo.copy(internal_copy_bo, this->_size);
     }
   }
 
+  /**
+   * Sync the data from the device back to the host. Will copy the data from
+   * the BO buffer to the simulated buffer first if a BO buffer was provided
+   * during construction of the simulated buffer.
+   *
+   */
   void sync_from_device() override {
+    // First sync the BO buffer to the simulated buffer to make sure it's up to
+    // date.
     sync_bo_to_device();
     zmq_client_memread(this->zmq_ctx, (uint64_t)this->_physical_address,
                        (unsigned int)this->_size,
                        static_cast<uint8_t *>(this->_byte_array));
   }
 
+  /**
+   * Sync the data from the host to the device. Will copy the data from
+   * the host buffer to the BO buffer as well if a BO buffer was provided
+   * during construction of the simulated buffer.
+   *
+   */
   void sync_to_device() override {
     zmq_client_memwrite(this->zmq_ctx, (uint64_t)this->_physical_address,
                         (unsigned int)this->_size,

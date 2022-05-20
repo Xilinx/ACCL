@@ -21,6 +21,9 @@
 #include <fstream>
 #endif
 
+#define ACCL_SEND_LOG_FILE(i)                                                  \
+  (std::string("accl_send") + i + std::string(".log"))
+
 namespace ACCL {
 
 void write_arithconfig(CCLO &cclo, ArithConfig &arithcfg, addr_t *addr) {
@@ -36,7 +39,8 @@ void write_arithconfig(CCLO &cclo, ArithConfig &arithcfg, addr_t *addr) {
   *addr += 4;
   cclo.write(*addr, arithcfg.decompressor_tdest);
   *addr += 4;
-  cclo.write(*addr, arithcfg.arith_tdest.size()); // amount of arithmetic functions
+  cclo.write(*addr,
+             arithcfg.arith_tdest.size()); // amount of arithmetic functions
   *addr += 4;
   cclo.write(*addr, arithcfg.arith_is_compressed);
   *addr += 4;
