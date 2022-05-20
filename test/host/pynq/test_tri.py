@@ -25,12 +25,29 @@ import itertools
 import math
 from mpi4py import MPI
 
+allocated_buffers = {}
+
 def get_buffers(count, op0_dt, op1_dt, res_dt, accl_inst):
-    op0_buf = pynq.allocate((count,), dtype=op0_dt, target=accl_inst.cclo.devicemem)
-    op1_buf = pynq.allocate((count,), dtype=op1_dt, target=accl_inst.cclo.devicemem)
-    res_buf = pynq.allocate((count,), dtype=res_dt, target=accl_inst.cclo.devicemem)
+    try:
+        op0_buf, op1_buf, res_buf = allocated_buffers[(op0_dt, op1_dt, res_dt)]
+        if op0_buf.size >= count:
+            op0_buf = op0_buf[0:count]
+            op1_buf = op1_buf[0:count]
+            res_buf = res_buf[0:count]
+        else:
+            op0_buf = pynq.allocate((count,), dtype=op0_dt, target=accl_inst.cclo.devicemem)
+            op1_buf = pynq.allocate((count,), dtype=op1_dt, target=accl_inst.cclo.devicemem)
+            res_buf = pynq.allocate((count,), dtype=res_dt, target=accl_inst.cclo.devicemem)
+            allocated_buffers[(op0_dt, op1_dt, res_dt)] = (op0_buf, op1_buf, res_buf)
+    except:
+        op0_buf = pynq.allocate((count,), dtype=op0_dt, target=accl_inst.cclo.devicemem)
+        op1_buf = pynq.allocate((count,), dtype=op1_dt, target=accl_inst.cclo.devicemem)
+        res_buf = pynq.allocate((count,), dtype=res_dt, target=accl_inst.cclo.devicemem)
+        allocated_buffers[(op0_dt, op1_dt, res_dt)] = (op0_buf, op1_buf, res_buf)
+
     op0_buf[:] = np.random.randn(count).astype(op0_dt)
     op1_buf[:] = np.random.randn(count).astype(op1_dt)
+    res_buf[:] = np.random.randn(count).astype(res_dt)
     return op0_buf, op1_buf, res_buf
 
 def test_copy(cclo_inst, count, dt = [np.float32]):

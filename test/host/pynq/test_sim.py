@@ -24,13 +24,29 @@ import itertools
 import math
 from mpi4py import MPI
 
+allocated_buffers = {}
+
 def get_buffers(count, op0_dt, op1_dt, res_dt, accl_inst):
-    op0_buf = SimBuffer(np.zeros((count,), dtype=op0_dt), accl_inst.cclo.socket)
-    op1_buf = SimBuffer(np.zeros((count,), dtype=op1_dt), accl_inst.cclo.socket)
-    res_buf = SimBuffer(np.zeros((count,), dtype=res_dt), accl_inst.cclo.socket)
+    try:
+        op0_buf, op1_buf, res_buf = allocated_buffers[(op0_dt, op1_dt, res_dt)]
+        if op0_buf.size >= count:
+            op0_buf = op0_buf[0:count]
+            op1_buf = op1_buf[0:count]
+            res_buf = res_buf[0:count]
+        else:
+            op0_buf = SimBuffer(np.zeros((count,), dtype=op0_dt), accl_inst.cclo.socket)
+            op1_buf = SimBuffer(np.zeros((count,), dtype=op1_dt), accl_inst.cclo.socket)
+            res_buf = SimBuffer(np.zeros((count,), dtype=res_dt), accl_inst.cclo.socket)
+            allocated_buffers[(op0_dt, op1_dt, res_dt)] = (op0_buf, op1_buf, res_buf)
+    except:
+        op0_buf = SimBuffer(np.zeros((count,), dtype=op0_dt), accl_inst.cclo.socket)
+        op1_buf = SimBuffer(np.zeros((count,), dtype=op1_dt), accl_inst.cclo.socket)
+        res_buf = SimBuffer(np.zeros((count,), dtype=res_dt), accl_inst.cclo.socket)
+        allocated_buffers[(op0_dt, op1_dt, res_dt)] = (op0_buf, op1_buf, res_buf)
 
     op0_buf.data[:] = np.random.randn(count).astype(op0_dt)
     op1_buf.data[:] = np.random.randn(count).astype(op1_dt)
+    res_buf.data[:] = np.random.randn(count).astype(res_dt)
     return op0_buf, op1_buf, res_buf
 
 def test_copy(cclo_inst, count, dt = [np.float32]):
