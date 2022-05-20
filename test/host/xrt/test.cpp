@@ -674,7 +674,7 @@ void test_allgather_comms(ACCL::ACCL &accl, options_t &options) {
     new_rank = own_rank - split;
   }
   std::vector<rank_t> new_group(new_group_start, new_group_end);
-  CommunicatorId new_comm = accl.create_communicator(new_group, new_rank);
+  communicatorId new_comm = accl.create_communicator(new_group, new_rank);
   test_debug(accl.dump_communicator(), options);
   test_debug("Gathering data... count=" + std::to_string(count) +
                  ", comm=" + std::to_string(new_comm),
@@ -727,7 +727,7 @@ void test_multicomm(ACCL::ACCL &accl, options_t &options) {
   new_group.push_back(group[2]);
   new_group.push_back(group[3]);
   unsigned int new_rank = (own_rank == 0) ? 0 : own_rank - 1;
-  CommunicatorId new_comm = accl.create_communicator(new_group, new_rank);
+  communicatorId new_comm = accl.create_communicator(new_group, new_rank);
   test_debug(accl.dump_communicator(), options);
   std::unique_ptr<float> host_op_buf = random_array<float>(count);
   auto op_buf = accl.create_buffer(host_op_buf.get(), count, dataType::float32);

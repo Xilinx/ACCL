@@ -172,7 +172,7 @@ public:
    *                       waitfor; nullptr if run_async is false.
    */
   CCLO *send(BaseBuffer &srcbuf, unsigned int count, unsigned int dst,
-             unsigned int tag = TAG_ANY, CommunicatorId comm_id = GLOBAL_COMM,
+             unsigned int tag = TAG_ANY, communicatorId comm_id = GLOBAL_COMM,
              bool from_fpga = false,
              streamFlags stream_flags = streamFlags::NO_STREAM,
              dataType compress_dtype = dataType::none, bool run_async = false,
@@ -198,7 +198,7 @@ public:
    *                       waitfor; nullptr if run_async is false.
    */
   CCLO *recv(BaseBuffer &dstbuf, unsigned int count, unsigned int src,
-             unsigned int tag = TAG_ANY, CommunicatorId comm_id = GLOBAL_COMM,
+             unsigned int tag = TAG_ANY, communicatorId comm_id = GLOBAL_COMM,
              bool to_fpga = false,
              streamFlags stream_flags = streamFlags::NO_STREAM,
              dataType compress_dtype = dataType::none, bool run_async = false,
@@ -284,7 +284,7 @@ public:
    *                       waitfor; nullptr if run_async is false.
    */
   CCLO *bcast(BaseBuffer &buf, unsigned int count, unsigned int root,
-              CommunicatorId comm_id = GLOBAL_COMM, bool from_fpga = false,
+              communicatorId comm_id = GLOBAL_COMM, bool from_fpga = false,
               bool to_fpga = false, dataType compress_dtype = dataType::none,
               bool run_async = false, std::vector<CCLO *> waitfor = {});
 
@@ -312,7 +312,7 @@ public:
    *                       waitfor; nullptr if run_async is false.
    */
   CCLO *scatter(BaseBuffer &sendbuf, BaseBuffer &recvbuf, unsigned int count,
-                unsigned int root, CommunicatorId comm_id = GLOBAL_COMM,
+                unsigned int root, communicatorId comm_id = GLOBAL_COMM,
                 bool from_fpga = false, bool to_fpga = false,
                 dataType compress_dtype = dataType::none,
                 bool run_async = false, std::vector<CCLO *> waitfor = {});
@@ -341,7 +341,7 @@ public:
    *                       waitfor; nullptr if run_async is false.
    */
   CCLO *gather(BaseBuffer &sendbuf, BaseBuffer &recvbuf, unsigned int count,
-               unsigned int root, CommunicatorId comm_id = GLOBAL_COMM,
+               unsigned int root, communicatorId comm_id = GLOBAL_COMM,
                bool from_fpga = false, bool to_fpga = false,
                dataType compress_dtype = dataType::none, bool run_async = false,
                std::vector<CCLO *> waitfor = {});
@@ -368,7 +368,7 @@ public:
    *                       waitfor; nullptr if run_async is false.
    */
   CCLO *allgather(BaseBuffer &sendbuf, BaseBuffer &recvbuf, unsigned int count,
-                  CommunicatorId comm_id = GLOBAL_COMM, bool from_fpga = false,
+                  communicatorId comm_id = GLOBAL_COMM, bool from_fpga = false,
                   bool to_fpga = false,
                   dataType compress_dtype = dataType::none,
                   bool run_async = false, std::vector<CCLO *> waitfor = {});
@@ -397,7 +397,7 @@ public:
    */
   CCLO *reduce(BaseBuffer &sendbuf, BaseBuffer &recvbuf, unsigned int count,
                unsigned int root, reduceFunction func,
-               CommunicatorId comm_id = GLOBAL_COMM, bool from_fpga = false,
+               communicatorId comm_id = GLOBAL_COMM, bool from_fpga = false,
                bool to_fpga = false, dataType compress_dtype = dataType::none,
                bool run_async = false, std::vector<CCLO *> waitfor = {});
 
@@ -422,7 +422,7 @@ public:
    *                       waitfor; nullptr if run_async is false.
    */
   CCLO *allreduce(BaseBuffer &sendbuf, BaseBuffer &recvbuf, unsigned int count,
-                  reduceFunction func, CommunicatorId comm_id = GLOBAL_COMM,
+                  reduceFunction func, communicatorId comm_id = GLOBAL_COMM,
                   bool from_fpga = false, bool to_fpga = false,
                   dataType compress_dtype = dataType::none,
                   bool run_async = false, std::vector<CCLO *> waitfor = {});
@@ -450,7 +450,7 @@ public:
    */
   CCLO *reduce_scatter(BaseBuffer &sendbuf, BaseBuffer &recvbuf,
                        unsigned int count, reduceFunction func,
-                       CommunicatorId comm_id = GLOBAL_COMM,
+                       communicatorId comm_id = GLOBAL_COMM,
                        bool from_fpga = false, bool to_fpga = false,
                        dataType compress_dtype = dataType::none,
                        bool run_async = false,
@@ -465,11 +465,11 @@ public:
    */
   bool is_simulated() const { return sim_mode; }
 
-  std::vector<rank_t> get_comm_group(CommunicatorId comm_id);
+  std::vector<rank_t> get_comm_group(communicatorId comm_id);
 
-  unsigned int get_comm_rank(CommunicatorId comm_id);
+  unsigned int get_comm_rank(communicatorId comm_id);
 
-  CommunicatorId create_communicator(const std::vector<rank_t> &ranks,
+  communicatorId create_communicator(const std::vector<rank_t> &ranks,
                                      int local_rank);
 
   /**

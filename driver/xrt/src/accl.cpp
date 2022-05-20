@@ -117,7 +117,7 @@ CCLO *ACCL::nop(bool run_async, std::vector<CCLO *> waitfor) {
 }
 
 CCLO *ACCL::send(BaseBuffer &srcbuf, unsigned int count,
-                 unsigned int dst, unsigned int tag, CommunicatorId comm_id,
+                 unsigned int dst, unsigned int tag, communicatorId comm_id,
                  bool from_fpga, streamFlags stream_flags,
                  dataType compress_dtype, bool run_async,
                  std::vector<CCLO *> waitfor) {
@@ -147,7 +147,7 @@ CCLO *ACCL::send(BaseBuffer &srcbuf, unsigned int count,
 }
 
 CCLO *ACCL::recv(BaseBuffer &dstbuf, unsigned int count,
-                 unsigned int src, unsigned int tag, CommunicatorId comm_id,
+                 unsigned int src, unsigned int tag, communicatorId comm_id,
                  bool to_fpga, streamFlags stream_flags,
                  dataType compress_dtype, bool run_async,
                  std::vector<CCLO *> waitfor) {
@@ -300,7 +300,7 @@ CCLO *ACCL::external_stream_kernel(BaseBuffer &srcbuf, BaseBuffer &dstbuf,
 }
 
 CCLO *ACCL::bcast(BaseBuffer &buf, unsigned int count,
-                  unsigned int root, CommunicatorId comm_id, bool from_fpga,
+                  unsigned int root, communicatorId comm_id, bool from_fpga,
                   bool to_fpga, dataType compress_dtype, bool run_async,
                   std::vector<CCLO *> waitfor) {
   CCLO::Options options = CCLO::Options();
@@ -348,7 +348,7 @@ CCLO *ACCL::bcast(BaseBuffer &buf, unsigned int count,
 
 CCLO *ACCL::scatter(BaseBuffer &sendbuf,
                     BaseBuffer &recvbuf, unsigned int count, unsigned int root,
-                    CommunicatorId comm_id, bool from_fpga, bool to_fpga,
+                    communicatorId comm_id, bool from_fpga, bool to_fpga,
                     dataType compress_dtype, bool run_async,
                     std::vector<CCLO *> waitfor) {
   CCLO::Options options = CCLO::Options();
@@ -398,7 +398,7 @@ CCLO *ACCL::scatter(BaseBuffer &sendbuf,
 
 CCLO *ACCL::gather(BaseBuffer &sendbuf,
                    BaseBuffer &recvbuf, unsigned int count, unsigned int root,
-                   CommunicatorId comm_id, bool from_fpga, bool to_fpga,
+                   communicatorId comm_id, bool from_fpga, bool to_fpga,
                    dataType compress_dtype, bool run_async,
                    std::vector<CCLO *> waitfor) {
   CCLO::Options options = CCLO::Options();
@@ -458,7 +458,7 @@ CCLO *ACCL::gather(BaseBuffer &sendbuf,
 
 CCLO *ACCL::allgather(BaseBuffer &sendbuf,
                       BaseBuffer &recvbuf, unsigned int count,
-                      CommunicatorId comm_id, bool from_fpga, bool to_fpga,
+                      communicatorId comm_id, bool from_fpga, bool to_fpga,
                       dataType compress_dtype, bool run_async,
                       std::vector<CCLO *> waitfor) {
   CCLO::Options options = CCLO::Options();
@@ -515,7 +515,7 @@ CCLO *ACCL::allgather(BaseBuffer &sendbuf,
 
 CCLO *ACCL::reduce(BaseBuffer &sendbuf,
                    BaseBuffer &recvbuf, unsigned int count, unsigned int root,
-                   reduceFunction func, CommunicatorId comm_id, bool from_fpga,
+                   reduceFunction func, communicatorId comm_id, bool from_fpga,
                    bool to_fpga, dataType compress_dtype, bool run_async,
                    std::vector<CCLO *> waitfor) {
   CCLO::Options options = CCLO::Options();
@@ -567,7 +567,7 @@ CCLO *ACCL::reduce(BaseBuffer &sendbuf,
 
 CCLO *ACCL::allreduce(BaseBuffer &sendbuf,
                       BaseBuffer &recvbuf, unsigned int count,
-                      reduceFunction func, CommunicatorId comm_id,
+                      reduceFunction func, communicatorId comm_id,
                       bool from_fpga, bool to_fpga, dataType compress_dtype,
                       bool run_async, std::vector<CCLO *> waitfor) {
   CCLO::Options options = CCLO::Options();
@@ -616,7 +616,7 @@ CCLO *ACCL::allreduce(BaseBuffer &sendbuf,
 
 CCLO *ACCL::reduce_scatter(BaseBuffer &sendbuf,
                            BaseBuffer &recvbuf, unsigned int count,
-                           reduceFunction func, CommunicatorId comm_id,
+                           reduceFunction func, communicatorId comm_id,
                            bool from_fpga, bool to_fpga,
                            dataType compress_dtype, bool run_async,
                            std::vector<CCLO *> waitfor) {
@@ -664,21 +664,21 @@ CCLO *ACCL::reduce_scatter(BaseBuffer &sendbuf,
   return nullptr;
 }
 
-std::vector<rank_t> ACCL::get_comm_group(CommunicatorId comm_id) {
+std::vector<rank_t> ACCL::get_comm_group(communicatorId comm_id) {
   communicators[comm_id].readback();
   return *communicators[comm_id].get_ranks();
 }
 
-unsigned int ACCL::get_comm_rank(CommunicatorId comm_id) {
+unsigned int ACCL::get_comm_rank(communicatorId comm_id) {
   return communicators[comm_id].local_rank();
 }
 
-CommunicatorId ACCL::create_communicator(const std::vector<rank_t> &ranks,
+communicatorId ACCL::create_communicator(const std::vector<rank_t> &ranks,
                                             int local_rank) {
   configure_communicator(ranks, local_rank);
   // Communicator ID is the index of the communicator in the 
   // vector of communicators
-  CommunicatorId new_comm_id = communicators.size() - 1;
+  communicatorId new_comm_id = communicators.size() - 1;
   return communicators.size() - 1;
 }
 
