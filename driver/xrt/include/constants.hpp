@@ -28,6 +28,9 @@ namespace ACCL {
 typedef uint64_t addr_t;
 /** Device value type */
 typedef uint32_t val_t;
+/** Communicator IDs used to refer to a certain communicator */
+typedef unsigned int communicatorId;
+
 /** Tag any */
 const unsigned int TAG_ANY = 0xFFFFFFFF;
 /** Exchange mem offset address */
@@ -40,6 +43,8 @@ const addr_t RETCODE_OFFSET = 0x1FFC;
 const addr_t IDCODE_OFFSET = 0x1FF8;
 /** Configuration ready offset */
 const addr_t CFGRDY_OFFSET = 0x1FF4;
+/** Global Communicator */
+const communicatorId GLOBAL_COMM = 0x0;
 
 /**
  * Configuration functions

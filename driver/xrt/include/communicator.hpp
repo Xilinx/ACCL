@@ -46,7 +46,7 @@ struct rank_t {
 class Communicator {
 private:
   CCLO *cclo;
-  const std::vector<rank_t> _ranks;
+  std::vector<rank_t> _ranks;
   unsigned int _rank;
   addr_t _communicators_addr;
 
@@ -83,6 +83,8 @@ public:
    *     communicator.
    */
   const std::vector<rank_t> *get_ranks() const { return &_ranks; }
+
+  void readback();
 
   /**
    * Dump the configuration of this communicator stored in the CCLO to a string.
