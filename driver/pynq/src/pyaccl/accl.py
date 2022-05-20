@@ -83,7 +83,7 @@ class SimBuffer():
     def allocate(self):
         self.socket.send_json({"type": 4, "addr": self.physical_address, "len": self.data.nbytes})
         ack = self.socket.recv_json()
-        assert ack["status"] == 0, "ZMQ mem buffer write error"
+        assert ack["status"] == 0, "ZMQ mem buffer allocation error"
 
     def freebuffer(self):
         pass

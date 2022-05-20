@@ -471,6 +471,7 @@ void serve_zmq(zmq_intf_context *ctx,
             if((adr+len) > 256*1024){
                 response["status"] = 1;
                 response["rdata"][0] = 0;
+                *logger << log_level::error << "Mem read outside available range (256K) at addr: " << adr << " len: " << len << endl;
             } else {
                 for(int i=0; i<len; i+=64){
                     mem_addr = adr+i;
@@ -498,6 +499,7 @@ void serve_zmq(zmq_intf_context *ctx,
             *logger << log_level::info << "Mem write " << adr << " len: " << len << endl;
             if((adr+len) > 256*1024){
                 response["status"] = 1;
+                *logger << log_level::error << "Mem write outside available range (256KB) at addr: " << adr << " len: " << len << endl;
             } else{
                 for(int i=0; i<len; i+=64){
                     mem_strb = 0;
@@ -527,6 +529,7 @@ void serve_zmq(zmq_intf_context *ctx,
             *logger << log_level::info << "Mem allocate " << adr << " len: " << len << endl;
             if((adr+len) > 256*1024){
                 response["status"] = 1;
+                *logger << log_level::error << "Mem allocate outside available range (256KB) at addr: " << adr << " len: " << len << endl;
             }
             break;
         // Call request  {"type": 5, arg names and values}
