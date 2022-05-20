@@ -867,8 +867,10 @@ int reduce( unsigned int count,
     unsigned int next_in_ring = (world.local_rank + 1) % world.size;
     unsigned int prev_in_ring = (world.local_rank + world.size-1) % world.size;
 
-    //determine if we're sending or receiving
-    if( prev_in_ring == root_rank){
+    if(world.size == 1){
+        //corner-case copy for when running a single-node reduction
+        return copy(count, src_addr, dst_addr, arcfg_offset, compression, stream);
+    }else if( prev_in_ring == root_rank){
         //non root ranks immediately after the root sends
         return send(next_in_ring, count, src_addr, comm_offset, arcfg_offset, TAG_ANY, compression, stream);
     }else if (world.local_rank != root_rank){
@@ -895,6 +897,11 @@ int reduce_scatter(
     int i, curr_pos, rel_stride, abs_stride, next_in_ring, prev_in_ring;
     int err = NO_ERROR;
     unsigned int tmp_compression = NO_COMPRESSION;
+
+    if(world.size == 1){
+        //corner-case copy for when running a single-node reduction
+        return copy(count, src_buf_addr, dst_buf_addr, arcfg_offset, compression, stream);
+    }
 
     next_in_ring = (world.local_rank + 1) % world.size;
     prev_in_ring = (world.local_rank + world.size - 1) % world.size;
@@ -977,6 +984,11 @@ int allreduce(
     int i, curr_pos, curr_count, rel_stride, abs_stride, next_in_ring, prev_in_ring;
     int err = NO_ERROR;
     unsigned int tmp_compression = NO_COMPRESSION;
+
+    if(world.size == 1){
+        //corner-case copy for when running a single-node reduction
+        return copy(count, src_buf_addr, dst_buf_addr, arcfg_offset, compression, stream);
+    }
 
     next_in_ring = (world.local_rank + 1) % world.size;
     prev_in_ring = (world.local_rank + world.size - 1) % world.size;
