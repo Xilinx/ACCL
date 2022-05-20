@@ -651,7 +651,7 @@ void test_allgather_comms(ACCL::ACCL &accl, options_t &options) {
   auto op_buf = accl.create_buffer(host_op_buf.get(), count, dataType::float32);
   auto res_buf = accl.create_buffer<float>(count * size, dataType::float32);
 
-  for (int i = 0; i < count * size; i++) {
+  for (unsigned int i = 0; i < count * size; i++) {
     host_op_buf.get()[i] = rank + i;
   }
   std::fill(res_buf->buffer(), res_buf->buffer() + count * size, 0);
