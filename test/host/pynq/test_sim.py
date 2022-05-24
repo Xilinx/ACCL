@@ -85,13 +85,13 @@ def test_sendrecv(cclo_inst, world_size, local_rank, count, dt = [np.float32]):
         next_rank = (local_rank+1)%world_size
         prev_rank = (local_rank+world_size-1)%world_size
         print("Sending on ",local_rank," to ",next_rank)
-        cclo_inst.send(0, op_buf, count, next_rank, tag=0)
+        cclo_inst.send(op_buf, count, next_rank, tag=0)
         print("Receiving on ",local_rank," from ",prev_rank)
-        cclo_inst.recv(0, res_buf, count, prev_rank, tag=0)
+        cclo_inst.recv(res_buf, count, prev_rank, tag=0)
         print("Sending on ",local_rank," to ",prev_rank)
-        cclo_inst.send(0, res_buf, count, prev_rank, tag=1)
+        cclo_inst.send(res_buf, count, prev_rank, tag=1)
         print("Receiving on ",local_rank," from ",next_rank)
-        cclo_inst.recv(0, res_buf, count, next_rank, tag=1)
+        cclo_inst.recv(res_buf, count, next_rank, tag=1)
         if not np.isclose(op_buf.data.astype(res_dt), res_buf.data).all():
             err_count += 1
             print("Send/recv failed on pair ", op_dt, res_dt)
@@ -109,12 +109,12 @@ def test_sendrecv_strm(cclo_inst, world_size, local_rank, count, dt = [np.float3
         next_rank = (local_rank+1)%world_size
         prev_rank = (local_rank+world_size-1)%world_size
         print("Sending from memory on ",local_rank," to stream on ",next_rank)
-        cclo_inst.send(0, op_buf, count, next_rank, stream_flags=ACCLStreamFlags.RES_STREAM, tag=0)
+        cclo_inst.send(op_buf, count, next_rank, stream_flags=ACCLStreamFlags.RES_STREAM, tag=0)
         # recv is direct, no call required
         print("Sending from stream on ",local_rank," to memory on ",prev_rank)
-        cclo_inst.send(0, res_buf, count, prev_rank, stream_flags=ACCLStreamFlags.OP0_STREAM, tag=5)
+        cclo_inst.send(res_buf, count, prev_rank, stream_flags=ACCLStreamFlags.OP0_STREAM, tag=5)
         print("Receiving in memory on ",local_rank," from stream on ",next_rank)
-        cclo_inst.recv(0, res_buf, count, next_rank, tag=5)
+        cclo_inst.recv(res_buf, count, next_rank, tag=5)
         if not np.isclose(op_buf.data.astype(res_dt), res_buf.data).all():
             err_count += 1
             print("Send/recv failed on pair ", op_dt, res_dt)
@@ -132,13 +132,13 @@ def test_sendrecv_fanin(cclo_inst, world_size, local_rank, count, dt = [np.float
             for i in range(len(op_buf.data)):
                 op_buf.data[i] = i+local_rank
             print("Sending on ", local_rank, " to 0")
-            cclo_inst.send(0, op_buf, count, 0, tag=0)
+            cclo_inst.send(op_buf, count, 0, tag=0)
         else:
             for i in range(world_size):
                 if i == local_rank:
                     continue
                 print("Receiving on 0 from ", i)
-                cclo_inst.recv(0, res_buf, count, i, tag=0)
+                cclo_inst.recv(res_buf, count, i, tag=0)
                 for j in range(len(op_buf.data)):
                     op_buf.data[j] = j+i
                 if not np.isclose(op_buf.data, res_buf.data).all():
@@ -154,7 +154,7 @@ def test_bcast(cclo_inst, local_rank, root, count, dt = [np.float32]):
     for op_dt, res_dt in itertools.product(dt, repeat=2):
         op_buf, _, res_buf = get_buffers(count, op_dt, op_dt, res_dt, cclo_inst)
         op_buf.data[:] = [42+i for i in range(len(op_buf.data))]
-        cclo_inst.bcast(0, op_buf if root == local_rank else res_buf, count, root=root)
+        cclo_inst.bcast(op_buf if root == local_rank else res_buf, count, root=root)
 
         if local_rank == root:
             print("Bcast succeeded on pair ", op_dt, res_dt)
@@ -172,7 +172,7 @@ def test_scatter(cclo_inst, world_size, local_rank, root, count, dt = [np.float3
     for op_dt, res_dt in itertools.product(dt, repeat=2):
         op_buf, _, res_buf = get_buffers(count*world_size, op_dt, op_dt, res_dt, cclo_inst)
         op_buf[:] = [1.0*i for i in range(op_buf.size)]
-        cclo_inst.scatter(0, op_buf, res_buf, count, root=root)
+        cclo_inst.scatter(op_buf, res_buf, count, root=root)
 
         if not np.isclose(op_buf.data[local_rank*count:(local_rank+1)*count], res_buf.data[0:count]).all():
             err_count += 1
@@ -187,7 +187,7 @@ def test_gather(cclo_inst, world_size, local_rank, root, count, dt = [np.float32
     for op_dt, res_dt in itertools.product(dt, repeat=2):
         op_buf, _, res_buf = get_buffers(count*world_size, op_dt, op_dt, res_dt, cclo_inst)
         op_buf[:] = [1.0*(local_rank+i) for i in range(op_buf.size)]
-        cclo_inst.gather(0, op_buf, res_buf, count, root=root)
+        cclo_inst.gather(op_buf, res_buf, count, root=root)
 
         if local_rank == root:
             for i in range(world_size):
@@ -204,7 +204,7 @@ def test_allgather(cclo_inst, world_size, local_rank, count, dt = [np.float32]):
     for op_dt, res_dt in itertools.product(dt, repeat=2):
         op_buf, _, res_buf = get_buffers(count*world_size, op_dt, op_dt, res_dt, cclo_inst)
         op_buf[:] = [1.0*(local_rank+i) for i in range(op_buf.size)]
-        cclo_inst.allgather(0, op_buf, res_buf, count)
+        cclo_inst.allgather(op_buf, res_buf, count)
 
         for i in range(world_size):
             if not np.isclose(res_buf.data[i*count:(i+1)*count], [1.0*(i+j) for j in range(count)]).all():
@@ -220,7 +220,7 @@ def test_reduce(cclo_inst, world_size, local_rank, root, count, func, dt = [np.f
     for op_dt, res_dt in itertools.product(dt, repeat=2):
         op_buf, _, res_buf = get_buffers(count, op_dt, op_dt, res_dt, cclo_inst)
         op_buf[:] = [1.0*i*(local_rank+1) for i in range(op_buf.size)]
-        cclo_inst.reduce(0, op_buf, res_buf, count, root, func)
+        cclo_inst.reduce(op_buf, res_buf, count, root, func)
 
         if local_rank == root:
             if not np.isclose(res_buf.data, sum(range(world_size+1))*op_buf.data).all():
@@ -236,7 +236,7 @@ def test_reduce_scatter(cclo_inst, world_size, local_rank, count, func, dt = [np
     for op_dt, res_dt in itertools.product(dt, repeat=2):
         op_buf, _, res_buf = get_buffers(world_size*count, op_dt, op_dt, res_dt, cclo_inst)
         op_buf[:] = [1.0*i for i in range(op_buf.size)]
-        cclo_inst.reduce_scatter(0, op_buf, res_buf, count, func)
+        cclo_inst.reduce_scatter(op_buf, res_buf, count, func)
 
         full_reduce_result = world_size*op_buf.data
         if not np.isclose(res_buf.data[0:count], full_reduce_result[local_rank*count:(local_rank+1)*count]).all():
@@ -250,7 +250,7 @@ def test_allreduce(cclo_inst, world_size, local_rank, count, func, dt = [np.floa
     for op_dt, res_dt in itertools.product(dt, repeat=2):
         op_buf, _, res_buf = get_buffers(count, op_dt, op_dt, res_dt, cclo_inst)
         op_buf[:] = [1.0*i for i in range(op_buf.size)]
-        cclo_inst.allreduce(0, op_buf, res_buf, count, func)
+        cclo_inst.allreduce(op_buf, res_buf, count, func)
         full_reduce_result = world_size*op_buf.data
         if not np.isclose(res_buf.data, full_reduce_result).all():
             err_count += 1
@@ -271,20 +271,20 @@ def test_multicomm(cclo_inst, world_size, local_rank, count):
     op_buf, _, res_buf = get_buffers(count, np.float32, np.float32, np.float32, cclo_inst)
     # start with a send/recv between ranks 0 and 2 (0 and 1 in the new communicator)
     if local_rank == 0:
-        cclo_inst.send(used_comm, op_buf, count, 1, tag=0)
-        cclo_inst.recv(used_comm, res_buf, count, 1, tag=1)
+        cclo_inst.send(op_buf, count, 1, tag=0, comm_id=used_comm)
+        cclo_inst.recv(res_buf, count, 1, tag=1, comm_id=used_comm)
         if not np.isclose(res_buf.data, op_buf.data).all():
             err_count += 1
             print("Multi-communicator send/recv failed on rank ", local_rank)
         else:
             print("Multi-communicator send/recv succeded on rank ", local_rank)
     elif local_rank == 2:
-        cclo_inst.recv(used_comm, res_buf, count, 0, tag=0)
-        cclo_inst.send(used_comm, res_buf, count, 0, tag=1)
+        cclo_inst.recv(res_buf, count, 0, tag=0, comm_id=used_comm)
+        cclo_inst.send(res_buf, count, 0, tag=1, comm_id=used_comm)
         print("Multi-communicator send/recv succeded on rank ", local_rank)
     # do an all-reduce on the new communicator
     op_buf[:] = [1.0*i for i in range(op_buf.size)]
-    cclo_inst.allreduce(used_comm, op_buf, res_buf, count, 0)
+    cclo_inst.allreduce(op_buf, res_buf, count, 0, comm_id=used_comm)
     expected_allreduce_result = 3*op_buf.data
     if not np.isclose(res_buf.data, expected_allreduce_result).all():
         err_count += 1
@@ -308,7 +308,7 @@ def test_multicomm_allgather(cclo_inst, world_size, local_rank, count):
     op_buf, _, res_buf = get_buffers(count * world_size, np.float32, np.float32, np.float32, cclo_inst)
     op_buf[:] = [1.0*(local_rank+i) for i in range(op_buf.size)]
 
-    cclo_inst.allgather(used_comm, op_buf, res_buf, count)
+    cclo_inst.allgather(op_buf, res_buf, count, comm_id=used_comm)
 
     for i, g in enumerate(new_group):
         if not np.isclose(res_buf.data[i*count:(i+1)*count], [1.0*(g+j) for j in range(count)]).all():
@@ -317,7 +317,7 @@ def test_multicomm_allgather(cclo_inst, world_size, local_rank, count):
         else:
             print("Allgather succeeded for src rank", g)
     op_buf[:] = [1.0 * local_rank for i in range(op_buf.size)]
-    cclo_inst.bcast(0, op_buf, count, root=0)
+    cclo_inst.bcast(op_buf, count, root=0)
     if local_rank == 0:
         print("Bcast succeeded")
     else:
@@ -341,9 +341,9 @@ def test_eth_compression(cclo_inst, world_size, local_rank, count):
 
     # send data, with compression, from 0 to 1
     if local_rank == 0:
-        cclo_inst.send(0, op_buf, count, 1, tag=0, compress_dtype=np.dtype('float16'))
+        cclo_inst.send(op_buf, count, 1, tag=0, compress_dtype=np.dtype('float16'))
     elif local_rank == 1:
-        cclo_inst.recv(0, res_buf, count, 0, tag=0, compress_dtype=np.dtype('float16'))
+        cclo_inst.recv(res_buf, count, 0, tag=0, compress_dtype=np.dtype('float16'))
         # check data; since there seems to be some difference between
         # numpy and FPGA fp32 <-> fp16 conversion, allow 1% relative error, and 0.01 absolute error
         if not np.isclose(op_buf.data.astype(np.float16).astype(np.float32), res_buf.data, rtol=1e-02, atol=1e-02).all():
@@ -351,21 +351,21 @@ def test_eth_compression(cclo_inst, world_size, local_rank, count):
         else:
             print("Compressed send/recv succeeded")
 
-    cclo_inst.bcast(0, op_buf if local_rank == 0 else res_buf, count, root=0, compress_dtype=np.dtype('float16'))
+    cclo_inst.bcast(op_buf if local_rank == 0 else res_buf, count, root=0, compress_dtype=np.dtype('float16'))
     if local_rank > 0:
         if not np.isclose(op_buf.data.astype(np.float16).astype(np.float32), res_buf.data, rtol=1e-02, atol=1e-02).all():
             print("Compressed bcast failed")
         else:
             print("Compressed bcast succeeded")
 
-    cclo_inst.reduce(0, op_buf, res_buf, count, 0, ACCLReduceFunctions.SUM, compress_dtype=np.dtype('float16'))
+    cclo_inst.reduce(op_buf, res_buf, count, 0, ACCLReduceFunctions.SUM, compress_dtype=np.dtype('float16'))
     if local_rank == 0:
         if not np.isclose(res_buf.data, world_size*op_buf.data, rtol=1e-02, atol=1e-02).all():
             print("Compressed reduce failed")
         else:
             print("Compressed reduce succeeded")
 
-    cclo_inst.allreduce(0, op_buf, res_buf, count, ACCLReduceFunctions.SUM, compress_dtype=np.dtype('float16'))
+    cclo_inst.allreduce(op_buf, res_buf, count, ACCLReduceFunctions.SUM, compress_dtype=np.dtype('float16'))
     if not np.isclose(res_buf.data, world_size*op_buf.data, rtol=1e-02, atol=1e-02).all():
         print("Compressed allreduce failed")
     else:
@@ -375,13 +375,13 @@ def test_eth_compression(cclo_inst, world_size, local_rank, count):
     op_buf, _, res_buf = get_buffers(count*world_size, np.float32, np.float32, np.float32, cclo_inst)
     # paint source buffer
     op_buf[:] = [3.14159*i for i in range(op_buf.size)]
-    cclo_inst.scatter(0, op_buf, res_buf, count, 0, compress_dtype=np.dtype('float16'))
+    cclo_inst.scatter(op_buf, res_buf, count, 0, compress_dtype=np.dtype('float16'))
     if local_rank > 0:
         if not np.isclose(op_buf.data[local_rank*count:(local_rank+1)*count].astype(np.float16).astype(np.float32), res_buf.data[0:count], rtol=1e-02, atol=1e-02).all():
             print("Compressed scatter failed")
         else:
             print("Compressed scatter succeeded")
-    cclo_inst.gather(0, op_buf, res_buf, count, 0, compress_dtype=np.dtype('float16'))
+    cclo_inst.gather(op_buf, res_buf, count, 0, compress_dtype=np.dtype('float16'))
     if local_rank == 0:
         error_count = 0
         for i in range(world_size):
@@ -391,13 +391,13 @@ def test_eth_compression(cclo_inst, world_size, local_rank, count):
             print("Compressed gather failed")
         else:
             print("Compressed gather succeeded")
-    cclo_inst.allgather(0, op_buf[local_rank*count:(local_rank+1)*count], res_buf, count, compress_dtype=np.dtype('float16'))
+    cclo_inst.allgather(op_buf[local_rank*count:(local_rank+1)*count], res_buf, count, compress_dtype=np.dtype('float16'))
     if not np.isclose(op_buf.data.astype(np.float16).astype(np.float32), res_buf.data, rtol=1e-02, atol=1e-02).all():
         print("Compressed allgather failed")
     else:
         print("Compressed allgather succeeded")
 
-    cclo_inst.reduce_scatter(0, op_buf, res_buf, count, ACCLReduceFunctions.SUM, compress_dtype=np.dtype('float16'))
+    cclo_inst.reduce_scatter(op_buf, res_buf, count, ACCLReduceFunctions.SUM, compress_dtype=np.dtype('float16'))
     expected_res = world_size*op_buf.data[local_rank*count:(local_rank+1)*count]
     if not np.isclose(expected_res.astype(np.float16).astype(np.float32), res_buf.data[0:count], rtol=1e-02, atol=1e-02).all():
         print("Compressed reduce-scatter failed")

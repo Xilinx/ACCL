@@ -86,13 +86,13 @@ def test_sendrecv(cclo_inst, world_size, local_rank, count, dt = [np.float32]):
         next_rank = (local_rank+1)%world_size
         prev_rank = (local_rank+world_size-1)%world_size
         print("Sending on ",local_rank," to ",next_rank)
-        cclo_inst.send(0, op_buf, count, next_rank, tag=0)
+        cclo_inst.send(op_buf, count, next_rank, tag=0)
         print("Receiving on ",local_rank," from ",prev_rank)
-        cclo_inst.recv(0, res_buf, count, prev_rank, tag=0)
+        cclo_inst.recv(res_buf, count, prev_rank, tag=0)
         print("Sending on ",local_rank," to ",prev_rank)
-        cclo_inst.send(0, res_buf, count, prev_rank, tag=1)
+        cclo_inst.send(res_buf, count, prev_rank, tag=1)
         print("Receiving on ",local_rank," from ",next_rank)
-        cclo_inst.recv(0, res_buf, count, next_rank, tag=1)
+        cclo_inst.recv(res_buf, count, next_rank, tag=1)
         if not np.isclose(op_buf.astype(res_dt), res_buf).all():
             err_count += 1
             print("Send/recv failed on pair ", op_dt, res_dt)
@@ -110,12 +110,12 @@ def test_sendrecv_strm(cclo_inst, world_size, local_rank, count, dt = [np.float3
         next_rank = (local_rank+1)%world_size
         prev_rank = (local_rank+world_size-1)%world_size
         print("Sending from memory on ",local_rank," to stream on ",next_rank)
-        cclo_inst.send(0, op_buf, count, next_rank, stream_flags=ACCLStreamFlags.RES_STREAM, tag=0)
+        cclo_inst.send(op_buf, count, next_rank, stream_flags=ACCLStreamFlags.RES_STREAM, tag=0)
         # recv is direct, no call required
         print("Sending from stream on ",local_rank," to memory on ",prev_rank)
-        cclo_inst.send(0, res_buf, count, prev_rank, stream_flags=ACCLStreamFlags.OP0_STREAM, tag=5)
+        cclo_inst.send(res_buf, count, prev_rank, stream_flags=ACCLStreamFlags.OP0_STREAM, tag=5)
         print("Receiving in memory on ",local_rank," from stream on ",next_rank)
-        cclo_inst.recv(0, res_buf, count, next_rank, tag=5)
+        cclo_inst.recv(res_buf, count, next_rank, tag=5)
         if not np.isclose(op_buf.astype(res_dt), res_buf).all():
             err_count += 1
             print("Send/recv failed on pair ", op_dt, res_dt)
@@ -133,13 +133,13 @@ def test_sendrecv_fanin(cclo_inst, world_size, local_rank, count, dt = [np.float
             for i in range(len(op_buf)):
                 op_buf[i] = i+local_rank
             print("Sending on ", local_rank, " to 0")
-            cclo_inst.send(0, op_buf, count, 0, tag=0)
+            cclo_inst.send(op_buf, count, 0, tag=0)
         else:
             for i in range(world_size):
                 if i == local_rank:
                     continue
                 print("Receiving on 0 from ", i)
-                cclo_inst.recv(0, res_buf, count, i, tag=0)
+                cclo_inst.recv(res_buf, count, i, tag=0)
                 for j in range(len(op_buf)):
                     op_buf[j] = j+i
                 if not np.isclose(op_buf, res_buf).all():
@@ -155,7 +155,7 @@ def test_bcast(cclo_inst, local_rank, root, count, dt = [np.float32]):
     for op_dt, res_dt in itertools.product(dt, repeat=2):
         op_buf, _, res_buf = get_buffers(count, op_dt, op_dt, res_dt, cclo_inst)
         op_buf[:] = [42+i for i in range(len(op_buf))]
-        cclo_inst.bcast(0, op_buf if root == local_rank else res_buf, count, root=root)
+        cclo_inst.bcast(op_buf if root == local_rank else res_buf, count, root=root)
 
         if local_rank == root:
             print("Bcast succeeded on pair ", op_dt, res_dt)
@@ -173,7 +173,7 @@ def test_scatter(cclo_inst, world_size, local_rank, root, count, dt = [np.float3
     for op_dt, res_dt in itertools.product(dt, repeat=2):
         op_buf, _, res_buf = get_buffers(count*world_size, op_dt, op_dt, res_dt, cclo_inst)
         op_buf[:] = [1.0*i for i in range(op_buf.size)]
-        cclo_inst.scatter(0, op_buf, res_buf, count, root=root)
+        cclo_inst.scatter(op_buf, res_buf, count, root=root)
 
         if not np.isclose(op_buf[local_rank*count:(local_rank+1)*count], res_buf[0:count]).all():
             err_count += 1
@@ -188,7 +188,7 @@ def test_gather(cclo_inst, world_size, local_rank, root, count, dt = [np.float32
     for op_dt, res_dt in itertools.product(dt, repeat=2):
         op_buf, _, res_buf = get_buffers(count*world_size, op_dt, op_dt, res_dt, cclo_inst)
         op_buf[:] = [1.0*(local_rank+i) for i in range(op_buf.size)]
-        cclo_inst.gather(0, op_buf, res_buf, count, root=root)
+        cclo_inst.gather(op_buf, res_buf, count, root=root)
 
         if local_rank == root:
             for i in range(world_size):
@@ -205,7 +205,7 @@ def test_allgather(cclo_inst, world_size, local_rank, count, dt = [np.float32]):
     for op_dt, res_dt in itertools.product(dt, repeat=2):
         op_buf, _, res_buf = get_buffers(count*world_size, op_dt, op_dt, res_dt, cclo_inst)
         op_buf[:] = [1.0*(local_rank+i) for i in range(op_buf.size)]
-        cclo_inst.allgather(0, op_buf, res_buf, count)
+        cclo_inst.allgather(op_buf, res_buf, count)
 
         for i in range(world_size):
             if not np.isclose(res_buf[i*count:(i+1)*count], [1.0*(i+j) for j in range(count)]).all():
@@ -221,7 +221,7 @@ def test_reduce(cclo_inst, world_size, local_rank, root, count, func, dt = [np.f
     for op_dt, res_dt in itertools.product(dt, repeat=2):
         op_buf, _, res_buf = get_buffers(count, op_dt, op_dt, res_dt, cclo_inst)
         op_buf[:] = [1.0*i*(local_rank+1) for i in range(op_buf.size)]
-        cclo_inst.reduce(0, op_buf, res_buf, count, root, func)
+        cclo_inst.reduce(op_buf, res_buf, count, root, func)
 
         if local_rank == root:
             if not np.isclose(res_buf, sum(range(world_size+1))*op_buf).all():
@@ -237,7 +237,7 @@ def test_reduce_scatter(cclo_inst, world_size, local_rank, count, func, dt = [np
     for op_dt, res_dt in itertools.product(dt, repeat=2):
         op_buf, _, res_buf = get_buffers(world_size*count, op_dt, op_dt, res_dt, cclo_inst)
         op_buf[:] = [1.0*i for i in range(op_buf.size)]
-        cclo_inst.reduce_scatter(0, op_buf, res_buf, count, func)
+        cclo_inst.reduce_scatter(op_buf, res_buf, count, func)
 
         full_reduce_result = world_size*op_buf
         if not np.isclose(res_buf[0:count], full_reduce_result[local_rank*count:(local_rank+1)*count]).all():
@@ -251,7 +251,7 @@ def test_allreduce(cclo_inst, world_size, local_rank, count, func, dt = [np.floa
     for op_dt, res_dt in itertools.product(dt, repeat=2):
         op_buf, _, res_buf = get_buffers(count, op_dt, op_dt, res_dt, cclo_inst)
         op_buf[:] = [1.0*i for i in range(op_buf.size)]
-        cclo_inst.allreduce(0, op_buf, res_buf, count, func)
+        cclo_inst.allreduce(op_buf, res_buf, count, func)
         full_reduce_result = world_size*op_buf
         if not np.isclose(res_buf, full_reduce_result).all():
             err_count += 1
@@ -329,17 +329,17 @@ if __name__ == "__main__":
     hostctrl_ip = ol.__getattr__(f"hostctrl_{local_rank}")
     #create a memory config corresponding to each CCLO
     #CCLOs are connected to HBM banks [0:5], [6:11], [12:17]
-    # for simplicity we use the first bank in the range for user buffers, 
+    # for simplicity we use the first bank in the range for user buffers,
     # second bank for RX buffers, and third bank for theoretical TCP buffers
     mems = [[ol.HBM0, ol.HBM1, ol.HBM2],
             [ol.HBM6, ol.HBM7, ol.HBM8],
             [ol.HBM12, ol.HBM13, ol.HBM14]]
-    cclo_inst = accl(   ranks, 
-                        local_rank, 
-                        bufsize=args.rxbuf_size, 
-                        protocol="TCP", 
-                        overlay=ol, 
-                        cclo_ip=cclo_ip, 
+    cclo_inst = accl(   ranks,
+                        local_rank,
+                        bufsize=args.rxbuf_size,
+                        protocol="TCP",
+                        overlay=ol,
+                        cclo_ip=cclo_ip,
                         hostctrl_ip=hostctrl_ip,
                         mem = mems[local_rank]
                     )
