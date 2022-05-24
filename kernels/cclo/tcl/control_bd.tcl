@@ -365,6 +365,7 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} {fanInSuppo
   set microblaze_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:microblaze:11.0 microblaze_0 ]
   set_property -dict [ list \
    CONFIG.C_BASE_VECTORS {0x0000000000010000} \
+   CONFIG.C_USE_INTERRUPT {0} \
    CONFIG.C_D_AXI {1} \
    CONFIG.C_D_LMB {1} \
    CONFIG.C_FSL_LINKS {4} \

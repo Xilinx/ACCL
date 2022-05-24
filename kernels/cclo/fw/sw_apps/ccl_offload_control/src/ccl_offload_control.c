@@ -21,21 +21,10 @@
 #ifndef MB_FW_EMULATION
 #include "xparameters.h"
 #include "mb_interface.h"
-#include "microblaze_interrupts_i.h"
-#include <setjmp.h>
-static jmp_buf excp_handler;
-#else
-
-sem_t mb_irq_mutex;
-void microblaze_disable_interrupts(){sem_wait(&mb_irq_mutex);};
-void microblaze_enable_interrupts(){sem_post(&mb_irq_mutex);};
-
 #endif
 
 static volatile int 		 use_tcp = 1;
-static volatile int 		 dma_tag;
 static volatile unsigned int timeout = 1 << 28;
-static volatile unsigned int dma_tag_lookup [MAX_DMA_TAGS]; //index of the spare buffer that has been issued with that dma tag. -1 otherwise
 static volatile	unsigned int max_segment_size = DMA_MAX_BTT;
 
 static datapath_arith_config arcfg;
@@ -435,7 +424,6 @@ int wait_on_rx(
         idx = seek_rx_buffer(src_rank, count, src_tag);
         if(idx >= 0) return idx;
     }
-    longjmp(excp_handler, RECEIVE_TIMEOUT_ERROR);
     return -1;
 }
 
@@ -1202,14 +1190,6 @@ void run() {
     uint64_t op0_addr, op1_addr, res_addr;
 
     init();
-    //register exception handler though setjmp. it will save stack status to unroll stack when the jmp is performed 
-    //	ref: https://www.gnu.org/software/libc/manual/html_node/Longjmp-in-Handler.html
-    // when first executed, setjmp returns 0. call to longjmp pass a value != 0 to indicate a jmp is occurred
-    retval = setjmp(excp_handler);
-    if(retval)
-    {
-        finalize_call(retval);
-    }
 
     while (1) {
         wait_for_call();
