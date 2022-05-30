@@ -28,6 +28,10 @@ proc connect_clk_rst {clksig rstsig rstslr} {
         puts "Inferred shell xilinx_u250_gen3x16_xdma_3_1_202020_1"
         connect_bd_net [get_bd_pins ip_psr_aresetn_kernel_00_slr${rstslr}/peripheral_aresetn] [get_bd_pins $rstsig]
     }
+    if {![catch { connect_bd_net [get_bd_pins ulp_ucs/aclk_kernel_00] [get_bd_pins $clksig] } ]} {
+        puts "Inferred shell xilinx_u55c_gen3x16_xdma_202110_1"
+        connect_bd_net [get_bd_pins proc_sys_reset_kernel_slr${rstslr}/peripheral_aresetn] [get_bd_pins $rstsig]
+    }
 }
 
 # Break existing TCP connections and redo them through an AXI switch

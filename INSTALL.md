@@ -13,7 +13,7 @@ sudo apt update
 sudo apt install python3 cmake libzmqpp-dev libjsoncpp-dev libtclap-dev libopenmpi-dev xvfb
 pip3 install numpy pynq zmq mpi4py
 ```
-Optionally, install the Xilinx Run-Time libraries (XRT)
+Install the Xilinx Run-Time libraries (XRT)
 ```
 wget https://www.xilinx.com/bin/public/openDownload?filename=xrt_202120.2.12.427_20.04-amd64-xrt.deb
 sudo dpkg -i xrt_202120.2.12.427_20.04-amd64-xrt.deb
@@ -56,42 +56,22 @@ XCL_EMULATION_MODE=sw_emu mpirun -np <RANKS> bin/test
 ```
 
 ## Build a hardware design with ACCL
-<details>
-  <summary>ACCL with TCP Backend</summary>
 
-  ```sh
-  source <VITIS_INSTALL>/settings64.sh
-  cd "kernels/cclo"
-  make STACK_TYPE=TCP EN_FANIN=1 MB_DEBUG_LEVEL=2 PLATFORM=<Alveo Platform Name>
-  cd "../../test/hardware"
-  make MODE=tcp PLATFORM=<Alveo Platform Name>
-  ```
-</details>
-<details>
-  <summary>ACCL with TCP backend</summary>
+```sh
+source <VITIS_INSTALL>/settings64.sh
+cd "test/hardware"
+make MODE=<Build Mode> PLATFORM=<Platform Name>
+```
 
-  ```sh
-  source <VITIS_INSTALL>/settings64.sh
-  cd "kernels/cclo"
-  make STACK_TYPE=UDP MB_DEBUG_LEVEL=2 PLATFORM=<Alveo Platform Name>
-  cd "../../test/hardware"
-  make MODE=udp PLATFORM=<Alveo Platform Name>
-  ```
-</details>
-<details>
-  <summary>3-Rank ACCL Test System on a single FPGA (U280/U250)</summary>
+The following build modes are supported:
+| Build Mode | Description                              |
+|------------|------------------------------------------|
+| udp        | ACCL with UDP backend                    |
+| tcp        | ACCL with TCP backend                    |
+| tri        | 3-Rank ACCL Test System on a single FPGA |
 
-  ```sh
-  source <VITIS_INSTALL>/settings64.sh
-  cd "kernels/cclo"
-  make STACK_TYPE=TCP EN_FANIN=1 MB_DEBUG_LEVEL=2 PLATFORM=<Alveo U280 or U250 Platform Name>
-  cd "../../test/hardware"
-  make MODE=tri PLATFORM=<Alveo U280 or U250 Platform Name>
-  ```
-</details>
-
-The following Alveo platforms are supported:
-| Alveo | Development Target Platform(s)         |
+The following platforms are supported for Alveo boards:
+| Alveo | Platform Name                          |
 |-------|----------------------------------------|
 | U55C  | xilinx_u55c_gen3x16_xdma_2_202110_1    |
 | U250  | xilinx_u250_gen3x16_xdma_3_1_202020_1  |
