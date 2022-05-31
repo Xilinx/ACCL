@@ -19,6 +19,7 @@
 #pragma once
 #include "buffer.hpp"
 #include "common.hpp"
+#include <cstring>
 #include <math.h>
 #include <xrt/xrt_bo.h>
 #include <xrt/xrt_device.h>
@@ -100,7 +101,7 @@ public:
         _bo(device, length * sizeof(dtype), mem_grp) {
     set_buffer();
     // Initialize memory to zero
-    memset(this->_buffer, 0, this->_size);
+    std::memset(this->_buffer, 0, this->_size);
   }
 
   /**
@@ -153,7 +154,7 @@ public:
   void sync_from_device() override {
     _bo.sync(xclBOSyncDirection::XCL_BO_SYNC_BO_FROM_DEVICE);
     if (!is_aligned) {
-      memcpy(unaligned_buffer, aligned_buffer, this->size());
+      std::memcpy(unaligned_buffer, aligned_buffer, this->size());
     }
   }
 
@@ -165,7 +166,7 @@ public:
    */
   void sync_to_device() override {
     if (!is_aligned) {
-      memcpy(aligned_buffer, unaligned_buffer, this->size());
+      std::memcpy(aligned_buffer, unaligned_buffer, this->size());
     }
     _bo.sync(xclBOSyncDirection::XCL_BO_SYNC_BO_TO_DEVICE);
   }
