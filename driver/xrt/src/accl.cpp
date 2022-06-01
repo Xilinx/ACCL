@@ -72,6 +72,7 @@ void ACCL::deinit() {
 
   CCLO::Options options{};
   options.scenario = operation::config;
+  options.comm = communicators[GLOBAL_COMM].communicators_addr();
   options.cfg_function = cfgFunc::reset_periph;
   call_sync(options);
 
