@@ -404,7 +404,8 @@ void test_bcast_compressed(ACCL::ACCL &accl, options_t &options, int root) {
   if (rank == root) {
     test_debug("Broadcasting data from " + std::to_string(rank) + "...",
                options);
-    accl.bcast(*op_buf, count, root, GLOBAL_COMM, false, false, dataType::float16);
+    accl.bcast(*op_buf, count, root, GLOBAL_COMM, false, false,
+               dataType::float16);
   } else {
     test_debug("Getting broadcast data from " + std::to_string(root) + "...",
                options);
@@ -1017,7 +1018,7 @@ void start_test(options_t options) {
     ranks.emplace_back(new_rank);
   }
 
-  ACCL::ACCL *accl;
+  std::unique_ptr<ACCL::ACCL> accl;
 
   auto device = xrt::device(options.device_index);
   if (options.hardware) {
@@ -1031,12 +1032,13 @@ void start_test(options_t options) {
 
     std::vector<int> mem = {rank * 6 + 1};
 
-    accl = new ACCL::ACCL(ranks, rank, device, cclo_ip, hostctrl_ip, rank * 6,
-                          mem, rank * 6 + 2, networkProtocol::TCP, 16,
-                          options.rxbuf_size);
+    accl = std::make_unique<ACCL::ACCL>(
+        ranks, rank, device, cclo_ip, hostctrl_ip, rank * 6, mem, rank * 6 + 2,
+        networkProtocol::TCP, 16, options.rxbuf_size);
   } else {
-    accl = new ACCL::ACCL(ranks, rank, options.start_port, device,
-                          networkProtocol::TCP, 16, options.rxbuf_size);
+    accl = std::make_unique<ACCL::ACCL>(ranks, rank, options.start_port, device,
+                                        networkProtocol::TCP, 16,
+                                        options.rxbuf_size);
   }
   accl->set_timeout(1e8);
 
