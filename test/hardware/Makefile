@@ -42,6 +42,8 @@ CMAC_UDP_XO=$(VNX)/Ethernet/_x.$(PLATFORM)/cmac_$(ETH_IF).xo
 UDP_XO=$(VNX)/NetLayers/_x.$(PLATFORM)/networklayer.xo
 TCP_DUMMY_XO=../../kernels/plugins/dummy_tcp_stack/dummy_tcp_stack.xo
 TCP_XO=Vitis_with_100Gbps_TCP-IP/_x.hw.$(XSA)/network_krnl.xo
+TCP_VIVADO_ROOTDIR ?= $$XILINX_VIVADO
+TCP_HLS_ROOTDIR ?= $$XILINX_HLS
 CMAC_TCP_XO=Vitis_with_100Gbps_TCP-IP/_x.hw.$(XSA)/cmac_krnl.xo
 XCLBIN=$(BUILD_DIR)/ccl_offload.xclbin
 
@@ -153,8 +155,8 @@ tcp_stack_ips:
 	git submodule update --init --recursive Vitis_with_100Gbps_TCP-IP
 	rm -rf Vitis_with_100Gbps_TCP-IP/build
 	mkdir Vitis_with_100Gbps_TCP-IP/build
-	cmake -S Vitis_with_100Gbps_TCP-IP/ -BVitis_with_100Gbps_TCP-IP/build/ -DFDEV_NAME=$(BOARD) -DVIVADO_HLS_ROOT_DIR=/proj/xbuilds/2020.1_released/installs/lin64/Vivado/2020.1 -DVIVADO_ROOT_DIR=/proj/xbuilds/2020.1_released/installs/lin64/Vivado/2020.1 -DTCP_STACK_EN=1 -DTCP_STACK_RX_DDR_BYPASS_EN=1  -DTCP_STACK_WINDOW_SCALING=0 
-	make -C Vitis_with_100Gbps_TCP-IP/build installip
+	cmake -S Vitis_with_100Gbps_TCP-IP/ -BVitis_with_100Gbps_TCP-IP/build/ -DFDEV_NAME=$(BOARD) -DVIVADO_HLS_ROOT_DIR=$(TCP_HLS_ROOTDIR) -DVIVADO_ROOT_DIR=$(TCP_VIVADO_ROOTDIR) -DTCP_STACK_EN=1 -DTCP_STACK_RX_DDR_BYPASS_EN=1 -DTCP_STACK_WINDOW_SCALING=0 
+	$(MAKE) -C Vitis_with_100Gbps_TCP-IP/build installip
 
 $(XCLBIN): $(NET_XO) $(CONFIGFILE)
 	$(MAKE) -C ../../kernels/cclo PLATFORM=$(PLATFORM) STACK_TYPE=$(CCLO_STACK_TYPE) EN_FANIN=$(CCLO_EN_FANIN) MB_DEBUG_LEVEL=$(CCLO_MB_DEBUG_LEVEL)
