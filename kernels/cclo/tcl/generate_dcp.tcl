@@ -39,6 +39,7 @@ launch_runs synth_1 -jobs 6
 wait_on_run [get_runs synth_1]
 open_run synth_1 -name synth_1
 rename_ref -prefix_all ccl_offload_
+refresh_meminit
 write_checkpoint ./ccl_offload_ex/ccl_offload_ex.runs/synth_1/packaged.dcp
 write_xdc ./ccl_offload_ex/ccl_offload_ex.runs/synth_1/packaged.xdc
 close_design

@@ -103,12 +103,19 @@ module ccl_offload
 `endif
 
 `ifdef ARITH_ENABLE
-  output [1023:0] m_axis_arith_op_tdata,
-  output [127:0] m_axis_arith_op_tkeep,
-  output [7:0] m_axis_arith_op_tdest,
-  output [0:0] m_axis_arith_op_tlast,
-  input [0:0] m_axis_arith_op_tready,
-  output [0:0] m_axis_arith_op_tvalid,
+  output [511:0] m_axis_arith_op0_tdata,
+  output [63:0] m_axis_arith_op0_tkeep,
+  output [7:0] m_axis_arith_op0_tdest,
+  output [0:0] m_axis_arith_op0_tlast,
+  input [0:0] m_axis_arith_op0_tready,
+  output [0:0] m_axis_arith_op0_tvalid,
+
+  output [511:0] m_axis_arith_op1_tdata,
+  output [63:0] m_axis_arith_op1_tkeep,
+  output [7:0] m_axis_arith_op1_tdest,
+  output [0:0] m_axis_arith_op1_tlast,
+  input [0:0] m_axis_arith_op1_tready,
+  output [0:0] m_axis_arith_op1_tvalid,
 
   input [511:0] s_axis_arith_res_tdata,
   input [63:0] s_axis_arith_res_tkeep,
@@ -119,6 +126,7 @@ module ccl_offload
 
 `ifdef STREAM_ENABLE
   output [511:0] m_axis_krnl_tdata,
+  output [7:0] m_axis_krnl_tdest,
   output [63:0] m_axis_krnl_tkeep,
   output [0:0] m_axis_krnl_tlast,
   input [0:0] m_axis_krnl_tready,
@@ -126,6 +134,7 @@ module ccl_offload
 
   input [511:0] s_axis_krnl_tdata,
   input [63:0] s_axis_krnl_tkeep,
+  input [7:0] s_axis_krnl_tdest,
   input [0:0] s_axis_krnl_tlast,
   output [0:0] s_axis_krnl_tready,
   input [0:0] s_axis_krnl_tvalid,
@@ -408,12 +417,19 @@ module ccl_offload
 `endif
 
 `ifdef ARITH_ENABLE
-        .m_axis_arith_op_tdata(m_axis_arith_op_tdata),
-        .m_axis_arith_op_tkeep(m_axis_arith_op_tkeep),
-        .m_axis_arith_op_tdest(m_axis_arith_op_tdest),
-        .m_axis_arith_op_tlast(m_axis_arith_op_tlast),
-        .m_axis_arith_op_tready(m_axis_arith_op_tready),
-        .m_axis_arith_op_tvalid(m_axis_arith_op_tvalid),
+        .m_axis_arith_op0_tdata(m_axis_arith_op0_tdata),
+        .m_axis_arith_op0_tkeep(m_axis_arith_op0_tkeep),
+        .m_axis_arith_op0_tdest(m_axis_arith_op0_tdest),
+        .m_axis_arith_op0_tlast(m_axis_arith_op0_tlast),
+        .m_axis_arith_op0_tready(m_axis_arith_op0_tready),
+        .m_axis_arith_op0_tvalid(m_axis_arith_op0_tvalid),
+
+        .m_axis_arith_op1_tdata(m_axis_arith_op1_tdata),
+        .m_axis_arith_op1_tkeep(m_axis_arith_op1_tkeep),
+        .m_axis_arith_op1_tdest(m_axis_arith_op1_tdest),
+        .m_axis_arith_op1_tlast(m_axis_arith_op1_tlast),
+        .m_axis_arith_op1_tready(m_axis_arith_op1_tready),
+        .m_axis_arith_op1_tvalid(m_axis_arith_op1_tvalid),
 
         .s_axis_arith_res_tdata(s_axis_arith_res_tdata),
         .s_axis_arith_res_tkeep(s_axis_arith_res_tkeep),

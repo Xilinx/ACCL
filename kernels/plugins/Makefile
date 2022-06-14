@@ -16,7 +16,7 @@
 #
 # *******************************************************************************/
 
-PERIPHERAL_IPS = hostctrl loopback reduce_sum fp_hp_stream_conv hp_fp_stream_conv dummy_tcp_stack
+PERIPHERAL_IPS = hostctrl loopback reduce_sum hp_compression dummy_tcp_stack
 TARGET=ip
 PLATFORM ?= xilinx_u280_xdma_201920_3
 DEBUG ?= none
@@ -25,13 +25,15 @@ ifeq (u250,$(findstring u250, $(PLATFORM)))
 	FPGAPART=xcu250-figd2104-2L-e
 else ifeq (u280,$(findstring u280, $(PLATFORM)))
 	FPGAPART=xcu280-fsvh2892-2L-e
+else ifeq (u55c,$(findstring u55c, $(PLATFORM)))
+	FPGAPART=xcu55c-fsvh2892-2L-e
 else
 	$(error Unsupported PLATFORM)
 endif
 
 all: $(PERIPHERAL_IPS)
 
-.PHONY: hostctrl loopback reduce_sum fp_hp_stream_conv hp_fp_stream_conv dummy_tcp_stack
+.PHONY: hostctrl loopback reduce_sum hp_compression dummy_tcp_stack
 
 $(PERIPHERAL_IPS):
 	$(MAKE) -C $@ DEVICE=$(FPGAPART) TARGET=$(TARGET)

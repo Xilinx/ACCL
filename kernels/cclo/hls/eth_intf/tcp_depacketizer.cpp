@@ -94,12 +94,12 @@ void tcp_depacketizer(
 		message_rem = hdr.count;//length of upcoming message (excluding the header itself)
 		strm = hdr.strm;//target of message (0 is targeting memory so managed, everything else is  stream so unmanaged)
 		if(strm == 0){
-			//decrement the length to reflect the fact that we have removed the 64B header
-			//Note: the rxHandler must make sure to not give us fragments less than 64B
-			notif.length -= bytes_per_word;
 			//put notification, header in output streams
 			STREAM_WRITE(sts, hdr);
 		}
+		//decrement the length to reflect the fact that we have removed the 64B header
+		//Note: the rxHandler must make sure to not give us fragments less than 64B
+		notif.length -= bytes_per_word;
 		target_strm[notif.session_id] = strm;
 	} else{//if remaining bytes is not zero, then this is a continuation of an old message
 		strm = target_strm[notif.session_id];

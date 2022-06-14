@@ -16,12 +16,18 @@
 # *******************************************************************************/
 
 PLATFORM ?= xilinx_u280_xdma_201920_3
+# Supported Alveo platforms are:
+# U55C: xilinx_u55c_gen3x16_xdma_202110_1
+# U280: xilinx_u280_xdma_201920_3
+# U250: xilinx_u250_gen3x16_xdma_3_1_202020_1
+
 XSA := $(strip $(patsubst %.xpfm, % , $(shell basename $(PLATFORM))))
 DEBUG ?= none
 PROFILE ?= none
 MODE ?= tcp
 FREQUENCY = 250
-CCL_XO=../../kernels/cclo/ccl_offload.xo
+CCLO_XO = ../../kernels/cclo/ccl_offload.xo
+CCLO_MB_DEBUG_LEVEL ?= 0
 
 VNX=xup_vitis_network_example
 NETLAYERDIR = $(VNX)/NetLayers
@@ -36,16 +42,17 @@ CMAC_UDP_XO=$(VNX)/Ethernet/_x.$(PLATFORM)/cmac_$(ETH_IF).xo
 UDP_XO=$(VNX)/NetLayers/_x.$(PLATFORM)/networklayer.xo
 TCP_DUMMY_XO=../../kernels/plugins/dummy_tcp_stack/dummy_tcp_stack.xo
 TCP_XO=Vitis_with_100Gbps_TCP-IP/_x.hw.$(XSA)/network_krnl.xo
+TCP_VIVADO_ROOTDIR ?= $$XILINX_VIVADO
+TCP_HLS_ROOTDIR ?= $$XILINX_HLS
 CMAC_TCP_XO=Vitis_with_100Gbps_TCP-IP/_x.hw.$(XSA)/cmac_krnl.xo
 XCLBIN=$(BUILD_DIR)/ccl_offload.xclbin
 
 HOSTCTRL_XO=../../kernels/plugins/hostctrl/hostctrl.xo
-SUM_XO=$(wildcard ../../kernels/plugins/reduce_sum/*.xo)
-HP_UPCAST_XO=../../kernels/plugins/hp_fp_stream_conv/hp_fp_stream_conv.xo
-HP_DOWNCAST_XO=../../kernels/plugins/fp_hp_stream_conv/fp_hp_stream_conv.xo
+SUM_XO=../../kernels/plugins/reduce_sum/reduce_sum.xo
+COMPRESSION_XO=../../kernels/plugins/hp_compression/hp_compression.xo
 LOOPBACK_XO=../../kernels/plugins/loopback/loopback.xo
 
-ARITHMETIC_XO = $(SUM_XO) $(HP_UPCAST_XO) $(HP_DOWNCAST_XO)
+ARITHMETIC_XO = $(SUM_XO) $(COMPRESSION_XO)
 
 ifeq (all,$(PROFILE))
 	PROFILE_OPTS := --profile.data all:all:all --profile.exec all:all:all --profile.stall all:all:all
@@ -67,14 +74,16 @@ ifeq (u250,$(findstring u250, $(PLATFORM)))
 else ifeq (u280,$(findstring u280, $(PLATFORM)))
 	FPGAPART=xcu280-fsvh2892-2L-e
 	BOARD=u280
+else ifeq (u55c,$(findstring u55c, $(PLATFORM)))
+	FPGAPART=xcu55c-fsvh2892-2L-e
+	BOARD=u55c
 else
 	$(error Unsupported PLATFORM)
 endif
 
 CONFIGFILE := config/link_config_$(BOARD)_$(MODE).ini
 CONFIG := --config $(CONFIGFILE)
-ifeq (vnx,$(MODE))
-	CMAC_IP_FOLDER = $(shell readlink -f ./$(CMACDIR)/cmac)
+ifeq (udp,$(MODE))
 	ifeq (u50,$(findstring u50, $(PLATFORM)))
 		HLS_IP_FOLDER  = $(shell readlink -f ./$(NETLAYERHLS)/synthesis_results_HMB)
 	endif
@@ -87,27 +96,28 @@ ifeq (vnx,$(MODE))
 	ifeq (u280,$(findstring u280, $(PLATFORM)))
 		HLS_IP_FOLDER  = $(shell readlink -f ./$(NETLAYERHLS)/synthesis_results_HMB)
 	endif
-	CONFIG += --connectivity.nk cmac_$(ETH_IF):1:cmac_inst
-	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/$(VNX)/post_sys_link.tcl
+	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/$(VNX)/Ethernet/post_sys_link.tcl
 	NET_XO = $(CMAC_UDP_XO) $(UDP_XO)
-	CONFIG += --user_ip_repo_paths $(CMAC_IP_FOLDER)
+	OTHER_XO = $(LOOPBACK_XO)
 	CONFIG += --user_ip_repo_paths $(HLS_IP_FOLDER)
+	CCLO_STACK_TYPE = UDP
+	CCLO_EN_FANIN = 0
 else ifeq (tri,$(MODE))
 	ETH_IF := none
 	NET_XO = $(TCP_DUMMY_XO)
 	OTHER_XO = $(LOOPBACK_XO)
 	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/tcl/post_sys_link_tri.tcl
-else ifeq (lb,$(MODE))
-	ETH_IF := none
-	NET_XO = $(TCP_DUMMY_XO)
-	OTHER_XO = $(LOOPBACK_XO)
-	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/tcl/post_sys_link_lb.tcl
+	CCLO_STACK_TYPE = TCP
+	CCLO_EN_FANIN = 1
+	CCLO_MB_DEBUG_LEVEL = 2
 else ifeq (tcp, $(MODE))
 	CMAC_TCP_XO=Vitis_with_100Gbps_TCP-IP/_x.hw.$(XSA)/cmac_krnl.xo
 	NET_XO = $(TCP_XO) $(CMAC_TCP_XO)
 	OTHER_XO = $(LOOPBACK_XO)
 	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/Vitis_with_100Gbps_TCP-IP/scripts/post_sys_link.tcl
 	CONFIG += --user_ip_repo_paths Vitis_with_100Gbps_TCP-IP/build/fpga-network-stack/iprepo
+	CCLO_STACK_TYPE = TCP
+	CCLO_EN_FANIN = 1
 else
 	$(error Unsupported MODE)
 endif
@@ -145,12 +155,13 @@ tcp_stack_ips:
 	git submodule update --init --recursive Vitis_with_100Gbps_TCP-IP
 	rm -rf Vitis_with_100Gbps_TCP-IP/build
 	mkdir Vitis_with_100Gbps_TCP-IP/build
-	cmake -S Vitis_with_100Gbps_TCP-IP/ -BVitis_with_100Gbps_TCP-IP/build/ -DFDEV_NAME=$(BOARD) -DVIVADO_HLS_ROOT_DIR=/proj/xbuilds/2020.1_released/installs/lin64/Vivado/2020.1 -DVIVADO_ROOT_DIR=/proj/xbuilds/2020.1_released/installs/lin64/Vivado/2020.1 -DTCP_STACK_EN=1 -DTCP_STACK_RX_DDR_BYPASS_EN=1  -DTCP_STACK_WINDOW_SCALING=0 
-	make -C Vitis_with_100Gbps_TCP-IP/build installip
+	cmake -S Vitis_with_100Gbps_TCP-IP/ -BVitis_with_100Gbps_TCP-IP/build/ -DFDEV_NAME=$(BOARD) -DVIVADO_HLS_ROOT_DIR=$(TCP_HLS_ROOTDIR) -DVIVADO_ROOT_DIR=$(TCP_VIVADO_ROOTDIR) -DTCP_STACK_EN=1 -DTCP_STACK_RX_DDR_BYPASS_EN=1 -DTCP_STACK_WINDOW_SCALING=0 
+	$(MAKE) -C Vitis_with_100Gbps_TCP-IP/build installip
 
 $(XCLBIN): $(NET_XO) $(CONFIGFILE)
-	$(MAKE) -C ../../kernels PLATFORM=$(PLATFORM) DEBUG=$(DEBUG)
-	v++ --link --platform $(PLATFORM) --kernel_frequency $(FREQUENCY) --save-temps --temp_dir $(BUILD_DIR) $(CONFIG) -o $@ $(CCL_XO) $(HOSTCTRL_XO) $(ARITHMETIC_XO) $(NET_XO) $(OTHER_XO)
+	$(MAKE) -C ../../kernels/cclo PLATFORM=$(PLATFORM) STACK_TYPE=$(CCLO_STACK_TYPE) EN_FANIN=$(CCLO_EN_FANIN) MB_DEBUG_LEVEL=$(CCLO_MB_DEBUG_LEVEL)
+	$(MAKE) -C ../../kernels/plugins PLATFORM=$(PLATFORM) DEBUG=$(DEBUG)
+	v++ --link --platform $(PLATFORM) --kernel_frequency $(FREQUENCY) --save-temps --temp_dir $(BUILD_DIR) $(CONFIG) -o $@ $(CCLO_XO) $(HOSTCTRL_XO) $(ARITHMETIC_XO) $(NET_XO) $(OTHER_XO)
 
 distclean:
 	git clean -xfd
