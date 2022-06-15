@@ -787,15 +787,15 @@ private:
 
   CCLO *call_sync(CCLO::Options &options);
 
-  void init_connection(unsigned int comm_id = 0);
+  void init_connection(communicatorId comm_id = GLOBAL_COMM);
 
-  void open_port(unsigned int comm_id = 0);
+  void open_port(communicatorId comm_id = GLOBAL_COMM);
 
-  void open_con(unsigned int comm_id = 0);
+  void open_con(communicatorId comm_id = GLOBAL_COMM);
 
-  void use_udp(unsigned int comm_id = 0);
+  void use_udp(communicatorId comm_id = GLOBAL_COMM);
 
-  void use_tcp(unsigned int comm_id = 0);
+  void use_tcp(communicatorId comm_id = GLOBAL_COMM);
 
   void set_max_segment_size(unsigned int value = 0);
 

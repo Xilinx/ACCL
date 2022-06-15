@@ -1034,14 +1034,14 @@ CCLO *ACCL::call_sync(CCLO::Options &options) {
   return cclo;
 }
 
-void ACCL::init_connection(unsigned int comm_id) {
+void ACCL::init_connection(communicatorId comm_id) {
   debug("Opening ports to communicator ranks");
   open_port(comm_id);
   debug("Starting session to communicator ranks");
   open_con(comm_id);
 }
 
-void ACCL::open_port(unsigned int comm_id) {
+void ACCL::open_port(communicatorId comm_id) {
   CCLO::Options options{};
   options.scenario = operation::config;
   options.comm = communicators[comm_id].communicators_addr();
@@ -1050,7 +1050,7 @@ void ACCL::open_port(unsigned int comm_id) {
   check_return_value("open_port");
 }
 
-void ACCL::open_con(unsigned int comm_id) {
+void ACCL::open_con(communicatorId comm_id) {
   CCLO::Options options{};
   options.scenario = operation::config;
   options.comm = communicators[comm_id].communicators_addr();
@@ -1059,7 +1059,7 @@ void ACCL::open_con(unsigned int comm_id) {
   check_return_value("open_con");
 }
 
-void ACCL::use_udp(unsigned int comm_id) {
+void ACCL::use_udp(communicatorId comm_id) {
   CCLO::Options options{};
   options.scenario = operation::config;
   options.comm = communicators[comm_id].communicators_addr();
@@ -1069,7 +1069,7 @@ void ACCL::use_udp(unsigned int comm_id) {
   check_return_value("use_udp");
 }
 
-void ACCL::use_tcp(unsigned int comm_id) {
+void ACCL::use_tcp(communicatorId comm_id) {
   CCLO::Options options{};
   options.scenario = operation::config;
   options.comm = communicators[comm_id].communicators_addr();
