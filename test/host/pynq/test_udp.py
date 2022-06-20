@@ -19,14 +19,13 @@ import os
 import sys
 import numpy as np
 import time
-sys.path.append('../../../driver/pynq/src/pyaccl/')
-from accl import accl, ACCLReduceFunctions, ACCLStreamFlags
+from pyaccl.accl import accl, ACCLReduceFunctions, ACCLStreamFlags
 sys.path.append('../../hardware/xup_vitis_network_example/Notebooks/')
 from vnx_utils import *
 import pynq
 import argparse
 import itertools
-
+from mpi4py import MPI
 
 def configure_vnx_ip(overlay, our_ip):
     print("Link interface 1 {}".format(ol.cmac_0.linkStatus()))
@@ -41,6 +40,10 @@ def configure_vnx_socket(overlay, their_rank, our_port, their_ip, their_port):
 def configure_vnx(overlay, localrank, ranks):
     assert len(ranks) <= 16, "Too many ranks. VNX supports up to 16 sockets"
     configure_vnx_ip(overlay, ranks[localrank]["ip"])
+    # clear sockets
+    for i in range(16):
+        ol.networklayer_0.sockets[i] = ("127.0.0.1", 0, 0, False)
+    # set sockets in use, corresponding to ranks
     for i in range(len(ranks)):
         if i == localrank:
             pass
@@ -49,6 +52,7 @@ def configure_vnx(overlay, localrank, ranks):
     time.sleep(2)
     overlay.networklayer_0.arpDiscovery()
     time.sleep(2)
+    overlay.networklayer_0.arpDiscovery()
 
 def get_buffers(count, op0_dt, op1_dt, res_dt, accl_inst):
     op0_buf = pynq.allocate((count,), dtype=op0_dt, target=accl_inst.cclo.devicemem)
@@ -285,8 +289,15 @@ if __name__ == "__main__":
         args.allreduce = True
 
     # get communicator size and our local rank in it
-    world_size = int(os.environ.get('OMPI_COMM_WORLD_SIZE'))
-    local_rank = int(os.environ.get('OMPI_COMM_WORLD_RANK'))
+
+    # get communicator size and our local rank in it
+    comm = MPI.COMM_WORLD
+    world_size = comm.Get_size()
+    local_rank = comm.Get_rank()
+
+    # alternatively, without the communicator, and running under OpenMPI:
+    # world_size = int(os.environ.get('OMPI_COMM_WORLD_SIZE'))
+    # local_rank = int(os.environ.get('OMPI_COMM_WORLD_RANK'))
 
     #set a random seed to make it reproducible
     np.random.seed(2021+local_rank)
@@ -294,17 +305,23 @@ if __name__ == "__main__":
     assert len(args.iplist) == world_size, "Number of IPs provided must match the number of ranks"
     ranks = []
     for i in range(world_size):
-        ranks.append({"ip": args.iplist[i], "port": args.port, "session_id":0, "max_segment_size": args.rxbuf_size})
+        ranks.append({"ip": args.iplist[i], "port": args.port, "session_id":i, "max_segment_size": args.rxbuf_size})
+
+    print(f"Rank ID {local_rank} of {world_size} ranks")
+    print(ranks)
 
     #configure FPGA and CCLO cores with the default 16 RX buffers of size given by args.rxbuf_size
-    print(f"AlveoDevice connecting to board {args.board_idx} xclbin {args.xclbin}")
-    local_alveo = pynq.Device.devices[args.board_idx]
+    local_alveo = pynq.Device.devices[0]
+    print(f"AlveoDevice connecting to plaform {local_alveo.name}, loading xclbin {args.xclbin}")
     #this will program the FPGA if not already; when running under MPI, program the board ahead of time
     #with xbutil to avoid race conditions on the XCLBIN writes
     ol = pynq.Overlay(args.xclbin, device=local_alveo)
 
     # set up UDP POE
     configure_vnx(ol, local_rank, ranks)
+
+    print("VNX ready")
+    comm.barrier()
 
     #get handles to ACCL cores
     cclo_ip = ol.__getattr__(f"ccl_offload_0")
@@ -323,7 +340,8 @@ if __name__ == "__main__":
                     )
     cclo_inst.set_timeout(10**8)
     #wait a bit to make sure all the devices are configured before testing
-    time.sleep(1)
+    print("CCLO ready")
+    time.sleep(5)
 
     types = [[np.float32]]
     if args.fp16:
@@ -349,22 +367,31 @@ if __name__ == "__main__":
                     test_copy(cclo_inst, args.count, dt=dt)
                 if args.sndrcv:
                     test_sendrecv(cclo_inst, world_size, local_rank, args.count, dt=dt)
+                    comm.barrier()
                 if args.sndrcv_strm:
                     test_sendrecv_strm(cclo_inst, world_size, local_rank, args.count, dt=dt)
+                    comm.barrier()
                 if args.bcast:
                     test_bcast(cclo_inst, local_rank, i, args.count, dt=dt)
+                    comm.barrier()
                 if args.scatter:
                     test_scatter(cclo_inst, world_size, local_rank, i, args.count, dt=dt)
+                    comm.barrier()
                 if args.gather:
                     test_gather(cclo_inst, world_size, local_rank, i, args.count, dt=dt)
+                    comm.barrier()
                 if args.allgather:
                     test_allgather(cclo_inst, world_size, local_rank, args.count, dt=dt)
+                    comm.barrier()
                 if args.reduce:
                     test_reduce(cclo_inst, world_size, local_rank, i, args.count, args.reduce_func, dt=dt)
+                    comm.barrier()
                 if args.reduce_scatter:
                     test_reduce_scatter(cclo_inst, world_size, local_rank, args.count, args.reduce_func, dt=dt)
+                    comm.barrier()
                 if args.allreduce:
                     test_allreduce(cclo_inst, world_size, local_rank, args.count, args.reduce_func, dt=dt)
+                    comm.barrier()
 
     except KeyboardInterrupt:
         print("CTR^C")
