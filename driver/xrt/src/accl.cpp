@@ -18,7 +18,6 @@
 
 #include <bitset>
 #include <cmath>
-#include <jsoncpp/json/json.h>
 #include <set>
 
 #include "accl.hpp"
