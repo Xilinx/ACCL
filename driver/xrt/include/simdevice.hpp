@@ -20,7 +20,6 @@
 #include "cclo.hpp"
 #include "constants.hpp"
 #include <string>
-#include <zmq.hpp>
 #include "zmq_client.h"
 
 /** @file simdevice.hpp */
