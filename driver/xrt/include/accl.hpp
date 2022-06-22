@@ -257,14 +257,6 @@ public:
                 std::vector<CCLO *> waitfor = {});
 
   /**
-   * TODO: document function
-   */
-  CCLO *external_stream_kernel(BaseBuffer &srcbuf, BaseBuffer &dstbuf,
-                               bool from_fpga = false, bool to_fpga = false,
-                               bool run_async = false,
-                               std::vector<CCLO *> waitfor = {});
-
-  /**
    * Performs the broadcast operation on the FPGA.
    *
    * @param buf            Buffer that should contain the same data as the root
@@ -456,6 +448,16 @@ public:
                        bool run_async = false,
                        std::vector<CCLO *> waitfor = {});
 
+  /**
+   * Performs a barrier on the FPGA.
+   *
+   * @param comm_id        Index of communicator to use.
+   * @param waitfor        ACCL call will wait for these operations before it
+   *                       will start. Currently not implemented.
+   * 
+   */
+  void barrier(communicatorId comm_id = GLOBAL_COMM,
+                std::vector<CCLO *> waitfor = {});
 
   /**
    * Check if ACCL is being run in simulated mode or not.

@@ -1009,6 +1009,13 @@ void test_allreduce_compressed(ACCL::ACCL &accl, options_t &options,
   }
 }
 
+void test_barrier(ACCL::ACCL &accl) {
+  std::cout << "Start barrier test " << std::endl;
+  accl.barrier();
+  std::cout << "Test is successful!" << std::endl;
+
+}
+
 void start_test(options_t options) {
   std::vector<rank_t> ranks = {};
   failed_tests = 0;
@@ -1045,6 +1052,8 @@ void start_test(options_t options) {
   // barrier here to make sure all the devices are configured before testing
   MPI_Barrier(MPI_COMM_WORLD);
   accl->nop();
+  MPI_Barrier(MPI_COMM_WORLD);
+  test_barrier(*accl);
   MPI_Barrier(MPI_COMM_WORLD);
   test_copy(*accl, options);
   MPI_Barrier(MPI_COMM_WORLD);

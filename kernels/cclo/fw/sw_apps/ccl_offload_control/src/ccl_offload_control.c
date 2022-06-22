@@ -1133,6 +1133,75 @@ int allreduce(
     return err;
 }
 
+//barrier: swing a minimal packet around the ring then return
+//count == 64 because keeping packets multiples of 64 keeps memory 
+//accesses in the TCP stack aligned (so 1B would be slower than 64B)
+//requires a buffer from which we pull the 64B
+int barrier(
+    uint64_t src_buf_addr,
+    unsigned int comm_offset,
+    unsigned int arcfg_offset
+){
+    unsigned int count = 64;
+    int i, next_in_ring, prev_in_ring;
+    int err = NO_ERROR;
+
+    if(world.size == 1){
+        //corner-case copy for when running a single-node barrier
+        return NO_ERROR;
+    }
+
+    next_in_ring = (world.local_rank + 1) % world.size;
+    prev_in_ring = (world.local_rank + world.size - 1) % world.size;
+
+    //send local chunk to next in ring
+    start_move(
+        MOVE_IMMEDIATE, MOVE_NONE, MOVE_IMMEDIATE, 
+        NO_COMPRESSION, RES_REMOTE, 0,
+        count, 
+        comm_offset, arcfg_offset, 
+        src_buf_addr, 0, 0, 0, 0, 0,
+        0, 0, next_in_ring, TAG_ANY
+    );
+
+    //receive and forward from all other members of the communicator
+    for(i=0; i<world.size-1; i++){
+        //simultaneous receive, and send for the received chunk,
+        //unless it is the last step, in which case we copy back to the source buffer
+        if(i < world.size-2){
+            start_move(
+                MOVE_NONE, MOVE_ON_RECV, MOVE_IMMEDIATE, 
+                NO_COMPRESSION, RES_REMOTE, 0,
+                count,
+                comm_offset, arcfg_offset, 
+                0, 0, 0, 0, 0, 0,
+                prev_in_ring, TAG_ANY, next_in_ring, TAG_ANY
+            ); 
+        } else {
+            start_move(
+                MOVE_NONE, MOVE_ON_RECV, MOVE_IMMEDIATE, 
+                NO_COMPRESSION, RES_LOCAL, 0,
+                count,
+                comm_offset, arcfg_offset, 
+                0, 0, src_buf_addr, 0, 0, 0,
+                prev_in_ring, TAG_ANY, 0, 0
+            );
+        }
+        //pop one result here to keep the result FIFO not full
+        err |= end_move();
+    }
+
+    //pop final result
+    err |= end_move();
+
+    return err;
+}
+
+//placeholder for all-to-all collective
+int all_to_all(){
+    return NO_ERROR;
+}
+
 
 //startup and main
 
@@ -1258,6 +1327,12 @@ void run() {
                 break;
             case ACCL_ALLREDUCE:
                 retval = allreduce(count, function, op0_addr, res_addr, comm, datapath_cfg, compression_flags, stream_flags);
+                break;
+            case ACCL_BARRIER:
+                retval = barrier(op0_addr, comm, datapath_cfg);
+                break;
+            case ACCL_ALLTOALL:
+                retval = all_to_all();
                 break;
             case ACCL_CONFIG:
                 retval = 0;
