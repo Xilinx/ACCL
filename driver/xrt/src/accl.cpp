@@ -636,7 +636,6 @@ void ACCL::barrier(communicatorId comm_id,
   CCLO::Options options{};
 
   const Communicator &communicator = communicators[comm_id];
-
   options.scenario = operation::barrier;
   options.comm = communicator.communicators_addr();
   options.addr_0 = utility_spare;
@@ -925,7 +924,12 @@ void ACCL::prepare_call(CCLO::Options &options) {
       // no operand compression
       dataType dtype = *dtypes.begin();
       std::pair<dataType, dataType> key = {dtype, dtype};
-      arithcfg = &this->arith_config.at(key);
+      //barrier is a corner case, we don't care about the dtype
+      if(options.scenario == operation::barrier) {
+        arithcfg = &this->arith_config.begin()->second;
+      } else {
+        arithcfg = &this->arith_config.at(key);
+      }
     } else {
       // with operand compression
       // determine compression dtype

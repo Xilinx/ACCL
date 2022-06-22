@@ -1134,7 +1134,8 @@ int allreduce(
 }
 
 //barrier: swing a minimal packet around the ring then return
-//count == 64 because keeping packets multiples of 64 keeps memory 
+//Ideally count would be  computed such that the message is 64B; this is
+//because using packets of size multiples of 64 keeps memory 
 //accesses in the TCP stack aligned (so 1B would be slower than 64B)
 //requires a buffer from which we pull the 64B
 int barrier(
@@ -1142,7 +1143,7 @@ int barrier(
     unsigned int comm_offset,
     unsigned int arcfg_offset
 ){
-    unsigned int count = 64;
+    unsigned int count = 1;
     int i, next_in_ring, prev_in_ring;
     int err = NO_ERROR;
 
