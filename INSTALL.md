@@ -7,7 +7,7 @@ git submodule update --init --recursive
 ```
 
 ## Install dependencies
-The project has been tested with Xilinx Vitis 2021.2 on Ubuntu 20.04.
+The project has been tested with Xilinx Vitis 2022.1 on Ubuntu 20.04.
 ```sh
 sudo apt update
 sudo apt install python3 cmake libzmqpp-dev libjsoncpp-dev libtclap-dev libopenmpi-dev xvfb
@@ -73,6 +73,6 @@ The following build modes are supported:
 The following platforms are supported for Alveo boards:
 | Alveo | Platform Name                          |
 |-------|----------------------------------------|
-| U55C  | xilinx_u55c_gen3x16_xdma_2_202110_1    |
+| U55C  | xilinx_u55c_gen3x16_xdma_3_202210_1    |
 | U250  | xilinx_u250_gen3x16_xdma_3_1_202020_1  |
 | U280  | xilinx_u280_xdma_201920_3              |

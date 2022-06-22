@@ -17,7 +17,7 @@
 
 PLATFORM ?= xilinx_u280_xdma_201920_3
 # Supported Alveo platforms are:
-# U55C: xilinx_u55c_gen3x16_xdma_202110_1
+# U55C: xilinx_u55c_gen3x16_xdma_3_202210_1
 # U280: xilinx_u280_xdma_201920_3
 # U250: xilinx_u250_gen3x16_xdma_3_1_202020_1
 

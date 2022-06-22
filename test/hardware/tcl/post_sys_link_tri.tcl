@@ -29,7 +29,7 @@ proc connect_clk_rst {clksig rstsig rstslr} {
         connect_bd_net [get_bd_pins ip_psr_aresetn_kernel_00_slr${rstslr}/peripheral_aresetn] [get_bd_pins $rstsig]
     }
     if {![catch { connect_bd_net [get_bd_pins ulp_ucs/aclk_kernel_00] [get_bd_pins $clksig] } ]} {
-        puts "Inferred shell xilinx_u55c_gen3x16_xdma_202110_1"
+        puts "Inferred shell xilinx_u55c_gen3x16_xdma_2_202110_1 or xilinx_u55c_gen3x16_xdma_3_202210_1"
         connect_bd_net [get_bd_pins proc_sys_reset_kernel_slr${rstslr}/peripheral_aresetn] [get_bd_pins $rstsig]
     }
 }
