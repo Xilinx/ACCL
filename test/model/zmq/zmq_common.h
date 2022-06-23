@@ -15,7 +15,7 @@
 #
 # *******************************************************************************/
 #pragma once
-#include <jsoncpp/json/json.h>
+#include <json/json.h>
 #include <zmqpp/zmqpp.hpp>
 
 /**

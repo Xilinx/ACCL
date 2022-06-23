@@ -18,7 +18,6 @@
 
 #include "fpgadevice.hpp"
 #include "common.hpp"
-#include <jsoncpp/json/json.h>
 
 
 namespace ACCL {
