@@ -72,7 +72,7 @@ target_link_libraries(accl PUBLIC zmqpp)
 find_package(jsoncpp REQUIRED)
 target_link_libraries(accl PUBLIC jsoncpp_lib)
 get_target_property(JSON_INC_PATH jsoncpp_lib INTERFACE_INCLUDE_DIRECTORIES)
-target_include_directories(accl PUBLIC ${JSONCPP_INCLUDE_DIRS})
+target_include_directories(accl PUBLIC ${JSON_INC_PATH})
 
 
 if (ACCL_DEBUG)
