@@ -20,11 +20,11 @@ sudo dpkg -i xrt_202120.2.12.427_20.04-amd64-xrt.deb
 sudo apt --fix-broken install
 ```
 
-## Run ACCL tests using the Emulator or Simulator
-First start up either the emulator or simulator.
+## Run ACCL tests
+### Emulation or simulation
+First start up either the emulator or simulator:
 <details>
   <summary>Emulator</summary>
-
   ```sh
   cd "test/model/emulator"
   source <VITIS_INSTALL>/settings64.sh
@@ -53,6 +53,18 @@ cd "test/host/xrt"
 /bin/cmake .
 make
 XCL_EMULATION_MODE=sw_emu mpirun -np <RANKS> bin/test
+```
+
+### Hardware
+Make sure you have a [hardware design](#build-a-hardware-design-with-accl) of
+ACCL first.
+
+Open a terminal and run the tests:
+```sh
+cd "test/host/xrt"
+/bin/cmake .
+make
+mpirun -np <RANKS> bin/test -f -x <XCLBIN FILE>
 ```
 
 ## Build a hardware design with ACCL
