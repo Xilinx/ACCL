@@ -20,11 +20,33 @@ sudo dpkg -i xrt_202120.2.12.427_20.04-amd64-xrt.deb
 sudo apt --fix-broken install
 ```
 
-## Run ACCL tests using the Emulator or Simulator
-First start up either the emulator or simulator.
+## Build a hardware design with ACCL
+
+```sh
+source <VITIS_INSTALL>/settings64.sh
+cd "test/hardware"
+make MODE=<Build Mode> PLATFORM=<Platform Name>
+```
+
+The following build modes are supported:
+| Build Mode | Description                              |
+|------------|------------------------------------------|
+| udp        | ACCL with UDP backend                    |
+| tcp        | ACCL with TCP backend                    |
+| tri        | 3-Rank ACCL Test System on a single FPGA. Used for testing (see below) |
+
+The following platforms are supported for Alveo boards:
+| Alveo | Platform Name                          |
+|-------|----------------------------------------|
+| U55C  | xilinx_u55c_gen3x16_xdma_3_202210_1    |
+| U250  | xilinx_u250_gen3x16_xdma_3_1_202020_1  |
+| U280  | xilinx_u280_xdma_201920_3              |
+
+## Run ACCL tests
+### Emulation or simulation tests
+First start up either the emulator or simulator:
 <details>
   <summary>Emulator</summary>
-
   ```sh
   cd "test/model/emulator"
   source <VITIS_INSTALL>/settings64.sh
@@ -55,24 +77,15 @@ make
 XCL_EMULATION_MODE=sw_emu mpirun -np <RANKS> bin/test
 ```
 
-## Build a hardware design with ACCL
+### Hardware tests
+Make sure you have a [3-Rank, single FPGA test design](#build-a-hardware-design-with-accl) of
+ACCL first.
 
+Open a terminal and run the tests:
 ```sh
-source <VITIS_INSTALL>/settings64.sh
-cd "test/hardware"
-make MODE=<Build Mode> PLATFORM=<Platform Name>
+cd "test/host/xrt"
+/bin/cmake .
+make
+mpirun -np <RANKS> bin/test -f -x <XCLBIN FILE>
 ```
 
-The following build modes are supported:
-| Build Mode | Description                              |
-|------------|------------------------------------------|
-| udp        | ACCL with UDP backend                    |
-| tcp        | ACCL with TCP backend                    |
-| tri        | 3-Rank ACCL Test System on a single FPGA |
-
-The following platforms are supported for Alveo boards:
-| Alveo | Platform Name                          |
-|-------|----------------------------------------|
-| U55C  | xilinx_u55c_gen3x16_xdma_3_202210_1    |
-| U250  | xilinx_u250_gen3x16_xdma_3_1_202020_1  |
-| U280  | xilinx_u280_xdma_201920_3              |
