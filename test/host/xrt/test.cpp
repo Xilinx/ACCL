@@ -21,6 +21,7 @@
 #include <experimental/xrt_ip.h>
 #include <functional>
 #include <mpi.h>
+#include <network_util.h>
 #include <random>
 #include <sstream>
 #include <tclap/CmdLine.h>
@@ -29,6 +30,7 @@
 #include <xrt/xrt_kernel.h>
 
 using namespace ACCL;
+using namespace ACCL_NETWORK_UTIL;
 
 // Set the tolerance for compressed datatypes high enough, since we do currently
 // not replicate the float32 -> float16 conversion for our reference results
@@ -45,6 +47,8 @@ struct options_t {
   unsigned int nruns;
   bool debug;
   bool hardware;
+  bool tri;
+  bool udp;
   unsigned int device_index;
   std::string xclbin;
 };
@@ -1009,6 +1013,31 @@ void test_allreduce_compressed(ACCL::ACCL &accl, options_t &options,
   }
 }
 
+void configure_vnx(CMAC &cmac, NetworkLayer &network_layer,
+                   std::vector<rank_t> &ranks) {
+  if (ranks.size() > socket_count) {
+    throw std::runtime_error("Too many ranks. VNX supports up to " +
+                             std::to_string(socket_count) + " sockets.");
+  }
+
+  std::cerr << "Link interface 1 " << cmac.cmac_link_status() << std::endl;
+  network_layer.update_ip_address(ranks[rank].ip);
+  for (size_t i = 0; i < ranks.size(); ++i) {
+    if (i == static_cast<size_t>(rank)) {
+      continue;
+    }
+
+    network_layer.set_socket(i, ranks[i].ip, ranks[i].port, ranks[rank].port,
+                             true);
+  }
+
+  network_layer.populate_socket_table();
+  std::this_thread::sleep_for(std::chrono::seconds(2));
+  network_layer.arp_discovery();
+  std::this_thread::sleep_for(std::chrono::seconds(2));
+  network_layer.arp_discovery();
+}
+
 void start_test(options_t options) {
   std::vector<rank_t> ranks = {};
   failed_tests = 0;
@@ -1021,16 +1050,30 @@ void start_test(options_t options) {
   std::unique_ptr<ACCL::ACCL> accl;
 
   auto device = xrt::device(options.device_index);
+
   if (options.hardware) {
+    std::string cclo_id;
+    if (options.tri) {
+      cclo_id = std::to_string(rank);
+    } else {
+      cclo_id = "0";
+    }
     auto xclbin_uuid = device.load_xclbin(options.xclbin);
-    auto cclo_ip =
-        xrt::ip(device, xclbin_uuid,
-                "ccl_offload:{ccl_offload_" + std::to_string(rank) + "}");
-    auto hostctrl_ip = xrt::kernel(
-        device, xclbin_uuid, "hostctrl:{hostctrl_" + std::to_string(rank) + "}",
-        xrt::kernel::cu_access_mode::exclusive);
+    auto cclo_ip = xrt::ip(device, xclbin_uuid,
+                           "ccl_offload:{ccl_offload_" + cclo_id + "}");
+    auto hostctrl_ip =
+        xrt::kernel(device, xclbin_uuid, "hostctrl:{hostctrl_" + cclo_id + "}",
+                    xrt::kernel::cu_access_mode::exclusive);
 
     std::vector<int> mem = {rank * 6 + 1};
+
+    if (options.udp) {
+      auto cmac = CMAC(xrt::ip(device, xclbin_uuid, "cmac_0:{cmac_0}"));
+      auto network_layer = NetworkLayer(
+          xrt::ip(device, xclbin_uuid, "networklayer:{networklayer_0}"));
+
+      configure_vnx(cmac, network_layer, ranks);
+    }
 
     accl = std::make_unique<ACCL::ACCL>(
         ranks, rank, device, cclo_ip, hostctrl_ip, rank * 6, mem, rank * 6 + 2,
@@ -1123,6 +1166,8 @@ options_t parse_options(int argc, char *argv[]) {
   TCLAP::SwitchArg debug_arg("d", "debug", "Enable debug mode", cmd, false);
   TCLAP::SwitchArg hardware_arg("f", "hardware", "enable hardware mode", cmd,
                                 false);
+  TCLAP::SwitchArg tri_arg("t", "tri", "Use tri hardware setup", cmd, false);
+  TCLAP::SwitchArg udp_arg("u", "udp", "Use UDP hardware setup", cmd, false);
   TCLAP::ValueArg<std::string> xclbin_arg(
       "x", "xclbin", "xclbin of accl driver if hardware mode is used", false,
       "accl.xclbin", "file");
@@ -1134,6 +1179,12 @@ options_t parse_options(int argc, char *argv[]) {
 
   try {
     cmd.parse(argc, argv);
+    if (hardware_arg.getValue()) {
+      if (tri_arg.getValue() == udp_arg.getValue()) {
+        throw std::runtime_error("When using hardware, specify either tri or "
+                                 "udp mode, but not both.");
+      }
+    }
   } catch (std::exception &e) {
     if (rank == 0) {
       std::cout << "Error: " << e.what() << std::endl;
@@ -1150,12 +1201,15 @@ options_t parse_options(int argc, char *argv[]) {
   opts.nruns = nruns_arg.getValue();
   opts.debug = debug_arg.getValue();
   opts.hardware = hardware_arg.getValue();
+  opts.tri = tri_arg.getValue();
+  opts.udp = udp_arg.getValue();
   opts.device_index = device_index_arg.getValue();
   opts.xclbin = xclbin_arg.getValue();
   return opts;
 }
 
 int main(int argc, char *argv[]) {
+  std::cerr << sizeof(options_t) << std::endl;
 
   MPI_Init(&argc, &argv);
 
