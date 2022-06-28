@@ -265,45 +265,6 @@ CCLO *ACCL::combine(unsigned int count, reduceFunction function,
   return nullptr;
 }
 
-CCLO *ACCL::external_stream_kernel(BaseBuffer &srcbuf, BaseBuffer &dstbuf,
-                                   bool from_fpga, bool to_fpga, bool run_async,
-                                   std::vector<CCLO *> waitfor) {
-  CCLO::Options options{};
-
-  if (to_fpga == false && run_async == true) {
-    std::cerr << "ACCL: async run returns data on FPGA, user must "
-                 "sync_from_device() after waiting"
-              << std::endl;
-  }
-
-  if (srcbuf.size() <= 4) {
-    std::cerr << "ACCL: size of buffer not compatible" << std::endl;
-  }
-
-  if (from_fpga == false) {
-    srcbuf.sync_to_device();
-  }
-
-  options.scenario = operation::ext_stream_krnl;
-  options.addr_0 = &srcbuf;
-  options.addr_1 = &dstbuf;
-  options.count = srcbuf.size();
-  options.waitfor = waitfor;
-  CCLO *handle = call_async(options);
-
-  if (run_async) {
-    return handle;
-  } else {
-    handle->wait();
-    if (to_fpga == false) {
-      dstbuf.sync_from_device();
-    }
-    check_return_value("external_stream_kernel");
-  }
-
-  return nullptr;
-}
-
 CCLO *ACCL::bcast(BaseBuffer &buf, unsigned int count,
                   unsigned int root, communicatorId comm_id, bool from_fpga,
                   bool to_fpga, dataType compress_dtype, bool run_async,
@@ -669,6 +630,22 @@ CCLO *ACCL::reduce_scatter(BaseBuffer &sendbuf,
   return nullptr;
 }
 
+void ACCL::barrier(communicatorId comm_id,
+                    std::vector<CCLO *> waitfor) {
+  CCLO::Options options{};
+
+  const Communicator &communicator = communicators[comm_id];
+  options.scenario = operation::barrier;
+  options.comm = communicator.communicators_addr();
+  options.addr_0 = utility_spare;
+  options.waitfor = waitfor;
+  CCLO *handle = call_async(options);
+
+  handle->wait();
+  check_return_value("barrier");
+
+}
+
 std::vector<rank_t> ACCL::get_comm_group(communicatorId comm_id) {
   communicators[comm_id].readback();
   return *communicators[comm_id].get_ranks();
@@ -946,7 +923,12 @@ void ACCL::prepare_call(CCLO::Options &options) {
       // no operand compression
       dataType dtype = *dtypes.begin();
       std::pair<dataType, dataType> key = {dtype, dtype};
-      arithcfg = &this->arith_config.at(key);
+      //barrier is a corner case, we don't care about the dtype
+      if(options.scenario == operation::barrier) {
+        arithcfg = &this->arith_config.begin()->second;
+      } else {
+        arithcfg = &this->arith_config.at(key);
+      }
     } else {
       // with operand compression
       // determine compression dtype
