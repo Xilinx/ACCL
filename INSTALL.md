@@ -11,7 +11,6 @@ The project has been tested with Xilinx Vitis 2022.1 on Ubuntu 20.04.
 ```sh
 sudo apt update
 sudo apt install python3 cmake libzmqpp-dev libjsoncpp-dev libtclap-dev libopenmpi-dev xvfb
-pip3 install numpy pynq zmq mpi4py
 ```
 Install the Xilinx Run-Time libraries (XRT)
 ```
@@ -47,6 +46,7 @@ The following platforms are supported for Alveo boards:
 First start up either the emulator or simulator:
 <details>
   <summary>Emulator</summary>
+  
   ```sh
   cd "test/model/emulator"
   source <VITIS_INSTALL>/settings64.sh
