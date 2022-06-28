@@ -87,6 +87,9 @@ ifeq (udp,$(MODE))
 	ifeq (u50,$(findstring u50, $(PLATFORM)))
 		HLS_IP_FOLDER  = $(shell readlink -f ./$(NETLAYERHLS)/synthesis_results_HMB)
 	endif
+	ifeq (u55c,$(findstring u55c, $(PLATFORM)))
+		HLS_IP_FOLDER  = $(shell readlink -f ./$(NETLAYERHLS)/synthesis_results_HMB)
+	endif
 	ifeq (u200,$(findstring u200, $(PLATFORM)))
 		HLS_IP_FOLDER  = $(shell readlink -f ./$(NETLAYERHLS)/synthesis_results_noHMB)
 	endif
