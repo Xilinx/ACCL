@@ -156,8 +156,8 @@ void test_copy_p2p(ACCL::ACCL &accl, options_t &options) {
   }
 }
 
-void test_combine(ACCL::ACCL &accl, options_t &options) {
-  std::cout << "Start combine test..." << std::endl;
+void test_combine_sum(ACCL::ACCL &accl, options_t &options) {
+  std::cout << "Start combine SUM test..." << std::endl;
   unsigned int count = options.count;
   auto op_buf1 = accl.create_buffer<float>(count, dataType::float32);
   auto op_buf2 = accl.create_buffer<float>(count, dataType::float32);
@@ -169,6 +169,36 @@ void test_combine(ACCL::ACCL &accl, options_t &options) {
   int errors = 0;
   for (unsigned int i = 0; i < count; ++i) {
     float ref = (*op_buf1)[i] + (*op_buf2)[i];
+    float res = (*res_buf)[i];
+    if (res != ref) {
+      std::cout << i + 1
+                << "th item is incorrect! (" + std::to_string(res) +
+                       " != " + std::to_string(ref) + ")"
+                << std::endl;
+      errors += 1;
+    }
+  }
+
+  if (errors > 0) {
+    std::cout << errors << " errors!" << std::endl;
+  } else {
+    std::cout << "Test succesfull!" << std::endl;
+  }
+}
+
+void test_combine_max(ACCL::ACCL &accl, options_t &options) {
+  std::cout << "Start combine MAX test..." << std::endl;
+  unsigned int count = options.count;
+  auto op_buf1 = accl.create_buffer<float>(count, dataType::float32);
+  auto op_buf2 = accl.create_buffer<float>(count, dataType::float32);
+  auto res_buf = accl.create_buffer<float>(count, dataType::float32);
+  random_array(op_buf1->buffer(), count);
+  random_array(op_buf2->buffer(), count);
+
+  accl.combine(count, reduceFunction::MAX, *op_buf1, *op_buf2, *res_buf);
+  int errors = 0;
+  for (unsigned int i = 0; i < count; ++i) {
+    float ref = ((*op_buf1)[i] > (*op_buf2)[i]) ? (*op_buf1)[i] : (*op_buf2)[i];
     float res = (*res_buf)[i];
     if (res != ref) {
       std::cout << i + 1
@@ -1167,7 +1197,9 @@ void start_test(options_t options) {
   MPI_Barrier(MPI_COMM_WORLD);
   test_copy_p2p(*accl, options);
   MPI_Barrier(MPI_COMM_WORLD);
-  test_combine(*accl, options);
+  test_combine_sum(*accl, options);
+  MPI_Barrier(MPI_COMM_WORLD);
+  test_combine_max(*accl, options);
   MPI_Barrier(MPI_COMM_WORLD);
   test_sendrcv(*accl, options);
   if (options.test_xrt_simulator) {

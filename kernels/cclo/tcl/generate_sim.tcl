@@ -125,12 +125,12 @@ if { $stacktype == "TCP" } {
 
 # connect arithmetic plugins
 if { $en_arith != 0 } {
-    create_bd_cell -type ip -vlnv xilinx.com:ACCL:reduce_sum:1.0 reduce_sum
-    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins reduce_sum/ap_rst_n]
-    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins reduce_sum/ap_clk]
-    connect_bd_intf_net [get_bd_intf_pins cclo/m_axis_arith_op0] [get_bd_intf_pins reduce_sum/in0]
-    connect_bd_intf_net [get_bd_intf_pins cclo/m_axis_arith_op1] [get_bd_intf_pins reduce_sum/in1]
-    connect_bd_intf_net [get_bd_intf_pins reduce_sum/out_r] [get_bd_intf_pins cclo/s_axis_arith_res] 
+    create_bd_cell -type ip -vlnv xilinx.com:ACCL:reduce_ops:1.0 reduce_ops
+    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins reduce_ops/ap_rst_n]
+    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins reduce_ops/ap_clk]
+    connect_bd_intf_net [get_bd_intf_pins cclo/m_axis_arith_op0] [get_bd_intf_pins reduce_ops/in0]
+    connect_bd_intf_net [get_bd_intf_pins cclo/m_axis_arith_op1] [get_bd_intf_pins reduce_ops/in1]
+    connect_bd_intf_net [get_bd_intf_pins reduce_ops/out_r] [get_bd_intf_pins cclo/s_axis_arith_res] 
 }
 
 # implement compression lanes
