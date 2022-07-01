@@ -92,7 +92,8 @@ enum class operation {
  * operation::allreduce and operation::reduce_scatter.
  */
 enum class reduceFunction {
-  SUM = 0 /**< Sum all values */
+  SUM = 0, /**< Elementwise sum */
+  MAX = 1  /**< Elementwise max */
 };
 
 /**

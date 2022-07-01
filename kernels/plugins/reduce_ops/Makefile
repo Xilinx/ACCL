@@ -1,4 +1,4 @@
-/*******************************************************************************
+# /*******************************************************************************
 #  Copyright (C) 2021 Xilinx, Inc
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,12 +15,15 @@
 #
 # *******************************************************************************/
 
-#include "streamdefines.h"
-#include "ap_int.h"
-#include <stdint.h>
+TARGET=ip
+DEVICE=xcu250-figd2104-2L-e
+DTYPES=float half double int32_t int64_t
+DWIDTH=512
+REDUCE_IP = reduce_ops.xo
+
+all: $(REDUCE_IP)
+
+reduce_ops.xo: build.tcl reduce_ops.cpp
+	vitis_hls $< -tclargs $(TARGET) $(DEVICE)
 
 
-// template<unsigned int data_width, unsigned int dest_width, typename T>
-// void stream_add(STREAM<ap_axiu<2*data_width,0,0,dest_width> > & in, STREAM<ap_axiu<data_width,0,0,dest_width> > & out);
-
-void reduce_sum(STREAM<stream_word> & in0, STREAM<stream_word> & in1, STREAM<stream_word> & out);

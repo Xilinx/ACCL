@@ -105,16 +105,16 @@ typedef std::map<std::pair<dataType, dataType>, ArithConfig> arithConfigMap;
 /** Default arithmetic configuration definition */
 const arithConfigMap DEFAULT_ARITH_CONFIG = {
     {{dataType::float16, dataType::float16},
-     ArithConfig(2, 2, 0, 0, 0, false, {4})},
+     ArithConfig(2, 2, 0, 0, 0, false, {4,9})},
     {{dataType::float32, dataType::float16},
-     ArithConfig(4, 2, 0, 0, 1, true, {4})},
+     ArithConfig(4, 2, 0, 0, 1, true, {4,9})},
     {{dataType::float32, dataType::float32},
-     ArithConfig(4, 4, 0, 0, 0, false, {0})},
+     ArithConfig(4, 4, 0, 0, 0, false, {0,5})},
     {{dataType::float64, dataType::float64},
-     ArithConfig(8, 8, 0, 0, 0, false, {1})},
+     ArithConfig(8, 8, 0, 0, 0, false, {1,6})},
     {{dataType::int32, dataType::int32},
-     ArithConfig(4, 4, 0, 0, 0, false, {2})},
+     ArithConfig(4, 4, 0, 0, 0, false, {2,7})},
     {{dataType::int64, dataType::int64},
-     ArithConfig(8, 8, 0, 0, 0, false, {3})},
+     ArithConfig(8, 8, 0, 0, 0, false, {3,8})},
 };
 } // namespace ACCL

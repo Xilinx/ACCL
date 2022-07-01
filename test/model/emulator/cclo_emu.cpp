@@ -26,7 +26,7 @@
 #include <fstream>
 #include "ap_int.h"
 #include <stdint.h>
-#include "reduce_sum.h"
+#include "reduce_ops.h"
 #include "hp_compression.h"
 #include "eth_intf.h"
 #include "dummy_tcp_stack.h"
@@ -323,7 +323,7 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsign
     HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, clane2_res,                   switch_s[SWITCH_S_CLANE2], seg_cmd[12], seg_sts[12]);   //clane2 result
     HLSLIB_FREERUNNING_FUNCTION(axis_mux, accl_to_krnl_seg, switch_m[SWITCH_M_BYPASS], accl_to_krnl_data);
     //ARITH
-    HLSLIB_FREERUNNING_FUNCTION(reduce_sum, arith_op0, arith_op1, arith_res);
+    HLSLIB_FREERUNNING_FUNCTION(reduce_ops, arith_op0, arith_op1, arith_res);
     //COMPRESS 0, 1, 2
     HLSLIB_FREERUNNING_FUNCTION(hp_compression, clane0_op, clane0_res);
     HLSLIB_FREERUNNING_FUNCTION(hp_compression, clane1_op, clane1_res);
