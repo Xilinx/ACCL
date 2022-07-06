@@ -37,15 +37,17 @@ using namespace ACCL;
 
 int rank, size;
 unsigned failed_tests;
+unsigned skipped_tests;
 
 struct options_t {
   int start_port;
   unsigned int rxbuf_size;
   unsigned int count;
   unsigned int nruns;
+  unsigned int device_index;
+  bool test_xrt_simulator;
   bool debug;
   bool hardware;
-  unsigned int device_index;
   std::string xclbin;
 };
 
@@ -1013,12 +1015,12 @@ void test_barrier(ACCL::ACCL &accl) {
   std::cout << "Start barrier test " << std::endl;
   accl.barrier();
   std::cout << "Test is successful!" << std::endl;
-
 }
 
 void start_test(options_t options) {
   std::vector<rank_t> ranks = {};
   failed_tests = 0;
+  skipped_tests = 0;
   for (int i = 0; i < size; ++i) {
     rank_t new_rank = {"127.0.0.1", options.start_port + i, i,
                        options.rxbuf_size};
@@ -1027,7 +1029,11 @@ void start_test(options_t options) {
 
   std::unique_ptr<ACCL::ACCL> accl;
 
-  auto device = xrt::device(options.device_index);
+  xrt::device device;
+  if (options.hardware || options.test_xrt_simulator) {
+    device = xrt::device(options.device_index);
+  }
+
   if (options.hardware) {
     auto xclbin_uuid = device.load_xclbin(options.xclbin);
     auto cclo_ip =
@@ -1062,8 +1068,16 @@ void start_test(options_t options) {
   test_combine(*accl, options);
   MPI_Barrier(MPI_COMM_WORLD);
   test_sendrcv(*accl, options);
-  MPI_Barrier(MPI_COMM_WORLD);
-  test_sendrcv_bo(*accl, device, options);
+  if (options.test_xrt_simulator) {
+    MPI_Barrier(MPI_COMM_WORLD);
+    test_sendrcv_bo(*accl, device, options);
+  } else {
+    std::cout << "Skipping xrt::bo test. We are not running on hardware and "
+                 "XCL emulation is disabled. Make sure XILINX_VITIS and "
+                 "XCL_EMULATION_MODE are set."
+              << std::endl;
+    ++skipped_tests;
+  }
   MPI_Barrier(MPI_COMM_WORLD);
   test_sendrcv_compressed(*accl, options);
   MPI_Barrier(MPI_COMM_WORLD);
@@ -1103,16 +1117,37 @@ void start_test(options_t options) {
     MPI_Barrier(MPI_COMM_WORLD);
   }
 
-  std::cout << failed_tests << " tests failed on rank " << rank << "."
-            << std::endl;
+  std::cout << failed_tests << " tests failed on rank " << rank;
+  if (skipped_tests > 0) {
+    std::cout << " (skipped " << skipped_tests << " tests)";
+  }
+  std::cout << "." << std::endl;
   MPI_Barrier(MPI_COMM_WORLD);
   if (failed_tests > 1) {
     MPI_Abort(MPI_COMM_WORLD, 1);
   }
 }
 
-options_t parse_options(int argc, char *argv[]) {
+bool xrt_simulator_ready(const options_t &opts) {
+  if (opts.hardware) {
+    return true;
+  }
 
+  const char *vitis = std::getenv("XILINX_VITIS");
+
+  if (vitis == nullptr) {
+    return false;
+  }
+
+  const char *emu = std::getenv("XCL_EMULATION_MODE");
+  if (emu == nullptr) {
+    return false;
+  }
+
+  return std::string(emu) == "sw_emu" || std::string(emu) == "hw_emu";
+}
+
+options_t parse_options(int argc, char *argv[]) {
   TCLAP::CmdLine cmd("Test ACCL C++ driver");
   TCLAP::ValueArg<unsigned int> nruns_arg("n", "nruns",
                                           "How many times to run each test",
@@ -1161,11 +1196,11 @@ options_t parse_options(int argc, char *argv[]) {
   opts.hardware = hardware_arg.getValue();
   opts.device_index = device_index_arg.getValue();
   opts.xclbin = xclbin_arg.getValue();
+  opts.test_xrt_simulator = xrt_simulator_ready(opts);
   return opts;
 }
 
 int main(int argc, char *argv[]) {
-
   MPI_Init(&argc, &argv);
 
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
