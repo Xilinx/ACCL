@@ -37,9 +37,9 @@ set(CMAKE_BUILD_TYPE Debug)
 set(ACCL_DEBUG 1)
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../driver/xrt "CMakeFiles/accl")
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../hardware/xrt_network_util "CMakeFiles/xrt_network_util")
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../hardware/xup_vitis_network_example/xrt_host_api "CMakeFiles/xrt_host_api")
 
 find_package(MPI REQUIRED)
 add_executable(test test.cpp)
-target_include_directories(test PUBLIC ${MPI_CXX_INCLUDE_PATH} ${ACCL_INCLUDE_PATH} ${ACCL_NETWORK_UTIL_INCLUDE_PATH})
-target_link_libraries(test PUBLIC MPI::MPI_CXX accl)
+target_include_directories(test PUBLIC ${MPI_CXX_INCLUDE_PATH} ${ACCL_INCLUDE_PATH} ${VNX_INCLUDE_PATH})
+target_link_libraries(test PUBLIC MPI::MPI_CXX accl vnx)

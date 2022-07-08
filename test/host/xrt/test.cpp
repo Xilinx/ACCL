@@ -17,11 +17,12 @@
 *******************************************************************************/
 
 #include <accl.hpp>
+#include <cmac.hpp>
 #include <cstdlib>
 #include <experimental/xrt_ip.h>
 #include <functional>
 #include <mpi.h>
-#include <network_util.h>
+#include <networklayer.hpp>
 #include <random>
 #include <sstream>
 #include <tclap/CmdLine.h>
@@ -30,7 +31,7 @@
 #include <xrt/xrt_kernel.h>
 
 using namespace ACCL;
-using namespace ACCL_NETWORK_UTIL;
+using namespace vnx;
 
 // Set the tolerance for compressed datatypes high enough, since we do currently
 // not replicate the float32 -> float16 conversion for our reference results
@@ -1013,22 +1014,28 @@ void test_allreduce_compressed(ACCL::ACCL &accl, options_t &options,
   }
 }
 
-void configure_vnx(CMAC &cmac, NetworkLayer &network_layer,
+void configure_vnx(CMAC &cmac, Networklayer &network_layer,
                    std::vector<rank_t> &ranks) {
-  if (ranks.size() > socket_count) {
+  if (ranks.size() > max_sockets_size) {
     throw std::runtime_error("Too many ranks. VNX supports up to " +
-                             std::to_string(socket_count) + " sockets.");
+                             std::to_string(max_sockets_size) + " sockets.");
   }
 
-  std::cerr << "Link interface 1 " << cmac.cmac_link_status() << std::endl;
+  const auto link_status = cmac.link_status();
+
+  std::cerr << "Link interface 1 : {";
+  for (const auto &elem : link_status) {
+    std::cerr << elem.first << ": " << elem.second << ", ";
+  }
+  std::cerr << "}" << std::endl;
   network_layer.update_ip_address(ranks[rank].ip);
   for (size_t i = 0; i < ranks.size(); ++i) {
     if (i == static_cast<size_t>(rank)) {
       continue;
     }
 
-    network_layer.set_socket(i, ranks[i].ip, ranks[i].port, ranks[rank].port,
-                             true);
+    network_layer.configure_socket(i, ranks[i].ip, ranks[i].port,
+                                   ranks[rank].port, true);
   }
 
   network_layer.populate_socket_table();
@@ -1069,7 +1076,7 @@ void start_test(options_t options) {
 
     if (options.udp) {
       auto cmac = CMAC(xrt::ip(device, xclbin_uuid, "cmac_0:{cmac_0}"));
-      auto network_layer = NetworkLayer(
+      auto network_layer = Networklayer(
           xrt::ip(device, xclbin_uuid, "networklayer:{networklayer_0}"));
 
       configure_vnx(cmac, network_layer, ranks);
