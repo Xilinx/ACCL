@@ -1049,7 +1049,13 @@ void start_test(options_t options) {
   std::vector<rank_t> ranks = {};
   failed_tests = 0;
   for (int i = 0; i < size; ++i) {
-    rank_t new_rank = {"127.0.0.1", options.start_port + i, i,
+    std::string ip;
+    if (options.hardware && !options.tri) {
+      ip = "127.0.0.1";
+    } else {
+      ip = "10.10.10." + std::to_string(rank);
+    }
+    rank_t new_rank = {ip, options.start_port + i, i,
                        options.rxbuf_size};
     ranks.emplace_back(new_rank);
   }
@@ -1072,7 +1078,18 @@ void start_test(options_t options) {
         xrt::kernel(device, xclbin_uuid, "hostctrl:{hostctrl_" + cclo_id + "}",
                     xrt::kernel::cu_access_mode::exclusive);
 
-    std::vector<int> mem = {rank * 6 + 1};
+    int devicemem;
+    std::vector<int> rxbufmem;
+    int networkmem;
+    if (options.tri) {
+      devicemem = rank * 6;
+      rxbufmem = {rank * 6 + 1};
+      networkmem = rank * 6 + 2;
+    } else {
+      devicemem = 0;
+      rxbufmem = {1};
+      networkmem = 2;
+    }
 
     if (options.udp) {
       auto cmac = CMAC(xrt::ip(device, xclbin_uuid, "cmac_0:{cmac_0}"));
@@ -1083,8 +1100,8 @@ void start_test(options_t options) {
     }
 
     accl = std::make_unique<ACCL::ACCL>(
-        ranks, rank, device, cclo_ip, hostctrl_ip, rank * 6, mem, rank * 6 + 2,
-        networkProtocol::TCP, 16, options.rxbuf_size);
+        ranks, rank, device, cclo_ip, hostctrl_ip, devicemem, rxbufmem,
+        networkmem, networkProtocol::TCP, 16, options.rxbuf_size);
   } else {
     accl = std::make_unique<ACCL::ACCL>(ranks, rank, options.start_port, device,
                                         networkProtocol::TCP, 16,
