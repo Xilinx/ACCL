@@ -30,9 +30,8 @@ make MODE=<Build Mode> PLATFORM=<Platform Name>
 The following build modes are supported:
 | Build Mode | Description                              |
 |------------|------------------------------------------|
-| udp        | ACCL with UDP backend                    |
-| tcp        | ACCL with TCP backend                    |
-| tri        | 3-Rank ACCL Test System on a single FPGA. Used for testing (see below) |
+| udp or tcp | One ACCL instance per FPGA, with UDP or TCP transport respectively, via Ethernet port 0 |
+| axis3x     | Three ACCL instances connected together internally on a single FPGA, using an AXI-Stream switch. Used for testing (see below) |
 
 The following platforms are supported for Alveo boards:
 | Alveo | Platform Name                          |
