@@ -2,7 +2,7 @@
 
 ### * Note: This project is under active development. We will tag a stable release soon.*
 
-ACCL is a Vitis kernel and associated Pynq and XRT drivers which together provide MPI-like collectives for Xilinx FPGAs. ACCL is designed to enable compute kernels resident in FPGA fabric to communicate directly under host supervision but without requiring data movement between the FPGA and host. Instead, ACCL uses Vitis-compatible TCP and UDP stacks to connect FPGAs directly over Ethernet at up to 100 Gbps on Alveo cards.
+ACCL is a Vitis kernel and associated XRT drivers which together provide MPI-like collectives for Xilinx FPGAs. ACCL is designed to enable compute kernels resident in FPGA fabric to communicate directly under host supervision but without requiring data movement between the FPGA and host. Instead, ACCL uses Vitis-compatible TCP and UDP stacks to connect FPGAs directly over Ethernet at up to 100 Gbps on Alveo cards.
 
 ACCL currently supports Send/Recv and the following collectives:
 * Broadcast
@@ -14,7 +14,8 @@ ACCL currently supports Send/Recv and the following collectives:
 * Reduce-Scatter
 
 ## Installation
-See [INSTALL.md](INSTALL.md).
+See [INSTALL.md](INSTALL.md) to learn how to build ACCL-enabled designs and interact with them from C++.
+To use ACCL from Python, refer to [PyACCL](https://github.com/Xilinx/pyaccl).
 
 ## Citation
 If you use our work or would like to cite it in your own, please use the following citation:

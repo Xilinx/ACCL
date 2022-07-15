@@ -87,6 +87,9 @@ ifeq (udp,$(MODE))
 	ifeq (u50,$(findstring u50, $(PLATFORM)))
 		HLS_IP_FOLDER  = $(shell readlink -f ./$(NETLAYERHLS)/synthesis_results_HMB)
 	endif
+	ifeq (u55c,$(findstring u55c, $(PLATFORM)))
+		HLS_IP_FOLDER  = $(shell readlink -f ./$(NETLAYERHLS)/synthesis_results_HMB)
+	endif
 	ifeq (u200,$(findstring u200, $(PLATFORM)))
 		HLS_IP_FOLDER  = $(shell readlink -f ./$(NETLAYERHLS)/synthesis_results_noHMB)
 	endif
@@ -102,7 +105,7 @@ ifeq (udp,$(MODE))
 	CONFIG += --user_ip_repo_paths $(HLS_IP_FOLDER)
 	CCLO_STACK_TYPE = UDP
 	CCLO_EN_FANIN = 0
-else ifeq (tri,$(MODE))
+else ifeq (axis3x,$(MODE))
 	ETH_IF := none
 	NET_XO = $(TCP_DUMMY_XO)
 	OTHER_XO = $(LOOPBACK_XO)

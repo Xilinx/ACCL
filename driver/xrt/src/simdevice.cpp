@@ -19,7 +19,6 @@
 #include "simdevice.hpp"
 #include "common.hpp"
 #include "zmq_client.h"
-#include <jsoncpp/json/json.h>
 
 namespace ACCL {
 SimDevice::SimDevice(unsigned int zmqport, unsigned int local_rank) {
@@ -31,7 +30,6 @@ SimDevice::SimDevice(unsigned int zmqport, unsigned int local_rank) {
 
 void SimDevice::start(const Options &options) {
   int function;
-  Json::Value request_json;
 
   options.addr_0->sync_bo_to_device();
   options.addr_1->sync_bo_to_device();
