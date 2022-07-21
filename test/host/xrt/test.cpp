@@ -17,16 +17,17 @@
 *******************************************************************************/
 
 #include <accl.hpp>
-#include <cmac.hpp>
 #include <cstdlib>
 #include <experimental/xrt_ip.h>
 #include <functional>
 #include <mpi.h>
-#include <networklayer.hpp>
 #include <random>
 #include <sstream>
 #include <tclap/CmdLine.h>
 #include <vector>
+#include <vnx/cmac.hpp>
+#include <vnx/mac.hpp>
+#include <vnx/networklayer.hpp>
 #include <xrt/xrt_device.h>
 #include <xrt/xrt_kernel.h>
 
@@ -1015,19 +1016,37 @@ void test_allreduce_compressed(ACCL::ACCL &accl, options_t &options,
 }
 
 void configure_vnx(CMAC &cmac, Networklayer &network_layer,
-                   std::vector<rank_t> &ranks) {
+                   std::vector<rank_t> &ranks, options_t &options) {
   if (ranks.size() > max_sockets_size) {
     throw std::runtime_error("Too many ranks. VNX supports up to " +
                              std::to_string(max_sockets_size) + " sockets.");
   }
 
+  std::cout << "Testing UDP link status: ";
+
   const auto link_status = cmac.link_status();
 
-  std::cerr << "Link interface 1 : {";
-  for (const auto &elem : link_status) {
-    std::cerr << elem.first << ": " << elem.second << ", ";
+  if (link_status.at("rx_status")) {
+    std::cout << "Link successful!" << std::endl;
+  } else {
+    std::cout << "No link found." << std::endl;
   }
-  std::cerr << "}" << std::endl;
+
+  std::ostringstream ss;
+
+  ss << "Link interface 1 : {";
+  for (const auto &elem : link_status) {
+    ss << elem.first << ": " << elem.second << ", ";
+  }
+  ss << "}" << std::endl;
+  test_debug(ss.str(), options);
+
+  if (!link_status.at("rx_status")) {
+    exit(1);
+  }
+
+  std::cout << "Populating socket table..." << std::endl;
+
   network_layer.update_ip_address(ranks[rank].ip);
   for (size_t i = 0; i < ranks.size(); ++i) {
     if (i == static_cast<size_t>(rank)) {
@@ -1039,10 +1058,14 @@ void configure_vnx(CMAC &cmac, Networklayer &network_layer,
   }
 
   network_layer.populate_socket_table();
+
+  std::cout << "Starting ARP discovery..." << std::endl;
   std::this_thread::sleep_for(std::chrono::seconds(2));
   network_layer.arp_discovery();
+  std::cout << "Finishing ARP discovery..." << std::endl;
   std::this_thread::sleep_for(std::chrono::seconds(2));
   network_layer.arp_discovery();
+  std::cout << "ARP discovery finished!" << std::endl;
 }
 
 void start_test(options_t options) {
@@ -1055,8 +1078,7 @@ void start_test(options_t options) {
     } else {
       ip = "10.10.10." + std::to_string(rank);
     }
-    rank_t new_rank = {ip, options.start_port + i, i,
-                       options.rxbuf_size};
+    rank_t new_rank = {ip, options.start_port + i, i, options.rxbuf_size};
     ranks.emplace_back(new_rank);
   }
 
@@ -1096,7 +1118,7 @@ void start_test(options_t options) {
       auto network_layer = Networklayer(
           xrt::ip(device, xclbin_uuid, "networklayer:{networklayer_0}"));
 
-      configure_vnx(cmac, network_layer, ranks);
+      configure_vnx(cmac, network_layer, ranks, options);
     }
 
     accl = std::make_unique<ACCL::ACCL>(
