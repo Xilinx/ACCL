@@ -208,7 +208,7 @@ void zmq_client_memalloc(zmq_intf_context *ctx, uint64_t adr, unsigned int size)
     ctx->cmd_socket->receive(reply);
     Json::Value reply_json = to_json(reply);
     if (reply_json["status"] != 0) {
-        throw std::runtime_error("ZMQ mem write error (" + std::to_string(reply_json["status"].asUInt()) + ")");
+        throw std::runtime_error("ZMQ mem alloc error (" + std::to_string(reply_json["status"].asUInt()) + ")");
     }
 }
 

@@ -80,7 +80,8 @@ enum class operation {
                              on all ranks */
   reduce_scatter = 11,  /**< Perform reduce operator on remote FPGA buffers
                              and scatter to all ranks */
-  ext_stream_krnl = 12, /**< Stream kernel */
+  barrier = 12,         /**< barrier kernel */
+  all_to_all = 13,      /**< All-to-all kernel */
   nop = 255             /**< NOP operation */
 };
 

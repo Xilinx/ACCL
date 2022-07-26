@@ -209,11 +209,11 @@ private:
           ((size_t)ceil(length * sizeof(dtype) / (double)ALIGNMENT)) *
           ALIGNMENT;
       is_aligned = false;
+      dtype *aligned_buffer;
 #if (__cplusplus >= 201703L)
       aligned_buffer =
           static_cast<dtype *>(std::aligned_alloc(ALIGNMENT, aligned_size));
 #else
-      dtype *aligned_buffer;
       posix_memalign(reinterpret_cast<void **>(&aligned_buffer), ALIGNMENT,
                      aligned_size);
 #endif
