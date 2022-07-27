@@ -18,6 +18,7 @@
 
 #include "common.hpp"
 #include <cmath>
+#include <cstdlib>
 #ifdef ACCL_DEBUG
 #include <fstream>
 #endif
@@ -29,8 +30,7 @@ namespace ACCL {
 
 void *allocate_aligned_buffer(size_t size, size_t alignment) {
   size_t aligned_size =
-          ((size_t)std::ceil(size / (double)alignment)) *
-          alignment;
+      ((size_t)std::ceil(size / (double)alignment)) * alignment;
   return std::aligned_alloc(alignment, aligned_size);
 }
 
