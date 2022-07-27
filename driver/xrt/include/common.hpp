@@ -25,6 +25,8 @@
 
 /** @file common.hpp */
 
+#define ACCL_FPGA_ALIGNMENT 4096
+
 namespace ACCL {
 
 /**
@@ -53,6 +55,16 @@ inline std::string debug_hex(addr_t value) {
   return "";
 #endif
 }
+
+/**
+ * Allocate aligned buffer.
+ *
+ * @param size       Size of aligned buffer.
+ * @param alignment  Amount of bits to align to.
+ * @return void*     The aligned buffer.
+ */
+void *allocate_aligned_buffer(size_t size,
+                              size_t alignment = ACCL_FPGA_ALIGNMENT);
 
 /**
  * Reset the log file.

@@ -19,19 +19,10 @@
 #pragma once
 #include "buffer.hpp"
 #include "common.hpp"
+#include <cstdlib>
 #include <cstring>
-#include <math.h>
 #include <xrt/xrt_bo.h>
 #include <xrt/xrt_device.h>
-
-// Use posix_memalign if C++17 is not available
-#if (__cplusplus >= 201703L)
-#include <cstdlib>
-#else
-#include <stdlib.h>
-#endif
-
-#define ALIGNMENT 4096
 
 /** @file fpgabuffer.hpp */
 
@@ -124,11 +115,7 @@ public:
     // Only free the aligned buffer if it exists and we own it (might not be
     // the case if this is a slice).
     if (!is_aligned && own_unaligned) {
-#if (__cplusplus >= 201703L)
       std::free(aligned_buffer);
-#else
-      free(aligned_buffer);
-#endif
     }
   }
 
@@ -196,7 +183,7 @@ private:
 
   dtype *get_aligned_buffer(dtype *host_buffer, size_t length) {
     // Check if the existing pointer already is aligned
-    if ((reinterpret_cast<uintptr_t>(host_buffer) % ALIGNMENT) != 0) {
+    if ((reinterpret_cast<uintptr_t>(host_buffer) % ACCL_FPGA_ALIGNMENT) != 0) {
       std::cerr
           << "[ACCL] Warning: you're creating a buffer from an unaligned host "
              "pointer. This will cause extra copying when syncing the buffers."
@@ -205,18 +192,10 @@ private:
          alignment, or std::aligned_alloc will return a nullptr. So we change
          the size to the minimal required size that meets this requirement.
          (https://en.cppreference.com/w/c/memory/aligned_alloc#Notes) */
-      size_t aligned_size =
-          ((size_t)ceil(length * sizeof(dtype) / (double)ALIGNMENT)) *
-          ALIGNMENT;
+
       is_aligned = false;
-      dtype *aligned_buffer;
-#if (__cplusplus >= 201703L)
       aligned_buffer =
-          static_cast<dtype *>(std::aligned_alloc(ALIGNMENT, aligned_size));
-#else
-      posix_memalign(reinterpret_cast<void **>(&aligned_buffer), ALIGNMENT,
-                     aligned_size);
-#endif
+          static_cast<dtype *>(allocate_aligned_buffer(length * sizeof(dtype)));
       unaligned_buffer = host_buffer;
       own_unaligned = true;
       return aligned_buffer;
