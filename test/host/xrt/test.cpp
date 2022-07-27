@@ -123,7 +123,16 @@ void test_copy_p2p(ACCL::ACCL &accl, options_t &options) {
   std::cout << "Start copy p2p test..." << std::endl;
   unsigned int count = options.count;
   auto op_buf = accl.create_buffer<float>(count, dataType::float32);
-  auto p2p_buf = accl.create_buffer_p2p<float>(count, dataType::float32);
+  std::unique_ptr<ACCL::Buffer<float>> p2p_buf;
+  try {
+    p2p_buf = accl.create_buffer_p2p<float>(count, dataType::float32);
+  } catch (const std::bad_alloc &e) {
+    std::cout << "Can't allocate p2p buffer (" << e.what() << "). "
+              << "This probably means p2p is disabled on the FPGA.\n"
+              << "Skipping p2p test..." << std::endl;
+    skipped_tests += 1;
+    return;
+  }
   random_array(op_buf->buffer(), count);
 
   accl.copy(*op_buf, *p2p_buf, count);
@@ -1050,6 +1059,8 @@ void configure_vnx(CMAC &cmac, Networklayer &network_layer,
   test_debug(ss.str(), options);
 
   if (!link_status.at("rx_status")) {
+    // Give time for other ranks to setup link.
+    std::this_thread::sleep_for(std::chrono::seconds(3));
     exit(1);
   }
 
@@ -1068,7 +1079,7 @@ void configure_vnx(CMAC &cmac, Networklayer &network_layer,
   network_layer.populate_socket_table();
 
   std::cout << "Starting ARP discovery..." << std::endl;
-  std::this_thread::sleep_for(std::chrono::seconds(2));
+  std::this_thread::sleep_for(std::chrono::seconds(4));
   network_layer.arp_discovery();
   std::cout << "Finishing ARP discovery..." << std::endl;
   std::this_thread::sleep_for(std::chrono::seconds(2));
@@ -1136,11 +1147,13 @@ void start_test(options_t options) {
 
     accl = std::make_unique<ACCL::ACCL>(
         ranks, rank, device, cclo_ip, hostctrl_ip, devicemem, rxbufmem,
-        networkmem, networkProtocol::TCP, 16, options.rxbuf_size);
+        networkmem, options.udp ? networkProtocol::UDP : networkProtocol::TCP,
+        16, options.rxbuf_size);
   } else {
     accl = std::make_unique<ACCL::ACCL>(ranks, rank, options.start_port, device,
-                                        networkProtocol::TCP, 16,
-                                        options.rxbuf_size);
+                                        options.udp ? networkProtocol::UDP
+                                                    : networkProtocol::TCP,
+                                        16, options.rxbuf_size);
   }
   accl->set_timeout(1e8);
 
