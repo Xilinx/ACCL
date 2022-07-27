@@ -1019,13 +1019,16 @@ void test_allreduce_compressed(ACCL::ACCL &accl, options_t &options,
 
 void test_barrier(ACCL::ACCL &accl) {
   std::cout << "Start barrier test " << std::endl;
+  accl.barrier();
   std::cout << "Test is successful!" << std::endl;
 }
 
 void configure_vnx(CMAC &cmac, Networklayer &network_layer,
                    std::vector<rank_t> &ranks, options_t &options) {
-  throw std::runtime_error("Too many ranks. VNX supports up to " +
-                           std::to_string(max_sockets_size) + " sockets.");
+  if (ranks.size() > max_sockets_size) {
+    throw std::runtime_error("Too many ranks. VNX supports up to " +
+                             std::to_string(max_sockets_size) + " sockets.");
+  }
 
   std::cout << "Testing UDP link status: ";
 
