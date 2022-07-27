@@ -59,9 +59,9 @@ set rx_dir "[pwd]/../rxbuf_offload/"
 
 open_project build_$ipname
 
-add_files $ipname.cpp -cflags "-std=c++14 -I. -I../ -I$hlslib_dir -I$fw_dir -I$eth_dir -I$seg_dir -I$rx_dir -DACCL_SYNTHESIS"
+add_files $ipname.cpp -cflags "-std=c++14 -I. -I../ -I../../../../driver/hls/ -I$hlslib_dir -I$fw_dir -I$eth_dir -I$seg_dir -I$rx_dir -DACCL_SYNTHESIS"
 if {$do_sim || $do_cosim} {
-    add_files -tb tb_$ipname.cpp -cflags "-std=c++14 -I. -I../ -I$hlslib_dir -I$fw_dir -I$eth_dir -I$seg_dir -I$rx_dir -DACCL_SYNTHESIS"
+    add_files -tb tb_$ipname.cpp -cflags "-std=c++14 -I. -I../ -I../../../../driver/hls/ -I$hlslib_dir -I$fw_dir -I$eth_dir -I$seg_dir -I$rx_dir -DACCL_SYNTHESIS"
 }
 
 set_top $ipname

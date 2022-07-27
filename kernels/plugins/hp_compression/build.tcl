@@ -52,7 +52,7 @@ switch $command {
 
 open_project build_hp_compression
 
-add_files hp_compression.cpp -cflags "-std=c++14 -I[pwd]/../../cclo/hls -DACCL_SYNTHESIS"
+add_files hp_compression.cpp -cflags "-std=c++14 -I[pwd]/../../../driver/hls/ -DACCL_SYNTHESIS"
 
 set_top hp_compression
 

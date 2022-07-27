@@ -18,11 +18,15 @@
 #pragma once
 
 #include "ap_int.h"
-#include "hls_stream.h"
+#include "accl_hls.h"
+
+#ifndef NCLIENTS
+#define NCLIENTS 2
+#endif
 
 void client_arbiter(
-	hls::stream<ap_uint<32> > cmd_clients[NCLIENTS],
-	hls::stream<ap_uint<32> > ack_clients[NCLIENTS],
-	hls::stream<ap_uint<32> > & cmd_cclo,
-	hls::stream<ap_uint<32> > & ack_cclo
+	STREAM<command_word> cmd_clients[NCLIENTS],
+	STREAM<command_word> ack_clients[NCLIENTS],
+	STREAM<command_word> & cmd_cclo,
+	STREAM<command_word> & ack_cclo
 );

@@ -18,7 +18,7 @@
 #pragma once
 
 #include "ap_int.h"
-#include "streamdefines.h"
+#include "accl_hls.h"
 
 #define DWIDTH512 512
 #define DWIDTH256 256
@@ -116,10 +116,10 @@ void tcp_depacketizer(
 );
 
 void tcp_sessionHandler(
-    STREAM<ap_axiu<32,0,0,0> > & port_cmd,
-    STREAM<ap_axiu<32,0,0,0> > & port_sts,
-	STREAM<ap_axiu<32,0,0,0> > & con_cmd,
-    STREAM<ap_axiu<32,0,0,0> > & con_sts,
+    STREAM<command_word > & port_cmd,
+    STREAM<command_word > & port_sts,
+	STREAM<command_word > & con_cmd,
+    STREAM<command_word > & con_sts,
     STREAM<pkt16>& m_axis_tcp_listen_port, 
     STREAM<pkt8>& s_axis_tcp_port_status,
 	STREAM<pkt64>& m_axis_tcp_open_connection,

@@ -17,13 +17,6 @@
 
 #pragma once
 
-#include "ap_axi_sdata.h"
-
-#define DATA_WIDTH 512
-#define DEST_WIDTH 8
-
-typedef ap_axiu<DATA_WIDTH, 0, 0, DEST_WIDTH> stream_word;
-
 //define correspondence of
 //central datapath switch master/slave
 //ports to block design components
@@ -47,29 +40,3 @@ typedef ap_axiu<DATA_WIDTH, 0, 0, DEST_WIDTH> stream_word;
 #define SWITCH_S_CLANE1     6
 #define SWITCH_S_CLANE2     7
 
-//this is a work-around for hlslib streams not synthesizing
-//with vitis hls. Instead, we test a macro definition to select
-//between simulation behaviour (use hlslib streams) and
-//synthesis behaviour (use hls streams)
-//all code using these macros should make sure it doesnt use features
-//that aren't supported by both types of streams. For example,
-//hlslib stream depths and storage types can't be defined on declaration
-#ifdef ACCL_SYNTHESIS
-//use hls streams
-#include "hls_stream.h"
-#define STREAM hls::stream 
-#define STREAM_IS_EMPTY(s) s.empty()
-#define STREAM_IS_FULL(s) s.full()
-#define STREAM_READ(s) s.read()
-#define STREAM_WRITE(s, val) s.write(val)
-#else
-//use hlslib streams
-#include "Stream.h"
-#include <sstream>
-#include <iostream>
-#define STREAM hlslib::Stream 
-#define STREAM_IS_EMPTY(s) s.IsEmpty()
-#define STREAM_IS_FULL(s) s.IsFull()
-#define STREAM_READ(s) s.Pop()
-#define STREAM_WRITE(s, val) s.Push(val)
-#endif

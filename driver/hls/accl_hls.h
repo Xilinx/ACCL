@@ -17,10 +17,42 @@
 *******************************************************************************/
 #pragma once
 
-#include "hls_stream.h"
 #include "ap_int.h"
 #include "ap_utils.h"
 #include "ap_axi_sdata.h"
+
+#define DATA_WIDTH 512
+#define DEST_WIDTH 8
+
+typedef ap_axiu<DATA_WIDTH, 0, 0, DEST_WIDTH> stream_word;
+typedef ap_axiu<32, 0, 0, 0> command_word;
+
+//this is a work-around for hlslib streams not synthesizing
+//with vitis hls. Instead, we test a macro definition to select
+//between simulation behaviour (use hlslib streams) and
+//synthesis behaviour (use hls streams)
+//all code using these macros should make sure it doesnt use features
+//that aren't supported by both types of streams. For example,
+//hlslib stream depths and storage types can't be defined on declaration
+#ifdef ACCL_SYNTHESIS
+//use hls streams
+#include "hls_stream.h"
+#define STREAM hls::stream 
+#define STREAM_IS_EMPTY(s) s.empty()
+#define STREAM_IS_FULL(s) s.full()
+#define STREAM_READ(s) s.read()
+#define STREAM_WRITE(s, val) s.write(val)
+#else
+//use hlslib streams
+#include "Stream.h"
+// #include <sstream>
+// #include <iostream>
+#define STREAM hlslib::Stream 
+#define STREAM_IS_EMPTY(s) s.IsEmpty()
+#define STREAM_IS_FULL(s) s.IsFull()
+#define STREAM_READ(s) s.Pop()
+#define STREAM_WRITE(s, val) s.Push(val)
+#endif
 
 namespace accl_hls {
 
@@ -54,7 +86,7 @@ class ACCLCommand{
          * @param cflags Compression flags
          * @param sflags Stream flags
          */
-        ACCLCommand(hls::stream<ap_uint<32> > &cmd, hls::stream<ap_uint<32> > &sts,
+        ACCLCommand(STREAM<command_word > &cmd, STREAM<command_word > &sts,
                     ap_uint<32> comm_adr, ap_uint<32> dpcfg_adr,
                     ap_uint<32> cflags, ap_uint<32> sflags) : 
                     cmd(cmd), sts(sts), comm_adr(comm_adr), dpcfg_adr(dpcfg_adr), cflags(cflags), sflags(sflags) {}
@@ -65,12 +97,12 @@ class ACCLCommand{
          * @param cmd Reference to command stream to CCLO
          * @param sts Reference to status stream to CCLO
          */
-        ACCLCommand(hls::stream<ap_uint<32> > &cmd, hls::stream<ap_uint<32> > &sts) : 
+        ACCLCommand(STREAM<command_word > &cmd, STREAM<command_word > &sts) : 
                     ACCLCommand(cmd, sts, 0, 0, 0, 0) {}
 
     protected:
-        hls::stream<ap_uint<32> > &cmd;
-        hls::stream<ap_uint<32> > &sts;
+        STREAM<command_word > &cmd;
+        STREAM<command_word > &sts;
         ap_uint<32> comm_adr;
         ap_uint<32> dpcfg_adr;
         ap_uint<32> cflags;
@@ -108,37 +140,53 @@ class ACCLCommand{
             ap_uint<64> addrb,
             ap_uint<64> addrc
         ){
+            command_word tmp;
             io_section:{
                 #pragma HLS protocol fixed
-                cmd.write(scenario);
+                tmp = {.data=scenario, .last=0};
+                STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                cmd.write(len);
+                tmp = {.data=len, .last=0};
+                STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                cmd.write(comm);
+                tmp = {.data=comm, .last=0};
+                STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                cmd.write(root_src_dst);
+                tmp = {.data=root_src_dst, .last=0};
+                STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                cmd.write(function);
+                tmp = {.data=function, .last=0};
+                STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                cmd.write(msg_tag);
+                tmp = {.data=msg_tag, .last=0};
+                STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                cmd.write(datapath_cfg);
+                tmp = {.data=datapath_cfg, .last=0};
+                STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                cmd.write(compression_flags);
+                tmp = {.data=compression_flags, .last=0};
+                STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                cmd.write(stream_flags);
+                tmp = {.data=stream_flags, .last=0};
+                STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                cmd.write(addra(31,0));
+                tmp = {.data=addra(31,0), .last=0};
+                STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                cmd.write(addra(63,32));
+                tmp = {.data=addra(63,32), .last=0};
+                STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                cmd.write(addrb(31,0));
+                tmp = {.data=addrb(31,0), .last=0};
+                STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                cmd.write(addrb(63,32));
+                tmp = {.data=addrb(63,32), .last=0};
+                STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                cmd.write(addrc(31,0));
+                tmp = {.data=addrc(31,0), .last=0};
+                STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                cmd.write(addrc(63,32));
+                tmp = {.data=addrc(63,32), .last=1};
+                STREAM_WRITE(cmd, tmp);
                 ap_wait();
             }  
         }
@@ -148,7 +196,7 @@ class ACCLCommand{
          * 
          */
         void finalize_call(){
-            sts.read();
+            STREAM_READ(sts);
         }
 
         /**
@@ -391,12 +439,12 @@ class ACCLData{
          * @param krnl2cclo Reference to data stream from user kernel to CCLO
          * @param cclo2krnl Reference to data stream from CCLO to user kernel
          */
-        ACCLData(hls::stream<ap_axiu<512, 0, 0, 8> > &krnl2cclo, hls::stream<ap_axiu<512, 0, 0, 8> > &cclo2krnl) : 
+        ACCLData(STREAM<ap_axiu<512, 0, 0, 8> > &krnl2cclo, STREAM<ap_axiu<512, 0, 0, 8> > &cclo2krnl) : 
                     cclo2krnl(cclo2krnl), krnl2cclo(krnl2cclo){}
 
     protected:
-        hls::stream<ap_axiu<512, 0, 0, 8> > &krnl2cclo;
-        hls::stream<ap_axiu<512, 0, 0, 8> > &cclo2krnl;
+        STREAM<ap_axiu<512, 0, 0, 8> > &krnl2cclo;
+        STREAM<ap_axiu<512, 0, 0, 8> > &cclo2krnl;
 
     public:
         /**

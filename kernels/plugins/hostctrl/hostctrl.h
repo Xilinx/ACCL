@@ -15,12 +15,7 @@
 #
 # *******************************************************************************/
 
-#include "hls_stream.h"
-#include "ap_int.h"
-#include<iostream>
-
-using namespace hls;
-using namespace std;
+#include "accl_hls.h"
 
 void hostctrl(	ap_uint<32> scenario,
 				ap_uint<32> len,
@@ -34,41 +29,7 @@ void hostctrl(	ap_uint<32> scenario,
 				ap_uint<64> addra,
 				ap_uint<64> addrb,
 				ap_uint<64> addrc,
-				stream<ap_uint<32>> &cmd,
-				stream<ap_uint<32>> &sts
+				ap_int<32> *exchmem,
+				STREAM<ap_axiu<32,0,0,0>> &cmd,
+				STREAM<ap_axiu<32,0,0,0>> &sts
 );
-
-int main(){
-	int nerrors = 0;
-	ap_uint<64> addra, addrb, addrc;
-	addra(31,0) = 5;
-	addra(63,32) = 7;
-	addrb(31,0) = 3;
-	addrb(63,32) = 9;
-	addrc(31,0) = 1;
-	addrc(63,32) = 6;
-	stream<ap_uint<32>> cmd;
-	stream<ap_uint<32>> sts;
-	sts.write(1);
-	hostctrl(0, 1, 2, 3, 4, 5, 6, 7, 8, addra, addrb, addrc, cmd, sts);
-	nerrors += (cmd.read() != 0);
-	nerrors += (cmd.read() != 1);
-	nerrors += (cmd.read() != 2);
-	nerrors += (cmd.read() != 3);
-	nerrors += (cmd.read() != 4);
-	nerrors += (cmd.read() != 5);
-	nerrors += (cmd.read() != 6);
-	nerrors += (cmd.read() != 7);
-	nerrors += (cmd.read() != 8);
-	
-	nerrors += (cmd.read() != addra(31,0));
-	nerrors += (cmd.read() != addra(63,32));
-	
-	nerrors += (cmd.read() != addrb(31,0));
-	nerrors += (cmd.read() != addrb(63,32));
-	
-	nerrors += (cmd.read() != addrc(31,0));
-	nerrors += (cmd.read() != addrc(63,32));
-	
-	return nerrors;
-}

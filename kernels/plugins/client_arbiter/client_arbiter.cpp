@@ -18,10 +18,10 @@
 #include "client_arbiter.h"
 
 void client_arbiter(
-	hls::stream<ap_uint<32> > cmd_clients[NCLIENTS],
-	hls::stream<ap_uint<32> > ack_clients[NCLIENTS],
-	hls::stream<ap_uint<32> > & cmd_cclo,
-	hls::stream<ap_uint<32> > & ack_cclo
+	STREAM<command_word> cmd_clients[NCLIENTS],
+	STREAM<command_word> ack_clients[NCLIENTS],
+	STREAM<command_word> & cmd_cclo,
+	STREAM<command_word> & ack_cclo
 ){
 #pragma HLS INTERFACE axis register both port=cmd_clients
 #pragma HLS INTERFACE axis register both port=ack_clients
@@ -30,13 +30,13 @@ void client_arbiter(
 #pragma HLS INTERFACE ap_ctrl_none port=return
 
 for(int i=0; i<NCLIENTS; i++){
-	if(!cmd_clients[i].empty()){
+	if(!STREAM_IS_EMPTY(cmd_clients[i])){
 		//copy a whole command packet from client stream i to the CCLO side
 		for(int j=0; j<15; j++){
-        	cmd_cclo.write(cmd_clients[i].read());
+        	STREAM_WRITE(cmd_cclo, STREAM_READ(cmd_clients[i]));
 		}
 		//copy a completion flag from the CCLO side to the calling client
-		ack_clients[i].write(ack_cclo.read());
+		STREAM_WRITE(ack_clients[i], STREAM_READ(ack_cclo));
     }
 }
 

@@ -24,7 +24,7 @@
 # enableCompression - 0/1 - enables compression feature
 # enableExtKrnlStream - 0/1 - enables PL stream attachments, providing support for non-memory send/recv
 # debugLevel - 0/1/2 - enables DEBUG/TRACE support for the control microblaze
-proc create_root_design { netStackType enableDMA enableArithmetic enableCompression enableExtKrnlStream debugLevel enableFanIn numCmdStreams } {
+proc create_root_design { netStackType enableDMA enableArithmetic enableCompression enableExtKrnlStream debugLevel enableFanIn } {
 
   if { ( $enableDMA == 0 ) && ( $enableExtKrnlStream == 0) } {
       catch {common::send_gid_msg -severity "ERROR" "No data sources and sinks enabled, please enable either DMAs or Streams"}
@@ -39,7 +39,7 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
   # Create interface ports
   set s_axi_control [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:aximm_rtl:1.0 s_axi_control ]
   set_property -dict [ list \
-   CONFIG.ADDR_WIDTH {13} \
+   CONFIG.ADDR_WIDTH {12} \
    CONFIG.ARUSER_WIDTH {0} \
    CONFIG.AWUSER_WIDTH {0} \
    CONFIG.BUSER_WIDTH {0} \
@@ -69,23 +69,25 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
    CONFIG.WUSER_WIDTH {0} \
    ] $s_axi_control
 
+
+  set m_axi_cfg [ create_bd_intf_port -mode Master -vlnv xilinx.com:interface:aximm_rtl:1.0 m_axi_cfg ]
+  set_property -dict [ list CONFIG.ADDR_WIDTH {64} CONFIG.DATA_WIDTH {32} CONFIG.FREQ_HZ {250000000} CONFIG.HAS_BRESP {0} CONFIG.HAS_BURST {0} CONFIG.HAS_CACHE {0} CONFIG.HAS_LOCK {0} CONFIG.HAS_PROT {0} CONFIG.HAS_QOS {0} CONFIG.HAS_REGION {0} CONFIG.HAS_WSTRB {1} CONFIG.NUM_READ_OUTSTANDING {1} CONFIG.NUM_WRITE_OUTSTANDING {1} CONFIG.PROTOCOL {AXI4} CONFIG.READ_WRITE_MODE {READ_WRITE} ] $m_axi_cfg
+
   set m_axis_eth_tx_data [ create_bd_intf_port -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_eth_tx_data ]
   set_property -dict [ list CONFIG.FREQ_HZ {250000000} ] $m_axis_eth_tx_data
   set s_axis_eth_rx_data [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 s_axis_eth_rx_data ]
   set_property -dict [ list CONFIG.FREQ_HZ {250000000} CONFIG.HAS_TKEEP {1} CONFIG.HAS_TLAST {1} CONFIG.HAS_TREADY {1} CONFIG.HAS_TSTRB {1} CONFIG.LAYERED_METADATA {undef} CONFIG.TDATA_NUM_BYTES {64} CONFIG.TDEST_WIDTH {8} CONFIG.TID_WIDTH {0} CONFIG.TUSER_WIDTH {0} ] $s_axis_eth_rx_data
 
-  for {set i 0} {$i < $numCmdStreams} {incr i} {  
-    create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 s_axis_call_req_$i
-    set_property -dict [ list CONFIG.FREQ_HZ {250000000} CONFIG.HAS_TKEEP {1} CONFIG.HAS_TLAST {1} CONFIG.HAS_TREADY {1} CONFIG.HAS_TSTRB {1} CONFIG.LAYERED_METADATA {undef} CONFIG.TDATA_NUM_BYTES {4} CONFIG.TDEST_WIDTH {0} CONFIG.TID_WIDTH {0} CONFIG.TUSER_WIDTH {0} ] s_axis_call_req_$i
-    create_bd_intf_port -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_call_ack_$i
-    set_property -dict [ list CONFIG.FREQ_HZ {250000000} CONFIG.HAS_TKEEP {1} CONFIG.HAS_TLAST {1} CONFIG.HAS_TREADY {1} CONFIG.HAS_TSTRB {1} CONFIG.LAYERED_METADATA {undef} CONFIG.TDATA_NUM_BYTES {4} CONFIG.TDEST_WIDTH {0} CONFIG.TID_WIDTH {0} CONFIG.TUSER_WIDTH {0} ] m_axis_call_ack_$i
-  }
+  set call_req [create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 s_axis_call_req]
+  set_property -dict [ list CONFIG.FREQ_HZ {250000000} CONFIG.HAS_TKEEP {1} CONFIG.HAS_TLAST {1} CONFIG.HAS_TREADY {1} CONFIG.HAS_TSTRB {1} CONFIG.LAYERED_METADATA {undef} CONFIG.TDATA_NUM_BYTES {4} CONFIG.TDEST_WIDTH {0} CONFIG.TID_WIDTH {0} CONFIG.TUSER_WIDTH {0} ] $call_req
+  set call_ack [create_bd_intf_port -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_call_ack]
+  set_property -dict [ list CONFIG.FREQ_HZ {250000000} CONFIG.HAS_TKEEP {1} CONFIG.HAS_TLAST {1} CONFIG.HAS_TREADY {1} CONFIG.HAS_TSTRB {1} CONFIG.LAYERED_METADATA {undef} CONFIG.TDATA_NUM_BYTES {4} CONFIG.TDEST_WIDTH {0} CONFIG.TID_WIDTH {0} CONFIG.TUSER_WIDTH {0} ] $call_ack
 
   # Create ports
   set ap_clk [ create_bd_port -dir I -type clk -freq_hz 250000000 ap_clk ]
   set ap_rst_n [ create_bd_port -dir I -type rst ap_rst_n ]
 
-  set interfaces "s_axi_control:s_axis_call_req:m_axis_call_ack:m_axis_eth_tx_data:s_axis_eth_rx_data"
+  set interfaces "s_axi_control:m_axi_cfg:s_axis_call_req:m_axis_call_ack:m_axis_eth_tx_data:s_axis_eth_rx_data"
 
   # Create instance: axis_switch_0, and set properties
   # We route anything with TDEST > 9 to M9 which will go to external kernels bypassing the segmenter
@@ -113,6 +115,9 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
 
   source -notrace ./tcl/control_bd.tcl
   create_hier_cell_control [current_bd_instance .] control $debugLevel $enableFanIn
+
+  connect_bd_intf_net [get_bd_intf_ports s_axi_control] [get_bd_intf_pins control/host_control]
+  connect_bd_intf_net [get_bd_intf_ports m_axi_cfg] [get_bd_intf_pins control/m_axi_cfg]
 
   if { $enableDMA == 1 } {
 
@@ -231,23 +236,26 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
   save_bd_design
 
   # Create address segments
-
-  # Exchange memory, accessible by host and Microblaze at the same offsets
-  assign_bd_address -offset 0x00000000 -range 0x00002000 -target_address_space [get_bd_addr_spaces s_axi_control] [get_bd_addr_segs control/exchange_mem/axi_bram_ctrl_0/S_AXI/Mem0] -force
-  assign_bd_address -offset 0x00000000 -range 0x00002000 -target_address_space [get_bd_addr_spaces control/microblaze_0/Data] [get_bd_addr_segs control/exchange_mem/axi_bram_ctrl_0/S_AXI/Mem0] -force
-
-  assign_bd_address -offset 0x00010000 -range 0x00008000 -target_address_space [get_bd_addr_spaces control/microblaze_0/Data] [get_bd_addr_segs control/microblaze_0_local_memory/dlmb_bram_if_cntlr/SLMB/Mem] -force
+  # Microblaze instruction memory
   assign_bd_address -offset 0x00010000 -range 0x00008000 -target_address_space [get_bd_addr_spaces control/microblaze_0/Instruction] [get_bd_addr_segs control/microblaze_0_local_memory/ilmb_bram_if_cntlr/SLMB/Mem] -force
-  assign_bd_address -offset 0x40000000 -range 0x00001000 -target_address_space [get_bd_addr_spaces control/microblaze_0/Data] [get_bd_addr_segs control/exchange_mem/axi_gpio_0/S_AXI/Reg] -force
-
+  # Microblaze data memory
+  assign_bd_address -offset 0x00010000 -range 0x00008000 -target_address_space [get_bd_addr_spaces control/microblaze_0/Data] [get_bd_addr_segs control/microblaze_0_local_memory/dlmb_bram_if_cntlr/SLMB/Mem] -force
+  # Microblaze AXI address space to peripherals
+  assign_bd_address -offset 0x00020000 -range 0x00000FFF -target_address_space [get_bd_addr_spaces control/microblaze_0/Data] [get_bd_addr_segs control/axi_gpio_0/S_AXI/Reg]
+  # This hole is filled by various optional components (see ifs above)
   assign_bd_address -offset 0x00050000 -range 0x00010000 -target_address_space [get_bd_addr_spaces control/microblaze_0/Data] [get_bd_addr_segs control/rxbuf_offload/rxbuf_dequeue/s_axi_control/Reg]
   assign_bd_address -offset 0x00060000 -range 0x00010000 -target_address_space [get_bd_addr_spaces control/microblaze_0/Data] [get_bd_addr_segs control/rxbuf_offload/rxbuf_enqueue/s_axi_control/Reg]
   assign_bd_address -offset 0x00070000 -range 0x00010000 -target_address_space [get_bd_addr_spaces control/microblaze_0/Data] [get_bd_addr_segs control/rxbuf_offload/rxbuf_seek/s_axi_control/Reg]
+  assign_bd_address -offset 0x00100000 -range 0x00020000 -target_address_space [get_bd_addr_spaces control/microblaze_0/Data] [get_bd_addr_segs /m_axi_cfg/Reg]
 
-  assign_bd_address -offset 0x00000000 -range 0x00002000 -target_address_space [get_bd_addr_spaces control/dma_offload/dma_mover/Data_m_axi_mem] [get_bd_addr_segs control/exchange_mem/axi_bram_ctrl_bypass/S_AXI/Mem0]
-  assign_bd_address -offset 0x00000000 -range 0x00002000 -target_address_space [get_bd_addr_spaces control/rxbuf_offload/rxbuf_dequeue/Data_m_axi_mem] [get_bd_addr_segs control/exchange_mem/axi_bram_ctrl_bypass/S_AXI/Mem0]
-  assign_bd_address -offset 0x00000000 -range 0x00002000 -target_address_space [get_bd_addr_spaces control/rxbuf_offload/rxbuf_enqueue/Data_m_axi_mem] [get_bd_addr_segs control/exchange_mem/axi_bram_ctrl_bypass/S_AXI/Mem0]
-  assign_bd_address -offset 0x00000000 -range 0x00002000 -target_address_space [get_bd_addr_spaces control/rxbuf_offload/rxbuf_seek/Data_m_axi_mem] [get_bd_addr_segs control/exchange_mem/axi_bram_ctrl_bypass/S_AXI/Mem0]
+  # Offload engines address spaces - map exchange memory to offset 0
+  assign_bd_address -offset 0x00000000 -range 0x00020000 -target_address_space [get_bd_addr_spaces control/dma_offload/dma_mover/Data_m_axi_mem] [get_bd_addr_segs /m_axi_cfg/Reg]
+  assign_bd_address -offset 0x00000000 -range 0x00020000 -target_address_space [get_bd_addr_spaces control/rxbuf_offload/rxbuf_dequeue/Data_m_axi_mem] [get_bd_addr_segs /m_axi_cfg/Reg]
+  assign_bd_address -offset 0x00000000 -range 0x00020000 -target_address_space [get_bd_addr_spaces control/rxbuf_offload/rxbuf_enqueue/Data_m_axi_mem] [get_bd_addr_segs /m_axi_cfg/Reg]
+  assign_bd_address -offset 0x00000000 -range 0x00020000 -target_address_space [get_bd_addr_spaces control/rxbuf_offload/rxbuf_seek/Data_m_axi_mem] [get_bd_addr_segs /m_axi_cfg/Reg]
+
+  # Host AXI Lite port maps GPIO to offset 0
+  assign_bd_address -offset 0x00000000 -range 0x00001000 -target_address_space [get_bd_addr_spaces s_axi_control] [get_bd_addr_segs control/axi_gpio_0/S_AXI/Reg]
 
   save_bd_design
 
@@ -528,7 +536,6 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
   }
 
   # Create control interface connections
-  connect_bd_intf_net -intf_net host_control [get_bd_intf_ports s_axi_control] [get_bd_intf_pins control/host_control]
   connect_bd_intf_net -intf_net encore_control [get_bd_intf_pins control_xbar/S00_AXI] [get_bd_intf_pins control/encore_control]
   connect_bd_intf_net [get_bd_intf_ports s_axis_call_req] [get_bd_intf_pins control/call_req]
   connect_bd_intf_net [get_bd_intf_pins control/call_ack] [get_bd_intf_ports m_axis_call_ack] 
