@@ -45,7 +45,7 @@ The following platforms are supported for Alveo boards:
 First start up either the emulator or simulator:
 <details>
   <summary>Emulator</summary>
-  
+
   ```sh
   cd "test/model/emulator"
   source <VITIS_INSTALL>/settings64.sh
@@ -85,6 +85,6 @@ Open a terminal and run the tests:
 cd "test/host/xrt"
 /bin/cmake .
 make
-mpirun -np <RANKS> bin/test -f -x <XCLBIN FILE>
+mpirun -np <RANKS> bin/test -a -f -x <XCLBIN FILE>
 ```
 

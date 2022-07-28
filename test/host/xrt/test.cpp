@@ -52,7 +52,7 @@ struct options_t {
   bool test_xrt_simulator;
   bool debug;
   bool hardware;
-  bool tri;
+  bool axis3;
   bool udp;
   std::string xclbin;
 };
@@ -1093,7 +1093,7 @@ void start_test(options_t options) {
   skipped_tests = 0;
   for (int i = 0; i < size; ++i) {
     std::string ip;
-    if (options.hardware && !options.tri) {
+    if (options.hardware && !options.axis3) {
       ip = "127.0.0.1";
     } else {
       ip = "10.10.10." + std::to_string(rank);
@@ -1112,7 +1112,7 @@ void start_test(options_t options) {
 
   if (options.hardware) {
     std::string cclo_id;
-    if (options.tri) {
+    if (options.axis3) {
       cclo_id = std::to_string(rank);
     } else {
       cclo_id = "0";
@@ -1127,7 +1127,7 @@ void start_test(options_t options) {
     int devicemem;
     std::vector<int> rxbufmem;
     int networkmem;
-    if (options.tri) {
+    if (options.axis3) {
       devicemem = rank * 6;
       rxbufmem = {rank * 6 + 1};
       networkmem = rank * 6 + 2;
@@ -1269,7 +1269,8 @@ options_t parse_options(int argc, char *argv[]) {
   TCLAP::SwitchArg debug_arg("d", "debug", "Enable debug mode", cmd, false);
   TCLAP::SwitchArg hardware_arg("f", "hardware", "enable hardware mode", cmd,
                                 false);
-  TCLAP::SwitchArg tri_arg("t", "tri", "Use tri hardware setup", cmd, false);
+  TCLAP::SwitchArg axis3_arg("a", "axis3", "Use axis3 hardware setup", cmd,
+                             false);
   TCLAP::SwitchArg udp_arg("u", "udp", "Use UDP hardware setup", cmd, false);
   TCLAP::ValueArg<std::string> xclbin_arg(
       "x", "xclbin", "xclbin of accl driver if hardware mode is used", false,
@@ -1283,8 +1284,8 @@ options_t parse_options(int argc, char *argv[]) {
   try {
     cmd.parse(argc, argv);
     if (hardware_arg.getValue()) {
-      if (tri_arg.getValue() == udp_arg.getValue()) {
-        throw std::runtime_error("When using hardware, specify either tri or "
+      if (axis3_arg.getValue() == udp_arg.getValue()) {
+        throw std::runtime_error("When using hardware, specify either axis3 or "
                                  "udp mode, but not both.");
       }
     }
@@ -1304,7 +1305,7 @@ options_t parse_options(int argc, char *argv[]) {
   opts.nruns = nruns_arg.getValue();
   opts.debug = debug_arg.getValue();
   opts.hardware = hardware_arg.getValue();
-  opts.tri = tri_arg.getValue();
+  opts.axis3 = axis3_arg.getValue();
   opts.udp = udp_arg.getValue();
   opts.device_index = device_index_arg.getValue();
   opts.xclbin = xclbin_arg.getValue();
