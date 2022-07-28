@@ -1094,9 +1094,9 @@ void start_test(options_t options) {
   for (int i = 0; i < size; ++i) {
     std::string ip;
     if (options.hardware && !options.axis3) {
-      ip = "127.0.0.1";
+      ip = "10.10.10." + std::to_string(i);
     } else {
-      ip = "10.10.10." + std::to_string(rank);
+      ip = "127.0.0.1";
     }
     rank_t new_rank = {ip, options.start_port + i, i, options.rxbuf_size};
     ranks.emplace_back(new_rank);
