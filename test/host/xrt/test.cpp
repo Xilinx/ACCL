@@ -25,10 +25,14 @@
 #include <sstream>
 #include <tclap/CmdLine.h>
 #include <vector>
+#include <vnx/cmac.hpp>
+#include <vnx/mac.hpp>
+#include <vnx/networklayer.hpp>
 #include <xrt/xrt_device.h>
 #include <xrt/xrt_kernel.h>
 
 using namespace ACCL;
+using namespace vnx;
 
 // Set the tolerance for compressed datatypes high enough, since we do currently
 // not replicate the float32 -> float16 conversion for our reference results
@@ -48,6 +52,8 @@ struct options_t {
   bool test_xrt_simulator;
   bool debug;
   bool hardware;
+  bool axis3;
+  bool udp;
   std::string xclbin;
 };
 
@@ -117,7 +123,16 @@ void test_copy_p2p(ACCL::ACCL &accl, options_t &options) {
   std::cout << "Start copy p2p test..." << std::endl;
   unsigned int count = options.count;
   auto op_buf = accl.create_buffer<float>(count, dataType::float32);
-  auto p2p_buf = accl.create_buffer_p2p<float>(count, dataType::float32);
+  std::unique_ptr<ACCL::Buffer<float>> p2p_buf;
+  try {
+    p2p_buf = accl.create_buffer_p2p<float>(count, dataType::float32);
+  } catch (const std::bad_alloc &e) {
+    std::cout << "Can't allocate p2p buffer (" << e.what() << "). "
+              << "This probably means p2p is disabled on the FPGA.\n"
+              << "Skipping p2p test..." << std::endl;
+    skipped_tests += 1;
+    return;
+  }
   random_array(op_buf->buffer(), count);
 
   accl.copy(*op_buf, *p2p_buf, count);
@@ -1017,41 +1032,128 @@ void test_barrier(ACCL::ACCL &accl) {
   std::cout << "Test is successful!" << std::endl;
 }
 
+void configure_vnx(CMAC &cmac, Networklayer &network_layer,
+                   std::vector<rank_t> &ranks, options_t &options) {
+  if (ranks.size() > max_sockets_size) {
+    throw std::runtime_error("Too many ranks. VNX supports up to " +
+                             std::to_string(max_sockets_size) + " sockets.");
+  }
+
+  std::cout << "Testing UDP link status: ";
+
+  const auto link_status = cmac.link_status();
+
+  if (link_status.at("rx_status")) {
+    std::cout << "Link successful!" << std::endl;
+  } else {
+    std::cout << "No link found." << std::endl;
+  }
+
+  std::ostringstream ss;
+
+  ss << "Link interface 1 : {";
+  for (const auto &elem : link_status) {
+    ss << elem.first << ": " << elem.second << ", ";
+  }
+  ss << "}" << std::endl;
+  test_debug(ss.str(), options);
+
+  if (!link_status.at("rx_status")) {
+    // Give time for other ranks to setup link.
+    std::this_thread::sleep_for(std::chrono::seconds(3));
+    exit(1);
+  }
+
+  std::cout << "Populating socket table..." << std::endl;
+
+  network_layer.update_ip_address(ranks[rank].ip);
+  for (size_t i = 0; i < ranks.size(); ++i) {
+    if (i == static_cast<size_t>(rank)) {
+      continue;
+    }
+
+    network_layer.configure_socket(i, ranks[i].ip, ranks[i].port,
+                                   ranks[rank].port, true);
+  }
+
+  network_layer.populate_socket_table();
+
+  std::cout << "Starting ARP discovery..." << std::endl;
+  std::this_thread::sleep_for(std::chrono::seconds(4));
+  network_layer.arp_discovery();
+  std::cout << "Finishing ARP discovery..." << std::endl;
+  std::this_thread::sleep_for(std::chrono::seconds(2));
+  network_layer.arp_discovery();
+  std::cout << "ARP discovery finished!" << std::endl;
+}
+
 void start_test(options_t options) {
   std::vector<rank_t> ranks = {};
   failed_tests = 0;
   skipped_tests = 0;
   for (int i = 0; i < size; ++i) {
-    rank_t new_rank = {"127.0.0.1", options.start_port + i, i,
-                       options.rxbuf_size};
+    std::string ip;
+    if (options.hardware && !options.axis3) {
+      ip = "10.10.10." + std::to_string(i);
+    } else {
+      ip = "127.0.0.1";
+    }
+    rank_t new_rank = {ip, options.start_port + i, i, options.rxbuf_size};
     ranks.emplace_back(new_rank);
   }
 
   std::unique_ptr<ACCL::ACCL> accl;
 
   xrt::device device;
+
   if (options.hardware || options.test_xrt_simulator) {
     device = xrt::device(options.device_index);
   }
 
   if (options.hardware) {
+    std::string cclo_id;
+    if (options.axis3) {
+      cclo_id = std::to_string(rank);
+    } else {
+      cclo_id = "0";
+    }
     auto xclbin_uuid = device.load_xclbin(options.xclbin);
-    auto cclo_ip =
-        xrt::ip(device, xclbin_uuid,
-                "ccl_offload:{ccl_offload_" + std::to_string(rank) + "}");
-    auto hostctrl_ip = xrt::kernel(
-        device, xclbin_uuid, "hostctrl:{hostctrl_" + std::to_string(rank) + "}",
-        xrt::kernel::cu_access_mode::exclusive);
+    auto cclo_ip = xrt::ip(device, xclbin_uuid,
+                           "ccl_offload:{ccl_offload_" + cclo_id + "}");
+    auto hostctrl_ip =
+        xrt::kernel(device, xclbin_uuid, "hostctrl:{hostctrl_" + cclo_id + "}",
+                    xrt::kernel::cu_access_mode::exclusive);
 
-    std::vector<int> mem = {rank * 6 + 1};
+    int devicemem;
+    std::vector<int> rxbufmem;
+    int networkmem;
+    if (options.axis3) {
+      devicemem = rank * 6;
+      rxbufmem = {rank * 6 + 1};
+      networkmem = rank * 6 + 2;
+    } else {
+      devicemem = 0;
+      rxbufmem = {1};
+      networkmem = 2;
+    }
+
+    if (options.udp) {
+      auto cmac = CMAC(xrt::ip(device, xclbin_uuid, "cmac_0:{cmac_0}"));
+      auto network_layer = Networklayer(
+          xrt::ip(device, xclbin_uuid, "networklayer:{networklayer_0}"));
+
+      configure_vnx(cmac, network_layer, ranks, options);
+    }
 
     accl = std::make_unique<ACCL::ACCL>(
-        ranks, rank, device, cclo_ip, hostctrl_ip, rank * 6, mem, rank * 6 + 2,
-        networkProtocol::TCP, 16, options.rxbuf_size);
+        ranks, rank, device, cclo_ip, hostctrl_ip, devicemem, rxbufmem,
+        networkmem, options.udp ? networkProtocol::UDP : networkProtocol::TCP,
+        16, options.rxbuf_size);
   } else {
     accl = std::make_unique<ACCL::ACCL>(ranks, rank, options.start_port, device,
-                                        networkProtocol::TCP, 16,
-                                        options.rxbuf_size);
+                                        options.udp ? networkProtocol::UDP
+                                                    : networkProtocol::TCP,
+                                        16, options.rxbuf_size);
   }
   accl->set_timeout(1e8);
 
@@ -1167,6 +1269,9 @@ options_t parse_options(int argc, char *argv[]) {
   TCLAP::SwitchArg debug_arg("d", "debug", "Enable debug mode", cmd, false);
   TCLAP::SwitchArg hardware_arg("f", "hardware", "enable hardware mode", cmd,
                                 false);
+  TCLAP::SwitchArg axis3_arg("a", "axis3", "Use axis3 hardware setup", cmd,
+                             false);
+  TCLAP::SwitchArg udp_arg("u", "udp", "Use UDP hardware setup", cmd, false);
   TCLAP::ValueArg<std::string> xclbin_arg(
       "x", "xclbin", "xclbin of accl driver if hardware mode is used", false,
       "accl.xclbin", "file");
@@ -1178,6 +1283,12 @@ options_t parse_options(int argc, char *argv[]) {
 
   try {
     cmd.parse(argc, argv);
+    if (hardware_arg.getValue()) {
+      if (axis3_arg.getValue() == udp_arg.getValue()) {
+        throw std::runtime_error("When using hardware, specify either axis3 or "
+                                 "udp mode, but not both.");
+      }
+    }
   } catch (std::exception &e) {
     if (rank == 0) {
       std::cout << "Error: " << e.what() << std::endl;
@@ -1194,6 +1305,8 @@ options_t parse_options(int argc, char *argv[]) {
   opts.nruns = nruns_arg.getValue();
   opts.debug = debug_arg.getValue();
   opts.hardware = hardware_arg.getValue();
+  opts.axis3 = axis3_arg.getValue();
+  opts.udp = udp_arg.getValue();
   opts.device_index = device_index_arg.getValue();
   opts.xclbin = xclbin_arg.getValue();
   opts.test_xrt_simulator = xrt_simulator_ready(opts);
