@@ -66,7 +66,7 @@ target_link_libraries(accl PUBLIC xilinxopencl xrt_coreutil xrt_core)
 target_include_directories(accl PUBLIC $ENV{XILINX_XRT}/include)
 
 # ZMQ
-target_link_libraries(accl PUBLIC zmqpp)
+target_link_libraries(accl PUBLIC zmqpp zmq pthread)
 
 # Json
 find_package(jsoncpp REQUIRED)
