@@ -20,7 +20,6 @@
 #include <iostream>
 #include <signal.h>
 #include <zmqpp/zmqpp.hpp>
-#include <jsoncpp/json/json.h>
 #include <vector>
 #include <chrono>
 #include <thread>
