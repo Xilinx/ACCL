@@ -196,6 +196,13 @@ module ccl_offload
   output [7:0] m_axis_eth_open_connection_tstrb,
   output m_axis_eth_open_connection_tvalid,
 
+  output [15:0] m_axis_eth_close_connection_tdata,
+  output [1:0] m_axis_eth_close_connection_tkeep,
+  output [0:0] m_axis_eth_close_connection_tlast,
+  input m_axis_eth_close_connection_tready,
+  output [1:0] m_axis_eth_close_connection_tstrb,
+  output m_axis_eth_close_connection_tvalid,
+
   output [31:0] m_axis_eth_read_pkg_tdata,
   output [3:0] m_axis_eth_read_pkg_tkeep,
   output [0:0] m_axis_eth_read_pkg_tlast,
