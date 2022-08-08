@@ -179,7 +179,7 @@ static hlslib::Stream<hlslib::axi::Stream<ap_uint<DATA_WIDTH>, DEST_WIDTH>, 512>
 void open_con_handler(
     STREAM<pkt64>& s_axis_tcp_open_connection,
     STREAM<pkt128>& m_axis_tcp_open_status,
-    STREAM<pkt16>& s_axis_tcp_close_connection,
+    STREAM<pkt16>& s_axis_tcp_close_connection
 ){
 #pragma HLS PIPELINE II=1 style=flp
 #pragma HLS INLINE off

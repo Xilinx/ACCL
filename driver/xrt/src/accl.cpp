@@ -1040,6 +1040,15 @@ void ACCL::open_con(communicatorId comm_id) {
   check_return_value("open_con");
 }
 
+void ACCL::close_con(communicatorId comm_id) {
+  CCLO::Options options{};
+  options.scenario = operation::config;
+  options.comm = communicators[comm_id].communicators_addr();
+  options.cfg_function = cfgFunc::close_con;
+  call_sync(options);
+  check_return_value("close_con");
+}
+
 void ACCL::use_udp(communicatorId comm_id) {
   CCLO::Options options{};
   options.scenario = operation::config;

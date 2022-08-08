@@ -57,7 +57,8 @@ enum class cfgFunc {
   open_port = 3,
   open_con = 4,
   set_stack_type = 5,
-  set_max_segment_size = 6
+  set_max_segment_size = 6,
+  close_con = 7
 };
 
 /**
@@ -206,7 +207,8 @@ enum class errorCode {
   KRNL_TIMEOUT_STS_ERROR = 1 << 23,
   KRNL_STS_COUNT_ERROR = 1 << 24,
   SEGMENTER_EXPECTED_BTT_ERROR = 1 << 25,
-  DMA_TAG_MISMATCH_ERROR = 1 << 26
+  DMA_TAG_MISMATCH_ERROR = 1 << 26,
+  CLOSE_CON_NOT_SUCCEEDED = 1 << 27
 };
 
 /** Amount of bits used for error codes. */

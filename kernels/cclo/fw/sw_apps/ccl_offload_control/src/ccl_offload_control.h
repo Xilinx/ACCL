@@ -84,6 +84,7 @@
 #define HOUSEKEEP_OPEN_CON             4
 #define HOUSEKEEP_SET_STACK_TYPE       5
 #define HOUSEKEEP_SET_MAX_SEGMENT_SIZE 6
+#define HOUSEKEEP_CLOSE_CON            7
 
 //AXI MMAP address
 #define CFGRDY_OFFSET     0x1FF4
@@ -151,6 +152,7 @@
 #define KRNL_STS_COUNT_ERROR                          (1<<24)
 #define SEGMENTER_EXPECTED_BTT_ERROR                  (1<<25)
 #define DMA_TAG_MISMATCH_ERROR                        (1<<26)
+#define CLOSE_CON_NOT_SUCCEEDED                       (1<<27)
 
 //define opcodes for move offload
 //each address parameter (op0, op1, res) should carry one of these opcodes

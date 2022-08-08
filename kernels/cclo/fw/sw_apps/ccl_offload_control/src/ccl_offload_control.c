@@ -153,6 +153,30 @@ int openCon()
     return ret;
 }
 
+//close connection with every other rank in the communicator
+int closeCon()
+{
+    unsigned int cur_rank_sess_id;
+    int ret = NO_ERROR;
+
+    unsigned int size 		= world.size;
+    unsigned int local_rank = world.local_rank;
+
+    //close connection to all the ranks except for the local rank
+    for (int i = 0; i < size; i++)
+    {
+        if (i != local_rank)
+        {
+            cur_rank_sess_id 	= world.ranks[i].session;
+            //send close connection request to the packetizer
+            putd(CMD_NET_CON, 0);
+            putd(CMD_NET_CON, cur_rank_sess_id);
+        }
+    }
+
+    return ret;
+}
+
 //open local port for listening
 int openPort()
 {
@@ -1363,6 +1387,13 @@ void run() {
                             retval = openCon();
                         } else{
                             retval = OPEN_CON_NOT_SUCCEEDED;
+                        }
+                        break;
+                    case HOUSEKEEP_CLOSE_CON:
+                        if(use_tcp == 1){
+                            retval = closeCon();
+                        } else{
+                            retval = CLOSE_CON_NOT_SUCCEEDED;
                         }
                         break;
                     case HOUSEKEEP_SET_STACK_TYPE:
