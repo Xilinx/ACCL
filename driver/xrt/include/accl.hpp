@@ -795,6 +795,8 @@ private:
 
   void open_con(communicatorId comm_id = GLOBAL_COMM);
 
+  void close_con(communicatorId comm_id = GLOBAL_COMM);
+
   void use_udp(communicatorId comm_id = GLOBAL_COMM);
 
   void use_tcp(communicatorId comm_id = GLOBAL_COMM);

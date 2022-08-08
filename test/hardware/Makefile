@@ -148,13 +148,14 @@ $(CMAC_TCP_XO):
 $(TCP_DUMMY_XO):
 	$(MAKE) -C ../../kernels/plugins/dummy_tcp_stack DEVICE=$(FPGAPART) all
 
-.PHONY: network_krnl
-network_krnl: $(TCP_XO)
+.PHONY: tcp_stack
+tcp_stack: $(TCP_XO)
 
-$(TCP_XO):
+$(TCP_XO): tcp_stack_ips
 	git submodule update --init --recursive Vitis_with_100Gbps_TCP-IP
 	$(MAKE) -C Vitis_with_100Gbps_TCP-IP/ network_krnl DEVICE=$(PLATFORM) TEMP_DIR=_x.hw.$(XSA)/ XSA=$(XSA)
 
+.PHONY: tcp_stack_ips
 tcp_stack_ips:
 	git submodule update --init --recursive Vitis_with_100Gbps_TCP-IP
 	rm -rf Vitis_with_100Gbps_TCP-IP/build
@@ -167,5 +168,6 @@ $(XCLBIN): $(NET_XO) $(CONFIGFILE)
 	$(MAKE) -C ../../kernels/plugins PLATFORM=$(PLATFORM) DEBUG=$(DEBUG)
 	v++ --link --platform $(PLATFORM) --kernel_frequency $(FREQUENCY) --save-temps --temp_dir $(BUILD_DIR) $(CONFIG) -o $@ $(CCLO_XO) $(HOSTCTRL_XO) $(CLIENT_ARB_XO) $(ARITHMETIC_XO) $(NET_XO) $(OTHER_XO)
 
+.PHONY: distclean
 distclean:
 	git clean -xfd
