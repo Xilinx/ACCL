@@ -20,17 +20,23 @@ using namespace std;
 
 void tcp_openConReq(	
 	STREAM<ap_axiu<32,0,0,0> > & cmd,
-	STREAM<pkt64>& m_axis_tcp_open_connection
+	STREAM<pkt64>& m_axis_tcp_open_connection,
+    STREAM<pkt64>& m_axis_tcp_close_connection
 ){
 #pragma HLS PIPELINE II=1 style=flp
 #pragma HLS INLINE off
     if (!STREAM_IS_EMPTY(cmd)){
         unsigned int ip = (STREAM_READ(cmd)).data;
-        int port = (STREAM_READ(cmd)).data;	
-        pkt64 openConnection_pkt;
-        openConnection_pkt.data(31,0) = ip;
-        openConnection_pkt.data(47,32) = port;
-        STREAM_WRITE(m_axis_tcp_open_connection, openConnection_pkt);
+        int port = (STREAM_READ(cmd)).data;
+        //if IP is zero, then this is a close request, and port is the session ID
+        if(ip != 0){	
+            pkt64 openConnection_pkt;
+            openConnection_pkt.data(31,0) = ip;
+            openConnection_pkt.data(47,32) = port;
+            STREAM_WRITE(m_axis_tcp_open_connection, openConnection_pkt);
+        } else {
+            STREAM_WRITE(m_axis_tcp_close_connection, port);
+        }
     }
 }
 
@@ -150,6 +156,7 @@ void tcp_sessionHandler(
     STREAM<pkt16>& m_axis_tcp_listen_port, 
     STREAM<pkt8>& s_axis_tcp_port_status,
 	STREAM<pkt64>& m_axis_tcp_open_connection,
+    STREAM<pkt16>& m_axis_tcp_close_connection,
     STREAM<pkt128>& s_axis_tcp_open_status
 ){
 #pragma HLS INTERFACE axis register both port=port_sts
@@ -158,12 +165,13 @@ void tcp_sessionHandler(
 #pragma HLS INTERFACE axis register both port=s_axis_tcp_port_status
 #pragma HLS INTERFACE axis register both port=con_cmd
 #pragma HLS INTERFACE axis register both port=m_axis_tcp_open_connection
+#pragma HLS INTERFACE axis register both port=m_axis_tcp_close_connection
 #pragma HLS INTERFACE axis register both port=con_sts
 #pragma HLS INTERFACE axis register both port=s_axis_tcp_open_status
 #pragma HLS INTERFACE ap_ctrl_none port=return
 #pragma HLS DATAFLOW disable_start_propagation
 
-tcp_openConReq(con_cmd,m_axis_tcp_open_connection);
+tcp_openConReq(con_cmd, m_axis_tcp_open_connection, m_axis_tcp_close_connection);
 tcp_openConResp(con_sts, s_axis_tcp_open_status);
 tcp_openPort(port_cmd, port_sts, m_axis_tcp_listen_port, s_axis_tcp_port_status);
 

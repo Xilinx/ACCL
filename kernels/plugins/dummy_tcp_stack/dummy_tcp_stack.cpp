@@ -178,7 +178,8 @@ static hlslib::Stream<hlslib::axi::Stream<ap_uint<DATA_WIDTH>, DEST_WIDTH>, 512>
 //[15:0] session; [23:16] success; [55:24] ip; [71:56] port 
 void open_con_handler(
     STREAM<pkt64>& s_axis_tcp_open_connection,
-    STREAM<pkt128>& m_axis_tcp_open_status
+    STREAM<pkt128>& m_axis_tcp_open_status,
+    STREAM<pkt16>& s_axis_tcp_close_connection,
 ){
 #pragma HLS PIPELINE II=1 style=flp
 #pragma HLS INLINE off
@@ -198,6 +199,8 @@ void open_con_handler(
         open_status_pkt.data(71,56) = port;
         STREAM_WRITE(m_axis_tcp_open_status, open_status_pkt);
         sessionCnt ++;
+    } else if(!STREAM_IS_EMPTY(s_axis_tcp_close_connection)) {
+        STREAM_READ(s_axis_tcp_close_connection);
     }
 }
 
@@ -228,6 +231,7 @@ void network_krnl(
     STREAM<pkt64>& m_axis_tcp_tx_status,
     STREAM<pkt64>& s_axis_tcp_open_connection,
     STREAM<pkt128>& m_axis_tcp_open_status,
+    STREAM<pkt16>& s_axis_tcp_close_connection,
     STREAM<pkt16>& s_axis_tcp_listen_port, 
     STREAM<pkt8>& m_axis_tcp_port_status,
     STREAM<stream_word>& net_rx,
@@ -242,6 +246,7 @@ void network_krnl(
 #pragma HLS INTERFACE axis register both port=m_axis_tcp_tx_status
 #pragma HLS INTERFACE axis register both port=s_axis_tcp_open_connection
 #pragma HLS INTERFACE axis register both port=m_axis_tcp_open_status
+#pragma HLS INTERFACE axis register both port=s_axis_tcp_close_connection
 #pragma HLS INTERFACE axis register both port=s_axis_tcp_listen_port
 #pragma HLS INTERFACE axis register both port=m_axis_tcp_port_status
 #pragma HLS INTERFACE axis register both port=net_rx
@@ -250,7 +255,7 @@ void network_krnl(
 
 #pragma HLS DATAFLOW disable_start_propagation
     
-open_con_handler(s_axis_tcp_open_connection, m_axis_tcp_open_status);
+open_con_handler(s_axis_tcp_open_connection, m_axis_tcp_open_status, s_axis_tcp_close_connection);
 listen_port_handler(s_axis_tcp_listen_port, m_axis_tcp_port_status);
 rx_handler(
     m_axis_tcp_notification, 
