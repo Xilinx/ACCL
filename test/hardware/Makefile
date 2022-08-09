@@ -85,19 +85,19 @@ CONFIGFILE := config/link_config_$(BOARD)_$(MODE).ini
 CONFIG := --config $(CONFIGFILE)
 ifeq (udp,$(MODE))
 	ifeq (u50,$(findstring u50, $(PLATFORM)))
-		HLS_IP_FOLDER  = $(shell readlink -f ./$(NETLAYERHLS)/synthesis_results_HMB)
+		HLS_IP_FOLDER  = $(shell readlink -f ./$(NETLAYERHLS)/synthesis_results_HBM)
 	endif
 	ifeq (u55c,$(findstring u55c, $(PLATFORM)))
-		HLS_IP_FOLDER  = $(shell readlink -f ./$(NETLAYERHLS)/synthesis_results_HMB)
+		HLS_IP_FOLDER  = $(shell readlink -f ./$(NETLAYERHLS)/synthesis_results_HBM)
 	endif
 	ifeq (u200,$(findstring u200, $(PLATFORM)))
-		HLS_IP_FOLDER  = $(shell readlink -f ./$(NETLAYERHLS)/synthesis_results_noHMB)
+		HLS_IP_FOLDER  = $(shell readlink -f ./$(NETLAYERHLS)/synthesis_results_noHBM)
 	endif
 	ifeq (u250,$(findstring u250, $(PLATFORM)))
-		HLS_IP_FOLDER  = $(shell readlink -f ./$(NETLAYERHLS)/synthesis_results_noHMB)
+		HLS_IP_FOLDER  = $(shell readlink -f ./$(NETLAYERHLS)/synthesis_results_noHBM)
 	endif
 	ifeq (u280,$(findstring u280, $(PLATFORM)))
-		HLS_IP_FOLDER  = $(shell readlink -f ./$(NETLAYERHLS)/synthesis_results_HMB)
+		HLS_IP_FOLDER  = $(shell readlink -f ./$(NETLAYERHLS)/synthesis_results_HBM)
 	endif
 	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/$(VNX)/Ethernet/post_sys_link.tcl
 	NET_XO = $(CMAC_UDP_XO) $(UDP_XO)
