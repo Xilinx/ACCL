@@ -21,8 +21,8 @@
 #include "hls_stream.h"
 
 void client_arbiter(
-	hls::stream<ap_uint<32> > cmd_clients[NCLIENTS],
-	hls::stream<ap_uint<32> > ack_clients[NCLIENTS],
-	hls::stream<ap_uint<32> > & cmd_cclo,
-	hls::stream<ap_uint<32> > & ack_cclo
+	hls::stream<ap_uint<32>> (&cmd_clients)[NCLIENTS],
+	hls::stream<ap_uint<32>> (&ack_clients)[NCLIENTS],
+	hls::stream<ap_uint<32>>  &cmd_cclo,
+	hls::stream<ap_uint<32>>  &ack_cclo
 );
