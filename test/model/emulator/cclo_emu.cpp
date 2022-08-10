@@ -250,6 +250,7 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsign
     Stream<pkt16> eth_listen_port;
     Stream<pkt8> eth_port_status;
     Stream<pkt64> eth_open_connection;
+    Stream<pkt16> eth_close_connection;
     Stream<pkt128> eth_open_status;
 
     Stream<ap_uint<96> > cmd_txHandler;
@@ -339,7 +340,7 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsign
             cmd_fifos[CMD_NET_PORT], sts_fifos[STS_NET_PORT],
             cmd_fifos[CMD_NET_CON], sts_fifos[STS_NET_CON],
             eth_listen_port, eth_port_status,
-            eth_open_connection, eth_open_status
+            eth_open_connection, eth_close_connection, eth_open_status
         );
         //instantiate dummy TCP stack which responds to appropriate comm patterns
         HLSLIB_FREERUNNING_FUNCTION(
@@ -347,7 +348,7 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsign
             eth_notif, eth_read_pkg,
             eth_rx_meta, eth_rx_data_stack,
             eth_tx_meta, eth_tx_data_stack, eth_tx_status,
-            eth_open_connection, eth_open_status,
+            eth_open_connection, eth_open_status, eth_close_connection,
             eth_listen_port, eth_port_status,
             eth_rx_data, eth_tx_data
         );

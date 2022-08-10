@@ -123,6 +123,7 @@ void tcp_sessionHandler(
     STREAM<pkt16>& m_axis_tcp_listen_port, 
     STREAM<pkt8>& s_axis_tcp_port_status,
 	STREAM<pkt64>& m_axis_tcp_open_connection,
+    STREAM<pkt16>& m_axis_tcp_close_connection,
     STREAM<pkt128>& s_axis_tcp_open_status
 );
 
