@@ -18,10 +18,10 @@
 #include "client_arbiter.h"
 
 void client_arbiter(
-	hls::stream<ap_uint<32>> (&cmd_clients)[NCLIENTS],
-	hls::stream<ap_uint<32>> (&ack_clients)[NCLIENTS],
-	hls::stream<ap_uint<32>>  &cmd_cclo,
-	hls::stream<ap_uint<32>>  &ack_cclo
+	STREAM<command_word> cmd_clients[NUM_CTRL_STREAMS],
+	STREAM<command_word> ack_clients[NUM_CTRL_STREAMS],
+	STREAM<command_word>  &cmd_cclo,
+	STREAM<command_word>  &ack_cclo
 ){
 #pragma HLS INTERFACE axis register both port=cmd_clients
 #pragma HLS INTERFACE axis register both port=ack_clients
@@ -32,47 +32,45 @@ void client_arbiter(
 #pragma HLS pipeline II=1 style=frp
 
 	// 1-Hot indication of current token position of highest priority
-	static ap_uint<NCLIENTS>  pos = 1;
+	static ap_uint<NUM_CTRL_STREAMS>  pos = 1;
 #pragma HLS reset variable=pos
 
 	// Request vector with asserted added MSB
-	ap_uint<1+NCLIENTS>  rqst;
-	for(int  i = 0; i < NCLIENTS; i++) {
+	ap_uint<1+NUM_CTRL_STREAMS>  rqst;
+	for(int  i = 0; i < NUM_CTRL_STREAMS; i++) {
 #pragma HLS unroll
-		rqst[i] = !cmd_clients[i].empty();
+		rqst[i] = !STREAM_IS_EMPTY(cmd_clients[i]);
 	}
-	rqst[NCLIENTS] = 1;
+	rqst[NUM_CTRL_STREAMS] = 1;
 
 	// 1-Hot grant vectors starting at token position and at LSB, respectively
-	ap_uint<1+NCLIENTS> const  grnt1 = (~rqst + pos) & rqst;
-	ap_uint<1+NCLIENTS> const  grnt0 = (~rqst +   1) & rqst;
+	ap_uint<1+NUM_CTRL_STREAMS> const  grnt1 = (~rqst + pos) & rqst;
+	ap_uint<1+NUM_CTRL_STREAMS> const  grnt0 = (~rqst +   1) & rqst;
 
 	// Take this round only if there is at least one request
-	if(!grnt0[NCLIENTS]) {
-		ap_uint<NCLIENTS> const  grant = grnt1[NCLIENTS]? grnt0 : grnt1;
+	if(!grnt0[NUM_CTRL_STREAMS]) {
+		ap_uint<NUM_CTRL_STREAMS> const  grant = grnt1[NUM_CTRL_STREAMS]? grnt0 : grnt1;
 
 		// Collect the granted command
 		ap_uint<32>  cmd = 0;
-		for(int  i = 0; i < NCLIENTS; i++) {
-#pragma HLS unroll
+		for(int  i = 0; i < NUM_CTRL_STREAMS; i++) {
 			if(grant[i]) {
-				ap_uint<32>  ccmd;
-				cmd_clients[i].read_nb(ccmd);
-				cmd |= ccmd;
+				// Dispatch to CCLO
+				for(int j=0; j<15; j++){
+					STREAM_WRITE(cmd_cclo, STREAM_READ(cmd_clients[i]));
+				}
 			}
 		}
 
-		// Dispatch to CCLO
-		cmd_cclo.write(cmd);
-		ap_uint<32> const  ack = ack_cclo.read();
+		command_word const ack = STREAM_READ(ack_cclo);
 
 		// Return ACK
-		for(int  i = 0; i < NCLIENTS; i++) {
+		for(int  i = 0; i < NUM_CTRL_STREAMS; i++) {
 #pragma HLS unroll
-			if(grant[i])  ack_clients[i].write(ack);
+			if(grant[i])  STREAM_WRITE(ack_clients[i], ack);
 		}
 
 		// Rotate priority position to left neighbor
-		pos = (grant(NCLIENTS-2, 0), grant[NCLIENTS-1]);
+		pos = (grant(NUM_CTRL_STREAMS-2, 0), grant[NUM_CTRL_STREAMS-1]);
 	}
 }

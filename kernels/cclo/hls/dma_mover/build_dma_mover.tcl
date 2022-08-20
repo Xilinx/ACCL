@@ -52,8 +52,8 @@ switch $command {
 
 open_project build_dma_mover
 
-add_files dma_mover.cpp -cflags "-std=c++14 -I[pwd]/../eth_intf/ -I[pwd]/../../../../hlslib/include/hlslib/xilinx -I[pwd]/../segmenter -I[pwd]/../../fw/sw_apps/ccl_offload_control/src -DHLSLIB_SYNTHESIS"
-add_files -tb tb_dma_mover.cpp -cflags "-std=c++14 -I[pwd]/../eth_intf/ -I[pwd]/../../../../hlslib/include/hlslib/xilinx -I[pwd]/../segmenter -I[pwd]/../../fw/sw_apps/ccl_offload_control/src -DHLSLIB_SYNTHESIS"
+add_files dma_mover.cpp -cflags "-std=c++14 -I[pwd]/../../../../driver/hls -I[pwd]/../eth_intf/ -I[pwd]/../../../../hlslib/include/hlslib/xilinx -I[pwd]/../segmenter -I[pwd]/../../fw/sw_apps/ccl_offload_control/src -DHLSLIB_SYNTHESIS"
+add_files -tb tb_dma_mover.cpp -cflags "-std=c++14 -I[pwd]/../../../../driver/hls -I[pwd]/../eth_intf/ -I[pwd]/../../../../hlslib/include/hlslib/xilinx -I[pwd]/../segmenter -I[pwd]/../../fw/sw_apps/ccl_offload_control/src -DHLSLIB_SYNTHESIS"
 
 set_top dma_mover
 open_solution sol1

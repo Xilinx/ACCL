@@ -17,8 +17,7 @@
 
 #pragma once
 
-#include "ap_int.h"
-#include "streamdefines.h"
+#include "accl_hls.h"
 
 #define DWIDTH512 512
 #define DWIDTH256 256

@@ -83,10 +83,11 @@ zmq_intf_context zmq_client_intf(unsigned int starting_port, unsigned int local_
 void zmq_client_startcall(zmq_intf_context *ctx, unsigned int scenario, unsigned int tag, unsigned int count,
                         unsigned int comm, unsigned int root_src_dst, unsigned int function,
                         unsigned int arithcfg_addr, unsigned int compression_flags, unsigned int stream_flags,
-                        uint64_t addr_0, uint64_t addr_1, uint64_t addr_2) {
+                        uint64_t addr_0, uint64_t addr_1, uint64_t addr_2, unsigned int ctrl_id) {
     Json::Value request_json;
 
     request_json["type"] = 5;
+    request_json["stream_id"] = ctrl_id;
     request_json["scenario"] = scenario;
     request_json["tag"] = tag;
     request_json["count"] = count;
@@ -100,17 +101,37 @@ void zmq_client_startcall(zmq_intf_context *ctx, unsigned int scenario, unsigned
     request_json["addr_1"] = (Json::Value::UInt64)addr_1;
     request_json["addr_2"] = (Json::Value::UInt64)addr_2;
 
+    //send the message out to the CCLO simulator/emulator
     zmqpp::message msg;
     to_message(request_json, msg);
     ctx->cmd_socket->send(msg);
-}
-
-void zmq_client_retcall(zmq_intf_context *ctx){
+    //receive confirmation
     zmqpp::message reply;
     ctx->cmd_socket->receive(reply);
     Json::Value status = to_json(reply);
-    if (status["status"] != 0) {
-        throw std::runtime_error("ZMQ call error (" + std::to_string(status["status"].asUInt()) + ")");
+    if (status["status"].asInt() < 0) {
+        throw std::runtime_error("ZMQ startcall error (" + std::to_string(status["status"].asInt()) + ")");
+    }
+}
+
+void zmq_client_retcall(zmq_intf_context *ctx, unsigned int ctrl_id){
+    while(1){
+        //send an update request out to the CCLO simulator/emulator
+        Json::Value request_json;
+        request_json["type"] = 6;
+        request_json["stream_id"] = ctrl_id;
+        zmqpp::message msg;
+        to_message(request_json, msg);
+        ctx->cmd_socket->send(msg);
+        //check the reply
+        zmqpp::message reply;
+        ctx->cmd_socket->receive(reply);
+        Json::Value status = to_json(reply);
+        if (status["status"].asInt() < 0) {
+            throw std::runtime_error("ZMQ retcall error (" + std::to_string(status["status"].asInt()) + ")");
+        } else if (status["status"] == 0) {
+            return;
+        }
     }
 }
 
