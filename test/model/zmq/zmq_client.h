@@ -56,14 +56,14 @@ zmq_intf_context zmq_client_intf(   unsigned int starting_port, unsigned int loc
 void zmq_client_startcall(zmq_intf_context *ctx, unsigned int scenario, unsigned int tag, unsigned int count,
                         unsigned int comm, unsigned int root_src_dst, unsigned int function,
                         unsigned int arithcfg_addr, unsigned int compression_flags, unsigned int stream_flags,
-                        uint64_t addr_0, uint64_t addr_1, uint64_t addr_2);
+                        uint64_t addr_0, uint64_t addr_1, uint64_t addr_2, unsigned int ctrl_id=0);
 
 /**
  * @brief Wait for completion of a previously-initiated ACCL call via the ZMQ connection to the emulator/simulator
  *
  * @param ctx Pointer to existing ZMQ context
  */
-void zmq_client_retcall(zmq_intf_context *ctx);
+void zmq_client_retcall(zmq_intf_context *ctx, unsigned int ctrl_id=0);
 
 /**
  * @brief Read from emulated CCLO local memory

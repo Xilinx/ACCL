@@ -43,7 +43,7 @@ switch $command {
 
 open_project build_client_arbiter
 
-add_files client_arbiter.cpp -cflags "-std=c++14 -DNCLIENTS=$nclients"
+add_files client_arbiter.cpp -cflags "-std=c++14 -I../../../driver/hls/ -DNUM_CTRL_STREAMS=$nclients -DACCL_SYNTHESIS"
 
 set_top client_arbiter
 

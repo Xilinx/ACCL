@@ -53,9 +53,7 @@ switch $command {
 
 open_project build_tcp_stack
 
-add_files dummy_tcp_stack.cpp -cflags "-std=c++14 -I../../cclo/hls/ -I../../cclo/hls/eth_intf/ -I../../../hlslib/include/hlslib/xilinx -DACCL_SYNTHESIS"
-add_files -tb tb_dummy_tcp_stack.cpp -cflags "-std=c++14 -I../../cclo/hls/ -I../../cclo/hls/eth_intf/ -I../../../hlslib/include/hlslib/xilinx -DACCL_SYNTHESIS"
-
+add_files dummy_tcp_stack.cpp -cflags "-std=c++14 -I../../../driver/hls/ -I../../cclo/hls/eth_intf/ -I../../../hlslib/include/hlslib/xilinx -DACCL_SYNTHESIS"
 
 set_top network_krnl
 

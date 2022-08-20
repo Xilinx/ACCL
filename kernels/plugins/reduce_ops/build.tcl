@@ -55,7 +55,7 @@ switch $command {
 
 open_project build_${ipname}
 
-add_files reduce_ops.cpp -cflags "-std=c++14 -I[pwd]/ -I[pwd]/../../cclo/hls -DACCL_SYNTHESIS"
+add_files reduce_ops.cpp -cflags "-std=c++14 -I[pwd]/ -I[pwd]/../../../driver/hls/ -DACCL_SYNTHESIS"
 
 set_top ${ipname}
 

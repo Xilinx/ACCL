@@ -14,7 +14,7 @@
 #  limitations under the License.
 #
 # *******************************************************************************/
-#include "ap_int.h"
+
 #include "dummy_tcp_stack.h"
 #include "Axi.h" //for axi::Stream
 

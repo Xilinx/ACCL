@@ -15,8 +15,7 @@
 #
 # *******************************************************************************/
 
-#include "streamdefines.h"
-#include "ap_int.h"
+#include "accl_hls.h"
 #include <stdint.h>
 
 

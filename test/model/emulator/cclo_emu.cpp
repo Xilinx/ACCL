@@ -31,6 +31,8 @@
 #include "eth_intf.h"
 #include "dummy_tcp_stack.h"
 #include "stream_segmenter.h"
+#include "client_arbiter.h"
+#include "hostctrl.h"
 #include "rxbuf_offload.h"
 #include "dma_mover.h"
 #include "ccl_offload_control.h"
@@ -193,6 +195,35 @@ void axis_mux(Stream<stream_word> &s0, Stream<stream_word> &s1, Stream<stream_wo
     }
 }
 
+//wrap a host controller
+void controller(Stream<command_word> &cmdin, Stream<command_word> &cmdout,
+                Stream<command_word> &stsin, Stream<command_word> &stsout){
+    //gather arguments from input command queue
+    ap_uint<32> scenario = cmdin.Pop().data;
+    ap_uint<32> count = cmdin.Pop().data;
+    ap_uint<32> comm = cmdin.Pop().data;
+    ap_uint<32> root_src_dst = cmdin.Pop().data;
+    ap_uint<32> function = cmdin.Pop().data;
+    ap_uint<32> tag = cmdin.Pop().data;
+    ap_uint<32> arithcfg = cmdin.Pop().data;
+    ap_uint<32> compression_flags = cmdin.Pop().data;
+    ap_uint<32> stream_flags = cmdin.Pop().data;
+    ap_uint<64> addr_0 = cmdin.Pop().data;
+    addr_0(63,32) = cmdin.Pop().data;
+    ap_uint<64> addr_1 = cmdin.Pop().data;
+    addr_1(63,32) = cmdin.Pop().data;
+    ap_uint<64> addr_2 = cmdin.Pop().data;
+    addr_2(63,32) = cmdin.Pop().data;
+    //execute host controller
+    logger << log_level::verbose << "Controller forwarding call with scenario " << scenario << endl;
+    hostctrl(	scenario, count, comm, root_src_dst, function, tag, arithcfg, 
+				compression_flags, stream_flags,
+				addr_0, addr_1, addr_2,
+				cmdout, stsin   );
+    //signal upstream
+    stsout.Push({.data=0, .last=1});
+}
+
 void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsigned int world_size) {
     vector<char> devicemem;
 
@@ -266,6 +297,11 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsign
     Stream<stream_word, 1024> eth_rx_data_int;
     Stream<stream_word> eth_tx_data_stack;
     Stream<stream_word> eth_rx_data_stack;
+
+    Stream<command_word> callreq_fifos[NUM_CTRL_STREAMS];
+    Stream<command_word> callack_fifos[NUM_CTRL_STREAMS];
+
+    Stream<command_word, 512> callreq_arb[NUM_CTRL_STREAMS], callack_arb[NUM_CTRL_STREAMS];
 
     unsigned int max_words_per_pkt = MAX_PACKETSIZE/DATAPATH_WIDTH_BYTES;
 
@@ -359,8 +395,13 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsign
     HLSLIB_FREERUNNING_FUNCTION(krnl_endpoint_egress_port, ctx, accl_to_krnl_data);
     HLSLIB_FREERUNNING_FUNCTION(krnl_endpoint_ingress_port, ctx, krnl_to_accl_data);
 
+    //emulated hostcontrollers
+    HLSLIB_FREERUNNING_FUNCTION(controller, callreq_fifos[0], callreq_arb[0], callack_arb[0], callack_fifos[0]);
+    HLSLIB_FREERUNNING_FUNCTION(controller, callreq_fifos[1], callreq_arb[1], callack_arb[1], callack_fifos[1]);
+    HLSLIB_FREERUNNING_FUNCTION(client_arbiter, callreq_arb, callack_arb, sts_fifos[CMD_CALL], cmd_fifos[STS_CALL]);
+
     //ZMQ to host process
-    HLSLIB_FREERUNNING_FUNCTION(serve_zmq, ctx, cfgmem, devicemem, sts_fifos[CMD_CALL], cmd_fifos[STS_CALL]);
+    HLSLIB_FREERUNNING_FUNCTION(serve_zmq, ctx, cfgmem, devicemem, callreq_fifos, callack_fifos);
     //ZMQ to other nodes process(es)
     HLSLIB_FREERUNNING_FUNCTION(eth_endpoint_egress_port, ctx, eth_tx_data, local_rank, use_tcp && world_size > 1);
     HLSLIB_FREERUNNING_FUNCTION(eth_endpoint_ingress_port, ctx, eth_rx_data);

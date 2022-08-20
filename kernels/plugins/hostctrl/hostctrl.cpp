@@ -15,7 +15,7 @@
 #
 # *******************************************************************************/
 
-#include "accl_hls.h"
+#include "hostctrl.h"
 
 using namespace hls;
 using namespace std;
@@ -32,8 +32,8 @@ void hostctrl(	ap_uint<32> scenario,
 				ap_uint<64> addra,
 				ap_uint<64> addrb,
 				ap_uint<64> addrc,
-				stream<ap_uint<32>> &cmd,
-				stream<ap_uint<32>> &sts
+				STREAM<command_word> &cmd,
+				STREAM<command_word> &sts
 ) {
 #pragma HLS INTERFACE s_axilite port=scenario
 #pragma HLS INTERFACE s_axilite port=len
