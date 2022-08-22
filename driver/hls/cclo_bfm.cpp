@@ -21,10 +21,10 @@
 #include "constants.hpp"
 
 CCLO_BFM::CCLO_BFM(unsigned int zmqport, unsigned int local_rank, unsigned int world_size,  unsigned int krnl_dest,
-            Stream<ap_uint<32> > &callreq, Stream<ap_uint<32> > &callack,
-            ap_uint<512> *mem,
-            Stream<stream_word> &m_krnl, Stream<stream_word> &s_krnl) : 
-            callreq(callreq), callack(callack), mem(mem), m_krnl(m_krnl), s_krnl(s_krnl) {
+            Stream<command_word> &callreq, Stream<command_word> &callack,
+            Stream<stream_word> &m_krnl, Stream<stream_word> &s_krnl,
+            int target_ctrl_stream) : 
+            callreq(callreq), callack(callack), m_krnl(m_krnl), s_krnl(s_krnl), target_ctrl_stream(target_ctrl_stream) {
     //create ZMQ context
     debug("CCLO BFM connecting to ZMQ on starting port " + std::to_string(zmqport) + " for rank " + std::to_string(local_rank));
     ctx = zmq_client_intf(zmqport, local_rank, world_size, krnl_dest);
@@ -50,18 +50,18 @@ void CCLO_BFM::push_cmd(){
     unsigned int scenario, tag, count, comm, root_src_dst, function, arithcfg_addr, compression_flags, stream_flags;
     uint64_t addr_0, addr_1,addr_2;
     while(!finalize){
-        scenario = callreq.Pop();
-        tag = callreq.Pop();
-        count = callreq.Pop();
-        comm = callreq.Pop();
-        root_src_dst = callreq.Pop();
-        function = callreq.Pop();
-        arithcfg_addr = callreq.Pop();
-        compression_flags = callreq.Pop();
-        stream_flags = callreq.Pop();
-        addr_0 = (uint64_t)callreq.Pop() | ((uint64_t)callreq.Pop())<<32;
-        addr_1 = (uint64_t)callreq.Pop() | ((uint64_t)callreq.Pop())<<32;
-        addr_2 = (uint64_t)callreq.Pop() | ((uint64_t)callreq.Pop())<<32;
+        scenario = callreq.Pop().data;
+        tag = callreq.Pop().data;
+        count = callreq.Pop().data;
+        comm = callreq.Pop().data;
+        root_src_dst = callreq.Pop().data;
+        function = callreq.Pop().data;
+        arithcfg_addr = callreq.Pop().data;
+        compression_flags = callreq.Pop().data;
+        stream_flags = callreq.Pop().data;
+        addr_0 = (uint64_t)callreq.Pop().data | ((uint64_t)callreq.Pop().data)<<32;
+        addr_1 = (uint64_t)callreq.Pop().data | ((uint64_t)callreq.Pop().data)<<32;
+        addr_2 = (uint64_t)callreq.Pop().data | ((uint64_t)callreq.Pop().data)<<32;
         SimBuffer *buf;
         std::vector<SimBuffer*> bufargs;
         if(count > 0 && addr_0 != 0){
@@ -83,7 +83,7 @@ void CCLO_BFM::push_cmd(){
         zmq_client_startcall(ctx, scenario, tag, count,
                             comm, root_src_dst, function,
                             arithcfg_addr, compression_flags, stream_flags,
-                            addr_0, addr_1, addr_2);
+                            addr_0, addr_1, addr_2, target_ctrl_stream);
     }
 }
 
@@ -98,7 +98,7 @@ void CCLO_BFM::pop_sts(){
             bufargs.at(i)->sync_from_device();
         }
         //signal completion to kernel
-        callack.Push(0);
+        callack.Push({.data=0, .last=1});
     }
 }
 

@@ -17,26 +17,27 @@
 
 #pragma once
 #include "zmq_client.h"
-#include "streamdefines.h"
+#include "accl_hls.h"
 #include "simbuffer.hpp"
 #include <vector>
 
 class CCLO_BFM{
     private:
         zmq_intf_context zmq_ctx;
-        Stream<ap_uint<32> > &callreq;
-        Stream<ap_uint<32> > &callack;
+        Stream<command_word> &callreq;
+        Stream<command_word> &callack;
         Stream<stream_word> &m_krnl;
         Stream<stream_word> &s_krnl;
         std::vector<SimBuffer*> buffers;
         bool finalize;
         std::vector<std::thread> threads;
         Stream<vector<SimBuffer*>> buf_args; 
+        int target_ctrl_stream;
 
     public:
         CCLO_BFM(unsigned int zmqport, unsigned int local_rank, unsigned int world_size,  unsigned int krnl_dest,
-                    Stream<ap_uint<32> > &callreq, Stream<ap_uint<32> > &callack,
-                    Stream<stream_word> &m_krnl, Stream<stream_word> &s_krnl);
+                    Stream<command_word> &callreq, Stream<command_word> &callack,
+                    Stream<stream_word> &m_krnl, Stream<stream_word> &s_krnl, target_ctrl_stream=2);
         void run();
         void stop();
         void register_buffer(SimBuffer* buf);

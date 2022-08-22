@@ -225,6 +225,16 @@ void controller(Stream<command_word> &cmdin, Stream<command_word> &cmdout,
     stsout.Push({.data=0, .last=1});
 }
 
+//wrap a host controller
+void controller_bypass(Stream<command_word> &cmdin, Stream<command_word> &cmdout,
+                Stream<command_word> &stsin, Stream<command_word> &stsout){
+    //gather arguments from input command queue
+    for(int i=0; i<15; i++){
+        cmdout.Push(cmdin.Pop());
+    }
+    stsout.Push(stsin.Pop());
+}
+
 void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsigned int world_size) {
     vector<char> devicemem;
 
@@ -399,6 +409,7 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsign
     //emulated hostcontrollers
     HLSLIB_FREERUNNING_FUNCTION(controller, callreq_fifos[0], callreq_arb[0], callack_arb[0], callack_fifos[0]);
     HLSLIB_FREERUNNING_FUNCTION(controller, callreq_fifos[1], callreq_arb[1], callack_arb[1], callack_fifos[1]);
+    HLSLIB_FREERUNNING_FUNCTION(controller_bypass, callreq_fifos[2], callreq_arb[2], callack_arb[2], callack_fifos[2]);
     HLSLIB_FREERUNNING_FUNCTION(client_arbiter, callreq_arb, callack_arb, sts_fifos[CMD_CALL], cmd_fifos[STS_CALL]);
 
     //ZMQ to host process

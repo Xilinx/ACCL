@@ -439,12 +439,12 @@ class ACCLData{
          * @param krnl2cclo Reference to data stream from user kernel to CCLO
          * @param cclo2krnl Reference to data stream from CCLO to user kernel
          */
-        ACCLData(STREAM<ap_axiu<512, 0, 0, 8> > &krnl2cclo, STREAM<ap_axiu<512, 0, 0, 8> > &cclo2krnl) : 
+        ACCLData(STREAM<stream_word> &krnl2cclo, STREAM<stream_word> &cclo2krnl) : 
                     cclo2krnl(cclo2krnl), krnl2cclo(krnl2cclo){}
 
     protected:
-        STREAM<ap_axiu<512, 0, 0, 8> > &krnl2cclo;
-        STREAM<ap_axiu<512, 0, 0, 8> > &cclo2krnl;
+        STREAM<stream_word> &krnl2cclo;
+        STREAM<stream_word> &cclo2krnl;
 
     public:
         /**
@@ -453,8 +453,8 @@ class ACCLData{
          * @param data Data word (64B)
          * @param dest Destination value (potentially used in routing)
          */
-        void push(ap_uint<512> data, ap_uint<8> dest){
-            ap_axiu<512, 0, 0, 8> tmp;
+        void push(ap_uint<DATA_WIDTH> data, ap_uint<DEST_WIDTH> dest){
+            stream_word tmp;
             tmp.data = data;
             tmp.dest = dest;
             tmp.keep = -1;
@@ -464,9 +464,9 @@ class ACCLData{
         /**
          * @brief Pull data from CCLO stream
          * 
-         * @return ap_axiu<512, 0, 0, 8> 
+         * @return stream_word
          */
-        ap_axiu<512, 0, 0, 8> pull(){
+        stream_word pull(){
             return cclo2krnl.read();   
         }
 };
