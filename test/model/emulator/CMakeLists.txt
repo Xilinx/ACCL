@@ -63,7 +63,7 @@ add_executable(cclo_emu ${EMU_SOURCES})
 get_target_property(JSON_INC_PATH jsoncpp_lib INTERFACE_INCLUDE_DIRECTORIES)
 target_include_directories(cclo_emu PUBLIC ${JSON_INC_PATH} ${MPI_CXX_INCLUDE_PATH} ${EMU_INCLUDES})
 target_link_libraries(cclo_emu PUBLIC MPI::MPI_CXX zmq zmqpp pthread jsoncpp_lib)
-target_compile_definitions(cclo_emu PUBLIC MB_FW_EMULATION REDUCE_HALF_PRECISION HLS_NO_XIL_FPO_LIB NUM_CTRL_STREAMS=2)
+target_compile_definitions(cclo_emu PUBLIC MB_FW_EMULATION REDUCE_HALF_PRECISION HLS_NO_XIL_FPO_LIB NUM_CTRL_STREAMS=3)
 target_compile_options(cclo_emu PRIVATE -Wno-attributes -fdiagnostics-color=always -g)
 
 install(TARGETS cclo_emu DESTINATION bin)
