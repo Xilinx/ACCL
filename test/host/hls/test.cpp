@@ -25,6 +25,8 @@
 #include <tclap/CmdLine.h>
 #include <vector>
 #include <accl_hls.h>
+#include <cclo_bfm.h>
+#include <xrt/xrt_device.h>
 
 using namespace ACCL;
 
@@ -70,7 +72,7 @@ void vadd_s2s(
     int wr_count = count;
     while(wr_count > 0){
         //read vector from CCLO
-        tmpword = data.pull();
+        tmpword = data.pull().data;
         //read from the 512b vector into 16 floats
         for(int i=0; (i<16) && (wr_count>0); i++){
             ap_uint<32> val = tmpword(i*32,(i+1)*32-1);
@@ -98,7 +100,7 @@ void run_test(options_t options) {
     }
 
     std::unique_ptr<ACCL::ACCL> accl;
-    accl = std::make_unique<ACCL::ACCL>(ranks, rank, options.start_port, device,
+    accl = std::make_unique<ACCL::ACCL>(ranks, rank, options.start_port,
                                             networkProtocol::TCP, 16,
                                             options.rxbuf_size);
 
@@ -110,15 +112,12 @@ void run_test(options_t options) {
     //run test here:
     //initialize a CCLO BFM and streams as needed
 
-    Stream<command_word> callreq, callack;
-    Stream<stream_word> m_krnl, s_krnl;
+    hlslib::Stream<command_word> callreq, callack;
+    hlslib::Stream<stream_word> m_krnl, s_krnl;
     CCLO_BFM cclo(options.start_port, rank, size, 0, callreq, callack, m_krnl, s_krnl);
     cclo.run();
-    //allocate and register buffers for the HLS function to use
-    auto src_buf = accl.create_buffer<float>(count, dataType::float32);
-    auto dst_buf = accl.create_buffer<float>(count, dataType::float32);
-    cclo.register_buffer(src_buf);
-    cclo.register_buffer(dst_buf);
+    //allocate and register float arrays for the HLS function to use
+
     //run the hls function
     //check HLS function outputs
     //clean up
@@ -172,8 +171,7 @@ int main(int argc, char *argv[]) {
     options_t options = parse_options(argc, argv);
 
     std::ostringstream stream;
-    stream << prepend_process() << "rank " << rank << " size " << size
-            << std::endl;
+    stream << "rank " << rank << " size " << size << std::endl;
     std::cout << stream.str();
 
     run_test(options);

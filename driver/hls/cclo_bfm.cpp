@@ -19,32 +19,33 @@
 #include "zmq_client.h"
 #include <stdexcept>
 #include "constants.hpp"
+#include <iostream>
 
 CCLO_BFM::CCLO_BFM(unsigned int zmqport, unsigned int local_rank, unsigned int world_size,  unsigned int krnl_dest,
-            Stream<command_word> &callreq, Stream<command_word> &callack,
-            Stream<stream_word> &m_krnl, Stream<stream_word> &s_krnl,
+            hlslib::Stream<command_word> &callreq, hlslib::Stream<command_word> &callack,
+            hlslib::Stream<stream_word> &m_krnl, hlslib::Stream<stream_word> &s_krnl,
             int target_ctrl_stream) : 
             callreq(callreq), callack(callack), m_krnl(m_krnl), s_krnl(s_krnl), target_ctrl_stream(target_ctrl_stream) {
     //create ZMQ context
-    debug("CCLO BFM connecting to ZMQ on starting port " + std::to_string(zmqport) + " for rank " + std::to_string(local_rank));
-    ctx = zmq_client_intf(zmqport, local_rank, world_size, krnl_dest);
-    debug("CCLO BFM connected");
+    std::cout << "CCLO BFM connecting to ZMQ on starting port " + std::to_string(zmqport) + " for rank " + std::to_string(local_rank) << std::endl;
+    zmq_ctx = zmq_client_intf(zmqport, local_rank, world_size, krnl_dest);
+    std::cout << "CCLO BFM connected" << std::endl;
 }
 
-//utility function, finds the registered SimBuffer
+//TODO: utility function, finds the registered SimBuffer
 //to which a given address belongs, and performs sanity checks
-unsigned int CCLO_BFM::find_registered_buffer(uint64_t adr){
-    for(int i=0; i<this->buffers.size(); i++){
-        SimBuffer *tmp = buffers.at(i);
-        uint64_t tmp_start_adr = (uint64_t)tmp->byte_array();
-        uint64_t tmp_end_adr = tmp_start_adr + tmp->size();
-        //check the start address is within the range of tmp
-        if(adr < tmp_start_adr || adr >= tmp_end_adr) continue;
-        //return this buffer's index
-        return i;
-    }
-    throw std::invalid_argument("No registered buffer found for this request");
-}
+// unsigned int CCLO_BFM::find_registered_buffer(uint64_t adr){
+//     for(int i=0; i<this->buffers.size(); i++){
+//         SimBuffer *tmp = buffers.at(i);
+//         uint64_t tmp_start_adr = (uint64_t)tmp->byte_array();
+//         uint64_t tmp_end_adr = tmp_start_adr + tmp->size();
+//         //check the start address is within the range of tmp
+//         if(adr < tmp_start_adr || adr >= tmp_end_adr) continue;
+//         //return this buffer's index
+//         return i;
+//     }
+//     throw std::invalid_argument("No registered buffer found for this request");
+// }
 
 void CCLO_BFM::push_cmd(){
     unsigned int scenario, tag, count, comm, root_src_dst, function, arithcfg_addr, compression_flags, stream_flags;
@@ -62,25 +63,26 @@ void CCLO_BFM::push_cmd(){
         addr_0 = (uint64_t)callreq.Pop().data | ((uint64_t)callreq.Pop().data)<<32;
         addr_1 = (uint64_t)callreq.Pop().data | ((uint64_t)callreq.Pop().data)<<32;
         addr_2 = (uint64_t)callreq.Pop().data | ((uint64_t)callreq.Pop().data)<<32;
-        SimBuffer *buf;
-        std::vector<SimBuffer*> bufargs;
-        if(count > 0 && addr_0 != 0){
-            buf = this->buffers(find_registered_buffer(addr_0));
-            buf->sync_to_device();
-            bufargs.push_back(buf);
-        }
-        if(count > 0 && addr_1 != 0){
-            buf = this->buffers(find_registered_buffer(addr_1));
-            buf->sync_to_device();
-            bufargs.push_back(buf);
-        }
-        if(count > 0 && addr_2 != 0){
-            buf = this->buffers(find_registered_buffer(addr_2));
-            buf->sync_to_device();
-            bufargs.push_back(buf);
-        }
-        this->buf_args.Push(bufargs);
-        zmq_client_startcall(ctx, scenario, tag, count,
+        //TODO: use addresses to look up registered buffers and sync them
+        // SimBuffer *buf;
+        // std::vector<SimBuffer*> bufargs;
+        // if(count > 0 && addr_0 != 0){
+        //     buf = this->buffers(find_registered_buffer(addr_0));
+        //     buf->sync_to_device();
+        //     bufargs.push_back(buf);
+        // }
+        // if(count > 0 && addr_1 != 0){
+        //     buf = this->buffers(find_registered_buffer(addr_1));
+        //     buf->sync_to_device();
+        //     bufargs.push_back(buf);
+        // }
+        // if(count > 0 && addr_2 != 0){
+        //     buf = this->buffers(find_registered_buffer(addr_2));
+        //     buf->sync_to_device();
+        //     bufargs.push_back(buf);
+        // }
+        // this->buf_args.Push(bufargs);
+        zmq_client_startcall(&zmq_ctx, scenario, tag, count,
                             comm, root_src_dst, function,
                             arithcfg_addr, compression_flags, stream_flags,
                             addr_0, addr_1, addr_2, target_ctrl_stream);
@@ -88,15 +90,15 @@ void CCLO_BFM::push_cmd(){
 }
 
 void CCLO_BFM::pop_sts(){
-    std::vector<SimBuffer*> bufargs;
+    //std::vector<SimBuffer*> bufargs;
     while(!finalize){
         //wait for simulator/emulator to finish executing
-        zmq_client_retcall(ctx);
-        //get buffers and sync them back
-        bufargs = this->buf_args.Pop();
-        for(int i=0; i<bufargs.size(); i++){
-            bufargs.at(i)->sync_from_device();
-        }
+        zmq_client_retcall(&zmq_ctx);
+        //TODO: get buffers and sync them back
+        // bufargs = this->buf_args.Pop();
+        // for(int i=0; i<bufargs.size(); i++){
+        //     bufargs.at(i)->sync_from_device();
+        // }
         //signal completion to kernel
         callack.Push({.data=0, .last=1});
     }
@@ -104,26 +106,26 @@ void CCLO_BFM::pop_sts(){
 
 void CCLO_BFM::push_krnl(){
     while(!finalize){
-        ap_axiu<512,0,0,8> tmp;
-        vector<uint8_t> vec;
+        stream_word tmp;
+        std::vector<uint8_t> vec;
         do{
             tmp = s_krnl.Pop();
-            for(int i=0; i<512/8; i++){
+            for(int i=0; i<DATA_WIDTH/8; i++){
                 vec.push_back(tmp.data((i+1)*8-1,i*8));
             }
         } while(tmp.last == 0);
-        zmq_client_strmwrite(ctx, vec);
+        zmq_client_strmwrite(&zmq_ctx, vec);
     }
 }
 
 void CCLO_BFM::pop_krnl(){
     while(!finalize){
-        ap_axiu<512,0,0,8> tmp;
-        vector<uint8_t> vec;
-        zmq_client_strmread(ctx, vec);
+        stream_word tmp;
+        std::vector<uint8_t> vec;
+        vec = zmq_client_strmread(&zmq_ctx);
         int idx;
         do{
-            for(i=0; i<512/8, idx<vec.size(); i++){
+            for(int i=0; i<DATA_WIDTH/8, idx<vec.size(); i++){
                 tmp.data((i+1)*8-1,i*8) = vec.at(idx++);
             }
             tmp.last = (idx == vec.size());
@@ -136,15 +138,15 @@ void CCLO_BFM::run(){
     //start threads
     finalize = false;
     //command interface threads
-    std::thread t1(push_cmd);
-    threads.push_back(t1);
-    std::thread t2(pop_sts);
-    threads.push_back(t2);
+    std::thread t1(&CCLO_BFM::push_cmd, this);
+    threads.push_back(move(t1));
+    std::thread t2(&CCLO_BFM::pop_sts, this);
+    threads.push_back(move(t2));
     //kernel interface threads
-    std::thread t3(push_krnl);
-    threads.push_back(t3);
-    std::thread t4(pop_krnl);
-    threads.push_back(t4);
+    std::thread t3(&CCLO_BFM::push_krnl, this);
+    threads.push_back(move(t3));
+    std::thread t4(&CCLO_BFM::pop_krnl, this);
+    threads.push_back(move(t4));
 }
 
 void CCLO_BFM::stop(){
@@ -154,6 +156,7 @@ void CCLO_BFM::stop(){
     }
 }
 
-void CCLO_BFM::register_buffer(SimBuffer* buf){
-    this->buffers.push_back(buf);
-}
+//TODO: a register_buffer function that works with any SimBuffer
+// void CCLO_BFM::register_buffer(SimBuffer* buf){
+//     this->buffers.push_back(buf);
+// }
