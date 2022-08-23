@@ -24,29 +24,31 @@
 class CCLO_BFM{
     private:
         zmq_intf_context zmq_ctx;
-        Stream<command_word> &callreq;
-        Stream<command_word> &callack;
-        Stream<stream_word> &m_krnl;
-        Stream<stream_word> &s_krnl;
-        std::vector<SimBuffer*> buffers;
+        hlslib::Stream<command_word> &callreq;
+        hlslib::Stream<command_word> &callack;
+        hlslib::Stream<stream_word> &m_krnl;
+        hlslib::Stream<stream_word> &s_krnl;
+
         bool finalize;
         std::vector<std::thread> threads;
-        Stream<vector<SimBuffer*>> buf_args; 
         int target_ctrl_stream;
+
+        //hlslib::Stream<std::vector<ACCL::SimBuffer *>> buf_args; 
+        //std::vector<ACCL::SimBuffer *> buffers;
 
     public:
         CCLO_BFM(unsigned int zmqport, unsigned int local_rank, unsigned int world_size,  unsigned int krnl_dest,
-                    Stream<command_word> &callreq, Stream<command_word> &callack,
-                    Stream<stream_word> &m_krnl, Stream<stream_word> &s_krnl, target_ctrl_stream=2);
+                    hlslib::Stream<command_word> &callreq, hlslib::Stream<command_word> &callack,
+                    hlslib::Stream<stream_word> &m_krnl, hlslib::Stream<stream_word> &s_krnl, int target_ctrl_stream=2);
         void run();
         void stop();
-        void register_buffer(SimBuffer* buf);
+        //void register_buffer(ACCL::SimBuffer *buf)
 
     private:
         void push_cmd();
         void pop_sts();
         void pop_krnl();
         void push_krnl();
-        unsigned int find_registered_buffer(uint64_t adr);
+        //unsigned int find_registered_buffer(uint64_t adr);
 
 };

@@ -16,7 +16,7 @@
 # *******************************************************************************/
 
 cmake_minimum_required(VERSION 3.9)
-project(xrt_test)
+project(hls_test)
 
 set(CMAKE_CXX_STANDARD 17)
 
@@ -32,6 +32,11 @@ if (NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 endif()
 
+set(ACCL_REPO_ROOT ${CMAKE_CURRENT_LIST_DIR}/../../../)
+set(HLSLIB_INCLUDE ${ACCL_REPO_ROOT}/hlslib/include/hlslib/xilinx/)
+set(ACCL_HLSDRV_DIR ${ACCL_REPO_ROOT}/driver/hls/)
+set(EMU_INCLUDES ${HLSLIB_INCLUDE} $ENV{XILINX_HLS}/include/ ${ACCL_HLSDRV_DIR})
+
 set(CMAKE_BUILD_TYPE Debug)
 
 set(ACCL_DEBUG 1)
@@ -39,6 +44,7 @@ set(ACCL_DEBUG 1)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../driver/xrt "CMakeFiles/accl")
 
 find_package(MPI REQUIRED)
-add_executable(test test.cpp)
-target_include_directories(test PUBLIC ${MPI_CXX_INCLUDE_PATH} ${ACCL_INCLUDE_PATH})
-target_link_libraries(test PUBLIC MPI::MPI_CXX accl)
+add_executable(test test.cpp ${ACCL_HLSDRV_DIR}/cclo_bfm.cpp)
+target_include_directories(test PUBLIC ${MPI_CXX_INCLUDE_PATH} ${ACCL_INCLUDE_PATH} ${EMU_INCLUDES})
+target_link_libraries(test PUBLIC MPI::MPI_CXX accl zmq zmqpp pthread)
+target_compile_options(test PRIVATE -w -fdiagnostics-color=always -g)
