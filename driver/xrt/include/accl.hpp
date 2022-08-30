@@ -728,6 +728,22 @@ public:
   std::string dump_communicator();
 
   /**
+   * Return CCLO address of communicator.
+   *
+   * @param ACCL::communicatorId Numerical ID of the target communicator.
+   * @return addr_t Address of the communicator in CCLO memory.
+   */
+  addr_t get_communicator_adr(communicatorId comm_id=GLOBAL_COMM);
+
+  /**
+   * Return CCLO address of arithmetic config.
+   *
+   * @param unsigned int Numerical ID of the target arithmetic configuration.
+   * @return addr_t Address of the arithmetic configuration in CCLO memory.
+   */
+  addr_t get_arithmetic_config_addr(std::pair<dataType, dataType> id);
+
+  /**
    * Retrieve the devicemem memory bank.
    *
    * @return int The devicemem memory bank

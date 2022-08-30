@@ -457,6 +457,7 @@ class ACCLData{
             stream_word tmp;
             tmp.data = data;
             tmp.dest = dest;
+            tmp.last = 1;
             tmp.keep = -1;
             krnl2cclo.write(tmp);
         }

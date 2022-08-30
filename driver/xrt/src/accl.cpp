@@ -816,6 +816,10 @@ void ACCL::configure_arithmetic() {
   }
 }
 
+addr_t ACCL::get_arithmetic_config_addr(std::pair<dataType, dataType> id) {
+  return arith_config.at(id).addr();
+}
+
 void ACCL::setup_rx_buffers(size_t nbufs, addr_t bufsize,
                             const std::vector<int> &devicemem) {
   addr_t address = rx_buffers_adr;
@@ -1110,6 +1114,10 @@ std::string ACCL::dump_communicator() {
   }
 
   return stream.str();
+}
+
+addr_t ACCL::get_communicator_adr(communicatorId comm_id){
+  return communicators[comm_id].communicators_addr();
 }
 
 } // namespace ACCL

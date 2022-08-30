@@ -27,8 +27,11 @@
 #include <accl_hls.h>
 #include <cclo_bfm.h>
 #include <xrt/xrt_device.h>
+#include <iostream>
 
 using namespace ACCL;
+
+int rank, size;
 
 //hls-synthesizable function performing
 //an elementwise increment on fp32 data in src 
@@ -82,12 +85,11 @@ void vadd_s2s(
     }
 }
 
-int rank, size;
-
 struct options_t {
     int start_port;
     unsigned int rxbuf_size;
     unsigned int count;
+    unsigned int dest;
     unsigned int nruns;
     unsigned int device_index;
 };
@@ -105,21 +107,37 @@ void run_test(options_t options) {
                                             options.rxbuf_size);
 
     accl->set_timeout(1e8);
+    std::cout << "Host-side CCLO initialization finished" << std::endl;
 
     // barrier here to make sure all the devices are configured before testing
     MPI_Barrier(MPI_COMM_WORLD);
 
     //run test here:
     //initialize a CCLO BFM and streams as needed
-
     hlslib::Stream<command_word> callreq, callack;
-    hlslib::Stream<stream_word> m_krnl, s_krnl;
-    CCLO_BFM cclo(options.start_port, rank, size, 0, callreq, callack, m_krnl, s_krnl);
+    hlslib::Stream<stream_word> data_cclo2krnl, data_krnl2cclo;
+    CCLO_BFM cclo(options.start_port, rank, size, options.dest, callreq, callack, data_cclo2krnl, data_krnl2cclo);
     cclo.run();
-    //allocate and register float arrays for the HLS function to use
+    std::cout << "CCLO BFM started" << std::endl;
+    MPI_Barrier(MPI_COMM_WORLD);
 
-    //run the hls function
+    //allocate and float arrays for the HLS function to use
+    float src[options.count], dst[options.count];
+    for(int i=0; i<options.count; i++){
+        src[i] = 0;
+    }
+    //run the hls function, using the global communicator
+    vadd_s2s(   src, dst, options.count, 
+                accl->get_communicator_adr(), 
+                accl->get_arithmetic_config_addr({dataType::float32, dataType::float32}), 
+                callreq, callack, 
+                data_krnl2cclo, data_cclo2krnl);
     //check HLS function outputs
+    unsigned int err_count = 0;
+    for(int i=0; i<options.count; i++){
+        err_count += (dst[i] != size);
+    }
+    std::cout << "Test finished with " << err_count << " errors" << std::endl;
     //clean up
     cclo.stop();
 }
@@ -138,6 +156,9 @@ options_t parse_options(int argc, char *argv[]) {
     TCLAP::ValueArg<uint16_t> count_arg("c", "count", "How many bytes per buffer",
                                         false, 16, "positive integer");
     cmd.add(count_arg);
+    TCLAP::ValueArg<uint16_t> dest_arg("d", "dest", "Destination ID on stream",
+                                        false, 1, "positive integer");
+    cmd.add(dest_arg);
     TCLAP::ValueArg<uint16_t> bufsize_arg("b", "rxbuf-size",
                                             "How many KB per RX buffer", false, 1,
                                             "positive integer");
@@ -157,6 +178,7 @@ options_t parse_options(int argc, char *argv[]) {
     options_t opts;
     opts.start_port = start_port_arg.getValue();
     opts.count = count_arg.getValue();
+    opts.dest = dest_arg.getValue();
     opts.rxbuf_size = bufsize_arg.getValue() * 1024; // convert to bytes
     opts.nruns = nruns_arg.getValue();
     return opts;
