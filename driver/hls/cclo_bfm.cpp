@@ -23,12 +23,12 @@
 
 CCLO_BFM::CCLO_BFM(unsigned int zmqport, unsigned int local_rank, unsigned int world_size,  unsigned int krnl_dest,
             hlslib::Stream<command_word> &callreq, hlslib::Stream<command_word> &callack,
-            hlslib::Stream<stream_word> &m_krnl, hlslib::Stream<stream_word> &s_krnl,
+            hlslib::Stream<stream_word> &data_cclo2krnl, hlslib::Stream<stream_word> &data_krnl2cclo,
             int target_ctrl_stream) : 
-            callreq(callreq), callack(callack), m_krnl(m_krnl), s_krnl(s_krnl), target_ctrl_stream(target_ctrl_stream) {
+            callreq(callreq), callack(callack), data_cclo2krnl(data_cclo2krnl), data_krnl2cclo(data_krnl2cclo), target_ctrl_stream(target_ctrl_stream) {
     //create ZMQ context
     std::cout << "CCLO BFM connecting to ZMQ on starting port " + std::to_string(zmqport) + " for rank " + std::to_string(local_rank) << std::endl;
-    zmq_ctx = zmq_client_intf(zmqport, local_rank, world_size, krnl_dest);
+    zmq_ctx = zmq_client_intf(zmqport, local_rank, krnl_dest, world_size);
     std::cout << "CCLO BFM connected" << std::endl;
 }
 
@@ -52,11 +52,11 @@ void CCLO_BFM::push_cmd(){
     uint64_t addr_0, addr_1,addr_2;
     while(!finalize){
         scenario = callreq.Pop().data;
-        tag = callreq.Pop().data;
         count = callreq.Pop().data;
         comm = callreq.Pop().data;
         root_src_dst = callreq.Pop().data;
         function = callreq.Pop().data;
+        tag = callreq.Pop().data;
         arithcfg_addr = callreq.Pop().data;
         compression_flags = callreq.Pop().data;
         stream_flags = callreq.Pop().data;
@@ -104,12 +104,12 @@ void CCLO_BFM::pop_sts(){
     }
 }
 
-void CCLO_BFM::push_krnl(){
+void CCLO_BFM::push_data(){
     while(!finalize){
         stream_word tmp;
         std::vector<uint8_t> vec;
         do{
-            tmp = s_krnl.Pop();
+            tmp = data_krnl2cclo.Pop();
             for(int i=0; i<DATA_WIDTH/8; i++){
                 vec.push_back(tmp.data((i+1)*8-1,i*8));
             }
@@ -118,7 +118,7 @@ void CCLO_BFM::push_krnl(){
     }
 }
 
-void CCLO_BFM::pop_krnl(){
+void CCLO_BFM::pop_data(){
     while(!finalize){
         stream_word tmp;
         std::vector<uint8_t> vec;
@@ -129,7 +129,7 @@ void CCLO_BFM::pop_krnl(){
                 tmp.data((i+1)*8-1,i*8) = vec.at(idx++);
             }
             tmp.last = (idx == vec.size());
-            m_krnl.Push(tmp);
+            data_cclo2krnl.Push(tmp);
         } while(tmp.last == 0);
     }
 }
@@ -143,9 +143,9 @@ void CCLO_BFM::run(){
     std::thread t2(&CCLO_BFM::pop_sts, this);
     threads.push_back(move(t2));
     //kernel interface threads
-    std::thread t3(&CCLO_BFM::push_krnl, this);
+    std::thread t3(&CCLO_BFM::push_data, this);
     threads.push_back(move(t3));
-    std::thread t4(&CCLO_BFM::pop_krnl, this);
+    std::thread t4(&CCLO_BFM::pop_data, this);
     threads.push_back(move(t4));
 }
 

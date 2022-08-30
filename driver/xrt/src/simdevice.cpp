@@ -24,7 +24,7 @@ namespace ACCL {
 SimDevice::SimDevice(unsigned int zmqport, unsigned int local_rank) {
   debug("SimDevice connecting to ZMQ on port " + std::to_string(zmqport) +
         " for rank " + std::to_string(local_rank));
-  zmq_ctx = zmq_client_cmd_intf(zmqport, local_rank);
+  zmq_ctx = zmq_client_intf(zmqport, local_rank);
   debug("SimDevice connected");
 };
 

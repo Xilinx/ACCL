@@ -20,32 +20,16 @@
 #include <vector>
 
 /**
- * @brief Create a command-only client interface to the CCLO simulator/emulator, via ZMQ
+ * @brief Create a command and optionally data interface to the CCLO simulator/emulator, via ZMQ
  *
  * @param starting_port The first in a sequence of ports that provide access to the simulator/emulator
  * @param local_rank The local rank of this process. This will determine actual ports used by ZMQ
- * @return zmq_intf_context A set of ZMQ sockets through which we can talk to the simulator/emulator
- */
-zmq_intf_context zmq_client_cmd_intf(unsigned int starting_port, unsigned int local_rank);
-
-/**
- * @brief Create a data-only client interface to the CCLO simulator/emulator, via ZMQ
- *
- * @param starting_port The first in a sequence of ports that provide access to the simulator/emulator
- * @param local_rank The local rank of this process. This will determine actual ports used by ZMQ
- * @param world_size The total number of ranks
  * @param krnl_dest A destination field to attach to data, for routing purposes
+ * @param world_size The total number of ranks
  * @return zmq_intf_context A set of ZMQ sockets through which we can talk to the simulator/emulator
  */
-zmq_intf_context zmq_client_krnl_intf(  unsigned int starting_port, unsigned int local_rank,
-                                        unsigned int world_size, unsigned int krnl_dest);
-
-/**
- * @brief A combination of zmq_client_cmd_intf and zmq_client_krnl_intf
- *
- */
-zmq_intf_context zmq_client_intf(   unsigned int starting_port, unsigned int local_rank,
-                                    unsigned int world_size, unsigned int krnl_dest);
+zmq_intf_context zmq_client_intf(  unsigned int starting_port, unsigned int local_rank,
+                                        unsigned int krnl_dest=0, unsigned int world_size=0);
 
 /**
  * @brief Initiate an ACCL call via the ZMQ connection to the emulator/simulator. Parameters correspond to CCLO::Options

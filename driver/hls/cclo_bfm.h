@@ -26,8 +26,8 @@ class CCLO_BFM{
         zmq_intf_context zmq_ctx;
         hlslib::Stream<command_word> &callreq;
         hlslib::Stream<command_word> &callack;
-        hlslib::Stream<stream_word> &m_krnl;
-        hlslib::Stream<stream_word> &s_krnl;
+        hlslib::Stream<stream_word> &data_cclo2krnl;
+        hlslib::Stream<stream_word> &data_krnl2cclo;
 
         bool finalize;
         std::vector<std::thread> threads;
@@ -39,7 +39,7 @@ class CCLO_BFM{
     public:
         CCLO_BFM(unsigned int zmqport, unsigned int local_rank, unsigned int world_size,  unsigned int krnl_dest,
                     hlslib::Stream<command_word> &callreq, hlslib::Stream<command_word> &callack,
-                    hlslib::Stream<stream_word> &m_krnl, hlslib::Stream<stream_word> &s_krnl, int target_ctrl_stream=2);
+                    hlslib::Stream<stream_word> &data_cclo2krnl, hlslib::Stream<stream_word> &data_krnl2cclo, int target_ctrl_stream=2);
         void run();
         void stop();
         //void register_buffer(ACCL::SimBuffer *buf)
@@ -47,8 +47,8 @@ class CCLO_BFM{
     private:
         void push_cmd();
         void pop_sts();
-        void pop_krnl();
-        void push_krnl();
+        void pop_data();
+        void push_data();
         //unsigned int find_registered_buffer(uint64_t adr);
 
 };
