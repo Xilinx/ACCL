@@ -231,7 +231,9 @@ void controller_bypass(Stream<command_word> &cmdin, Stream<command_word> &cmdout
     for(int i=0; i<15; i++){
         cmdout.Push(cmdin.Pop());
     }
+    logger << log_level::verbose << "Controller bypass: pushed arguments" << endl;
     stsout.Push(stsin.Pop());
+    logger << log_level::verbose << "Controller bypass: pushed status" << endl;
 }
 
 void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsigned int world_size) {

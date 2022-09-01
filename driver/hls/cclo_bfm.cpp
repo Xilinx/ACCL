@@ -20,8 +20,12 @@
 #include <stdexcept>
 #include "constants.hpp"
 #include <iostream>
+#include <mutex>
 
-CCLO_BFM::CCLO_BFM(unsigned int zmqport, unsigned int local_rank, unsigned int world_size,  unsigned int krnl_dest,
+std::mutex call_ctr_mutex;
+unsigned int call_ctr;
+
+CCLO_BFM::CCLO_BFM(unsigned int zmqport, unsigned int local_rank, unsigned int world_size,  const std::vector<unsigned int>& krnl_dest,
             hlslib::Stream<command_word> &callreq, hlslib::Stream<command_word> &callack,
             hlslib::Stream<stream_word> &data_cclo2krnl, hlslib::Stream<stream_word> &data_krnl2cclo,
             int target_ctrl_stream) : 
@@ -51,6 +55,7 @@ void CCLO_BFM::push_cmd(){
     unsigned int scenario, tag, count, comm, root_src_dst, function, arithcfg_addr, compression_flags, stream_flags;
     uint64_t addr_0, addr_1,addr_2;
     while(!finalize){
+        if(callreq.IsEmpty()) continue;
         scenario = callreq.Pop().data;
         count = callreq.Pop().data;
         comm = callreq.Pop().data;
@@ -86,14 +91,18 @@ void CCLO_BFM::push_cmd(){
                             comm, root_src_dst, function,
                             arithcfg_addr, compression_flags, stream_flags,
                             addr_0, addr_1, addr_2, target_ctrl_stream);
+        call_ctr_mutex.lock();
+        call_ctr++;
+        call_ctr_mutex.unlock();
     }
 }
 
 void CCLO_BFM::pop_sts(){
     //std::vector<SimBuffer*> bufargs;
     while(!finalize){
+        if(call_ctr == 0) continue;
         //wait for simulator/emulator to finish executing
-        zmq_client_retcall(&zmq_ctx);
+        zmq_client_retcall(&zmq_ctx, target_ctrl_stream);
         //TODO: get buffers and sync them back
         // bufargs = this->buf_args.Pop();
         // for(int i=0; i<bufargs.size(); i++){
@@ -101,6 +110,9 @@ void CCLO_BFM::pop_sts(){
         // }
         //signal completion to kernel
         callack.Push({.data=0, .last=1});
+        call_ctr_mutex.lock();
+        call_ctr--;
+        call_ctr_mutex.unlock();
     }
 }
 
@@ -108,6 +120,7 @@ void CCLO_BFM::push_data(){
     while(!finalize){
         stream_word tmp;
         std::vector<uint8_t> vec;
+        if(data_krnl2cclo.IsEmpty()) continue;
         do{
             tmp = data_krnl2cclo.Pop();
             for(int i=0; i<DATA_WIDTH/8; i++){
@@ -122,7 +135,8 @@ void CCLO_BFM::pop_data(){
     while(!finalize){
         stream_word tmp;
         std::vector<uint8_t> vec;
-        vec = zmq_client_strmread(&zmq_ctx);
+        vec = zmq_client_strmread(&zmq_ctx, true);
+        if(vec.size() == 0) continue;
         int idx;
         do{
             for(int i=0; i<DATA_WIDTH/8, idx<vec.size(); i++){
@@ -137,6 +151,7 @@ void CCLO_BFM::pop_data(){
 void CCLO_BFM::run(){
     //start threads
     finalize = false;
+    call_ctr = 0;
     //command interface threads
     std::thread t1(&CCLO_BFM::push_cmd, this);
     threads.push_back(move(t1));
@@ -154,6 +169,7 @@ void CCLO_BFM::stop(){
     for(int i=0; i<threads.size(); i++){
         threads.at(i).join();
     }
+    std::cout << "CCLO BFM stopped" << std::endl;
 }
 
 //TODO: a register_buffer function that works with any SimBuffer

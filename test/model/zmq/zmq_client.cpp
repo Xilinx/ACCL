@@ -18,10 +18,13 @@
 #include "zmq_client.h"
 #include <iostream>
 #include <string>
+#include <mutex>
 
 using namespace std;
 
-zmq_intf_context zmq_client_intf(unsigned int starting_port, unsigned int local_rank, unsigned int krnl_dest, unsigned int world_size){
+mutex cmd_socket_mutex;
+
+zmq_intf_context zmq_client_intf(unsigned int starting_port, unsigned int local_rank, const vector<unsigned int>& krnl_dest, unsigned int world_size){
     zmq_intf_context ctx;
     const string endpoint_base = "tcp://127.0.0.1:";
 
@@ -38,7 +41,7 @@ zmq_intf_context zmq_client_intf(unsigned int starting_port, unsigned int local_
 
     cout << "ZMQ Client Command Context established for rank " << local_rank << endl;
 
-    if(krnl_dest > 0){
+    if(krnl_dest.size() > 0){
         ctx.krnl_tx_socket = new zmqpp::socket(ctx.context, zmqpp::socket_type::sub);
         ctx.krnl_rx_socket = new zmqpp::socket(ctx.context, zmqpp::socket_type::pub);
 
@@ -47,11 +50,13 @@ zmq_intf_context zmq_client_intf(unsigned int starting_port, unsigned int local_
         cout << "Rank " << local_rank << " connecting to " << krnl_endpoint << " (KRNL)" << endl;
         ctx.krnl_tx_socket->connect(krnl_endpoint);
         this_thread::sleep_for(chrono::milliseconds(1000));
-        //subscribe to dst == local_rank
-        string krnl_subscribe = (krnl_dest > 0) ? to_string(krnl_dest) : "";
-        cout << "Rank " << local_rank << " subscribing to " << ((krnl_dest > 0) ? krnl_subscribe : "all") << " (KRNL)" << endl;
-        ctx.krnl_tx_socket->subscribe(krnl_subscribe);
-        this_thread::sleep_for(chrono::milliseconds(1000));
+        //subscribe to destinations
+        for(int i; i<(int)krnl_dest.size(); i++){
+            string krnl_subscribe = to_string(krnl_dest.at(i));
+            cout << "Rank " << local_rank << " subscribing to " << krnl_subscribe << " (KRNL)" << endl;
+            ctx.krnl_tx_socket->subscribe(krnl_subscribe);
+            this_thread::sleep_for(chrono::milliseconds(1000));
+        }
         //connect to rx socket
         krnl_endpoint = endpoint_base + to_string(starting_port+3*world_size+local_rank);
         cout << "Rank " << local_rank << " binding to " << krnl_endpoint << " (KRNL)" << endl;
@@ -88,10 +93,12 @@ void zmq_client_startcall(zmq_intf_context *ctx, unsigned int scenario, unsigned
     //send the message out to the CCLO simulator/emulator
     zmqpp::message msg;
     to_message(request_json, msg);
+    cmd_socket_mutex.lock();
     ctx->cmd_socket->send(msg);
     //receive confirmation
     zmqpp::message reply;
     ctx->cmd_socket->receive(reply);
+    cmd_socket_mutex.unlock();
     Json::Value status = to_json(reply);
     if (status["status"].asInt() < 0) {
         throw std::runtime_error("ZMQ startcall error (" + std::to_string(status["status"].asInt()) + ")");
@@ -103,13 +110,15 @@ void zmq_client_retcall(zmq_intf_context *ctx, unsigned int ctrl_id){
         //send an update request out to the CCLO simulator/emulator
         Json::Value request_json;
         request_json["type"] = 6;
-        request_json["stream_id"] = ctrl_id;
+        request_json["ctrl_id"] = ctrl_id;
         zmqpp::message msg;
         to_message(request_json, msg);
+        cmd_socket_mutex.lock();
         ctx->cmd_socket->send(msg);
         //check the reply
         zmqpp::message reply;
         ctx->cmd_socket->receive(reply);
+        cmd_socket_mutex.unlock();
         Json::Value status = to_json(reply);
         if (status["status"].asInt() < 0) {
             throw std::runtime_error("ZMQ retcall error (" + std::to_string(status["status"].asInt()) + ")");
@@ -217,10 +226,19 @@ void zmq_client_memalloc(zmq_intf_context *ctx, uint64_t adr, unsigned int size)
     }
 }
 
-std::vector<uint8_t> zmq_client_strmread(zmq_intf_context *ctx){
+std::vector<uint8_t> zmq_client_strmread(zmq_intf_context *ctx, bool dont_block){
     zmqpp::message msg;
-    ctx->krnl_tx_socket->receive(msg);
-    Json::Value msg_json = to_json(msg);
+    Json::Reader reader;
+    Json::Value msg_json;
+    std::string msg_text, dst_text;
+
+    if(!ctx->krnl_tx_socket->receive(msg, dont_block)) return std::vector<uint8_t>();
+
+    // decompose the message
+    msg >> dst_text;
+    msg >> msg_text;
+    reader.parse(msg_text, msg_json);
+
     std::vector<uint8_t> ret;
     size_t array_size = msg_json["data"].size();
     for (size_t i = 0; i < array_size; ++i) {
@@ -229,12 +247,16 @@ std::vector<uint8_t> zmq_client_strmread(zmq_intf_context *ctx){
     return ret;
 }
 
-void zmq_client_strmwrite(zmq_intf_context *ctx, std::vector<uint8_t> val){
-    Json::Value msg_json;
+void zmq_client_strmwrite(zmq_intf_context *ctx, std::vector<uint8_t> val, unsigned int dest){
+    Json::Value data_packet;
     zmqpp::message msg;
+    Json::StreamWriterBuilder builder;
     for (int i = 0; i < static_cast<int>(val.size()); ++i) {
-        msg_json["data"][i] = val.at(i);
+        data_packet["data"][i] = val.at(i);
     }
-    to_message(msg_json, msg);
+    //first part of the message is the destination, used to filter at receiver
+    msg << to_string(dest);
+    //package the data
+    msg << Json::writeString(builder, data_packet);
     ctx->krnl_rx_socket->send(msg);
 }

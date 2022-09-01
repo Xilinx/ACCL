@@ -116,7 +116,8 @@ void run_test(options_t options) {
     //initialize a CCLO BFM and streams as needed
     hlslib::Stream<command_word> callreq, callack;
     hlslib::Stream<stream_word> data_cclo2krnl, data_krnl2cclo;
-    CCLO_BFM cclo(options.start_port, rank, size, options.dest, callreq, callack, data_cclo2krnl, data_krnl2cclo);
+    std::vector<unsigned int> dest = {0};
+    CCLO_BFM cclo(options.start_port, rank, size, dest, callreq, callack, data_cclo2krnl, data_krnl2cclo);
     cclo.run();
     std::cout << "CCLO BFM started" << std::endl;
     MPI_Barrier(MPI_COMM_WORLD);
@@ -140,6 +141,7 @@ void run_test(options_t options) {
     std::cout << "Test finished with " << err_count << " errors" << std::endl;
     //clean up
     cclo.stop();
+    accl->deinit();
 }
 
 
@@ -153,13 +155,10 @@ options_t parse_options(int argc, char *argv[]) {
         "s", "start-port", "Start of range of ports usable for sim", false, 5500,
         "positive integer");
     cmd.add(start_port_arg);
-    TCLAP::ValueArg<uint16_t> count_arg("c", "count", "How many bytes per buffer",
+    TCLAP::ValueArg<uint32_t> count_arg("c", "count", "How many bytes per buffer",
                                         false, 16, "positive integer");
     cmd.add(count_arg);
-    TCLAP::ValueArg<uint16_t> dest_arg("d", "dest", "Destination ID on stream",
-                                        false, 1, "positive integer");
-    cmd.add(dest_arg);
-    TCLAP::ValueArg<uint16_t> bufsize_arg("b", "rxbuf-size",
+    TCLAP::ValueArg<uint32_t> bufsize_arg("b", "rxbuf-size",
                                             "How many KB per RX buffer", false, 1,
                                             "positive integer");
     cmd.add(bufsize_arg);
@@ -178,7 +177,6 @@ options_t parse_options(int argc, char *argv[]) {
     options_t opts;
     opts.start_port = start_port_arg.getValue();
     opts.count = count_arg.getValue();
-    opts.dest = dest_arg.getValue();
     opts.rxbuf_size = bufsize_arg.getValue() * 1024; // convert to bytes
     opts.nruns = nruns_arg.getValue();
     return opts;
