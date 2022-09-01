@@ -84,10 +84,9 @@ zmq_intf_context zmq_server_intf(unsigned int starting_port, unsigned int local_
     *logger << log_level::info << "Rank " << local_rank << " connecting to " << krnl_endpoint << " (KRNL)" << endl;
     ctx.krnl_rx_socket->connect(krnl_endpoint);
     this_thread::sleep_for(chrono::milliseconds(1000));
-    //subscribe to dst == local_rank
-    string krnl_subscribe = kernel_loopback ? "" : to_string(local_rank);
-    *logger << log_level::info << "Rank " << local_rank << " subscribing to " << krnl_subscribe << " (KRNL)" << endl;
-    ctx.krnl_rx_socket->subscribe(krnl_subscribe);
+    //subscribing to all (for now)
+    *logger << log_level::info << "Rank " << local_rank << " subscribing to all (KRNL)" << endl;
+    ctx.krnl_rx_socket->subscribe("");
     this_thread::sleep_for(chrono::milliseconds(1000));
 
     *logger << log_level::info << "ZMQ Context established for rank " << local_rank << endl;
@@ -230,7 +229,7 @@ void krnl_endpoint_ingress_port(zmq_intf_context *ctx, Stream<stream_word > &out
     if(!ctx->krnl_rx_socket->receive(message, true)) return;
 
     // decompose the message
-    string msg_text, dst_text;;
+    string msg_text, dst_text;
 
     //get and check destination ID
     message >> dst_text;

@@ -29,7 +29,7 @@
  * @return zmq_intf_context A set of ZMQ sockets through which we can talk to the simulator/emulator
  */
 zmq_intf_context zmq_client_intf(  unsigned int starting_port, unsigned int local_rank,
-                                        unsigned int krnl_dest=0, unsigned int world_size=0);
+                                        const std::vector<unsigned int>& krnl_dest=std::vector<unsigned int>(), unsigned int world_size=0);
 
 /**
  * @brief Initiate an ACCL call via the ZMQ connection to the emulator/simulator. Parameters correspond to CCLO::Options
@@ -102,12 +102,13 @@ void zmq_client_memalloc(zmq_intf_context *ctx, uint64_t adr, unsigned int size)
  * @param ctx Pointer to existing ZMQ context
  * @return std::vector<uint8_t> A data message
  */
-std::vector<uint8_t> zmq_client_strmread(zmq_intf_context *ctx);
+std::vector<uint8_t> zmq_client_strmread(zmq_intf_context *ctx, bool dont_block=false);
 
 /**
  * @brief Write to CCLO input data stream
  *
  * @param ctx Pointer to existing ZMQ context
  * @param val A data message
+ * @param dest An identifier for the destination, to enable routing
  */
-void zmq_client_strmwrite(zmq_intf_context *ctx, std::vector<uint8_t> val);
+void zmq_client_strmwrite(zmq_intf_context *ctx, std::vector<uint8_t> val, unsigned int dest=0);
