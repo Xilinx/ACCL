@@ -333,6 +333,50 @@ void test_sendrcv(ACCL::ACCL &accl, options_t &options) {
   }
 }
 
+void test_stream_put(ACCL::ACCL &accl, options_t &options) {
+  std::cout << "Start stream put test..." << std::endl;
+  unsigned int count = options.count;
+  auto op_buf = accl.create_buffer<float>(count, dataType::float32);
+  auto res_buf = accl.create_buffer<float>(count, dataType::float32);
+  random_array(op_buf->buffer(), count);
+  int next_rank = (rank + 1) % size;
+  int prev_rank = (rank + size - 1) % size;
+
+  test_debug("Sending data on " + std::to_string(rank) + " to stream 0 " " on " +
+                 std::to_string(next_rank) + "...",
+             options);
+  accl.stream_put(*op_buf, count, next_rank, 0);
+
+  test_debug("Sending data on " + std::to_string(rank) + " from stream to " +
+                 std::to_string(prev_rank) + "...",
+             options);
+  accl.send(*res_buf, count, prev_rank, 1, GLOBAL_COMM, false, streamFlags::OP0_STREAM);
+
+  test_debug("Receiving data on " + std::to_string(rank) + " from " +
+                 std::to_string(next_rank) + "...",
+             options);
+  accl.recv(*res_buf, count, next_rank, 1);
+
+  int errors = 0;
+  for (unsigned int i = 0; i < count; ++i) {
+    float res = (*res_buf)[i];
+    float ref = (*op_buf)[i];
+    if (res != ref) {
+      std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
+                       std::to_string(res) + " != " + std::to_string(ref) + ")"
+                << std::endl;
+      errors += 1;
+    }
+  }
+
+  if (errors > 0) {
+    std::cout << std::to_string(errors) + " errors!" << std::endl;
+    failed_tests++;
+  } else {
+    std::cout << "Test is successful!" << std::endl;
+  }
+}
+
 void test_sendrcv_compressed(ACCL::ACCL &accl, options_t &options) {
   std::cout << "Start send recv compression test..." << std::endl;
   unsigned int count = options.count;
@@ -1214,6 +1258,8 @@ void start_test(options_t options) {
   }
   MPI_Barrier(MPI_COMM_WORLD);
   test_sendrcv_compressed(*accl, options);
+  MPI_Barrier(MPI_COMM_WORLD);
+  test_stream_put(*accl, options);
   MPI_Barrier(MPI_COMM_WORLD);
   test_allgather(*accl, options);
   MPI_Barrier(MPI_COMM_WORLD);
