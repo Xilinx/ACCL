@@ -151,6 +151,36 @@ CCLO *ACCL::send(BaseBuffer &srcbuf, unsigned int count,
   return nullptr;
 }
 
+CCLO *ACCL::stream_put(BaseBuffer &srcbuf, unsigned int count,
+                 unsigned int dst, unsigned int stream_id, communicatorId comm_id,
+                 bool from_fpga, streamFlags stream_flags,
+                 dataType compress_dtype, bool run_async,
+                 std::vector<CCLO *> waitfor) {
+  CCLO::Options options{};
+  if (from_fpga == false) {
+    srcbuf.sync_to_device();
+  }
+  options.scenario = operation::send;
+  options.comm = communicators[comm_id].communicators_addr();
+  options.addr_0 = &srcbuf;
+  options.count = count;
+  options.root_src_dst = dst;
+  options.tag = stream_id;
+  options.stream_flags = stream_flags | streamFlags::RES_STREAM;
+  options.compress_dtype = compress_dtype;
+  options.waitfor = waitfor;
+  CCLO *handle = call_async(options);
+
+  if (run_async) {
+    return handle;
+  } else {
+    handle->wait();
+    check_return_value("send");
+  }
+
+  return nullptr;
+}
+
 CCLO *ACCL::recv(BaseBuffer &dstbuf, unsigned int count,
                  unsigned int src, unsigned int tag, communicatorId comm_id,
                  bool to_fpga, streamFlags stream_flags,

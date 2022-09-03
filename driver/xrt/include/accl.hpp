@@ -179,6 +179,30 @@ public:
              std::vector<CCLO *> waitfor = {});
 
   /**
+   * Performs a one-sided put to a stream on a remote FPGA.
+   *
+   * @param comm_id        Index of communicator to use.
+   * @param srcbuf         Buffer that contains the data to be send. Create a
+   *                       buffer using ACCL::create_buffer.
+   * @param count          Amount of elements in buffer to send.
+   * @param dst            Destination rank to send data to.
+   * @param stream_id      ID of target stream on destination rank.
+   * @param from_fpga      Set to true if the data is already on the FPGA.
+   * @param stream_flags   Stream flags to use. Note that only OP0_STREAM is relevant.
+   * @param compress_dtype Datatype to compress buffers to over ethernet.
+   * @param run_async      Run the ACCL call asynchronously.
+   * @param waitfor        ACCL call will wait for these operations before it
+   *                       will start. Currently not implemented.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
+   */
+  CCLO *stream_put(BaseBuffer &srcbuf, unsigned int count,
+                   unsigned int dst, unsigned int stream_id, communicatorId comm_id = GLOBAL_COMM,
+                   bool from_fpga = false, streamFlags stream_flags = streamFlags::NO_STREAM,
+                   dataType compress_dtype = dataType::none, bool run_async = false,
+                   std::vector<CCLO *> waitfor = {});
+
+  /**
    * Performs the receive operation on the FPGA.
    *
    * @param dstbuf         Buffer where the data should be stored to. Create a
