@@ -240,7 +240,7 @@ class ACCLCommand{
         }
 
         /**
-         * @brief 
+         * @brief Send data to a remote peer. Two-sided, i.e. requires a recv on remote end.
          * 
          * @param len Number of array elements
          * @param tag Message tag
@@ -261,7 +261,29 @@ class ACCLCommand{
         }
 
         /**
-         * @brief 
+         * @brief One-sided data transfer to a stream on a remote peer. 
+         * 
+         * @param len Number of array elements
+         * @param stream_id Stream ID at destination. IDs 0-8 are reserved, call will not execute if set in this range
+         * @param dst_rank Rank ID of destination
+         * @param src_addr Source array address
+         */
+        void stream_put(ap_uint<32> len,
+                        ap_uint<32> stream_id,
+                        ap_uint<32> dst_rank,
+                        ap_uint<64> src_addr
+        ){
+            if(stream_id < 9) return;
+            start_call(
+                ACCL_SEND, len, comm_adr, dst_rank, 0, stream_id-9, 
+                dpcfg_adr, cflags, sflags | 0x2, 
+                src_addr, 0, 0
+            );
+            finalize_call();
+        }
+
+        /**
+         * @brief Receive data send from a remote peer.
          * 
          * @param len Number of array elements
          * @param tag Message tag
@@ -282,7 +304,7 @@ class ACCLCommand{
         }
 
         /**
-         * @brief 
+         * @brief Broadcast data to members of the communicator
          * 
          * @param len Number of array elements
          * @param root Rank ID of root node
@@ -301,7 +323,7 @@ class ACCLCommand{
         }
 
         /**
-         * @brief 
+         * @brief Scatter data to members of the communicator
          * 
          * @param len Number of array elements
          * @param root Rank ID of root node
@@ -322,7 +344,7 @@ class ACCLCommand{
         }
 
         /**
-         * @brief 
+         * @brief Gather data from members of the communicator
          * 
          * @param len Number of array elements
          * @param root Rank ID of root node
@@ -343,7 +365,7 @@ class ACCLCommand{
         }
 
         /**
-         * @brief 
+         * @brief All-gather data in the communicator. Equivalent to gather followed by broadcast
          * 
          * @param len Number of array elements
          * @param src_addr Source array address
@@ -362,7 +384,7 @@ class ACCLCommand{
         }
 
         /**
-         * @brief 
+         * @brief Reduce data from members of the communicator
          * 
          * @param len Number of array elements
          * @param root Rank ID of root node
@@ -385,7 +407,7 @@ class ACCLCommand{
         }
 
         /**
-         * @brief 
+         * @brief Reduce-scatter data in the communicator. Equivalent to reduce followed by scatter
          * 
          * @param len Number of array elements
          * @param function Reduction function ID
@@ -406,7 +428,7 @@ class ACCLCommand{
         }
 
         /**
-         * @brief 
+         * @brief All-reduce data in the communicator. Equivalent to reduce followed by broadcast
          * 
          * @param len Number of array elements
          * @param function Reduction function ID
