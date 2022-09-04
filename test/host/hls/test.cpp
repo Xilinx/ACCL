@@ -35,12 +35,13 @@ int rank, size;
 
 //hls-synthesizable function performing
 //an elementwise increment on fp32 data in src 
-//followed by an allreduce on communicator 0,
+//followed by a put to another rank, then
 //writing result in dst
 void vadd_s2s(
     float *src,
     float *dst,
     int count,
+    unsigned int destination,
     //parameters pertaining to CCLO config
     ap_uint<32> comm_adr, 
     ap_uint<32> dpcfg_adr,
@@ -68,9 +69,10 @@ void vadd_s2s(
         data.push(tmpword, 0);
     }
     //send command to CCLO
-    //we're passing src as source and dst as detination
-    //since we're streaming data, these will be ignored
-    accl.all_reduce(count, 0, (ap_uint<64>)src, (ap_uint<64>)dst);
+    //we're passing src as source 
+    //because we're streaming data, the address will be ignored
+    //we're passing 9 as stream ID, because IDs 0-8 are reserved
+    accl.stream_put(count, 9, destination, (ap_uint<64>)src);
     //pull data from CCLO and write it to dst
     int wr_count = count;
     while(wr_count > 0){
@@ -116,19 +118,20 @@ void run_test(options_t options) {
     //initialize a CCLO BFM and streams as needed
     hlslib::Stream<command_word> callreq, callack;
     hlslib::Stream<stream_word> data_cclo2krnl, data_krnl2cclo;
-    std::vector<unsigned int> dest = {0};
+    std::vector<unsigned int> dest = {9};
     CCLO_BFM cclo(options.start_port, rank, size, dest, callreq, callack, data_cclo2krnl, data_krnl2cclo);
     cclo.run();
     std::cout << "CCLO BFM started" << std::endl;
     MPI_Barrier(MPI_COMM_WORLD);
 
-    //allocate and float arrays for the HLS function to use
+    //allocate float arrays for the HLS function to use
     float src[options.count], dst[options.count];
     for(int i=0; i<options.count; i++){
         src[i] = 0;
     }
     //run the hls function, using the global communicator
     vadd_s2s(   src, dst, options.count, 
+                (rank+1)%size,
                 accl->get_communicator_adr(), 
                 accl->get_arithmetic_config_addr({dataType::float32, dataType::float32}), 
                 callreq, callack, 
@@ -136,7 +139,7 @@ void run_test(options_t options) {
     //check HLS function outputs
     unsigned int err_count = 0;
     for(int i=0; i<options.count; i++){
-        err_count += (dst[i] != size);
+        err_count += (dst[i] != 1);
     }
     std::cout << "Test finished with " << err_count << " errors" << std::endl;
     //clean up

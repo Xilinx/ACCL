@@ -157,6 +157,7 @@ CCLO *ACCL::stream_put(BaseBuffer &srcbuf, unsigned int count,
                  dataType compress_dtype, bool run_async,
                  std::vector<CCLO *> waitfor) {
   CCLO::Options options{};
+  if (stream_id < 9) return nullptr;
   if (from_fpga == false) {
     srcbuf.sync_to_device();
   }
@@ -165,7 +166,7 @@ CCLO *ACCL::stream_put(BaseBuffer &srcbuf, unsigned int count,
   options.addr_0 = &srcbuf;
   options.count = count;
   options.root_src_dst = dst;
-  options.tag = stream_id;
+  options.tag = stream_id - 9;
   options.stream_flags = stream_flags | streamFlags::RES_STREAM;
   options.compress_dtype = compress_dtype;
   options.waitfor = waitfor;
