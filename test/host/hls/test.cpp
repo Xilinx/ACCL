@@ -16,7 +16,7 @@
 #
 *******************************************************************************/
 
-#include <accl.hpp>
+#include "accl.hpp"
 #include <cstdlib>
 #include <functional>
 #include <mpi.h>
@@ -24,68 +24,14 @@
 #include <sstream>
 #include <tclap/CmdLine.h>
 #include <vector>
-#include <accl_hls.h>
-#include <cclo_bfm.h>
+#include "vadd_put.h"
+#include "cclo_bfm.h"
 #include <xrt/xrt_device.h>
 #include <iostream>
 
 using namespace ACCL;
 
 int rank, size;
-
-//hls-synthesizable function performing
-//an elementwise increment on fp32 data in src 
-//followed by a put to another rank, then
-//writing result in dst
-void vadd_s2s(
-    float *src,
-    float *dst,
-    int count,
-    unsigned int destination,
-    //parameters pertaining to CCLO config
-    ap_uint<32> comm_adr, 
-    ap_uint<32> dpcfg_adr,
-    //streams to and from CCLO
-    STREAM<command_word> &cmd_to_cclo,
-    STREAM<command_word> &sts_from_cclo,
-    STREAM<stream_word> &data_to_cclo,
-    STREAM<stream_word> &data_from_cclo
-){
-    //set up interfaces
-    accl_hls::ACCLCommand accl(cmd_to_cclo, sts_from_cclo, comm_adr, dpcfg_adr, 0, 3);
-    accl_hls::ACCLData data(data_to_cclo, data_from_cclo);
-    //read data from src, increment it, 
-    //and push the result into the CCLO stream
-    ap_uint<512> tmpword;
-    int rd_count = count;
-    while(rd_count > 0){
-        //read 16 floats into a 512b vector
-        for(int i=0; (i<16) && (rd_count>0); i++){
-            float inc = src[i]+1;
-            tmpword(i*32,(i+1)*32-1) = *reinterpret_cast<ap_uint<32>*>(&inc);
-            rd_count--;
-        }
-        //send the vector to cclo
-        data.push(tmpword, 0);
-    }
-    //send command to CCLO
-    //we're passing src as source 
-    //because we're streaming data, the address will be ignored
-    //we're passing 9 as stream ID, because IDs 0-8 are reserved
-    accl.stream_put(count, 9, destination, (ap_uint<64>)src);
-    //pull data from CCLO and write it to dst
-    int wr_count = count;
-    while(wr_count > 0){
-        //read vector from CCLO
-        tmpword = data.pull().data;
-        //read from the 512b vector into 16 floats
-        for(int i=0; (i<16) && (wr_count>0); i++){
-            ap_uint<32> val = tmpword(i*32,(i+1)*32-1);
-            dst[i] = *reinterpret_cast<float*>(&val);
-            wr_count--;
-        }
-    }
-}
 
 struct options_t {
     int start_port;
@@ -130,7 +76,7 @@ void run_test(options_t options) {
         src[i] = 0;
     }
     //run the hls function, using the global communicator
-    vadd_s2s(   src, dst, options.count, 
+    vadd_put(   src, dst, options.count, 
                 (rank+1)%size,
                 accl->get_communicator_adr(), 
                 accl->get_arithmetic_config_addr({dataType::float32, dataType::float32}), 
