@@ -1,5 +1,6 @@
+#!/bin/bash
 # /*******************************************************************************
-#  Copyright (C) 2021 Xilinx, Inc
+#  Copyright (C) 2022 Advanced Micro Devices, Inc
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -15,17 +16,6 @@
 #
 # *******************************************************************************/
 
-*.xclbin
-CMakeCache.txt
-CMakeDoxyfile.in
-CMakeDoxygenDefaults.cmake
-CMakeFiles/
-Makefile
-cmake_install.cmake
-doxygen.log
-bin
-docs/html
-docs/latex
-docs/xml
-docs/sphinx
-lib
+BASH_SOURCE_DIR="$( dirname -- "$( readlink -f -- "$0"; )"; )"
+
+sphinx-build -b html "$BASH_SOURCE_DIR" "$BASH_SOURCE_DIR/sphinx"
