@@ -75,7 +75,7 @@ elf: $(CCLO_ELF)
 
 $(CCLO_ELF): tcl/generate_sw.tcl tcl/associate_elf.tcl $(FW_SOURCES) $(CCLO_XSA)
 	rm -rf vitis_ws && mkdir vitis_ws
-	xsct -nodisp $< ccl_offload $(CCLO_XSA) ./fw $(OPTIMIZATION_STRING)
+	xsct $< ccl_offload $(CCLO_XSA) ./fw $(OPTIMIZATION_STRING)
 	vivado -mode batch -source tcl/associate_elf.tcl -tclargs $(CCLO_ELF)
 
 simdll: $(CCLO_SIMDLL)
