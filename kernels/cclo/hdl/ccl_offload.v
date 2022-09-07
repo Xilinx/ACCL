@@ -319,11 +319,11 @@ module ccl_offload
   output s_axis_call_req_tready,
   input s_axis_call_req_tvalid,
 
-  input [12:0] s_axi_control_araddr,
+  input [`AXILITE_ADR_BITS-1:0] s_axi_control_araddr,
   input [2:0] s_axi_control_arprot,
   output s_axi_control_arready,
   input s_axi_control_arvalid,
-  input [12:0] s_axi_control_awaddr,
+  input [`AXILITE_ADR_BITS-1:0] s_axi_control_awaddr,
   input [2:0] s_axi_control_awprot,
   output s_axi_control_awready,
   input s_axi_control_awvalid,

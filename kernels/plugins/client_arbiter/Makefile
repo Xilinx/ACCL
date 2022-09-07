@@ -18,7 +18,7 @@
 DEVICE=xcu250-figd2104-2L-e
 ARBITER_IP=client_arbiter.xo
 TARGET=ip
-NCLIENTS=2
+NCLIENTS=3
 
 all: $(ARBITER_IP) 
 
