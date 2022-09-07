@@ -50,13 +50,15 @@ void hostctrl(	ap_uint<32> scenario,
 #pragma HLS INTERFACE axis port=cmd
 #pragma HLS INTERFACE axis port=sts
 #pragma HLS INTERFACE s_axilite port=return
-
 	accl_hls::ACCLCommand accl(cmd, sts);
-	accl.start_call(
-		scenario, len, comm, root_src_dst, function,
-		msg_tag, datapath_cfg, compression_flags, stream_flags,
-		addra, addrb, addrc
-	);
-	accl.finalize_call();
-
+	io_section:{
+		#pragma HLS protocol fixed
+		accl.start_call(
+			scenario, len, comm, root_src_dst, function,
+			msg_tag, datapath_cfg, compression_flags, stream_flags,
+			addra, addrb, addrc
+		);
+		ap_wait();
+		accl.finalize_call();
+	}
 }
