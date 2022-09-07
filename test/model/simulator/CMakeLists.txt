@@ -48,7 +48,7 @@ add_executable(cclo_sim ${SIM_SOURCES})
 get_target_property(JSON_INC_PATH jsoncpp_lib INTERFACE_INCLUDE_DIRECTORIES)
 target_include_directories(cclo_sim PUBLIC ${JSON_INC_PATH} ${MPI_CXX_INCLUDE_PATH} ${SIM_INCLUDES})
 target_link_libraries(cclo_sim PUBLIC MPI::MPI_CXX zmq zmqpp pthread jsoncpp_lib dl rt)
-target_compile_definitions(cclo_sim PUBLIC ZMQ_CALL_VERBOSE)
+target_compile_definitions(cclo_sim PUBLIC ZMQ_CALL_VERBOSE NUM_CTRL_STREAMS=3)
 target_compile_options(cclo_sim PRIVATE -Wno-attributes -fdiagnostics-color=always -g -fmax-errors=3)
 
 set(XSIM_COMPILE_FOLDER ${ACCL_REPO_ROOT}/kernels/cclo/ccl_offload_ex/ccl_offload_ex.sim/sim_1/behav/xsim/)
