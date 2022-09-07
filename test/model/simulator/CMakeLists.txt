@@ -24,6 +24,7 @@ set(CMAKE_CXX_STANDARD 17)
 # https://cmake.org/cmake/help/latest/command/cmake_path.html
 set(ACCL_REPO_ROOT ${CMAKE_CURRENT_LIST_DIR}/../../../)
 set(HLSLIB_INCLUDE ${ACCL_REPO_ROOT}/hlslib/include/hlslib/xilinx/)
+set(ACCL_HLSDRV_DIR ${ACCL_REPO_ROOT}/driver/hls/)
 set(CCLO_HLS_ROOT ${ACCL_REPO_ROOT}/kernels/cclo/hls)
 set(MB_FW_DIR ${ACCL_REPO_ROOT}/kernels/cclo/fw/sw_apps/ccl_offload_control/src)
 set(ZMQ_INTF_DIR ${ACCL_REPO_ROOT}/test/model/zmq)
@@ -40,7 +41,7 @@ endif (NOT EXISTS $ENV{XILINX_HLS})
 find_package(MPI REQUIRED)
 find_package(jsoncpp REQUIRED)
 
-set(SIM_INCLUDES ${HLSLIB_INCLUDE} $ENV{XILINX_HLS}/include/ $ENV{XILINX_VIVADO}/data/xsim/include/ ${MB_FW_DIR} ${CCLO_HLS_ROOT} ${ZMQ_INTF_DIR} ${LOG_DIR})
+set(SIM_INCLUDES ${HLSLIB_INCLUDE} $ENV{XILINX_HLS}/include/ $ENV{XILINX_VIVADO}/data/xsim/include/ ${MB_FW_DIR} ${ACCL_HLSDRV_DIR} ${CCLO_HLS_ROOT} ${ZMQ_INTF_DIR} ${LOG_DIR})
 set(SIM_SOURCES cclo_sim.cpp xsi_dut.cpp xsi_loader.cpp ${ZMQ_INTF_DIR}/zmq_server.cpp)
 
 add_executable(cclo_sim ${SIM_SOURCES})

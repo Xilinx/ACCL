@@ -141,51 +141,52 @@ class ACCLCommand{
             ap_uint<64> addrc
         ){
             command_word tmp;
+            tmp.keep = 0xf;
             io_section:{
                 #pragma HLS protocol fixed
-                tmp = {.data=scenario, .last=0};
+                tmp.data=scenario; tmp.last=0;
                 STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                tmp = {.data=len, .last=0};
+                tmp.data=len; tmp.last=0;
                 STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                tmp = {.data=comm, .last=0};
+                tmp.data=comm; tmp.last=0;
                 STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                tmp = {.data=root_src_dst, .last=0};
+                tmp.data=root_src_dst; tmp.last=0;
                 STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                tmp = {.data=function, .last=0};
+                tmp.data=function; tmp.last=0;
                 STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                tmp = {.data=msg_tag, .last=0};
+                tmp.data=msg_tag; tmp.last=0;
                 STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                tmp = {.data=datapath_cfg, .last=0};
+                tmp.data=datapath_cfg; tmp.last=0;
                 STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                tmp = {.data=compression_flags, .last=0};
+                tmp.data=compression_flags; tmp.last=0;
                 STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                tmp = {.data=stream_flags, .last=0};
+                tmp.data=stream_flags; tmp.last=0;
                 STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                tmp = {.data=addra(31,0), .last=0};
+                tmp.data=addra(31,0); tmp.last=0;
                 STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                tmp = {.data=addra(63,32), .last=0};
+                tmp.data=addra(63,32); tmp.last=0;
                 STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                tmp = {.data=addrb(31,0), .last=0};
+                tmp.data=addrb(31,0); tmp.last=0;
                 STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                tmp = {.data=addrb(63,32), .last=0};
+                tmp.data=addrb(63,32); tmp.last=0;
                 STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                tmp = {.data=addrc(31,0), .last=0};
+                tmp.data=addrc(31,0); tmp.last=0;
                 STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                tmp = {.data=addrc(63,32), .last=1};
+                tmp.data=addrc(63,32); tmp.last=1;
                 STREAM_WRITE(cmd, tmp);
                 ap_wait();
             }  

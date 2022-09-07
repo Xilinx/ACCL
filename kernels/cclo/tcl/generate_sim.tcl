@@ -53,6 +53,43 @@ catch { delete_bd_objs [get_bd_intf_ports m_axis_compression0] }
 catch { delete_bd_objs [get_bd_intf_ports m_axis_compression1] }
 catch { delete_bd_objs [get_bd_intf_ports m_axis_compression2] }
 catch { delete_bd_objs [get_bd_intf_ports bscan_0] }
+catch { delete_bd_objs [get_bd_intf_nets s_axi_control_1] }
+catch { delete_bd_objs [get_bd_intf_nets s_axis_call_req_1] }
+catch { delete_bd_objs [get_bd_intf_nets cclo_m_axis_call_ack] }
+
+create_bd_cell -type ip -vlnv xilinx.com:ACCL:hostctrl:1.0 hostctrl_0
+create_bd_cell -type ip -vlnv xilinx.com:ACCL:hostctrl:1.0 hostctrl_1
+create_bd_cell -type ip -vlnv xilinx.com:ACCL:client_arbiter:1.0 client_arbiter_0
+create_bd_cell -type ip -vlnv xilinx.com:ip:smartconnect:1.0 smartconnect_0
+set_property -dict [list CONFIG.NUM_MI {3} CONFIG.NUM_SI {1}] [get_bd_cells smartconnect_0]
+connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins smartconnect_0/aresetn]
+connect_bd_net [get_bd_ports ap_clk] [get_bd_pins smartconnect_0/aclk]
+connect_bd_intf_net [get_bd_intf_ports s_axi_control] [get_bd_intf_pins smartconnect_0/S00_AXI]
+connect_bd_intf_net [get_bd_intf_pins smartconnect_0/M00_AXI] [get_bd_intf_pins cclo/s_axi_control]
+connect_bd_intf_net [get_bd_intf_pins smartconnect_0/M01_AXI] [get_bd_intf_pins hostctrl_0/s_axi_control]
+connect_bd_intf_net [get_bd_intf_pins smartconnect_0/M02_AXI] [get_bd_intf_pins hostctrl_1/s_axi_control]
+connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins hostctrl_1/ap_rst_n]
+connect_bd_net [get_bd_ports ap_clk] [get_bd_pins hostctrl_1/ap_clk]
+connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins hostctrl_0/ap_rst_n]
+connect_bd_net [get_bd_ports ap_clk] [get_bd_pins hostctrl_0/ap_clk]
+connect_bd_intf_net [get_bd_intf_pins hostctrl_0/cmd] [get_bd_intf_pins client_arbiter_0/cmd_clients_0]
+connect_bd_intf_net [get_bd_intf_pins hostctrl_1/cmd] [get_bd_intf_pins client_arbiter_0/cmd_clients_1]
+connect_bd_intf_net [get_bd_intf_ports s_axis_call_req] [get_bd_intf_pins client_arbiter_0/cmd_clients_2]
+connect_bd_intf_net [get_bd_intf_pins client_arbiter_0/ack_clients_0] [get_bd_intf_pins hostctrl_0/sts]
+connect_bd_intf_net [get_bd_intf_pins client_arbiter_0/ack_clients_1] [get_bd_intf_pins hostctrl_1/sts]
+connect_bd_intf_net [get_bd_intf_ports m_axis_call_ack] [get_bd_intf_pins client_arbiter_0/ack_clients_2]
+connect_bd_intf_net [get_bd_intf_pins client_arbiter_0/cmd_cclo] -boundary_type upper [get_bd_intf_pins cclo/s_axis_call_req]
+connect_bd_intf_net -boundary_type upper [get_bd_intf_pins cclo/m_axis_call_ack] [get_bd_intf_pins client_arbiter_0/ack_cclo]
+connect_bd_net [get_bd_ports ap_clk] [get_bd_pins client_arbiter_0/ap_clk]
+connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins client_arbiter_0/ap_rst_n]
+
+# enlarge the aperture of the AXI Lite port to enable controlling two hostctrl cores
+set_property CONFIG.ADDR_WIDTH 15 [get_bd_intf_ports /s_axi_control]
+assign_bd_address -offset 0x2000 -range 8K -target_address_space [get_bd_addr_spaces s_axi_control] [get_bd_addr_segs hostctrl_0/s_axi_control/Reg] -force
+assign_bd_address -offset 0x4000 -range 8K -target_address_space [get_bd_addr_spaces s_axi_control] [get_bd_addr_segs hostctrl_1/s_axi_control/Reg] -force
+
+# create hierarchy
+group_bd_cells control [get_bd_cells hostctrl_0] [get_bd_cells hostctrl_1] [get_bd_cells client_arbiter_0] [get_bd_cells smartconnect_0]
 
 if { $en_dma != 0 } {
     create_bd_cell -type ip -vlnv xilinx.com:ip:blk_mem_gen:8.4 blk_mem_gen_0
@@ -156,7 +193,7 @@ if { $en_compress != 0 } {
 save_bd_design
 validate_bd_design
 
-set extra_sim_options ""
+set extra_sim_options "-d AXILITE_ADR_BITS=15"
 if { $en_dma == 1 } { set extra_sim_options "$extra_sim_options -d AXI_DATA_ACCESS " }
 if { $en_extkrnl == 1 } { set extra_sim_options "$extra_sim_options -d STREAM_ENABLE " }
 set_property -name {xsim.compile.xvlog.more_options} -value $extra_sim_options -objects [get_filesets sim_1]

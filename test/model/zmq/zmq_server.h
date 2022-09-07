@@ -106,7 +106,7 @@ void zmq_cmd_server(zmq_intf_context *ctx,
                 hlslib::Stream<unsigned int> &axilite_wr_addr, hlslib::Stream<unsigned int> &axilite_wr_data,
                 hlslib::Stream<ap_uint<64> > &aximm_rd_addr, hlslib::Stream<ap_uint<512> > &aximm_rd_data,
                 hlslib::Stream<ap_uint<64> > &aximm_wr_addr, hlslib::Stream<ap_uint<512> > &aximm_wr_data, hlslib::Stream<ap_uint<64> > &aximm_wr_strb,
-                hlslib::Stream<unsigned int> callreq[NUM_CTRL_STREAMS], hlslib::Stream<unsigned int> callack[NUM_CTRL_STREAMS]);
+                hlslib::Stream<unsigned int> &callreq, hlslib::Stream<unsigned int> &callack);
 
 /**
  * @brief Run eth_endpoint_ingress_port repeatedly
