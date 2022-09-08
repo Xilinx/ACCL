@@ -424,7 +424,7 @@ void interface_handler(XSI_DUT *dut, Stream<unsigned int> &axilite_rd_addr, Stre
                         Stream<ap_uint<64> > &aximm_wr_addr, Stream<ap_uint<512> > &aximm_wr_data, Stream<ap_uint<64> > &aximm_wr_strb,
                         Stream<unsigned int> &callreq, Stream<unsigned int> &callack,
                         Stream<stream_word> &eth_tx_data, Stream<stream_word> &eth_rx_data,
-                        Stream<stream_word> &krnl_tx_data, Stream<stream_word> &krnl_rx_data){
+                        Stream<stream_word> &cclo_to_krnl_data, Stream<stream_word> &krnl_to_cclo_data){
     logger << log_level::info << "Starting XSI interface server" << endl;
     while(!stop){
         dut->run_ncycles(1);
@@ -436,8 +436,8 @@ void interface_handler(XSI_DUT *dut, Stream<unsigned int> &axilite_rd_addr, Stre
         call_ack_fsm(dut, callack);
         eth_ingress_fsm(dut, eth_rx_data);
         eth_egress_fsm(dut, eth_tx_data);
-        krnl_ingress_fsm(dut, krnl_rx_data);
-        krnl_egress_fsm(dut, krnl_tx_data);
+        krnl_ingress_fsm(dut, krnl_to_cclo_data);
+        krnl_egress_fsm(dut, cclo_to_krnl_data);
     }
     logger << log_level::info << "Exiting XSI interface server" << endl;
 }
@@ -522,8 +522,8 @@ int main(int argc, char **argv)
     Stream<stream_word> eth_tx_data;
     Stream<stream_word> eth_rx_data;
 
-    Stream<stream_word> krnl_tx_data;
-    Stream<stream_word> krnl_rx_data;
+    Stream<stream_word> cclo_to_krnl_data;
+    Stream<stream_word> krnl_to_cclo_data;
 
     try {
         // Register signal and signal handler
@@ -546,7 +546,7 @@ int main(int argc, char **argv)
                                     aximm_wr_addr, aximm_wr_data, aximm_wr_strb,
                                     callreq, callack,
                                     eth_tx_data, eth_rx_data,
-                                    krnl_tx_data, krnl_rx_data);
+                                    cclo_to_krnl_data, krnl_to_cclo_data);
         HLSLIB_DATAFLOW_FUNCTION(zmq_cmd_server,  &ctx,
                                     axilite_rd_addr, axilite_rd_data,
                                     axilite_wr_addr, axilite_wr_data,
@@ -556,8 +556,8 @@ int main(int argc, char **argv)
         //ZMQ to other nodes process(es)
         HLSLIB_DATAFLOW_FUNCTION(zmq_eth_egress_server, &ctx, eth_tx_data, local_rank, eth_type == "tcp");
         HLSLIB_DATAFLOW_FUNCTION(zmq_eth_ingress_server, &ctx, eth_rx_data);
-        HLSLIB_DATAFLOW_FUNCTION(zmq_krnl_egress_server, &ctx, krnl_tx_data);
-        HLSLIB_DATAFLOW_FUNCTION(zmq_krnl_ingress_server, &ctx, krnl_rx_data);
+        HLSLIB_DATAFLOW_FUNCTION(zmq_krnl_egress_server, &ctx, cclo_to_krnl_data);
+        HLSLIB_DATAFLOW_FUNCTION(zmq_krnl_ingress_server, &ctx, krnl_to_cclo_data);
         HLSLIB_DATAFLOW_FUNCTION(update_zmq_stop, &ctx);
         HLSLIB_DATAFLOW_FINALIZE();
     }

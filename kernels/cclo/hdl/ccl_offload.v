@@ -449,12 +449,14 @@ module ccl_offload
         .m_axis_krnl_tdata(m_axis_krnl_tdata),
         .m_axis_krnl_tkeep(m_axis_krnl_tkeep),
         .m_axis_krnl_tlast(m_axis_krnl_tlast),
+        .m_axis_krnl_tdest(m_axis_krnl_tdest),
         .m_axis_krnl_tready(m_axis_krnl_tready),
         .m_axis_krnl_tvalid(m_axis_krnl_tvalid),
 
         .s_axis_krnl_tdata(s_axis_krnl_tdata),
         .s_axis_krnl_tkeep(s_axis_krnl_tkeep),
         .s_axis_krnl_tlast(s_axis_krnl_tlast),
+        .s_axis_krnl_tdest(s_axis_krnl_tdest),
         .s_axis_krnl_tready(s_axis_krnl_tready),
         .s_axis_krnl_tvalid(s_axis_krnl_tvalid),
 `endif
