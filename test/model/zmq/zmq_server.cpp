@@ -631,7 +631,7 @@ void serve_zmq(zmq_intf_context *ctx,
         // Call wait response {"status": OK|NOK|ERR}
         case 6:
             ctrl_id = request["ctrl_id"].asUInt();
-            *logger << log_level::info << "Call wait on control stream " << ctrl_id << endl;
+            *logger << log_level::verbose << "Call wait on control stream " << ctrl_id << endl;
             //pop the corresponding status queue if possible
             if(ctrl_id >= NUM_CTRL_STREAMS){
                 response["status"] = -1;
