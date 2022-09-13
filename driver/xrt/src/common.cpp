@@ -17,6 +17,8 @@
 *******************************************************************************/
 
 #include "common.hpp"
+#include <cmath>
+#include <cstdlib>
 #ifdef ACCL_DEBUG
 #include <fstream>
 #endif
@@ -25,6 +27,12 @@
   (std::string("accl_send") + i + std::string(".log"))
 
 namespace ACCL {
+
+void *allocate_aligned_buffer(size_t size, size_t alignment) {
+  size_t aligned_size =
+      ((size_t)std::ceil(size / (double)alignment)) * alignment;
+  return std::aligned_alloc(alignment, aligned_size);
+}
 
 void write_arithconfig(CCLO &cclo, ArithConfig &arithcfg, addr_t *addr) {
   arithcfg.set_exchmem(*addr);

@@ -38,7 +38,6 @@
 #include "ccl_offload_control.h"
 #include <zmqpp/zmqpp.hpp>
 #include <string>
-#include <jsoncpp/json/json.h>
 #include <chrono>
 #include <numeric>
 #include <mpi.h>

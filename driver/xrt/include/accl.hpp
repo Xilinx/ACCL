@@ -478,7 +478,7 @@ public:
    * @param comm_id        Index of communicator to use.
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
-   * 
+   *
    */
   void barrier(communicatorId comm_id = GLOBAL_COMM,
                 std::vector<CCLO *> waitfor = {});
