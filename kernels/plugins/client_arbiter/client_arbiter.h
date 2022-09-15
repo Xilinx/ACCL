@@ -24,8 +24,10 @@
 #endif
 
 void client_arbiter(
-	STREAM<command_word> cmd_clients[NUM_CTRL_STREAMS],
-	STREAM<command_word> ack_clients[NUM_CTRL_STREAMS],
-	STREAM<command_word>  &cmd_cclo,
-	STREAM<command_word>  &ack_cclo
+	STREAM<command_word> &cmd_clients_0,
+	STREAM<command_word> &ack_clients_0,
+	STREAM<command_word> &cmd_clients_1,
+	STREAM<command_word> &ack_clients_1,
+	STREAM<command_word> &cmd_cclo,
+	STREAM<command_word> &ack_cclo
 );

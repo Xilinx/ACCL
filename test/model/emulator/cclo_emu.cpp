@@ -314,6 +314,7 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsign
     Stream<command_word> callack_fifos[NUM_CTRL_STREAMS];
 
     Stream<command_word, 512> callreq_arb[NUM_CTRL_STREAMS], callack_arb[NUM_CTRL_STREAMS];
+    Stream<command_word, 512> callreq_arb_host, callack_arb_host;
 
     unsigned int max_words_per_pkt = MAX_PACKETSIZE/DATAPATH_WIDTH_BYTES;
 
@@ -411,7 +412,8 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsign
     HLSLIB_FREERUNNING_FUNCTION(controller, callreq_fifos[0], callreq_arb[0], callack_arb[0], callack_fifos[0]);
     HLSLIB_FREERUNNING_FUNCTION(controller, callreq_fifos[1], callreq_arb[1], callack_arb[1], callack_fifos[1]);
     HLSLIB_FREERUNNING_FUNCTION(controller_bypass, callreq_fifos[2], callreq_arb[2], callack_arb[2], callack_fifos[2]);
-    HLSLIB_FREERUNNING_FUNCTION(client_arbiter, callreq_arb, callack_arb, sts_fifos[CMD_CALL], cmd_fifos[STS_CALL]);
+    HLSLIB_FREERUNNING_FUNCTION(client_arbiter, callreq_arb[0], callack_arb[0], callreq_arb[1], callack_arb[1], callreq_arb_host, callack_arb_host);
+    HLSLIB_FREERUNNING_FUNCTION(client_arbiter, callreq_arb_host, callack_arb_host, callreq_arb[2], callack_arb[2], sts_fifos[CMD_CALL], cmd_fifos[STS_CALL]);
 
     //ZMQ to host process
     HLSLIB_FREERUNNING_FUNCTION(serve_zmq, ctx, cfgmem, devicemem, callreq_fifos, callack_fifos);

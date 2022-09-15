@@ -60,6 +60,7 @@ catch { delete_bd_objs [get_bd_intf_nets cclo_m_axis_call_ack] }
 create_bd_cell -type ip -vlnv xilinx.com:ACCL:hostctrl:1.0 hostctrl_0
 create_bd_cell -type ip -vlnv xilinx.com:ACCL:hostctrl:1.0 hostctrl_1
 create_bd_cell -type ip -vlnv xilinx.com:ACCL:client_arbiter:1.0 client_arbiter_0
+create_bd_cell -type ip -vlnv xilinx.com:ACCL:client_arbiter:1.0 client_arbiter_1
 create_bd_cell -type ip -vlnv xilinx.com:ip:smartconnect:1.0 smartconnect_0
 set_property -dict [list CONFIG.NUM_MI {3} CONFIG.NUM_SI {1}] [get_bd_cells smartconnect_0]
 connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins smartconnect_0/aresetn]
@@ -73,15 +74,19 @@ connect_bd_net [get_bd_ports ap_clk] [get_bd_pins hostctrl_1/ap_clk]
 connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins hostctrl_0/ap_rst_n]
 connect_bd_net [get_bd_ports ap_clk] [get_bd_pins hostctrl_0/ap_clk]
 connect_bd_intf_net [get_bd_intf_pins hostctrl_0/cmd] [get_bd_intf_pins client_arbiter_0/cmd_clients_0]
-connect_bd_intf_net [get_bd_intf_pins hostctrl_1/cmd] [get_bd_intf_pins client_arbiter_0/cmd_clients_2]
-connect_bd_intf_net [get_bd_intf_ports s_axis_call_req] [get_bd_intf_pins client_arbiter_0/cmd_clients_1]
+connect_bd_intf_net [get_bd_intf_pins hostctrl_1/cmd] [get_bd_intf_pins client_arbiter_0/cmd_clients_1]
+connect_bd_intf_net [get_bd_intf_pins client_arbiter_0/cmd_cclo] [get_bd_intf_pins client_arbiter_1/cmd_clients_0]
+connect_bd_intf_net [get_bd_intf_pins client_arbiter_1/ack_clients_0] [get_bd_intf_pins client_arbiter_0/ack_cclo]
 connect_bd_intf_net [get_bd_intf_pins client_arbiter_0/ack_clients_0] [get_bd_intf_pins hostctrl_0/sts]
-connect_bd_intf_net [get_bd_intf_pins client_arbiter_0/ack_clients_2] [get_bd_intf_pins hostctrl_1/sts]
-connect_bd_intf_net [get_bd_intf_pins client_arbiter_0/ack_clients_1] [get_bd_intf_ports m_axis_call_ack]
-connect_bd_intf_net [get_bd_intf_pins client_arbiter_0/cmd_cclo] -boundary_type upper [get_bd_intf_pins cclo/s_axis_call_req]
-connect_bd_intf_net -boundary_type upper [get_bd_intf_pins cclo/m_axis_call_ack] [get_bd_intf_pins client_arbiter_0/ack_cclo]
+connect_bd_intf_net [get_bd_intf_pins client_arbiter_0/ack_clients_1] [get_bd_intf_pins hostctrl_1/sts]
+connect_bd_intf_net [get_bd_intf_ports s_axis_call_req] [get_bd_intf_pins client_arbiter_1/cmd_clients_1]
+connect_bd_intf_net [get_bd_intf_pins client_arbiter_1/ack_clients_1] [get_bd_intf_ports m_axis_call_ack]
+connect_bd_intf_net [get_bd_intf_pins client_arbiter_1/cmd_cclo] [get_bd_intf_pins cclo/s_axis_call_req]
+connect_bd_intf_net [get_bd_intf_pins cclo/m_axis_call_ack] [get_bd_intf_pins client_arbiter_1/ack_cclo]
 connect_bd_net [get_bd_ports ap_clk] [get_bd_pins client_arbiter_0/ap_clk]
 connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins client_arbiter_0/ap_rst_n]
+connect_bd_net [get_bd_ports ap_clk] [get_bd_pins client_arbiter_1/ap_clk]
+connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins client_arbiter_1/ap_rst_n]
 
 # enlarge the aperture of the AXI Lite port to enable controlling two hostctrl cores
 set_property CONFIG.ADDR_WIDTH 15 [get_bd_intf_ports /s_axi_control]
