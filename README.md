@@ -1,4 +1,4 @@
-# ACCL: Accelerated Collective Communication Library
+# ACCL: Alveo Collective Communication Library
 
 [![Documentation Status](https://readthedocs.org/projects/accl/badge/?version=latest)](https://accl.readthedocs.io/en/latest/?badge=latest)
 ### * Note: This project is under active development. We will tag a stable release soon.*
