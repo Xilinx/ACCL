@@ -1195,7 +1195,7 @@ void start_test(options_t options) {
     auto cclo_ip = xrt::ip(device, xclbin_uuid,
                            "ccl_offload:{ccl_offload_" + cclo_id + "}");
     auto hostctrl_ip =
-        xrt::kernel(device, xclbin_uuid, "hostctrl:{hostctrl_" + cclo_id + "}",
+        xrt::kernel(device, xclbin_uuid, "hostctrl:{hostctrl_" + cclo_id + "_0}",
                     xrt::kernel::cu_access_mode::exclusive);
 
     int devicemem;
