@@ -35,17 +35,19 @@ endif()
 set(ACCL_REPO_ROOT ${CMAKE_CURRENT_LIST_DIR}/../../../)
 set(HLSLIB_INCLUDE ${ACCL_REPO_ROOT}/hlslib/include/hlslib/xilinx/)
 set(ACCL_HLSDRV_DIR ${ACCL_REPO_ROOT}/driver/hls/)
+set(CCLO_BFM_DIR ${ACCL_REPO_ROOT}/test/model/bfm/)
 set(VADD_DIR ${ACCL_REPO_ROOT}/kernels/plugins/vadd_put/)
-set(EMU_INCLUDES ${HLSLIB_INCLUDE} $ENV{XILINX_HLS}/include/ ${ACCL_HLSDRV_DIR})
+set(EMU_INCLUDES ${HLSLIB_INCLUDE} $ENV{XILINX_HLS}/include/ ${ACCL_HLSDRV_DIR} ${CCLO_BFM_DIR})
 
 set(CMAKE_BUILD_TYPE Debug)
 
 set(ACCL_DEBUG 1)
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../driver/xrt "CMakeFiles/accl")
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../model/bfm "CMakeFiles/cclobfm")
 
 find_package(MPI REQUIRED)
-add_executable(test test.cpp ${ACCL_HLSDRV_DIR}/cclo_bfm.cpp ${VADD_DIR}/vadd_put.cpp)
+add_executable(test test.cpp ${CCLO_BFM_DIR}/cclo_bfm.cpp ${VADD_DIR}/vadd_put.cpp)
 target_include_directories(test PUBLIC ${MPI_CXX_INCLUDE_PATH} ${ACCL_INCLUDE_PATH} ${EMU_INCLUDES} ${VADD_DIR})
-target_link_libraries(test PUBLIC MPI::MPI_CXX accl zmq zmqpp pthread)
+target_link_libraries(test PUBLIC MPI::MPI_CXX accl zmq zmqpp pthread cclobfm)
 target_compile_options(test PRIVATE -w -fdiagnostics-color=always -g)

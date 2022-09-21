@@ -21,6 +21,10 @@
 #include "simbuffer.hpp"
 #include <vector>
 
+/**
+ * @brief Class providing a bus-functional model (at HLS Stream level) of the ACCL CCLO kernel. Connects to the emulator/simulator.
+ * 
+ */
 class CCLO_BFM{
     private:
         zmq_intf_context zmq_ctx;
@@ -37,10 +41,33 @@ class CCLO_BFM{
         //std::vector<ACCL::SimBuffer *> buffers;
 
     public:
+        /**
+         * @brief Construct a new CCLO_BFM object
+         * 
+         * @param zmqport Number of port which connects to the ACCL emulator/simulator
+         * @param local_rank ID of local rank
+         * @param world_size Total number of ranks
+         * @param krnl_dest A vector of CCLO data port destination IDs to which to subscribe
+         * @param callreq HLS Stream for call commands issued by HLS functions
+         * @param callreq HLS Stream for call responses to HLS functions
+         * @param data_cclo2krnl HLS Stream for data provided by the (emulated) CCLO to HLS functions
+         * @param data_krnl2cclo HLS Stream for data provided by the HLS functions to the (emulated) CCLO
+         * @param target_ctrl_stream Control stream to use inside emulator/simulator. Do not change.
+         */
         CCLO_BFM(unsigned int zmqport, unsigned int local_rank, unsigned int world_size,  const std::vector<unsigned int>& krnl_dest,
                     hlslib::Stream<command_word> &callreq, hlslib::Stream<command_word> &callack,
                     hlslib::Stream<stream_word> &data_cclo2krnl, hlslib::Stream<stream_word> &data_krnl2cclo, int target_ctrl_stream=2);
+        
+        /**
+         * @brief Start BFM
+         * 
+         */
         void run();
+
+        /**
+         * @brief Stop BFM
+         * 
+         */
         void stop();
         //void register_buffer(ACCL::SimBuffer *buf)
 
