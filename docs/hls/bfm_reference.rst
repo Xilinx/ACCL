@@ -3,9 +3,9 @@
    comment:: Copyright (C) 2022 Advanced Micro Devices, Inc
 
 ##################################
-ACCL HLS Reference
+CCLO_BFM Reference
 ##################################
 
-.. doxygennamespace:: cclo_bfm
+.. doxygenclass:: CCLO_BFM
    :project: CCLO_BFM
    :members:

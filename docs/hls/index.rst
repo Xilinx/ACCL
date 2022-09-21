@@ -11,3 +11,4 @@ ACCL HLS interface
    :caption: Contents
 
    reference
+   bfm_reference
