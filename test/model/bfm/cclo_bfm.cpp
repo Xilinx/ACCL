@@ -137,9 +137,9 @@ void CCLO_BFM::pop_data(){
         std::vector<uint8_t> vec;
         vec = zmq_client_strmread(&zmq_ctx, true);
         if(vec.size() == 0) continue;
-        int idx;
+        unsigned int idx;
         do{
-            for(int i=0; i<DATA_WIDTH/8, idx<vec.size(); i++){
+            for(unsigned int i=0; i<DATA_WIDTH/8, idx<vec.size(); i++){
                 tmp.data((i+1)*8-1,i*8) = vec.at(idx++);
             }
             tmp.last = (idx == vec.size());
@@ -166,7 +166,7 @@ void CCLO_BFM::run(){
 
 void CCLO_BFM::stop(){
     finalize = true;
-    for(int i=0; i<threads.size(); i++){
+    for(unsigned int i=0; i<threads.size(); i++){
         threads.at(i).join();
     }
     std::cout << "CCLO BFM stopped" << std::endl;

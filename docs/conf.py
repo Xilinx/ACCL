@@ -84,3 +84,4 @@ breathe_default_project = "ACCL"
 
 subprocess.call('doxygen ./Doxyfile', shell=True, cwd='../driver/xrt')
 subprocess.call('doxygen ./Doxyfile', shell=True, cwd='../driver/hls')
+subprocess.call('doxygen ./Doxyfile', shell=True, cwd='../test//model/bfm')
