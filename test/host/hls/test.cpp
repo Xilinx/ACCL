@@ -40,6 +40,7 @@ struct options_t {
     unsigned int dest;
     unsigned int nruns;
     unsigned int device_index;
+    bool udp;
 };
 
 void run_test(options_t options) {
@@ -51,7 +52,7 @@ void run_test(options_t options) {
 
     std::unique_ptr<ACCL::ACCL> accl;
     accl = std::make_unique<ACCL::ACCL>(ranks, rank, options.start_port,
-                                            networkProtocol::TCP, 16,
+                                            options.udp ? networkProtocol::UDP : networkProtocol::TCP, 16,
                                             options.rxbuf_size);
 
     accl->set_timeout(1e8);
@@ -111,6 +112,7 @@ options_t parse_options(int argc, char *argv[]) {
                                             "How many KB per RX buffer", false, 1,
                                             "positive integer");
     cmd.add(bufsize_arg);
+    TCLAP::SwitchArg udp_arg("u", "udp", "Use UDP backend", cmd, false);
 
     try {
         cmd.parse(argc, argv);
@@ -128,6 +130,7 @@ options_t parse_options(int argc, char *argv[]) {
     opts.count = count_arg.getValue();
     opts.rxbuf_size = bufsize_arg.getValue() * 1024; // convert to bytes
     opts.nruns = nruns_arg.getValue();
+    opts.udp = udp_arg.getValue();
     return opts;
 }
 
