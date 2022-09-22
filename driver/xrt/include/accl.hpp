@@ -186,7 +186,7 @@ public:
    *                       buffer using ACCL::create_buffer.
    * @param count          Amount of elements in buffer to send.
    * @param dst            Destination rank to send data to.
-   * @param stream_id      ID of target stream on destination rank. IDs 0-8 are reserved, call will not execute if set in this range.
+   * @param stream_id      ID of target stream on destination rank. IDs 0-8 are reserved, throws exception if set in this range.
    * @param from_fpga      Set to true if the data is already on the FPGA.
    * @param stream_flags   Stream flags to use. Note that only OP0_STREAM is relevant.
    * @param compress_dtype Datatype to compress buffers to over ethernet.
