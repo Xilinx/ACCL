@@ -1147,7 +1147,7 @@ std::string ACCL::dump_communicator() {
   return stream.str();
 }
 
-addr_t ACCL::get_communicator_adr(communicatorId comm_id){
+addr_t ACCL::get_communicator_addr(communicatorId comm_id){
   return communicators[comm_id].communicators_addr();
 }
 
