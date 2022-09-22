@@ -139,7 +139,7 @@ void CCLO_BFM::pop_data(){
         if(vec.size() == 0) continue;
         unsigned int idx;
         do{
-            for(unsigned int i=0; i<DATA_WIDTH/8, idx<vec.size(); i++){
+            for(unsigned int i=0; i<DATA_WIDTH/8 && idx<vec.size(); i++){
                 tmp.data((i+1)*8-1,i*8) = vec.at(idx++);
             }
             tmp.last = (idx == vec.size());
