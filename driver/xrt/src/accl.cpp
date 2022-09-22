@@ -19,7 +19,7 @@
 #include <bitset>
 #include <cmath>
 #include <set>
-
+#include <stdexcept>
 #include "accl.hpp"
 #include "dummybuffer.hpp"
 
@@ -157,7 +157,7 @@ CCLO *ACCL::stream_put(BaseBuffer &srcbuf, unsigned int count,
                  dataType compress_dtype, bool run_async,
                  std::vector<CCLO *> waitfor) {
   CCLO::Options options{};
-  if (stream_id < 9) return nullptr;
+  if (stream_id < 9) throw std::invalid_argument("Stream ID must be >= 9");
   if (from_fpga == false) {
     srcbuf.sync_to_device();
   }
