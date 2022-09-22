@@ -53,16 +53,18 @@ void vadd_put(
     //read data from src, increment it, 
     //and push the result into the CCLO stream
     ap_uint<512> tmpword;
+    int word_count = 0;
     int rd_count = count;
     while(rd_count > 0){
         //read 16 floats into a 512b vector
         for(int i=0; (i<16) && (rd_count>0); i++){
-            float inc = src[i]+1;
+            float inc = src[i+16*word_count]+1;
             tmpword(i*32,(i+1)*32-1) = *reinterpret_cast<ap_uint<32>*>(&inc);
             rd_count--;
         }
         //send the vector to cclo
         data.push(tmpword, 0);
+        word_count++;
     }
     //send command to CCLO
     //we're passing src as source 
@@ -71,14 +73,16 @@ void vadd_put(
     accl.stream_put(count, 9, destination, (ap_uint<64>)src);
     //pull data from CCLO and write it to dst
     int wr_count = count;
+    word_count = 0;
     while(wr_count > 0){
         //read vector from CCLO
         tmpword = data.pull().data;
         //read from the 512b vector into 16 floats
         for(int i=0; (i<16) && (wr_count>0); i++){
             ap_uint<32> val = tmpword(i*32,(i+1)*32-1);
-            dst[i] = *reinterpret_cast<float*>(&val);
+            dst[i+16*word_count] = *reinterpret_cast<float*>(&val);
             wr_count--;
         }
+        word_count++;
     }
 }
