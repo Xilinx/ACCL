@@ -78,7 +78,7 @@ void run_test(options_t options) {
     //run the hls function, using the global communicator
     vadd_put(   src, dst, options.count, 
                 (rank+1)%size,
-                accl->get_communicator_adr(), 
+                accl->get_communicator_addr(), 
                 accl->get_arithmetic_config_addr({dataType::float32, dataType::float32}), 
                 callreq, callack, 
                 data_krnl2cclo, data_cclo2krnl);

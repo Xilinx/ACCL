@@ -757,7 +757,7 @@ public:
    * @param ACCL::communicatorId Numerical ID of the target communicator.
    * @return addr_t Address of the communicator in CCLO memory.
    */
-  addr_t get_communicator_adr(communicatorId comm_id=GLOBAL_COMM);
+  addr_t get_communicator_addr(communicatorId comm_id=GLOBAL_COMM);
 
   /**
    * Return CCLO address of arithmetic config.
