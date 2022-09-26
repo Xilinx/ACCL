@@ -384,13 +384,14 @@ int recv(	unsigned int src_rank,
             unsigned int comm_offset,
             unsigned int arcfg_offset,
             unsigned int src_tag,
-            unsigned int compression){
+            unsigned int compression,
+            unsigned int stream){
     //if ETH_COMPRESSED is set, also set OP1_COMPRESSED
     compression |= (compression & ETH_COMPRESSED) >> 2;
     return move(
         MOVE_NONE,
         MOVE_ON_RECV, 
-        MOVE_IMMEDIATE, 
+        (stream & RES_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE, 
         compression, RES_LOCAL, 0,
         count, comm_offset, arcfg_offset, 0, 0, dst_addr, 0, 0, 0,
         src_rank, src_tag, 0, 0
@@ -1330,7 +1331,7 @@ void run() {
                 retval = send(root_src_dst, count, op0_addr, comm, datapath_cfg, msg_tag, compression_flags, stream_flags);
                 break;
             case ACCL_RECV:
-                retval = recv(root_src_dst, count, res_addr, comm, datapath_cfg, msg_tag, compression_flags);
+                retval = recv(root_src_dst, count, res_addr, comm, datapath_cfg, msg_tag, compression_flags, stream_flags);
                 break;
             case ACCL_BCAST:
                 retval = broadcast(count, root_src_dst, op0_addr, comm, datapath_cfg, compression_flags, stream_flags);
