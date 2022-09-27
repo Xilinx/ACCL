@@ -57,6 +57,12 @@ class CCLO_BFM{
         CCLO_BFM(unsigned int zmqport, unsigned int local_rank, unsigned int world_size,  const std::vector<unsigned int>& krnl_dest,
                     hlslib::Stream<command_word> &callreq, hlslib::Stream<command_word> &callack,
                     hlslib::Stream<stream_word> &data_cclo2krnl, hlslib::Stream<stream_word> &data_krnl2cclo, int target_ctrl_stream=2);
+
+        /**
+        * @brief Deconstructer of the CCLO_BFM object
+        *
+        */
+        ~CCLO_BFM();
         
         /**
          * @brief Start BFM

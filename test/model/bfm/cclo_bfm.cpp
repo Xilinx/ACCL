@@ -36,6 +36,13 @@ CCLO_BFM::CCLO_BFM(unsigned int zmqport, unsigned int local_rank, unsigned int w
     std::cout << "CCLO BFM connected" << std::endl;
 }
 
+CCLO_BFM::~CCLO_BFM() {
+    // Free all used ZMQ sockets
+    delete zmq_ctx.cmd_socket;
+    delete zmq_ctx.krnl_rx_socket;
+    delete zmq_ctx.krnl_tx_socket;
+}
+
 //TODO: utility function, finds the registered SimBuffer
 //to which a given address belongs, and performs sanity checks
 // unsigned int CCLO_BFM::find_registered_buffer(uint64_t adr){
