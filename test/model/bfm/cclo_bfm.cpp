@@ -28,7 +28,7 @@ unsigned int call_ctr;
 CCLO_BFM::CCLO_BFM(unsigned int zmqport, unsigned int local_rank, unsigned int world_size,  const std::vector<unsigned int>& krnl_dest,
             hlslib::Stream<command_word> &callreq, hlslib::Stream<command_word> &callack,
             hlslib::Stream<stream_word> &data_cclo2krnl, hlslib::Stream<stream_word> &data_krnl2cclo,
-            int target_ctrl_stream) : 
+            int target_ctrl_stream) :
             callreq(callreq), callack(callack), data_cclo2krnl(data_cclo2krnl), data_krnl2cclo(data_krnl2cclo), target_ctrl_stream(target_ctrl_stream) {
     //create ZMQ context
     std::cout << "CCLO BFM connecting to ZMQ on starting port " + std::to_string(zmqport) + " for rank " + std::to_string(local_rank) << std::endl;
