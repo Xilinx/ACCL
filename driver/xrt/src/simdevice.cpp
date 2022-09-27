@@ -28,11 +28,6 @@ SimDevice::SimDevice(unsigned int zmqport, unsigned int local_rank) {
   debug("SimDevice connected");
 };
 
-SimDevice::~SimDevice() {
-    if (zmq_ctx.cmd_socket != nullptr)
-       delete zmq_ctx.cmd_socket;
-}
-
 void SimDevice::start(const Options &options) {
   int function;
 

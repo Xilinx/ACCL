@@ -23,7 +23,7 @@
 
 /**
  * @brief Class providing a bus-functional model (at HLS Stream level) of the ACCL CCLO kernel. Connects to the emulator/simulator.
- * 
+ *
  */
 class CCLO_BFM{
     private:
@@ -37,13 +37,13 @@ class CCLO_BFM{
         std::vector<std::thread> threads;
         int target_ctrl_stream;
 
-        //hlslib::Stream<std::vector<ACCL::SimBuffer *>> buf_args; 
+        //hlslib::Stream<std::vector<ACCL::SimBuffer *>> buf_args;
         //std::vector<ACCL::SimBuffer *> buffers;
 
     public:
         /**
          * @brief Construct a new CCLO_BFM object
-         * 
+         *
          * @param zmqport Number of port which connects to the ACCL emulator/simulator
          * @param local_rank ID of local rank
          * @param world_size Total number of ranks
@@ -62,17 +62,17 @@ class CCLO_BFM{
         * @brief Deconstructer of the CCLO_BFM object
         *
         */
-        ~CCLO_BFM();
-        
+        ~CCLO_BFM() {}
+
         /**
          * @brief Start BFM
-         * 
+         *
          */
         void run();
 
         /**
          * @brief Stop BFM
-         * 
+         *
          */
         void stop();
         //void register_buffer(ACCL::SimBuffer *buf)

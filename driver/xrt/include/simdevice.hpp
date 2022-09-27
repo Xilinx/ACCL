@@ -43,7 +43,7 @@ public:
    * Destroy the Simulated Device object
    *
    */
-  virtual ~SimDevice();
+  virtual ~SimDevice() {}
 
   void call(const Options &options) override;
 
