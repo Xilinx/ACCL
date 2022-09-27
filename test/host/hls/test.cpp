@@ -70,7 +70,7 @@ void run_test(options_t options) {
 
         accl = std::make_unique<ACCL::ACCL>(
             ranks, rank, device, cclo_ip, hostctrl_ip, devicemem, rxbufmem,
-            networkmem, networkProtocol::TCP, 16, options.rxbuf_size);
+            networkmem, networkProtocol::UDP, 16, options.rxbuf_size);
     } else {
         accl = std::make_unique<ACCL::ACCL>(ranks, rank, options.start_port,
                                                 options.udp ? networkProtocol::UDP : networkProtocol::TCP, 16,
@@ -88,7 +88,7 @@ void run_test(options_t options) {
     //allocate float arrays for the HLS function to use
     float src[options.count], dst[options.count];
     for(int i=0; i<options.count; i++){
-        src[i] = 0;
+        src[i] = 1.0*(options.count*rank+i);
     }
 
     if (options.hardware) {
@@ -100,9 +100,9 @@ void run_test(options_t options) {
 
         src_bo.write(src);
         src_bo.sync(XCL_BO_SYNC_BO_TO_DEVICE);
-
-        vadd_ip(src_bo, dst_bo, options.count, (rank+1)%size, accl->get_communicator_addr(), 
+        auto run = vadd_ip(src_bo, dst_bo, options.count, (rank+1)%size, accl->get_communicator_addr(), 
                     accl->get_arithmetic_config_addr({dataType::float32, dataType::float32}));
+        run.wait(10000);
 
         dst_bo.sync(XCL_BO_SYNC_BO_FROM_DEVICE);
         dst_bo.read(dst);
@@ -130,14 +130,15 @@ void run_test(options_t options) {
     //check HLS function outputs
     unsigned int err_count = 0;
     for(int i=0; i<options.count; i++){
-        err_count += (dst[i] != 1);
-        std::cout << "Mismatch at [" << i << "]: got " << dst[i] << " vs expected 1" << std::endl;
+        float expected = 1.0*(options.count*((rank+size-1)%size)+i) + 1;
+        if(dst[i] != expected){
+            err_count++;
+            std::cout << "Mismatch at [" << i << "]: got " << dst[i] << " vs expected " << expected << std::endl;
+        }
     }
 
     std::cout << "Test finished with " << err_count << " errors" << std::endl;
-    //clean up
-    accl->deinit();
-
+    MPI_Barrier(MPI_COMM_WORLD);
 
 }
 
