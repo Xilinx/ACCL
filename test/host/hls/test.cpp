@@ -41,6 +41,8 @@ struct options_t {
     unsigned int nruns;
     unsigned int device_index;
     bool udp;
+    bool hardware;
+    std::string xclbin;
 };
 
 void run_test(options_t options) {
@@ -51,9 +53,29 @@ void run_test(options_t options) {
     }
 
     std::unique_ptr<ACCL::ACCL> accl;
-    accl = std::make_unique<ACCL::ACCL>(ranks, rank, options.start_port,
-                                            options.udp ? networkProtocol::UDP : networkProtocol::TCP, 16,
-                                            options.rxbuf_size);
+    xrt::device device;
+
+    if (options.hardware) {
+        device = xrt::device(options.device_index);
+        auto xclbin_uuid = device.load_xclbin(options.xclbin);
+        auto cclo_ip = xrt::ip(device, device.get_xclbin_uuid(),
+                            "ccl_offload:{ccl_offload_" + std::to_string(rank) + "}");
+        auto hostctrl_ip =
+            xrt::kernel(device, device.get_xclbin_uuid(), "hostctrl:{hostctrl_" + std::to_string(rank) + "_0}",
+                        xrt::kernel::cu_access_mode::exclusive);
+
+        int devicemem = rank * 6;
+        std::vector<int> rxbufmem = {rank * 6 + 1};
+        int networkmem = rank * 6 + 2;
+
+        accl = std::make_unique<ACCL::ACCL>(
+            ranks, rank, device, cclo_ip, hostctrl_ip, devicemem, rxbufmem,
+            networkmem, networkProtocol::UDP, 16, options.rxbuf_size);
+    } else {
+        accl = std::make_unique<ACCL::ACCL>(ranks, rank, options.start_port,
+                                                options.udp ? networkProtocol::UDP : networkProtocol::TCP, 16,
+                                                options.rxbuf_size);
+    }
 
     accl->set_timeout(1e8);
     std::cout << "Host-side CCLO initialization finished" << std::endl;
@@ -62,36 +84,62 @@ void run_test(options_t options) {
     MPI_Barrier(MPI_COMM_WORLD);
 
     //run test here:
-    //initialize a CCLO BFM and streams as needed
-    hlslib::Stream<command_word> callreq, callack;
-    hlslib::Stream<stream_word> data_cclo2krnl, data_krnl2cclo;
-    std::vector<unsigned int> dest = {9};
-    CCLO_BFM cclo(options.start_port, rank, size, dest, callreq, callack, data_cclo2krnl, data_krnl2cclo);
-    cclo.run();
-    std::cout << "CCLO BFM started" << std::endl;
-    MPI_Barrier(MPI_COMM_WORLD);
 
     //allocate float arrays for the HLS function to use
     float src[options.count], dst[options.count];
     for(int i=0; i<options.count; i++){
-        src[i] = 0;
+        src[i] = 1.0*(options.count*rank+i);
     }
-    //run the hls function, using the global communicator
-    vadd_put(   src, dst, options.count, 
-                (rank+1)%size,
-                accl->get_communicator_addr(), 
-                accl->get_arithmetic_config_addr({dataType::float32, dataType::float32}), 
-                callreq, callack, 
-                data_krnl2cclo, data_cclo2krnl);
+
+    if (options.hardware) {
+        auto vadd_ip = xrt::kernel(device, device.get_xclbin_uuid(), "vadd_put:{vadd_" + std::to_string(rank) + "_0}",
+                        xrt::kernel::cu_access_mode::exclusive);
+        //need to use XRT API because vadd kernel might use different HBM banks than ACCL
+        auto src_bo = xrt::bo(device, sizeof(float)*options.count, vadd_ip.group_id(0));
+        auto dst_bo = xrt::bo(device, sizeof(float)*options.count, vadd_ip.group_id(1));
+
+        src_bo.write(src);
+        src_bo.sync(XCL_BO_SYNC_BO_TO_DEVICE);
+        auto run = vadd_ip(src_bo, dst_bo, options.count, (rank+1)%size, accl->get_communicator_addr(), 
+                    accl->get_arithmetic_config_addr({dataType::float32, dataType::float32}));
+        run.wait(10000);
+
+        dst_bo.sync(XCL_BO_SYNC_BO_FROM_DEVICE);
+        dst_bo.read(dst);
+    } else {
+        //initialize a CCLO BFM and streams as needed
+        hlslib::Stream<command_word> callreq, callack;
+        hlslib::Stream<stream_word> data_cclo2krnl, data_krnl2cclo;
+        std::vector<unsigned int> dest = {9};
+        CCLO_BFM cclo(options.start_port, rank, size, dest, callreq, callack, data_cclo2krnl, data_krnl2cclo);
+        cclo.run();
+        std::cout << "CCLO BFM started" << std::endl;
+        MPI_Barrier(MPI_COMM_WORLD);
+
+        //run the hls function, using the global communicator
+        vadd_put(   src, dst, options.count, 
+                    (rank+1)%size,
+                    accl->get_communicator_addr(), 
+                    accl->get_arithmetic_config_addr({dataType::float32, dataType::float32}), 
+                    callreq, callack, 
+                    data_krnl2cclo, data_cclo2krnl);
+        //stop the BFM
+        cclo.stop();
+    }
+
     //check HLS function outputs
     unsigned int err_count = 0;
     for(int i=0; i<options.count; i++){
-        err_count += (dst[i] != 1);
+        float expected = 1.0*(options.count*((rank+size-1)%size)+i) + 1;
+        if(dst[i] != expected){
+            err_count++;
+            std::cout << "Mismatch at [" << i << "]: got " << dst[i] << " vs expected " << expected << std::endl;
+        }
     }
+
     std::cout << "Test finished with " << err_count << " errors" << std::endl;
-    //clean up
-    cclo.stop();
-    accl->deinit();
+    MPI_Barrier(MPI_COMM_WORLD);
+
 }
 
 
@@ -113,9 +161,23 @@ options_t parse_options(int argc, char *argv[]) {
                                             "positive integer");
     cmd.add(bufsize_arg);
     TCLAP::SwitchArg udp_arg("u", "udp", "Use UDP backend", cmd, false);
+    TCLAP::SwitchArg hardware_arg("f", "hardware", "enable hardware mode", cmd, false);
+    TCLAP::ValueArg<std::string> xclbin_arg(
+        "x", "xclbin", "xclbin of accl driver if hardware mode is used", false,
+        "accl.xclbin", "file");
+    cmd.add(xclbin_arg);
+    TCLAP::ValueArg<uint16_t> device_index_arg(
+        "i", "device-index", "device index of FPGA if hardware mode is used",
+        false, 0, "positive integer");
+    cmd.add(device_index_arg);
 
     try {
         cmd.parse(argc, argv);
+        if(hardware_arg.getValue()) {
+            if(udp_arg.getValue()) {
+                throw std::runtime_error("Hardware run only supported on axis3x.");
+            }
+        }
     } catch (std::exception &e) {
         if (rank == 0) {
         std::cout << "Error: " << e.what() << std::endl;
@@ -131,6 +193,9 @@ options_t parse_options(int argc, char *argv[]) {
     opts.rxbuf_size = bufsize_arg.getValue() * 1024; // convert to bytes
     opts.nruns = nruns_arg.getValue();
     opts.udp = udp_arg.getValue();
+    opts.hardware = hardware_arg.getValue();
+    opts.xclbin = xclbin_arg.getValue();
+    opts.device_index = device_index_arg.getValue();
     return opts;
 }
 
