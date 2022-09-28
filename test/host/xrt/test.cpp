@@ -1152,6 +1152,57 @@ void test_barrier(ACCL::ACCL &accl) {
   std::cout << "Test is successful!" << std::endl;
 }
 
+bool check_arp(Networklayer &network_layer, std::vector<rank_t> &ranks, options_t &options) {
+  std::map<unsigned, bool> ranks_checked;
+  for (unsigned i = 0; i < static_cast<unsigned>(size); ++i) {
+    ranks_checked[i] = false;
+  }
+
+  bool sanity_check = true;
+  const std::map<int, std::pair<std::string, std::string>> arp = network_layer.read_arp_table(size);
+
+  std::ostringstream ss_arp;
+  ss_arp << "ARP table:";
+
+  for (const std::pair<const int, std::pair<std::string, std::string>> &elem : arp) {
+    const unsigned index = elem.first;
+    const std::pair<std::string, std::string> &entry = elem.second;
+    const std::string &mac = entry.first;
+    const std::string &ip = entry.second;
+    ss_arp << "\n(" << index << ") " << mac << ": " << ip;
+
+    for (unsigned i = 0; i < static_cast<unsigned>(size); ++i) {
+      if (ranks[i].ip == ip) {
+        if (ranks_checked[i]) {
+          std::cout << "Double entry for " << ip << " in arp table!" << std::endl;
+          sanity_check = false;
+        } else {
+          ranks_checked[i] = true;
+        }
+      }
+    }
+  }
+
+  test_debug(ss_arp.str(), options);
+
+  if (!sanity_check) {
+    return false;
+  }
+
+  unsigned hosts = 0;
+  for (unsigned i = 0; i < static_cast<unsigned>(size); ++i) {
+    if (ranks_checked[i]) {
+      hosts += 1;
+    }
+  }
+  if (hosts < static_cast<unsigned>(size) - 1) {
+    std::cout << "Found only " << hosts << " hosts out of " << size - 1 << "!" << std::endl;
+    return false;
+  }
+
+  return true;
+}
+
 void configure_vnx(CMAC &cmac, Networklayer &network_layer,
                    std::vector<rank_t> &ranks, options_t &options) {
   if (ranks.size() > max_sockets_size) {
@@ -1184,6 +1235,8 @@ void configure_vnx(CMAC &cmac, Networklayer &network_layer,
     exit(1);
   }
 
+  MPI_Barrier(MPI_COMM_WORLD);
+
   std::cout << "Populating socket table..." << std::endl;
 
   network_layer.update_ip_address(ranks[rank].ip);
@@ -1200,11 +1253,20 @@ void configure_vnx(CMAC &cmac, Networklayer &network_layer,
 
   std::cout << "Starting ARP discovery..." << std::endl;
   std::this_thread::sleep_for(std::chrono::seconds(4));
+  MPI_Barrier(MPI_COMM_WORLD);
   network_layer.arp_discovery();
   std::cout << "Finishing ARP discovery..." << std::endl;
   std::this_thread::sleep_for(std::chrono::seconds(2));
+  MPI_Barrier(MPI_COMM_WORLD);
   network_layer.arp_discovery();
   std::cout << "ARP discovery finished!" << std::endl;
+
+  if (!check_arp(network_layer, ranks, options)) {
+    std::this_thread::sleep_for(std::chrono::seconds(3));
+    exit(1);
+  }
+
+  MPI_Barrier(MPI_COMM_WORLD);
 }
 
 void start_test(options_t options) {
