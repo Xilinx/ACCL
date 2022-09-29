@@ -774,6 +774,27 @@ public:
    */
   int devicemem() { return _devicemem; }
 
+  /**
+   * Open port on network interface of FPGA to exchange ACCL message.
+   *
+   * @param comm_id Numerical ID of the target communicator.
+   */
+  void open_port(communicatorId comm_id = GLOBAL_COMM);
+
+  /**
+   * Open connections with other ranks.
+   *
+   * @param comm_id Numerical ID of the target communicator.
+   */
+  void open_con(communicatorId comm_id = GLOBAL_COMM);
+
+  /**
+   * Close connections with other ranks.
+   *
+   * @param comm_id Numerical ID of the target communicator.
+   */
+  void close_con(communicatorId comm_id = GLOBAL_COMM);
+
 private:
   CCLO *cclo{};
   // Supported types and corresponding arithmetic config
@@ -809,6 +830,10 @@ private:
   const int networkmem;
   xrt::device device;
 
+  // TCP safety flags
+  bool port_open{};
+  bool con_open{};
+
   void initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
                        int nbufs, addr_t bufsize);
 
@@ -821,6 +846,8 @@ private:
     return setup_rx_buffers(nbufs, bufsize, mems);
   }
 
+  void check_tcp_ready();
+
   void check_return_value(const std::string function_name);
 
   void prepare_call(CCLO::Options &options);
@@ -828,14 +855,6 @@ private:
   CCLO *call_async(CCLO::Options &options);
 
   CCLO *call_sync(CCLO::Options &options);
-
-  void init_connection(communicatorId comm_id = GLOBAL_COMM);
-
-  void open_port(communicatorId comm_id = GLOBAL_COMM);
-
-  void open_con(communicatorId comm_id = GLOBAL_COMM);
-
-  void close_con(communicatorId comm_id = GLOBAL_COMM);
 
   void use_udp(communicatorId comm_id = GLOBAL_COMM);
 

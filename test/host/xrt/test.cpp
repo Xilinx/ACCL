@@ -1229,6 +1229,13 @@ void start_test(options_t options) {
                                                     : networkProtocol::TCP,
                                         16, options.rxbuf_size);
   }
+  if (!options.udp) {
+    MPI_Barrier(MPI_COMM_WORLD);
+    accl->open_port();
+    MPI_Barrier(MPI_COMM_WORLD);
+    accl->open_con();
+  }
+
   accl->set_timeout(1e8);
 
   // barrier here to make sure all the devices are configured before testing
