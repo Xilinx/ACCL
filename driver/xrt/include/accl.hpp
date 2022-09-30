@@ -52,7 +52,6 @@ public:
    * @param hostctrl_ip   The hostctrl kernel on the FPGA
    * @param devicemem     Memory bank of device memory
    * @param rxbufmem      Memory banks of rxbuf memory
-   * @param networkmem    Memory bank of network memory
    * @param protocol      Network protocol to use
    * @param nbufs         Amount of buffers to use
    * @param bufsize       Size of buffers
@@ -60,7 +59,7 @@ public:
    */
   ACCL(const std::vector<rank_t> &ranks, int local_rank, xrt::device &device,
        xrt::ip &cclo_ip, xrt::kernel &hostctrl_ip, int devicemem,
-       const std::vector<int> &rxbufmem, int networkmem,
+       const std::vector<int> &rxbufmem,
        networkProtocol protocol = networkProtocol::TCP, int nbufs = 16,
        addr_t bufsize = 1024,
        const arithConfigMap &arith_config = DEFAULT_ARITH_CONFIG);
@@ -774,6 +773,10 @@ public:
    */
   int devicemem() { return _devicemem; }
 
+  void open_port(communicatorId comm_id = GLOBAL_COMM);
+
+  void open_con(communicatorId comm_id = GLOBAL_COMM);
+
 private:
   CCLO *cclo{};
   // Supported types and corresponding arithmetic config
@@ -785,9 +788,6 @@ private:
   std::vector<Buffer<int8_t> *> rx_buffer_spares;
   addr_t rx_buffer_size{};
   addr_t rx_buffers_adr{};
-  // Buffers for POE
-  Buffer<int8_t> *tx_buf_network{};
-  Buffer<int8_t> *rx_buf_network{};
   // Spare buffer for general use
   Buffer<int8_t> *utility_spare{};
   // List of communicators, to which users will add
@@ -806,7 +806,6 @@ private:
   // memory banks for hardware
   const int _devicemem;
   const std::vector<int> rxbufmem;
-  const int networkmem;
   xrt::device device;
 
   void initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
@@ -831,9 +830,9 @@ private:
 
   void init_connection(communicatorId comm_id = GLOBAL_COMM);
 
-  void open_port(communicatorId comm_id = GLOBAL_COMM);
+  // void open_port(communicatorId comm_id = GLOBAL_COMM);
 
-  void open_con(communicatorId comm_id = GLOBAL_COMM);
+  // void open_con(communicatorId comm_id = GLOBAL_COMM);
 
   void close_con(communicatorId comm_id = GLOBAL_COMM);
 

@@ -30,6 +30,8 @@
 #include <vnx/networklayer.hpp>
 #include <xrt/xrt_device.h>
 #include <xrt/xrt_kernel.h>
+#include <fstream>
+#include <arpa/inet.h>
 
 using namespace ACCL;
 using namespace vnx;
@@ -54,8 +56,33 @@ struct options_t {
   bool hardware;
   bool axis3;
   bool udp;
+	bool tcp;
   std::string xclbin;
+	std::string fpgaIP;
 };
+
+inline void swap_endianness(uint32_t *ip) {
+  uint8_t *ip_bytes = reinterpret_cast<uint8_t *>(ip);
+  *ip = (ip_bytes[3] << 0) | (ip_bytes[2] << 8) | (ip_bytes[1] << 16) |
+        (ip_bytes[0] << 24);
+}
+
+uint32_t ip_encode(std::string ip) {
+  struct sockaddr_in sa;
+  inet_pton(AF_INET, ip.c_str(), &(sa.sin_addr));
+  swap_endianness(&sa.sin_addr.s_addr);
+  return sa.sin_addr.s_addr;
+}
+
+std::string ip_decode(uint32_t ip) {
+  char buffer[INET_ADDRSTRLEN];
+  struct in_addr sa;
+  sa.s_addr = ip;
+  swap_endianness(&sa.s_addr);
+  inet_ntop(AF_INET, &sa, buffer, INET_ADDRSTRLEN);
+  return std::string(buffer, INET_ADDRSTRLEN);
+}
+
 
 void test_debug(std::string message, options_t &options) {
   if (options.debug) {
@@ -1165,10 +1192,20 @@ void start_test(options_t options) {
   std::vector<rank_t> ranks = {};
   failed_tests = 0;
   skipped_tests = 0;
+	std::ifstream myfile;
+  myfile.open(options.fpgaIP);
+	if(!myfile.is_open()) {
+      perror("Error open fpgaIP file");
+      exit(EXIT_FAILURE);
+  }
+	std::vector<std::string> ipList;
   for (int i = 0; i < size; ++i) {
     std::string ip;
     if (options.hardware && !options.axis3) {
-      ip = "10.10.10." + std::to_string(i);
+      // ip = "10.10.10." + std::to_string(i);
+			getline(myfile, ip);
+			std::cout << ip << std::endl;
+			ipList.push_back(ip);
     } else {
       ip = "127.0.0.1";
     }
@@ -1208,7 +1245,7 @@ void start_test(options_t options) {
     } else {
       devicemem = 0;
       rxbufmem = {1};
-      networkmem = 2;
+      networkmem = 6;
     }
 
     if (options.udp) {
@@ -1217,12 +1254,47 @@ void start_test(options_t options) {
           xrt::ip(device, xclbin_uuid, "networklayer:{networklayer_0}"));
 
       configure_vnx(cmac, network_layer, ranks, options);
-    }
+    } else if (options.tcp)
+		{
+			std::cout << "Configure TCP Network Kernel" << std::endl;
+			auto network_krnl = xrt::kernel(device, xclbin_uuid, "network_krnl:{network_krnl_0}",
+                    xrt::kernel::cu_access_mode::exclusive);
+			Buffer<int8_t> *tx_buf_network = new FPGABuffer<int8_t>(64*1024*1024, dataType::int8,
+                                              device, networkmem);
+			Buffer<int8_t> *rx_buf_network = new FPGABuffer<int8_t>(64*1024*1024, dataType::int8,
+                                              device, networkmem);
+			tx_buf_network->sync_to_device();
+      rx_buf_network->sync_to_device();
+
+			// network_krnl (uint ip_addr, uint board_number, uint arp, int* axi00_ptr0, int* axi01_ptr0)
+			uint localFPGAIP = ip_encode(ipList[rank]);
+			std::cout << "rank: "<< rank << " FPGA IP: "<<std::hex << localFPGAIP << std::endl;
+
+			network_krnl(localFPGAIP, uint(rank), localFPGAIP, tx_buf_network->bo(), rx_buf_network->bo());
+
+      uint32_t ip_reg = network_krnl.read_register(0x010);
+      uint32_t board_reg = network_krnl.read_register(0x018);
+      std::cout<< std::hex << "ip_reg: "<< ip_reg << " board_reg IP: " << board_reg << std::endl;
+		}
+		
+
+		MPI_Barrier(MPI_COMM_WORLD);
 
     accl = std::make_unique<ACCL::ACCL>(
         ranks, rank, device, cclo_ip, hostctrl_ip, devicemem, rxbufmem,
-        networkmem, options.udp ? networkProtocol::UDP : networkProtocol::TCP,
+        options.udp ? networkProtocol::UDP : networkProtocol::TCP,
         16, options.rxbuf_size);
+
+    if (options.tcp){
+      debug("Starting connections to communicator ranks");
+      debug("Opening ports to communicator ranks");
+      accl->open_port();
+      MPI_Barrier(MPI_COMM_WORLD);
+      debug("Starting session to communicator ranks");
+      accl->open_con();
+      debug(accl->dump_communicator());
+    }
+
   } else {
     accl = std::make_unique<ACCL::ACCL>(ranks, rank, options.start_port, device,
                                         options.udp ? networkProtocol::UDP
@@ -1271,8 +1343,8 @@ void start_test(options_t options) {
   MPI_Barrier(MPI_COMM_WORLD);
   test_reduce_scatter(*accl, options, reduceFunction::SUM);
   MPI_Barrier(MPI_COMM_WORLD);
-  // test_reduce_scatter_compressed(*accl, options, reduceFunction::SUM);
-  // MPI_Barrier(MPI_COMM_WORLD);
+  test_reduce_scatter_compressed(*accl, options, reduceFunction::SUM);
+  MPI_Barrier(MPI_COMM_WORLD);
   test_multicomm(*accl, options);
   MPI_Barrier(MPI_COMM_WORLD);
   test_allgather_comms(*accl, options);
@@ -1282,10 +1354,10 @@ void start_test(options_t options) {
     test_bcast(*accl, options, root);
     MPI_Barrier(MPI_COMM_WORLD);
     test_bcast_compressed(*accl, options, root);
-    MPI_Barrier(MPI_COMM_WORLD);
-    test_scatter(*accl, options, root);
-    MPI_Barrier(MPI_COMM_WORLD);
-    test_scatter_compressed(*accl, options, root);
+    // MPI_Barrier(MPI_COMM_WORLD);
+    // test_scatter(*accl, options, root);
+    // MPI_Barrier(MPI_COMM_WORLD);
+    // test_scatter_compressed(*accl, options, root);
     MPI_Barrier(MPI_COMM_WORLD);
     test_gather(*accl, options, root);
     MPI_Barrier(MPI_COMM_WORLD);
@@ -1334,7 +1406,7 @@ options_t parse_options(int argc, char *argv[]) {
                                           false, 1, "positive integer");
   cmd.add(nruns_arg);
   TCLAP::ValueArg<uint16_t> start_port_arg(
-      "s", "start-port", "Start of range of ports usable for sim", false, 5500,
+      "s", "start-port", "Start of range of ports usable for sim", false, 5005,
       "positive integer");
   cmd.add(start_port_arg);
   TCLAP::ValueArg<uint16_t> count_arg("c", "count", "How many bytes per buffer",
@@ -1350,10 +1422,15 @@ options_t parse_options(int argc, char *argv[]) {
   TCLAP::SwitchArg axis3_arg("a", "axis3", "Use axis3 hardware setup", cmd,
                              false);
   TCLAP::SwitchArg udp_arg("u", "udp", "Use UDP hardware setup", cmd, false);
+	TCLAP::SwitchArg tcp_arg("t", "tcp", "Use TCP hardware setup", cmd, false);
   TCLAP::ValueArg<std::string> xclbin_arg(
       "x", "xclbin", "xclbin of accl driver if hardware mode is used", false,
       "accl.xclbin", "file");
   cmd.add(xclbin_arg);
+	TCLAP::ValueArg<std::string> fpgaIP_arg(
+      "l", "ipList", "ip list of FPGAs if hardware mode is used", false,
+      "fpga", "file");
+  cmd.add(fpgaIP_arg);
   TCLAP::ValueArg<uint16_t> device_index_arg(
       "i", "device-index", "device index of FPGA if hardware mode is used",
       false, 0, "positive integer");
@@ -1362,9 +1439,29 @@ options_t parse_options(int argc, char *argv[]) {
   try {
     cmd.parse(argc, argv);
     if (hardware_arg.getValue()) {
-      if (axis3_arg.getValue() == udp_arg.getValue()) {
-        throw std::runtime_error("When using hardware, specify either axis3 or "
-                                 "udp mode, but not both.");
+			if (axis3_arg.getValue()){
+				if (udp_arg.getValue() || tcp_arg.getValue()){
+					throw std::runtime_error("When using hardware axis3 mode, tcp or udp can not be used.");
+				}
+				std::cout << "Hardware axis3 mode" << std::endl;
+			}  
+			if (udp_arg.getValue())
+			{
+				if (axis3_arg.getValue() || tcp_arg.getValue()){
+					throw std::runtime_error("When using hardware udp mode, tcp or axis3 can not be used.");
+				}
+				std::cout << "Hardware udp mode" << std::endl;
+			}
+			if (tcp_arg.getValue())
+			{
+				if (axis3_arg.getValue() || udp_arg.getValue()){
+					throw std::runtime_error("When using hardware tcp mode, udp or axis3 can not be used.");
+				}
+				std::cout << "Hardware tcp mode" << std::endl;
+			}
+      if ((axis3_arg.getValue() || udp_arg.getValue() || tcp_arg.getValue()) == false) {
+        throw std::runtime_error("When using hardware, specify either axis3 or tcp or"
+                                 "udp mode.");
       }
     }
   } catch (std::exception &e) {
@@ -1385,8 +1482,10 @@ options_t parse_options(int argc, char *argv[]) {
   opts.hardware = hardware_arg.getValue();
   opts.axis3 = axis3_arg.getValue();
   opts.udp = udp_arg.getValue();
+	opts.tcp = tcp_arg.getValue();
   opts.device_index = device_index_arg.getValue();
   opts.xclbin = xclbin_arg.getValue();
+	opts.fpgaIP = fpgaIP_arg.getValue();
   opts.test_xrt_simulator = xrt_simulator_ready(opts);
   return opts;
 }
@@ -1399,8 +1498,12 @@ int main(int argc, char *argv[]) {
 
   options_t options = parse_options(argc, argv);
 
+  int len;
+  char name[MPI_MAX_PROCESSOR_NAME];
+  MPI_Get_processor_name(name, &len);
+
   std::ostringstream stream;
-  stream << prepend_process() << "rank " << rank << " size " << size
+  stream << prepend_process() << "rank " << rank << " size " << size <<" "<< name
          << std::endl;
   std::cout << stream.str();
 

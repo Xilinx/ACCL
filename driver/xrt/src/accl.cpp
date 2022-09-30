@@ -22,18 +22,17 @@
 
 #include "accl.hpp"
 #include "dummybuffer.hpp"
-
-// 64 MB
-#define NETWORK_BUF_SIZE (64 << 20)
+#include <thread>         // std::this_thread::sleep_for
+#include <chrono>         // std::chrono::seconds
 
 namespace ACCL {
 ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
            xrt::device &device, xrt::ip &cclo_ip, xrt::kernel &hostctrl_ip,
-           int devicemem, const std::vector<int> &rxbufmem, int networkmem,
+           int devicemem, const std::vector<int> &rxbufmem, 
            networkProtocol protocol, int nbufs, addr_t bufsize,
            const arithConfigMap &arith_config)
     : arith_config(arith_config), protocol(protocol), sim_mode(false),
-      _devicemem(devicemem), rxbufmem(rxbufmem), networkmem(networkmem),
+      _devicemem(devicemem), rxbufmem(rxbufmem), 
       device(device) {
   cclo = new FPGADevice(cclo_ip, hostctrl_ip);
   initialize_accl(ranks, local_rank, nbufs, bufsize);
@@ -44,7 +43,7 @@ ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
            unsigned int sim_start_port, networkProtocol protocol, int nbufs,
            addr_t bufsize, const arithConfigMap &arith_config)
     : arith_config(arith_config), protocol(protocol), sim_mode(true),
-      _devicemem(0), rxbufmem({}), networkmem(0) {
+      _devicemem(0), rxbufmem({}) {
   cclo = new SimDevice(sim_start_port, local_rank);
   initialize_accl(ranks, local_rank, nbufs, bufsize);
 }
@@ -54,7 +53,7 @@ ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
            networkProtocol protocol, int nbufs, addr_t bufsize,
            const arithConfigMap &arith_config)
     : arith_config(arith_config), protocol(protocol), sim_mode(true),
-      _devicemem(0), rxbufmem({}), networkmem(0), device(device) {
+      _devicemem(0), rxbufmem({}), device(device) {
   cclo = new SimDevice(sim_start_port, local_rank);
   initialize_accl(ranks, local_rank, nbufs, bufsize);
 }
@@ -62,8 +61,6 @@ ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
 ACCL::~ACCL() {
   deinit();
   delete cclo;
-  delete tx_buf_network;
-  delete rx_buf_network;
 }
 
 void ACCL::deinit() {
@@ -778,7 +775,7 @@ std::string ACCL::dump_rx_buffers(size_t nbufs) {
 
 void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
                            int nbufs, addr_t bufsize) {
-  reset_log();
+  // reset_log();
   debug("CCLO HWID: " + std::to_string(get_hwid()) + " at 0x" +
         debug_hex(cclo->get_base_addr()));
 
@@ -813,25 +810,17 @@ void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
     use_udp();
     break;
   case networkProtocol::TCP:
-    if (!sim_mode) {
-      tx_buf_network = new FPGABuffer<int8_t>(NETWORK_BUF_SIZE, dataType::int8,
-                                              device, networkmem);
-      rx_buf_network = new FPGABuffer<int8_t>(NETWORK_BUF_SIZE, dataType::int8,
-                                              device, networkmem);
-      tx_buf_network->sync_to_device();
-      rx_buf_network->sync_to_device();
-    }
     use_tcp();
     break;
   default:
     throw std::runtime_error(
         "Requested network protocol is not yet supported.");
   }
-
-  if (protocol == networkProtocol::TCP) {
-    debug("Starting connections to communicator ranks");
-    init_connection();
-  }
+  
+  // if (protocol == networkProtocol::TCP) {
+  //   debug("Starting connections to communicator ranks");
+  //   init_connection();
+  // }
 
   debug("Accelerator ready!");
 }
@@ -1053,6 +1042,7 @@ CCLO *ACCL::call_sync(CCLO::Options &options) {
 void ACCL::init_connection(communicatorId comm_id) {
   debug("Opening ports to communicator ranks");
   open_port(comm_id);
+  std::this_thread::sleep_for (std::chrono::seconds(1));
   debug("Starting session to communicator ranks");
   open_con(comm_id);
 }
