@@ -394,7 +394,7 @@ int recv(	unsigned int src_rank,
         (stream & RES_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE, 
         compression, RES_LOCAL, 0,
         count, comm_offset, arcfg_offset, 0, 0, dst_addr, 0, 0, 0,
-        src_rank, src_tag, 0, 0
+        src_rank, src_tag, 0, (stream & RES_STREAM) ? src_tag : 0
     );
 }
 
