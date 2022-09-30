@@ -45,7 +45,7 @@ struct options_t {
     std::string xclbin;
 };
 
-void run_test(options_t options) {
+std::unique_ptr<ACCL::ACCL> test_vadd_put(options_t options) {
     std::vector<rank_t> ranks = {};
     for (int i = 0; i < size; ++i) {
         rank_t new_rank = {"127.0.0.1", options.start_port + i, i, options.rxbuf_size};
@@ -140,8 +140,53 @@ void run_test(options_t options) {
     std::cout << "Test finished with " << err_count << " errors" << std::endl;
     MPI_Barrier(MPI_COMM_WORLD);
 
+    return accl;
 }
 
+void test_loopback(ACCL::ACCL& accl, options_t options, unsigned char stream_id) {
+
+    //run test here:
+    //initialize a CCLO BFM and streams as needed
+    hlslib::Stream<command_word> callreq, callack;
+    hlslib::Stream<stream_word, 512> data_cclo2krnl("cclo2krnl"), data_krnl2cclo("krnl2cclo");
+    std::vector<unsigned int> dest = {stream_id};
+    CCLO_BFM cclo(options.start_port, rank, size, dest, callreq, callack, data_cclo2krnl, data_krnl2cclo);
+    cclo.run();
+    std::cout << "CCLO BFM started" << std::endl;
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    //allocate float arrays for the HLS function to use
+    auto src_buffer = accl.create_buffer<int>(options.count, ACCL::dataType::int32, 0);
+    auto dst_buffer = accl.create_buffer<int>(options.count, ACCL::dataType::int32, 0);
+    for(int i=0; i<options.count; i++){
+        src_buffer->buffer()[i] = rank;
+        dst_buffer->buffer()[i] = 0;
+    }
+
+    int init_rank = ((rank - 1 + size) % size);
+    int loopback_rank = ((rank + 1 ) % size);
+
+    accl.send(*src_buffer, options.count, loopback_rank, stream_id);
+    accl.recv(*src_buffer, options.count, init_rank, stream_id, ACCL::GLOBAL_COMM, false, ACCL::streamFlags::RES_STREAM);
+
+    //loop back data (divide count by 16 and round up to get number of stream words)
+    for (int i=0; i < (options.count+15)/16; i++) {
+        data_krnl2cclo.write(data_cclo2krnl.read());
+    }
+
+    accl.send(*src_buffer, options.count, init_rank, stream_id, ACCL::GLOBAL_COMM, false, ACCL::streamFlags::OP0_STREAM);
+
+    accl.recv(*dst_buffer, options.count,  loopback_rank, stream_id);
+    //check HLS function outputs
+    unsigned int err_count = 0;
+    for(int i=0; i<options.count; i++){
+        err_count += (dst_buffer->buffer()[i] != rank);
+    }
+
+    std::cout << "Test finished with " << err_count << " errors" << std::endl;
+    //clean up
+    cclo.stop();
+}
 
 options_t parse_options(int argc, char *argv[]) {
     TCLAP::CmdLine cmd("Test ACCL C++ driver");
@@ -211,7 +256,17 @@ int main(int argc, char *argv[]) {
     stream << "rank " << rank << " size " << size << std::endl;
     std::cout << stream.str();
 
-    run_test(options);
+    auto accl = test_vadd_put(options);
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    if(!options.hardware){
+        std::srand(42);
+        for(int i=0; i<options.nruns; i++){
+            unsigned char stream_id = std::abs(std::rand()) % 256; 
+            test_loopback(*accl, options, stream_id);
+        }
+        MPI_Barrier(MPI_COMM_WORLD);
+    }
 
     MPI_Finalize();
     return 0;
