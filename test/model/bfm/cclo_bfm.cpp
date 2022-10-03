@@ -137,7 +137,7 @@ void CCLO_BFM::pop_data(){
         std::vector<uint8_t> vec;
         vec = zmq_client_strmread(&zmq_ctx, true);
         if(vec.size() == 0) continue;
-        unsigned int idx;
+        unsigned int idx = 0;
         do{
             for(unsigned int i=0; i<DATA_WIDTH/8 && idx<vec.size(); i++){
                 tmp.data((i+1)*8-1,i*8) = vec.at(idx++);
