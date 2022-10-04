@@ -51,7 +51,7 @@ zmq_intf_context zmq_client_intf(unsigned int starting_port, unsigned int local_
         ctx.krnl_tx_socket->connect(krnl_endpoint);
         this_thread::sleep_for(chrono::milliseconds(1000));
         //subscribe to destinations
-        for(int i; i<(int)krnl_dest.size(); i++){
+        for(int i=0; i<(int)krnl_dest.size(); i++){
             string krnl_subscribe = to_string(krnl_dest.at(i));
             cout << "Rank " << local_rank << " subscribing to " << krnl_subscribe << " (KRNL)" << endl;
             ctx.krnl_tx_socket->subscribe(krnl_subscribe);
