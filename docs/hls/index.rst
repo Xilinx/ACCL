@@ -10,5 +10,6 @@ ACCL HLS interface
    :maxdepth: 2
    :caption: Contents
 
+   simulation
    reference
    bfm_reference

@@ -728,20 +728,21 @@ public:
    * Dump the content of the RX buffers to a string for the first nbufs buffers.
    *
    * @param nbufs        Amount of buffers to dump the content of.
+   * @param dump_data    Dump buffer contents along with metadata.
    * @return std::string Content of the RX buffers.
    */
-  std::string dump_rx_buffers(size_t nbufs);
+  std::string dump_rx_buffers(size_t nbufs, bool dump_data=true);
 
   /**
    * Dump the content of all RX buffers to a string.
    *
    * @return std::string Content of all RX buffers.
    */
-  std::string dump_rx_buffers() {
+  std::string dump_rx_buffers(bool dump_data=true) {
     if (cclo->read(rx_buffers_adr) != rx_buffer_spares.size()) {
       throw std::runtime_error("CCLO inconsistent");
     }
-    return dump_rx_buffers(rx_buffer_spares.size());
+    return dump_rx_buffers(rx_buffer_spares.size(), dump_data);
   }
 
   /**

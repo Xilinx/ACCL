@@ -714,7 +714,7 @@ std::string ACCL::dump_exchange_memory() {
   return stream.str();
 }
 
-std::string ACCL::dump_rx_buffers(size_t nbufs) {
+std::string ACCL::dump_rx_buffers(size_t nbufs, bool dump_data) {
   std::stringstream stream;
   stream << "CCLO address: " << std::hex << cclo->get_base_addr() << std::endl;
   nbufs = std::min(nbufs, rx_buffer_spares.size());
@@ -760,17 +760,23 @@ std::string ACCL::dump_rx_buffers(size_t nbufs) {
            << addrh * (1UL << 32) + addrl << std::dec
            << " \t status: " << status << " \t occupancy: " << rxlen << "/"
            << maxsize << " \t MPI tag: " << std::hex << rxtag << std::dec
-           << " \t seq: " << seq << " \t src: " << rxsrc
-           << " \t data: " << std::hex << "[";
-    for (size_t j = 0; j < rx_buffer_spares[i]->size(); ++j) {
-      stream << "0x"
-             << static_cast<uint16_t>(static_cast<uint8_t *>(
-                    rx_buffer_spares[i]->byte_array())[j]);
-      if (j != rx_buffer_spares[i]->size() - 1) {
-        stream << ", ";
+           << " \t seq: " << seq << " \t src: " << rxsrc;
+
+    if(dump_data){
+      stream << " \t data: " << std::hex << "[";
+      for (size_t j = 0; j < rx_buffer_spares[i]->size(); ++j) {
+        stream << "0x"
+              << static_cast<uint16_t>(static_cast<uint8_t *>(
+                      rx_buffer_spares[i]->byte_array())[j]);
+        if (j != rx_buffer_spares[i]->size() - 1) {
+          stream << ", ";
+        }
       }
+      stream << "]" << std::dec << std::endl;
+    } else{
+      stream << std::endl;
     }
-    stream << "]" << std::dec << std::endl;
+
   }
 
   return stream.str();

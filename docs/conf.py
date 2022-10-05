@@ -55,7 +55,7 @@ read_the_docs_build = os.environ.get('READTHEDOCS', None) == 'True'
 # ones.
 #...
 
-extensions = [ "breathe" ]
+extensions = [ "breathe", 'sphinxcontrib.tikz']
 
 #...
 
@@ -86,3 +86,6 @@ breathe_default_project = "ACCL"
 subprocess.call('doxygen ./Doxyfile', shell=True, cwd='../driver/xrt')
 subprocess.call('doxygen ./Doxyfile', shell=True, cwd='../driver/hls')
 subprocess.call('doxygen ./Doxyfile', shell=True, cwd='../test/model/bfm')
+
+# Tikz configuration, as indicated in https://github.com/sphinx-contrib/tikz
+tikz_proc_suite = 'GhostScript'
