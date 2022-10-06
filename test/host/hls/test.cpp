@@ -28,6 +28,7 @@
 #include "cclo_bfm.h"
 #include <xrt/xrt_device.h>
 #include <iostream>
+#include "dummybuffer.hpp"
 
 using namespace ACCL;
 
@@ -143,6 +144,47 @@ std::unique_ptr<ACCL::ACCL> test_vadd_put(options_t options) {
     return accl;
 }
 
+void test_copy(ACCL::ACCL& accl, options_t options) {
+    //run test here:
+    //initialize a CCLO BFM and streams as needed
+    hlslib::Stream<command_word> callreq, callack;
+    hlslib::Stream<stream_word, 512> data_cclo2krnl("cclo2krnl"), data_krnl2cclo("krnl2cclo");
+
+    std::vector<unsigned int> dest = {0};
+
+    CCLO_BFM cclo(options.start_port, rank, size, dest, callreq, callack, data_cclo2krnl, data_krnl2cclo);
+    cclo.run();
+    std::cout << "CCLO BFM started" << std::endl;
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    //allocate float arrays for the HLS function to use
+    auto src_buffer = accl.create_buffer<int>(options.count, ACCL::dataType::int32, 0);
+    auto dst_buffer = accl.create_buffer<int>(options.count, ACCL::dataType::int32, 0);
+    for(int i=0; i<options.count; i++){
+        src_buffer->buffer()[i] = rank;
+        dst_buffer->buffer()[i] = 0;
+    }
+
+    accl.copy(*src_buffer, dummy_buffer, options.count, false, false, ACCL::streamFlags::RES_STREAM);
+
+    //loop back data (divide count by 16 and round up to get number of stream words)
+    for (int i=0; i < (options.count+15)/16; i++) {
+        data_krnl2cclo.write(data_cclo2krnl.read());
+    }
+
+    accl.copy(dummy_buffer, *dst_buffer, options.count, false, false, ACCL::streamFlags::OP0_STREAM);
+
+    //check HLS function outputs
+    unsigned int err_count = 0;
+    for(int i=0; i<options.count; i++){
+        err_count += (dst_buffer->buffer()[i] != rank);
+    }
+
+    std::cout << "Test finished with " << err_count << " errors" << std::endl;
+    //clean up
+    cclo.stop();
+}
+
 void test_loopback_local_res(ACCL::ACCL& accl, options_t options) {
 
     //run test here:
@@ -182,7 +224,6 @@ void test_loopback_local_res(ACCL::ACCL& accl, options_t options) {
     //clean up
     cclo.stop();
 }
-
 
 void test_loopback(ACCL::ACCL& accl, options_t options, unsigned char stream_id) {
 
@@ -299,7 +340,8 @@ int main(int argc, char *argv[]) {
 
     auto accl = test_vadd_put(options);
     MPI_Barrier(MPI_COMM_WORLD);
-
+    test_copy(*accl, options);
+    MPI_Barrier(MPI_COMM_WORLD);
     if(!options.hardware){
         std::srand(42);
         for(int i=0; i<options.nruns; i++){
