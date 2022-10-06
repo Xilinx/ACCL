@@ -297,8 +297,8 @@ CCLO *ACCL::recv(dataType dst_data_type, unsigned int count,
 }
 
 CCLO *ACCL::copy(BaseBuffer &srcbuf, BaseBuffer &dstbuf, unsigned int count,
-                 bool from_fpga, bool to_fpga, bool run_async,
-                 std::vector<CCLO *> waitfor) {
+                 bool from_fpga, bool to_fpga, streamFlags stream_flags,
+                 bool run_async, std::vector<CCLO *> waitfor) {
   CCLO::Options options{};
 
   if (to_fpga == false && run_async == true) {
@@ -315,6 +315,7 @@ CCLO *ACCL::copy(BaseBuffer &srcbuf, BaseBuffer &dstbuf, unsigned int count,
   options.addr_0 = &srcbuf;
   options.addr_2 = &dstbuf;
   options.count = count;
+  options.stream_flags = stream_flags;
   options.waitfor = waitfor;
   CCLO *handle = call_async(options);
 

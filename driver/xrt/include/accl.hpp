@@ -303,7 +303,7 @@ public:
    *                       waitfor; nullptr if run_async is false.
    */
   CCLO *copy(BaseBuffer &srcbuf, BaseBuffer &dstbuf, unsigned int count,
-             bool from_fpga = false, bool to_fpga = false,
+             bool from_fpga = false, bool to_fpga = false, streamFlags stream_flags = streamFlags::NO_STREAM,
              bool run_async = false, std::vector<CCLO *> waitfor = {});
 
   /**
