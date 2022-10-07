@@ -11,7 +11,7 @@ We'll refer to these patterns by their MPI terminology: collectives.
 ACCL consists of two parts: the FPGA circuitry required to implement the collectives, and a host driver which configures the FPGA 
 circuits and exposes the functionality they implement to software running on the host.
 In addition, ACCL includes several software components which ease development of ACCL-enabled applications:
-a C++ library of functions designed to allow FPGA kernels to  
+A C++ library of functions designed to control the communication from the host and ACCL HLS bindings to control the communication from programmable logic.
 
 
 .. _overview_cclo_subsystem:
