@@ -1269,7 +1269,7 @@ void configure_vnx(CMAC &cmac, Networklayer &network_layer,
   MPI_Barrier(MPI_COMM_WORLD);
 }
 
-void start_test(options_t options) {
+int start_test(options_t options) {
   std::vector<rank_t> ranks = {};
   failed_tests = 0;
   skipped_tests = 0;
@@ -1413,9 +1413,7 @@ void start_test(options_t options) {
   }
   std::cout << "." << std::endl;
   MPI_Barrier(MPI_COMM_WORLD);
-  if (failed_tests > 1) {
-    MPI_Abort(MPI_COMM_WORLD, 1);
-  }
+  return failed_tests;
 }
 
 bool xrt_simulator_ready(const options_t &opts) {
@@ -1514,8 +1512,8 @@ int main(int argc, char *argv[]) {
          << std::endl;
   std::cout << stream.str();
 
-  start_test(options);
+  int errors = start_test(options);
 
   MPI_Finalize();
-  return 0;
+  return errors;
 }
