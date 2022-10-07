@@ -9,7 +9,7 @@ ACCL: The Alveo Collective Communication Library
 ACCL enables MPI-like communication between network-attached FPGAs, facilitating the development of FPGA-accelerated distributed applications.
 There are several advantages to utilizing ACCL instead of MPI for such applications:
 
-* FPGAs communicate directly rathan than through system NICs, reducing latency and putting less pressure on the system bus.
+* FPGAs communicate directly rather than through system NICs, reducing latency and putting less pressure on the system bus.
 * No CPU involvement in communication, as collective orchestration is performed in the FPGA.
 * FPGA kernels can request communication directly, reducing CPU involvement in application orchestration, as well as eliminating kernel invocation latencies.
 

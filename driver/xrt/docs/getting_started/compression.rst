@@ -12,7 +12,7 @@ interaction with the data values themselves. However, there are two exceptions t
 * Elementwise operations (e.g. SUM) performed by ACCL instances on buffers during reduction-type collectives
 * Datatype conversions when the source and destination of a transfer are of different data types. In this scenario we say the lower-precision buffer is compressed.
 
-To support these elementwise operations and conversions, ACCL must be configured with a reduction plugin and coversion plugins respectively. 
+To support these elementwise operations and conversions, ACCL must be configured with a reduction plugin and conversion plugins respectively. 
 Reduction plugins take two operand streams and produce one result stream of the same datatype.
 Compression plugins take one operand as input and produce a result of different datatype.
 The input and output datatypes are specified to these plugins by the CCLO when initiating the operation.

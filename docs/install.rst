@@ -36,7 +36,7 @@ Simulator/Emulator API Tests
 *********************************
 
 Tests can be executed against the ACCL emulator, simulator, or real hardware on an Alveo FPGA board.
-The following sequence of commands builds the emulator:
+The following sequence of commands builds and runs the emulator:
 
 .. code-block:: sh
   
