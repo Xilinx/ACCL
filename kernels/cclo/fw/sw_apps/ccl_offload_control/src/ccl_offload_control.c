@@ -110,6 +110,7 @@ int openCon()
     unsigned int local_rank = world.local_rank;
 
     //open connection to all the ranks except for the local rank
+    ret = NO_ERROR;
     for (int i = 0; i < size; i++)
     {
         if (i != local_rank)
@@ -119,35 +120,18 @@ int openCon()
             //send open connection request to the packetizer
             putd(CMD_NET_CON, cur_rank_ip);
             putd(CMD_NET_CON, cur_rank_port);
-        }
-    }
-    ret = NO_ERROR;
-    //wait until the connections status are all returned
-    for (int i = 0; i < size -1 ; i++)
-    {	
-        //ask: tngetd or the stack will return a non-success? 
-        session 	= getd(STS_NET_CON);
-        dst_ip 		= getd(STS_NET_CON);
-        dst_port 	= getd(STS_NET_CON);
-        success 	= getd(STS_NET_CON);
 
-        if (success)
-        {
-            //store the session ID into corresponding rank
-            for (int j = 0; j < size ; ++j)
-            {
-                cur_rank_ip 	= world.ranks[j].ip;
-                cur_rank_port 	= world.ranks[j].port;
-                if ((dst_ip == cur_rank_ip) && (dst_port == cur_rank_port))
-                {
-                    world.ranks[j].session = session;
-                    break;
-                }
+            //wait until the connections status is returned
+            session = getd(STS_NET_CON);
+            dst_ip = getd(STS_NET_CON);
+            dst_port = getd(STS_NET_CON);
+            success = getd(STS_NET_CON);
+
+            if(success){
+                world.ranks[i].session = session;
+            } else {
+                ret = OPEN_CON_NOT_SUCCEEDED;
             }
-        }
-        else
-        {
-            ret = OPEN_CON_NOT_SUCCEEDED;
         }
     }
     return ret;
