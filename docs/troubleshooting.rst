@@ -149,6 +149,12 @@ necessary fixes. Here are some steps to follow:
 Enabling CCLO and Chipscope debug
 ##################################
 
+Users can attach integrated logic analyzers (ILAs) to any of the interfaces of the CCLO, plugins, or user kernels to inspect
+the flow of data between kernels in the FPGA, 
+using the `Vitis Linker debug settings <https://docs.xilinx.com/r/en-US/ug1393-vitis-application-acceleration/Enabling-Kernels-for-Debugging-with-Chipscope>`_
+
+For debug access to the CCLO internal microcontroller, set `MB_DEBUG_LEVEL=2` as an argument to the make command when building the CCLO kernel.
+After the FPGA design is programmed into the Alveo board, the CCLO microcontroller can be accessed as described in the sections below.
 
 Programming and checking the ACCL design on Alveo
 ######################################################
