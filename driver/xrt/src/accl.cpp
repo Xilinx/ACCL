@@ -123,8 +123,7 @@ CCLO *ACCL::nop(bool run_async, std::vector<CCLO *> waitfor) {
 
 CCLO *ACCL::send(BaseBuffer &srcbuf, unsigned int count,
                  unsigned int dst, unsigned int tag, communicatorId comm_id,
-                 bool from_fpga, streamFlags stream_flags,
-                 dataType compress_dtype, bool run_async,
+                 bool from_fpga, dataType compress_dtype, bool run_async,
                  std::vector<CCLO *> waitfor) {
   CCLO::Options options{};
   if (from_fpga == false) {
@@ -136,7 +135,33 @@ CCLO *ACCL::send(BaseBuffer &srcbuf, unsigned int count,
   options.count = count;
   options.root_src_dst = dst;
   options.tag = tag;
-  options.stream_flags = stream_flags;
+  options.compress_dtype = compress_dtype;
+  options.waitfor = waitfor;
+  CCLO *handle = call_async(options);
+
+  if (run_async) {
+    return handle;
+  } else {
+    handle->wait();
+    check_return_value("send");
+  }
+
+  return nullptr;
+}
+
+CCLO *ACCL::send(dataType src_data_type, unsigned int count,
+                 unsigned int dst, unsigned int tag, communicatorId comm_id,
+                 dataType compress_dtype, bool run_async,
+                 std::vector<CCLO *> waitfor) {
+  CCLO::Options options{};
+
+  options.scenario = operation::send;
+  options.comm = communicators[comm_id].communicators_addr();
+  options.data_type_io_0 = src_data_type;
+  options.count = count;
+  options.root_src_dst = dst;
+  options.tag = tag;
+  options.stream_flags = streamFlags::OP0_STREAM;
   options.compress_dtype = compress_dtype;
   options.waitfor = waitfor;
   CCLO *handle = call_async(options);
@@ -153,8 +178,7 @@ CCLO *ACCL::send(BaseBuffer &srcbuf, unsigned int count,
 
 CCLO *ACCL::stream_put(BaseBuffer &srcbuf, unsigned int count,
                  unsigned int dst, unsigned int stream_id, communicatorId comm_id,
-                 bool from_fpga, streamFlags stream_flags,
-                 dataType compress_dtype, bool run_async,
+                 bool from_fpga, dataType compress_dtype, bool run_async,
                  std::vector<CCLO *> waitfor) {
   CCLO::Options options{};
   if (stream_id < 9) throw std::invalid_argument("Stream ID must be >= 9");
@@ -167,7 +191,35 @@ CCLO *ACCL::stream_put(BaseBuffer &srcbuf, unsigned int count,
   options.count = count;
   options.root_src_dst = dst;
   options.tag = stream_id - 9;
-  options.stream_flags = stream_flags | streamFlags::RES_STREAM;
+  options.stream_flags = streamFlags::RES_STREAM;
+  options.compress_dtype = compress_dtype;
+  options.waitfor = waitfor;
+  CCLO *handle = call_async(options);
+
+  if (run_async) {
+    return handle;
+  } else {
+    handle->wait();
+    check_return_value("send");
+  }
+
+  return nullptr;
+}
+
+CCLO *ACCL::stream_put(dataType src_data_type, unsigned int count,
+                 unsigned int dst, unsigned int stream_id, communicatorId comm_id,
+                 dataType compress_dtype, bool run_async,
+                 std::vector<CCLO *> waitfor) {
+  CCLO::Options options{};
+  if (stream_id < 9) throw std::invalid_argument("Stream ID must be >= 9");
+
+  options.scenario = operation::send;
+  options.comm = communicators[comm_id].communicators_addr();
+  options.data_type_io_0 = src_data_type;
+  options.count = count;
+  options.root_src_dst = dst;
+  options.tag = stream_id - 9;
+  options.stream_flags = streamFlags::OP0_STREAM | streamFlags::RES_STREAM;
   options.compress_dtype = compress_dtype;
   options.waitfor = waitfor;
   CCLO *handle = call_async(options);
@@ -184,8 +236,7 @@ CCLO *ACCL::stream_put(BaseBuffer &srcbuf, unsigned int count,
 
 CCLO *ACCL::recv(BaseBuffer &dstbuf, unsigned int count,
                  unsigned int src, unsigned int tag, communicatorId comm_id,
-                 bool to_fpga, streamFlags stream_flags,
-                 dataType compress_dtype, bool run_async,
+                 bool to_fpga, dataType compress_dtype, bool run_async,
                  std::vector<CCLO *> waitfor) {
   CCLO::Options options{};
 
@@ -201,7 +252,6 @@ CCLO *ACCL::recv(BaseBuffer &dstbuf, unsigned int count,
   options.count = count;
   options.root_src_dst = src;
   options.tag = tag;
-  options.stream_flags = stream_flags;
   options.compress_dtype = compress_dtype;
   options.waitfor = waitfor;
   CCLO *handle = call_async(options);
@@ -213,6 +263,33 @@ CCLO *ACCL::recv(BaseBuffer &dstbuf, unsigned int count,
     if (to_fpga == false) {
       dstbuf.sync_from_device();
     }
+    check_return_value("send");
+  }
+
+  return nullptr;
+}
+
+CCLO *ACCL::recv(dataType dst_data_type, unsigned int count,
+                 unsigned int src, unsigned int tag, communicatorId comm_id,
+                 dataType compress_dtype, bool run_async,
+                 std::vector<CCLO *> waitfor) {
+  CCLO::Options options{};
+
+  options.scenario = operation::recv;
+  options.comm = communicators[comm_id].communicators_addr();
+  options.data_type_io_0 = dst_data_type;
+  options.count = count;
+  options.root_src_dst = src;
+  options.tag = tag;
+  options.stream_flags = streamFlags::RES_STREAM;
+  options.compress_dtype = compress_dtype;
+  options.waitfor = waitfor;
+  CCLO *handle = call_async(options);
+
+  if (run_async) {
+    return handle;
+  } else {
+    handle->wait();
     check_return_value("send");
   }
 
@@ -934,20 +1011,33 @@ void ACCL::check_return_value(const std::string function_name) {
 
 void ACCL::prepare_call(CCLO::Options &options) {
   const ArithConfig *arithcfg;
+
+  std::set<dataType> dtypes;
+
   if (options.addr_0 == nullptr) {
     options.addr_0 = &dummy_buffer;
+    dtypes.insert(options.data_type_io_0);
+  }
+  else {
+    dtypes.insert(options.addr_0->type());
   }
 
   if (options.addr_1 == nullptr) {
     options.addr_1 = &dummy_buffer;
+    dtypes.insert(options.data_type_io_1);
+  }
+  else {
+    dtypes.insert(options.addr_1->type());
   }
 
   if (options.addr_2 == nullptr) {
     options.addr_2 = &dummy_buffer;
+    dtypes.insert(options.data_type_io_2);
+  }
+  else {
+    dtypes.insert(options.addr_2->type());
   }
 
-  std::set<dataType> dtypes = {options.addr_0->type(), options.addr_1->type(),
-                               options.addr_2->type()};
   dtypes.erase(dataType::none);
 
   // if no compressed data type specified, set same as uncompressed

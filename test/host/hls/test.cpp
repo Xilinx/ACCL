@@ -167,14 +167,14 @@ void test_loopback(ACCL::ACCL& accl, options_t options, unsigned char stream_id)
     int loopback_rank = ((rank + 1 ) % size);
 
     accl.send(*src_buffer, options.count, loopback_rank, stream_id);
-    accl.recv(*src_buffer, options.count, init_rank, stream_id, ACCL::GLOBAL_COMM, false, ACCL::streamFlags::RES_STREAM);
+    accl.recv(dataType::int32, options.count, init_rank, stream_id, ACCL::GLOBAL_COMM);
 
     //loop back data (divide count by 16 and round up to get number of stream words)
     for (int i=0; i < (options.count+15)/16; i++) {
         data_krnl2cclo.write(data_cclo2krnl.read());
     }
 
-    accl.send(*src_buffer, options.count, init_rank, stream_id, ACCL::GLOBAL_COMM, false, ACCL::streamFlags::OP0_STREAM);
+    accl.send(dataType::int32, options.count, init_rank, stream_id, ACCL::GLOBAL_COMM);
 
     accl.recv(*dst_buffer, options.count,  loopback_rank, stream_id);
     //check HLS function outputs

@@ -338,7 +338,6 @@ void test_sendrcv_stream(ACCL::ACCL &accl, options_t &options) {
   unsigned int count = options.count;
   auto op_buf = accl.create_buffer<float>(count, dataType::float32);
   auto res_buf = accl.create_buffer<float>(count, dataType::float32);
-  auto dummy_buf = accl.create_buffer<float>(count, dataType::float32);
   random_array(op_buf->buffer(), count);
   int next_rank = (rank + 1) % size;
   int prev_rank = (rank + size - 1) % size;
@@ -349,11 +348,11 @@ void test_sendrcv_stream(ACCL::ACCL &accl, options_t &options) {
 
   test_debug("Receiving data on " + std::to_string(rank) + " from " +
                  std::to_string(prev_rank) + "...", options);
-  accl.recv(*dummy_buf, count, prev_rank, 0, GLOBAL_COMM, false, streamFlags::RES_STREAM);
+  accl.recv(dataType::float32, count, prev_rank, 0, GLOBAL_COMM);
 
   test_debug("Sending data on " + std::to_string(rank) + " to " +
                  std::to_string(prev_rank) + "...", options);
-  accl.send(*dummy_buf, count, prev_rank, 1, GLOBAL_COMM, false, streamFlags::OP0_STREAM);
+  accl.send(dataType::float32, count, prev_rank, 1, GLOBAL_COMM);
 
   test_debug("Receiving data on " + std::to_string(rank) + " from " +
                  std::to_string(next_rank) + "...", options);
@@ -396,7 +395,7 @@ void test_stream_put(ACCL::ACCL &accl, options_t &options) {
   test_debug("Sending data on " + std::to_string(rank) + " from stream to " +
                  std::to_string(prev_rank) + "...",
              options);
-  accl.send(*res_buf, count, prev_rank, 1, GLOBAL_COMM, false, streamFlags::OP0_STREAM);
+  accl.send(dataType::float32, count, prev_rank, 1, GLOBAL_COMM);
 
   test_debug("Receiving data on " + std::to_string(rank) + " from " +
                  std::to_string(next_rank) + "...",
@@ -438,13 +437,13 @@ void test_sendrcv_compressed(ACCL::ACCL &accl, options_t &options) {
                  std::to_string(next_rank) + "...",
              options);
   accl.send(*op_buf, count, next_rank, 0, GLOBAL_COMM, false,
-            streamFlags::NO_STREAM, dataType::float16);
+            dataType::float16);
 
   test_debug("Receiving data on " + std::to_string(rank) + " from " +
                  std::to_string(prev_rank) + "...",
              options);
   accl.recv(*res_buf, count, prev_rank, 0, GLOBAL_COMM, false,
-            streamFlags::NO_STREAM, dataType::float16);
+            dataType::float16);
 
   for (unsigned int i = 0; i < count; ++i) {
     float res = (*res_buf)[i];
@@ -461,13 +460,13 @@ void test_sendrcv_compressed(ACCL::ACCL &accl, options_t &options) {
                  std::to_string(prev_rank) + "...",
              options);
   accl.send(*op_buf, count, prev_rank, 1, GLOBAL_COMM, false,
-            streamFlags::NO_STREAM, dataType::float16);
+            dataType::float16);
 
   test_debug("Receiving data on " + std::to_string(rank) + " from " +
                  std::to_string(next_rank) + "...",
              options);
   accl.recv(*res_buf, count, next_rank, 1, GLOBAL_COMM, false,
-            streamFlags::NO_STREAM, dataType::float16);
+            dataType::float16);
 
   for (unsigned int i = 0; i < count; ++i) {
     float res = (*res_buf)[i];
