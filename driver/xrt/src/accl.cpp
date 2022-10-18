@@ -420,6 +420,40 @@ CCLO *ACCL::bcast(BaseBuffer &buf, unsigned int count,
   return nullptr;
 }
 
+CCLO *ACCL::bcast(dataType src_dst_data_type, unsigned int count,
+                  unsigned int root, communicatorId comm_id,
+                  dataType compress_dtype, bool run_async,
+                  std::vector<CCLO *> waitfor) {
+  CCLO::Options options{};
+
+  const Communicator &communicator = communicators[comm_id];
+
+  bool is_root = communicator.local_rank() == root;
+
+  if (count == 0) {
+    std::cerr << "ACCL: zero size stream" << std::endl;
+    return nullptr;
+  }
+
+  options.scenario = operation::bcast;
+  options.comm = communicator.communicators_addr();
+  options.data_type_io_0 = src_dst_data_type;
+  options.count = count;
+  options.root_src_dst = root;
+  options.compress_dtype = compress_dtype;
+  options.waitfor = waitfor;
+  CCLO *handle = call_async(options);
+
+  if (run_async) {
+    return handle;
+  } else {
+    handle->wait();
+    check_return_value("bcast");
+  }
+
+  return nullptr;
+}
+
 CCLO *ACCL::scatter(BaseBuffer &sendbuf,
                     BaseBuffer &recvbuf, unsigned int count, unsigned int root,
                     communicatorId comm_id, bool from_fpga, bool to_fpga,
@@ -464,6 +498,129 @@ CCLO *ACCL::scatter(BaseBuffer &sendbuf,
       auto slice = recvbuf.slice(0, count);
       slice->sync_from_device();
     }
+    check_return_value("scatter");
+  }
+
+  return nullptr;
+}
+
+CCLO *ACCL::scatter(dataType src_data_type,
+                    BaseBuffer &recvbuf, unsigned int count, unsigned int root,
+                    communicatorId comm_id, bool to_fpga,
+                    dataType compress_dtype, bool run_async,
+                    std::vector<CCLO *> waitfor) {
+  CCLO::Options options{};
+
+  const Communicator &communicator = communicators[comm_id];
+
+  bool is_root = communicator.local_rank() == root;
+
+  if (to_fpga == false && run_async == true) {
+    std::cerr << "ACCL: async run returns data on FPGA, user must "
+                 "sync_from_device() after waiting"
+              << std::endl;
+  }
+
+  if (count == 0) {
+    std::cerr << "ACCL: zero size buffer" << std::endl;
+    return nullptr;
+  }
+
+  options.scenario = operation::scatter;
+  options.comm = communicator.communicators_addr();
+  options.data_type_io_0 = src_data_type;
+  options.addr_2 = &recvbuf;
+  options.count = count;
+  options.stream_flags = streamFlags::OP0_STREAM;
+  options.root_src_dst = root;
+  options.waitfor = waitfor;
+  CCLO *handle = call_async(options);
+
+  if (run_async) {
+    return handle;
+  } else {
+    handle->wait();
+    if (to_fpga == false) {
+      auto slice = recvbuf.slice(0, count);
+      slice->sync_from_device();
+    }
+    check_return_value("scatter");
+  }
+
+  return nullptr;
+}
+
+CCLO *ACCL::scatter(BaseBuffer &sendbuf,
+                    dataType dst_data_type, unsigned int count, unsigned int root,
+                    communicatorId comm_id, bool from_fpga,
+                    dataType compress_dtype, bool run_async,
+                    std::vector<CCLO *> waitfor) {
+  CCLO::Options options{};
+
+  const Communicator &communicator = communicators[comm_id];
+
+  bool is_root = communicator.local_rank() == root;
+
+  if (count == 0) {
+    std::cerr << "ACCL: zero size buffer" << std::endl;
+    return nullptr;
+  }
+
+  if (from_fpga == false && is_root == true) {
+    auto slice = sendbuf.slice(0, count * communicator.get_ranks()->size());
+    slice->sync_to_device();
+  }
+
+  options.scenario = operation::scatter;
+  options.comm = communicator.communicators_addr();
+  options.addr_0 = &sendbuf;
+  options.data_type_io_2 = dst_data_type;
+  options.stream_flags = streamFlags::RES_STREAM;
+  options.count = count;
+  options.root_src_dst = root;
+  options.waitfor = waitfor;
+  CCLO *handle = call_async(options);
+
+  if (run_async) {
+    return handle;
+  } else {
+    handle->wait();
+    check_return_value("scatter");
+  }
+
+  return nullptr;
+}
+
+CCLO *ACCL::scatter(dataType src_data_type,
+                    dataType dst_data_type, unsigned int count, unsigned int root,
+                    communicatorId comm_id,
+                    dataType compress_dtype, bool run_async,
+                    std::vector<CCLO *> waitfor) {
+  CCLO::Options options{};
+
+  const Communicator &communicator = communicators[comm_id];
+
+  bool is_root = communicator.local_rank() == root;
+
+  if (count == 0) {
+    std::cerr << "ACCL: zero size buffer" << std::endl;
+    return nullptr;
+  }
+
+  options.scenario = operation::scatter;
+  options.comm = communicator.communicators_addr();
+  options.data_type_io_0 = src_data_type;
+  options.data_type_io_2 = dst_data_type;
+  options.stream_flags = streamFlags::OP0_STREAM | streamFlags::RES_STREAM;
+  options.count = count;
+  options.root_src_dst = root;
+  options.waitfor = waitfor;
+  CCLO *handle = call_async(options);
+
+  if (run_async) {
+    return handle;
+  } else {
+    handle->wait();
     check_return_value("scatter");
   }
 
@@ -530,10 +687,165 @@ CCLO *ACCL::gather(BaseBuffer &sendbuf,
   return nullptr;
 }
 
-CCLO *ACCL::allgather(BaseBuffer &sendbuf,
-                      BaseBuffer &recvbuf, unsigned int count,
+CCLO *ACCL::gather(dataType src_data_type,
+                   BaseBuffer &recvbuf, unsigned int count, unsigned int root,
+                   communicatorId comm_id, bool to_fpga,
+                   dataType compress_dtype, bool run_async,
+                   std::vector<CCLO *> waitfor) {
+  CCLO::Options options{};
+
+  const Communicator &communicator = communicators[comm_id];
+
+  bool is_root = communicator.local_rank() == root;
+
+  if (to_fpga == false && run_async == true) {
+    std::cerr << "ACCL: async run returns data on FPGA, user must "
+                 "sync_from_device() after waiting"
+              << std::endl;
+  }
+
+  if (count == 0) {
+    std::cerr << "ACCL: zero size buffer" << std::endl;
+    return nullptr;
+  }
+
+  if (ignore_safety_checks == false &&
+      (count + segment_size - 1) / segment_size *
+              communicator.get_ranks()->size() >
+          rx_buffer_spares.size()) {
+    std::cerr << "ACCL: gather can't be executed safely with this number of "
+                 "spare buffers"
+              << std::endl;
+  }
+
+  options.scenario = operation::gather;
+  options.comm = communicator.communicators_addr();
+  options.data_type_io_0 = src_data_type;
+  options.addr_2 = &recvbuf;
+  options.stream_flags = streamFlags::OP0_STREAM;
+  options.count = count;
+  options.root_src_dst = root;
+  options.compress_dtype = compress_dtype;
+  options.waitfor = waitfor;
+  CCLO *handle = call_async(options);
+
+  if (run_async) {
+    return handle;
+  } else {
+    handle->wait();
+    if (to_fpga == false && is_root == true) {
+      auto slice = recvbuf.slice(0, count * communicator.get_ranks()->size());
+      slice->sync_from_device();
+    }
+    check_return_value("gather");
+  }
+
+  return nullptr;
+}
+
+CCLO *ACCL::gather(BaseBuffer &sendbuf,
+                   dataType dst_data_type, unsigned int count, unsigned int root,
+                   communicatorId comm_id, bool from_fpga,
+                   dataType compress_dtype, bool run_async,
+                   std::vector<CCLO *> waitfor) {
+  CCLO::Options options{};
+
+  const Communicator &communicator = communicators[comm_id];
+
+  bool is_root = communicator.local_rank() == root;
+
+  if (count == 0) {
+    std::cerr << "ACCL: zero size buffer" << std::endl;
+    return nullptr;
+  }
+
+  if (ignore_safety_checks == false &&
+      (count + segment_size - 1) / segment_size *
+              communicator.get_ranks()->size() >
+          rx_buffer_spares.size()) {
+    std::cerr << "ACCL: gather can't be executed safely with this number of "
+                 "spare buffers"
+              << std::endl;
+  }
+
+  if (from_fpga == false) {
+    auto slice = sendbuf.slice(0, count);
+    slice->sync_to_device();
+  }
+
+  options.scenario = operation::gather;
+  options.comm = communicator.communicators_addr();
+  options.addr_0 = &sendbuf;
+  options.data_type_io_2 = dst_data_type;
+  options.stream_flags = streamFlags::RES_STREAM;
+  options.count = count;
+  options.root_src_dst = root;
+  options.compress_dtype = compress_dtype;
+  options.waitfor = waitfor;
+  CCLO *handle = call_async(options);
+
+  if (run_async) {
+    return handle;
+  } else {
+    handle->wait();
+    check_return_value("gather");
+  }
+
+  return nullptr;
+}
+
+CCLO *ACCL::gather(dataType src_data_type,
+                   dataType dst_data_type, unsigned int count, unsigned int root,
+                   communicatorId comm_id,
+                   dataType compress_dtype, bool run_async,
+                   std::vector<CCLO *> waitfor) {
+  CCLO::Options options{};
+
+  const Communicator &communicator = communicators[comm_id];
+
+  bool is_root = communicator.local_rank() == root;
+
+  if (count == 0) {
+    std::cerr << "ACCL: zero size buffer" << std::endl;
+    return nullptr;
+  }
+
+  if (ignore_safety_checks == false &&
+      (count + segment_size - 1) / segment_size *
+              communicator.get_ranks()->size() >
+          rx_buffer_spares.size()) {
+    std::cerr << "ACCL: gather can't be executed safely with this number of "
+                 "spare buffers"
+              << std::endl;
+  }
+
+  options.scenario = operation::gather;
+  options.comm = communicator.communicators_addr();
+  options.data_type_io_0 = src_data_type;
+  options.data_type_io_2 = dst_data_type;
+  options.stream_flags = streamFlags::OP0_STREAM | streamFlags::RES_STREAM;
+  options.count = count;
+  options.root_src_dst = root;
+  options.compress_dtype = compress_dtype;
+  options.waitfor = waitfor;
+  CCLO *handle = call_async(options);
+
+  if (run_async) {
+    return handle;
+  } else {
+    handle->wait();
+    check_return_value("gather");
+  }
+
+  return nullptr;
+}
+
+CCLO *ACCL::allgather(BaseBuffer *sendbuf,
+                      BaseBuffer *recvbuf, unsigned int count,
                       communicatorId comm_id, bool from_fpga, bool to_fpga,
-                      dataType compress_dtype, bool run_async,
+                      dataType compress_dtype,
+                      streamFlags stream_flags, dataType src_data_type, 
+                      dataType dst_data_type, bool run_async,
                       std::vector<CCLO *> waitfor) {
   CCLO::Options options{};
 
@@ -560,14 +872,17 @@ CCLO *ACCL::allgather(BaseBuffer &sendbuf,
   }
 
   if (from_fpga == false) {
-    auto slice = sendbuf.slice(0, count);
+    auto slice = sendbuf->slice(0, count);
     slice->sync_to_device();
   }
 
   options.scenario = operation::allgather;
   options.comm = communicator.communicators_addr();
-  options.addr_0 = &sendbuf;
-  options.addr_2 = &recvbuf;
+  options.addr_0 = sendbuf;
+  options.addr_2 = recvbuf;
+  options.data_type_io_0 = src_data_type;
+  options.data_type_io_2 = dst_data_type;
+  options.stream_flags = stream_flags;
   options.count = count;
   options.compress_dtype = compress_dtype;
   options.waitfor = waitfor;
@@ -578,7 +893,7 @@ CCLO *ACCL::allgather(BaseBuffer &sendbuf,
   } else {
     handle->wait();
     if (to_fpga == false) {
-      auto slice = recvbuf.slice(0, count * communicator.get_ranks()->size());
+      auto slice = recvbuf->slice(0, count * communicator.get_ranks()->size());
       slice->sync_from_device();
     }
     check_return_value("allgather");
@@ -587,10 +902,64 @@ CCLO *ACCL::allgather(BaseBuffer &sendbuf,
   return nullptr;
 }
 
-CCLO *ACCL::reduce(BaseBuffer &sendbuf,
-                   BaseBuffer &recvbuf, unsigned int count, unsigned int root,
+CCLO *ACCL::allgather(BaseBuffer &sendbuf,
+                      BaseBuffer &recvbuf, unsigned int count,
+                      communicatorId comm_id, bool from_fpga, bool to_fpga,
+                      dataType compress_dtype, bool run_async,
+                      std::vector<CCLO *> waitfor) {
+  return allgather(&sendbuf,
+                      &recvbuf, count,
+                      comm_id, from_fpga, to_fpga,
+                      compress_dtype,
+                      streamFlags::NO_STREAM, dataType::none, 
+                      dataType::none, run_async, waitfor);
+}
+
+CCLO *ACCL::allgather(dataType src_data_type,
+                      BaseBuffer &recvbuf, unsigned int count,
+                      communicatorId comm_id, bool to_fpga,
+                      dataType compress_dtype, bool run_async,
+                      std::vector<CCLO *> waitfor) {
+  return allgather(&dummy_buffer,
+                      &recvbuf, count,
+                      comm_id, true, to_fpga,
+                      compress_dtype,
+                      streamFlags::OP0_STREAM, src_data_type, 
+                      dataType::none, run_async, waitfor);
+}
+
+CCLO *ACCL::allgather(BaseBuffer &sendbuf,
+                      dataType dst_data_type, unsigned int count,
+                      communicatorId comm_id, bool from_fpga,
+                      dataType compress_dtype, bool run_async,
+                      std::vector<CCLO *> waitfor) {
+  return allgather(&sendbuf,
+                      &dummy_buffer, count,
+                      comm_id, from_fpga, true,
+                      compress_dtype,
+                      streamFlags::RES_STREAM, dataType::none, 
+                      dst_data_type, run_async, waitfor);
+}
+
+CCLO *ACCL::allgather(dataType src_data_type,
+                      dataType dst_data_type, unsigned int count,
+                      communicatorId comm_id,
+                      dataType compress_dtype, bool run_async,
+                      std::vector<CCLO *> waitfor) {
+  return allgather(&dummy_buffer,
+                      &dummy_buffer, count,
+                      comm_id, true, true,
+                      compress_dtype,
+                      streamFlags::OP0_STREAM | streamFlags::RES_STREAM, src_data_type, 
+                      dst_data_type, run_async, waitfor);
+}
+
+CCLO *ACCL::reduce(BaseBuffer *sendbuf,
+                   BaseBuffer *recvbuf, unsigned int count, unsigned int root,
                    reduceFunction func, communicatorId comm_id, bool from_fpga,
-                   bool to_fpga, dataType compress_dtype, bool run_async,
+                   bool to_fpga, dataType compress_dtype,
+                   streamFlags stream_flags, dataType src_data_type, 
+                   dataType dst_data_type, bool run_async,
                    std::vector<CCLO *> waitfor) {
   CCLO::Options options{};
 
@@ -610,14 +979,17 @@ CCLO *ACCL::reduce(BaseBuffer &sendbuf,
   }
 
   if (from_fpga == false) {
-    auto slice = sendbuf.slice(0, count);
+    auto slice = sendbuf->slice(0, count);
     slice->sync_to_device();
   }
 
   options.scenario = operation::reduce;
   options.comm = communicator.communicators_addr();
-  options.addr_0 = &sendbuf;
-  options.addr_2 = &recvbuf;
+  options.addr_0 = sendbuf;
+  options.addr_2 = recvbuf;
+  options.data_type_io_0 = src_data_type;
+  options.data_type_io_2 = dst_data_type;
+  options.stream_flags = stream_flags;
   options.count = count;
   options.reduce_function = func;
   options.root_src_dst = root;
@@ -630,7 +1002,7 @@ CCLO *ACCL::reduce(BaseBuffer &sendbuf,
   } else {
     handle->wait();
     if (to_fpga == false && is_root == true) {
-      auto slice = recvbuf.slice(0, count);
+      auto slice = recvbuf->slice(0, count);
       slice->sync_from_device();
     }
     check_return_value("reduce");
@@ -639,10 +1011,68 @@ CCLO *ACCL::reduce(BaseBuffer &sendbuf,
   return nullptr;
 }
 
-CCLO *ACCL::allreduce(BaseBuffer &sendbuf,
-                      BaseBuffer &recvbuf, unsigned int count,
+CCLO *ACCL::reduce(BaseBuffer &sendbuf,
+                   BaseBuffer &recvbuf, unsigned int count, unsigned int root,
+                   reduceFunction func, communicatorId comm_id, bool from_fpga,
+                   bool to_fpga, dataType compress_dtype, bool run_async,
+                   std::vector<CCLO *> waitfor) {
+  return reduce(&sendbuf,
+                   &recvbuf, count, root,
+                   func, comm_id, from_fpga,
+                   to_fpga, compress_dtype,
+                   streamFlags::NO_STREAM, dataType::none, 
+                   dataType::none, run_async,
+                   waitfor);
+}
+
+CCLO *ACCL::reduce(dataType src_data_type,
+                   BaseBuffer &recvbuf, unsigned int count, unsigned int root,
+                   reduceFunction func, communicatorId comm_id,
+                   bool to_fpga, dataType compress_dtype, bool run_async,
+                   std::vector<CCLO *> waitfor) {
+  return reduce(&dummy_buffer,
+                   &recvbuf, count, root,
+                   func, comm_id, true,
+                   to_fpga, compress_dtype,
+                   streamFlags::OP0_STREAM, src_data_type, 
+                   dataType::none, run_async,
+                   waitfor);
+}
+
+CCLO *ACCL::reduce(BaseBuffer &sendbuf,
+                   dataType dst_data_type, unsigned int count, unsigned int root,
+                   reduceFunction func, communicatorId comm_id, bool from_fpga,
+                   dataType compress_dtype, bool run_async,
+                   std::vector<CCLO *> waitfor) {
+  return reduce(&sendbuf,
+                   &dummy_buffer, count, root,
+                   func, comm_id, from_fpga,
+                   true, compress_dtype,
+                   streamFlags::RES_STREAM, dataType::none, 
+                   dst_data_type, run_async,
+                   waitfor);
+}
+
+CCLO *ACCL::reduce(dataType src_data_type,
+                   dataType dst_data_type, unsigned int count, unsigned int root,
+                   reduceFunction func, communicatorId comm_id,
+                   dataType compress_dtype, bool run_async,
+                   std::vector<CCLO *> waitfor) {
+  return reduce(&dummy_buffer,
+                   &dummy_buffer, count, root,
+                   func, comm_id, true,
+                   true, compress_dtype,
+                   streamFlags::OP0_STREAM | streamFlags::RES_STREAM, src_data_type, 
+                   dst_data_type, run_async,
+                   waitfor);
+}
+
+CCLO *ACCL::allreduce(BaseBuffer *sendbuf,
+                      BaseBuffer *recvbuf, unsigned int count,
                       reduceFunction func, communicatorId comm_id,
                       bool from_fpga, bool to_fpga, dataType compress_dtype,
+                      streamFlags stream_flags, dataType src_data_type, 
+                      dataType dst_data_type, 
                       bool run_async, std::vector<CCLO *> waitfor) {
   CCLO::Options options{};
 
@@ -660,15 +1090,18 @@ CCLO *ACCL::allreduce(BaseBuffer &sendbuf,
   }
 
   if (from_fpga == false) {
-    auto slice = sendbuf.slice(0, count);
+    auto slice = sendbuf->slice(0, count);
     slice->sync_to_device();
   }
 
   options.scenario = operation::allreduce;
   options.comm = communicator.communicators_addr();
-  options.addr_0 = &sendbuf;
-  options.addr_2 = &recvbuf;
+  options.addr_0 = sendbuf;
+  options.addr_2 = recvbuf;
   options.count = count;
+  options.data_type_io_0 = src_data_type;
+  options.data_type_io_2 = dst_data_type;
+  options.stream_flags = stream_flags;
   options.reduce_function = func;
   options.compress_dtype = compress_dtype;
   options.waitfor = waitfor;
@@ -679,7 +1112,7 @@ CCLO *ACCL::allreduce(BaseBuffer &sendbuf,
   } else {
     handle->wait();
     if (to_fpga == false) {
-      auto slice = recvbuf.slice(0, count);
+      auto slice = recvbuf->slice(0, count);
       slice->sync_from_device();
     }
     check_return_value("allreduce");
@@ -688,11 +1121,69 @@ CCLO *ACCL::allreduce(BaseBuffer &sendbuf,
   return nullptr;
 }
 
-CCLO *ACCL::reduce_scatter(BaseBuffer &sendbuf,
-                           BaseBuffer &recvbuf, unsigned int count,
+CCLO *ACCL::allreduce(BaseBuffer &sendbuf,
+                      BaseBuffer &recvbuf, unsigned int count,
+                      reduceFunction func, communicatorId comm_id,
+                      bool from_fpga, bool to_fpga, dataType compress_dtype,
+                      bool run_async, std::vector<CCLO *> waitfor) {
+  return allreduce(&sendbuf,
+                      &recvbuf, count,
+                      func, comm_id,
+                      from_fpga, to_fpga, compress_dtype,
+                      streamFlags::NO_STREAM, dataType::none, 
+                      dataType::none, 
+                      run_async, waitfor);
+}
+
+CCLO *ACCL::allreduce(dataType src_data_type,
+                      BaseBuffer &recvbuf, unsigned int count,
+                      reduceFunction func, communicatorId comm_id,
+                      bool to_fpga, dataType compress_dtype,
+                      bool run_async, std::vector<CCLO *> waitfor) {
+  return allreduce(&dummy_buffer,
+                      &recvbuf, count,
+                      func, comm_id,
+                      true, to_fpga, compress_dtype,
+                      streamFlags::OP0_STREAM, src_data_type, 
+                      dataType::none, 
+                      run_async, waitfor);
+}
+
+CCLO *ACCL::allreduce(BaseBuffer &sendbuf,
+                      dataType dst_data_type, unsigned int count,
+                      reduceFunction func, communicatorId comm_id,
+                      bool from_fpga, dataType compress_dtype,
+                      bool run_async, std::vector<CCLO *> waitfor) {
+  return allreduce(&sendbuf,
+                      &dummy_buffer, count,
+                      func, comm_id,
+                      from_fpga, true, compress_dtype,
+                      streamFlags::RES_STREAM, dataType::none, 
+                      dst_data_type, 
+                      run_async, waitfor);
+}
+
+CCLO *ACCL::allreduce(dataType src_data_type,
+                      dataType dst_data_type, unsigned int count,
+                      reduceFunction func, communicatorId comm_id,
+                      dataType compress_dtype,
+                      bool run_async, std::vector<CCLO *> waitfor) {
+  return allreduce(&dummy_buffer,
+                      &dummy_buffer, count,
+                      func, comm_id,
+                      true, true, compress_dtype,
+                      streamFlags::OP0_STREAM | streamFlags::RES_STREAM, src_data_type, 
+                      dst_data_type, 
+                      run_async, waitfor);
+}
+
+CCLO *ACCL::reduce_scatter(BaseBuffer *sendbuf,
+                           BaseBuffer *recvbuf, unsigned int count,
                            reduceFunction func, communicatorId comm_id,
                            bool from_fpga, bool to_fpga,
-                           dataType compress_dtype, bool run_async,
+                           dataType compress_dtype,
+                           streamFlags stream_flags, dataType src_data_type, 
+                           dataType dst_data_type,  bool run_async,
                            std::vector<CCLO *> waitfor) {
   CCLO::Options options{};
 
@@ -710,15 +1201,18 @@ CCLO *ACCL::reduce_scatter(BaseBuffer &sendbuf,
   }
 
   if (from_fpga == false) {
-    auto slice = sendbuf.slice(0, count * communicator.get_ranks()->size());
+    auto slice = sendbuf->slice(0, count * communicator.get_ranks()->size());
     slice->sync_to_device();
   }
 
   options.scenario = operation::reduce_scatter;
   options.comm = communicator.communicators_addr();
-  options.addr_0 = &sendbuf;
-  options.addr_2 = &recvbuf;
+  options.addr_0 = sendbuf;
+  options.addr_2 = recvbuf;
   options.count = count;
+  options.data_type_io_0 = src_data_type;
+  options.data_type_io_2 = dst_data_type;
+  options.stream_flags = stream_flags;
   options.reduce_function = func;
   options.compress_dtype = compress_dtype;
   options.waitfor = waitfor;
@@ -729,13 +1223,76 @@ CCLO *ACCL::reduce_scatter(BaseBuffer &sendbuf,
   } else {
     handle->wait();
     if (to_fpga == false) {
-      auto slice = recvbuf.slice(0, count);
+      auto slice = recvbuf->slice(0, count);
       slice->sync_from_device();
     }
     check_return_value("reduce_scatter");
   }
 
   return nullptr;
+}
+
+CCLO *ACCL::reduce_scatter(BaseBuffer &sendbuf,
+                           BaseBuffer &recvbuf, unsigned int count,
+                           reduceFunction func, communicatorId comm_id,
+                           bool from_fpga, bool to_fpga,
+                           dataType compress_dtype,
+                           bool run_async,
+                           std::vector<CCLO *> waitfor) {
+  return reduce_scatter(&sendbuf,
+                           &recvbuf, count,
+                           func, comm_id,
+                           from_fpga, to_fpga,
+                           compress_dtype,
+                           streamFlags::NO_STREAM, dataType::none, 
+                           dataType::none, run_async, waitfor);
+}
+
+CCLO *ACCL::reduce_scatter(dataType src_data_type,
+                           BaseBuffer &recvbuf, unsigned int count,
+                           reduceFunction func, communicatorId comm_id,
+                           bool to_fpga,
+                           dataType compress_dtype,
+                           bool run_async,
+                           std::vector<CCLO *> waitfor) {
+  return reduce_scatter(&dummy_buffer,
+                           &recvbuf, count,
+                           func, comm_id,
+                           true, to_fpga,
+                           compress_dtype,
+                           streamFlags::OP0_STREAM, src_data_type, 
+                           dataType::none, run_async, waitfor);
+}
+
+CCLO *ACCL::reduce_scatter(BaseBuffer &sendbuf,
+                           dataType dst_data_type, unsigned int count,
+                           reduceFunction func, communicatorId comm_id,
+                           bool from_fpga,
+                           dataType compress_dtype,
+                           bool run_async,
+                           std::vector<CCLO *> waitfor) {
+  return reduce_scatter(&sendbuf,
+                           &dummy_buffer, count,
+                           func, comm_id,
+                           from_fpga, true,
+                           compress_dtype,
+                           streamFlags::RES_STREAM, dataType::none, 
+                           dst_data_type, run_async, waitfor);
+}
+
+CCLO *ACCL::reduce_scatter(dataType src_data_type,
+                           dataType dst_data_type, unsigned int count,
+                           reduceFunction func, communicatorId comm_id,
+                           dataType compress_dtype,
+                           bool run_async,
+                           std::vector<CCLO *> waitfor) {
+  return reduce_scatter(&dummy_buffer,
+                           &dummy_buffer, count,
+                           func, comm_id,
+                           true, true,
+                           compress_dtype,
+                           streamFlags::OP0_STREAM | streamFlags::RES_STREAM, src_data_type, 
+                           dst_data_type, run_async, waitfor);
 }
 
 void ACCL::barrier(communicatorId comm_id,

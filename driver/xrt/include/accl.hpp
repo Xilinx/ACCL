@@ -361,6 +361,25 @@ public:
               bool to_fpga = false, dataType compress_dtype = dataType::none,
               bool run_async = false, std::vector<CCLO *> waitfor = {});
 
+    /**
+   * Performs the broadcast operation on the FPGA using the streaming interface.
+   *
+   * @param src_dst_data_type Data type used for the source or destination stream.
+   * @param count          Amount of elements in buffer to broadcast.
+   * @param root           Rank to broadcast the data from.
+   * @param comm_id        Index of communicator to use.
+   * @param compress_dtype Datatype to compress buffers to over ethernet.
+   * @param run_async      Run the ACCL call asynchronously.
+   * @param waitfor        ACCL call will wait for these operations before it
+   *                       will start. Currently not implemented.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
+   */
+  CCLO *bcast(dataType src_dst_data_type, unsigned int count, unsigned int root,
+              communicatorId comm_id = GLOBAL_COMM,
+              dataType compress_dtype = dataType::none,
+              bool run_async = false, std::vector<CCLO *> waitfor = {});
+
   /**
    * Performs the scatter operation on the FPGA.
    *
@@ -389,6 +408,79 @@ public:
                 bool from_fpga = false, bool to_fpga = false,
                 dataType compress_dtype = dataType::none,
                 bool run_async = false, std::vector<CCLO *> waitfor = {});
+
+  /**
+   * Performs the scatter operation on the FPGA.
+   *
+   * @param src_data_type  Data type of the streaming data. Gets ignored on
+   *                       non-root ranks.
+   * @param recvbuf        Buffer of count elements where the scattered data
+   *                       should be stored. Create a buffer using
+   *                       ACCL::create_buffer.
+   * @param count          Amount of elements to scatter per rank.
+   * @param root           Rank to scatter the data from.
+   * @param comm_id        Index of communicator to use.
+   * @param to_fpga        Set to true if the scattered data will be used on the
+   *                       FPGA only.
+   * @param compress_dtype Datatype to compress buffers to over ethernet.
+   * @param run_async      Run the ACCL call asynchronously.
+   * @param waitfor        ACCL call will wait for these operations before it
+   *                       will start. Currently not implemented.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
+   */
+  CCLO *scatter(dataType src_data_type, BaseBuffer &recvbuf, unsigned int count,
+                unsigned int root, communicatorId comm_id = GLOBAL_COMM,
+                bool to_fpga = false,
+                dataType compress_dtype = dataType::none,
+                bool run_async = false, std::vector<CCLO *> waitfor = {});
+
+  /**
+   * Performs the scatter operation on the FPGA.
+   *
+   * @param src_data_type  Data type of the streaming data. Gets ignored on
+   *                       non-root ranks.
+   * @param dst_data_type  Data type of the outgoing streaming data.
+   * @param count          Amount of elements to scatter per rank.
+   * @param root           Rank to scatter the data from.
+   * @param comm_id        Index of communicator to use.
+   * @param compress_dtype Datatype to compress buffers to over ethernet.
+   * @param run_async      Run the ACCL call asynchronously.
+   * @param waitfor        ACCL call will wait for these operations before it
+   *                       will start. Currently not implemented.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
+   */
+  CCLO *scatter(dataType src_data_type, dataType dst_data_type, unsigned int count,
+                unsigned int root, communicatorId comm_id = GLOBAL_COMM,
+                dataType compress_dtype = dataType::none,
+                bool run_async = false, std::vector<CCLO *> waitfor = {});
+
+  /**
+   * Performs the scatter operation on the FPGA.
+   *
+   * @param sendbuf        Buffer of count × world size elements that contains
+   *                       the data to be scattered. Create a buffer using
+   *                       ACCL::create_buffer. You can pass a DummyBuffer on
+   *                       non-root ranks.
+   * @param dst_data_type  Data type of the outgoing streaming data.
+   * @param count          Amount of elements to scatter per rank.
+   * @param root           Rank to scatter the data from.
+   * @param comm_id        Index of communicator to use.
+   * @param from_fpga      Set to true if the data is already on the FPGA.
+   * @param compress_dtype Datatype to compress buffers to over ethernet.
+   * @param run_async      Run the ACCL call asynchronously.
+   * @param waitfor        ACCL call will wait for these operations before it
+   *                       will start. Currently not implemented.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
+   */
+  CCLO *scatter(BaseBuffer &sendbuf, dataType dst_data_type, unsigned int count,
+                unsigned int root, communicatorId comm_id = GLOBAL_COMM,
+                bool from_fpga = false,
+                dataType compress_dtype = dataType::none,
+                bool run_async = false, std::vector<CCLO *> waitfor = {});
+
 
   /**
    * Performs the gather operation on the FPGA.
@@ -420,6 +512,76 @@ public:
                std::vector<CCLO *> waitfor = {});
 
   /**
+   * Performs the gather operation on the FPGA.
+   *
+   * @param src_data_type  Data type of source stream.
+   * @param recvbuf        Buffer of count × world size elements to where the
+   *                       data should be gathered. Create a buffer using
+   *                       ACCL::create_buffer. You can pass a DummyBuffer on
+   *                       non-root ranks.
+   * @param count          Amount of elements to gather per rank.
+   * @param root           Rank to gather the data to.
+   * @param comm_id        Index of communicator to use.
+   * @param to_fpga        Set to true if the gathered data will be used on the
+   *                       FPGA only.
+   * @param compress_dtype Datatype to compress buffers to over ethernet.
+   * @param run_async      Run the ACCL call asynchronously.
+   * @param waitfor        ACCL call will wait for these operations before it
+   *                       will start. Currently not implemented.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
+   */
+  CCLO *gather(dataType src_data_type, BaseBuffer &recvbuf, unsigned int count,
+               unsigned int root, communicatorId comm_id = GLOBAL_COMM,
+               bool to_fpga = false,
+               dataType compress_dtype = dataType::none, bool run_async = false,
+               std::vector<CCLO *> waitfor = {});
+
+  /**
+   * Performs the gather operation on the FPGA.
+   *
+   * @param sendbuf        Buffer of count elements that contains the data to
+   *                       be gathered. Create a buffer using
+   *                       ACCL::create_buffer.
+   * @param dst_data_type  Data type os destinations stream.
+   * @param count          Amount of elements to gather per rank.
+   * @param root           Rank to gather the data to.
+   * @param comm_id        Index of communicator to use.
+   * @param from_fpga      Set to true if the data is already on the FPGA.
+   * @param compress_dtype Datatype to compress buffers to over ethernet.
+   * @param run_async      Run the ACCL call asynchronously.
+   * @param waitfor        ACCL call will wait for these operations before it
+   *                       will start. Currently not implemented.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
+   */
+  CCLO *gather(BaseBuffer &sendbuf, dataType dst_data_type, unsigned int count,
+               unsigned int root, communicatorId comm_id = GLOBAL_COMM,
+               bool from_fpga = false,
+               dataType compress_dtype = dataType::none, bool run_async = false,
+               std::vector<CCLO *> waitfor = {});
+
+  /**
+   * Performs the gather operation on the FPGA.
+   *
+   * @param src_data_type  Data type of input stream.
+   * @param dst_data_type  Data type of output stream.
+   * @param count          Amount of elements to gather per rank.
+   * @param root           Rank to gather the data to.
+   * @param comm_id        Index of communicator to use.
+   * @param compress_dtype Datatype to compress buffers to over ethernet.
+   * @param run_async      Run the ACCL call asynchronously.
+   * @param waitfor        ACCL call will wait for these operations before it
+   *                       will start. Currently not implemented.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
+   */
+  CCLO *gather(dataType src_data_type, dataType dst_data_type, unsigned int count,
+               unsigned int root, communicatorId comm_id = GLOBAL_COMM,
+               dataType compress_dtype = dataType::none, bool run_async = false,
+               std::vector<CCLO *> waitfor = {});
+
+  /**
    * Performs the allgather operation on the FPGA.
    *
    * @param sendbuf        Buffer of count elements that contains the data to
@@ -443,6 +605,74 @@ public:
   CCLO *allgather(BaseBuffer &sendbuf, BaseBuffer &recvbuf, unsigned int count,
                   communicatorId comm_id = GLOBAL_COMM, bool from_fpga = false,
                   bool to_fpga = false,
+                  dataType compress_dtype = dataType::none,
+                  bool run_async = false, std::vector<CCLO *> waitfor = {});
+
+  /**
+   * Performs the allgather operation on the FPGA.
+   *
+   * @param src_data_type  Data type of input stream.
+   * @param recvbuf        Buffer of count × world size elements to where the
+   *                       data should be gathered. Create a buffer using
+   *                       ACCL::create_buffer.
+   * @param count          Amount of elements to gather per rank.
+   * @param comm_id        Index of communicator to use.
+   * @param to_fpga        Set to true if the gathered data will be used on the
+   *                       FPGA only.
+   * @param compress_dtype Datatype to compress buffers to over ethernet.
+   * @param run_async      Run the ACCL call asynchronously.
+   * @param waitfor        ACCL call will wait for these operations before it
+   *                       will start. Currently not implemented.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
+   */
+  CCLO *allgather(dataType src_data_type, BaseBuffer &recvbuf, unsigned int count,
+                  communicatorId comm_id = GLOBAL_COMM,
+                  bool to_fpga = false,
+                  dataType compress_dtype = dataType::none,
+                  bool run_async = false, std::vector<CCLO *> waitfor = {});
+
+  /**
+   * Performs the allgather operation on the FPGA.
+   *
+   * @param sendbuf        Buffer of count elements that contains the data to
+   *                       be gathered. Create a buffer using
+   *                       ACCL::create_buffer.
+   * @param dst_data_type  Data type of output stream.
+   * @param count          Amount of elements to gather per rank.
+   * @param comm_id        Index of communicator to use.
+   * @param from_fpga      Set to true if the data is already on the FPGA.
+   * @param compress_dtype Datatype to compress buffers to over ethernet.
+   * @param run_async      Run the ACCL call asynchronously.
+   * @param waitfor        ACCL call will wait for these operations before it
+   *                       will start. Currently not implemented.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
+   */
+  CCLO *allgather(BaseBuffer &sendbuf, dataType dst_data_type, unsigned int count,
+                  communicatorId comm_id = GLOBAL_COMM, bool from_fpga = false,
+                  dataType compress_dtype = dataType::none,
+                  bool run_async = false, std::vector<CCLO *> waitfor = {});
+
+  /**
+   * Performs the allgather operation on the FPGA.
+   *
+   * @param src_data_type  Data type of input stream.
+   * @param dst_data_type  Data type of output stream.
+   * @param count          Amount of elements to gather per rank.
+   * @param comm_id        Index of communicator to use.
+   * @param from_fpga      Set to true if the data is already on the FPGA.
+   * @param to_fpga        Set to true if the gathered data will be used on the
+   *                       FPGA only.
+   * @param compress_dtype Datatype to compress buffers to over ethernet.
+   * @param run_async      Run the ACCL call asynchronously.
+   * @param waitfor        ACCL call will wait for these operations before it
+   *                       will start. Currently not implemented.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
+   */
+  CCLO *allgather(dataType src_data_type, dataType dst_data_type, unsigned int count,
+                  communicatorId comm_id = GLOBAL_COMM,
                   dataType compress_dtype = dataType::none,
                   bool run_async = false, std::vector<CCLO *> waitfor = {});
 
@@ -475,6 +705,78 @@ public:
                bool run_async = false, std::vector<CCLO *> waitfor = {});
 
   /**
+   * Performs the reduce operation on the FPGA.
+   *
+   * @param src_data_type  Data type of input stream.
+   * @param recvbuf        Buffer to where the data should be reduced. Create a
+   *                       buffer using ACCL::create_buffer. You can pass a
+   *                       DummyBuffer on non-root ranks.
+   * @param count          Amount of elements to reduce.
+   * @param root           Rank to reduce the data to.
+   * @param func           Reduce function to use.
+   * @param comm_id        Index of communicator to use.
+   * @param to_fpga        Set to true if the reduced data will be used on the
+   *                       FPGA only.
+   * @param compress_dtype Datatype to compress buffers to over ethernet.
+   * @param run_async      Run the ACCL call asynchronously.
+   * @param waitfor        ACCL call will wait for these operations before it
+   *                       will start. Currently not implemented.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
+   */
+  CCLO *reduce(dataType src_data_type, BaseBuffer &recvbuf, unsigned int count,
+               unsigned int root, reduceFunction func,
+               communicatorId comm_id = GLOBAL_COMM,
+               bool to_fpga = false, dataType compress_dtype = dataType::none,
+               bool run_async = false, std::vector<CCLO *> waitfor = {});
+
+  /**
+   * Performs the reduce operation on the FPGA.
+   *
+   * @param sendbuf        Buffer that contains the data to be reduced. Create a
+   *                       buffer using ACCL::create_buffer.
+   * @param dst_data_type  Data type of output stream.
+   * @param count          Amount of elements to reduce.
+   * @param root           Rank to reduce the data to.
+   * @param func           Reduce function to use.
+   * @param comm_id        Index of communicator to use.
+   * @param from_fpga      Set to true if the data is already on the FPGA.
+   * @param compress_dtype Datatype to compress buffers to over ethernet.
+   * @param run_async      Run the ACCL call asynchronously.
+   * @param waitfor        ACCL call will wait for these operations before it
+   *                       will start. Currently not implemented.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
+   */
+  CCLO *reduce(BaseBuffer &sendbuf, dataType dst_data_type, unsigned int count,
+               unsigned int root, reduceFunction func,
+               communicatorId comm_id = GLOBAL_COMM, bool from_fpga = false,
+               dataType compress_dtype = dataType::none,
+               bool run_async = false, std::vector<CCLO *> waitfor = {});
+
+  /**
+   * Performs the reduce operation on the FPGA.
+   *
+   * @param src_data_type  Data type of input stream.
+   * @param dst_data_type  Data type of output stream.
+   * @param count          Amount of elements to reduce.
+   * @param root           Rank to reduce the data to.
+   * @param func           Reduce function to use.
+   * @param comm_id        Index of communicator to use.
+   * @param compress_dtype Datatype to compress buffers to over ethernet.
+   * @param run_async      Run the ACCL call asynchronously.
+   * @param waitfor        ACCL call will wait for these operations before it
+   *                       will start. Currently not implemented.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
+   */
+  CCLO *reduce(dataType src_data_type, dataType dst_data_type, unsigned int count,
+               unsigned int root, reduceFunction func,
+               communicatorId comm_id = GLOBAL_COMM,
+               dataType compress_dtype = dataType::none,
+               bool run_async = false, std::vector<CCLO *> waitfor = {});
+
+  /**
    * Performs the allreduce operation on the FPGA.
    *
    * @param sendbuf        Buffer that contains the data to be reduced. Create a
@@ -497,6 +799,73 @@ public:
   CCLO *allreduce(BaseBuffer &sendbuf, BaseBuffer &recvbuf, unsigned int count,
                   reduceFunction func, communicatorId comm_id = GLOBAL_COMM,
                   bool from_fpga = false, bool to_fpga = false,
+                  dataType compress_dtype = dataType::none,
+                  bool run_async = false, std::vector<CCLO *> waitfor = {});
+
+  /**
+   * Performs the allreduce operation on the FPGA.
+   *
+   * @param src_data_type  Data type of input stream.
+   * @param recvbuf        Buffer to where the data should be reduced. Create a
+   *                       buffer using ACCL::create_buffer.
+   * @param count          Amount of elements to reduce.
+   * @param func           Reduce function to use.
+   * @param comm_id        Index of communicator to use.
+   * @param to_fpga        Set to true if the reduced data will be used on the
+   *                       FPGA only.
+   * @param compress_dtype Datatype to compress buffers to over ethernet.
+   * @param run_async      Run the ACCL call asynchronously.
+   * @param waitfor        ACCL call will wait for these operations before it
+   *                       will start. Currently not implemented.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
+   */
+  CCLO *allreduce(dataType src_data_type, BaseBuffer &recvbuf, unsigned int count,
+                  reduceFunction func, communicatorId comm_id = GLOBAL_COMM,
+                  bool to_fpga = false,
+                  dataType compress_dtype = dataType::none,
+                  bool run_async = false, std::vector<CCLO *> waitfor = {});
+
+  /**
+   * Performs the allreduce operation on the FPGA.
+   *
+   * @param sendbuf        Buffer that contains the data to be reduced. Create a
+   *                       buffer using ACCL::create_buffer.
+   * @param dst_data_type  Data type of output stream.
+   * @param count          Amount of elements to reduce.
+   * @param func           Reduce function to use.
+   * @param comm_id        Index of communicator to use.
+   * @param from_fpga      Set to true if the data is already on the FPGA.
+   * @param compress_dtype Datatype to compress buffers to over ethernet.
+   * @param run_async      Run the ACCL call asynchronously.
+   * @param waitfor        ACCL call will wait for these operations before it
+   *                       will start. Currently not implemented.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
+   */
+  CCLO *allreduce(BaseBuffer &sendbuf, dataType dst_data_type, unsigned int count,
+                  reduceFunction func, communicatorId comm_id = GLOBAL_COMM,
+                  bool from_fpga = false,
+                  dataType compress_dtype = dataType::none,
+                  bool run_async = false, std::vector<CCLO *> waitfor = {});
+
+  /**
+   * Performs the allreduce operation on the FPGA.
+   *
+   * @param src_data_type  Data type of input stream.
+   * @param dst_data_type  Data type of output stream.
+   * @param count          Amount of elements to reduce.
+   * @param func           Reduce function to use.
+   * @param comm_id        Index of communicator to use.
+   * @param compress_dtype Datatype to compress buffers to over ethernet.
+   * @param run_async      Run the ACCL call asynchronously.
+   * @param waitfor        ACCL call will wait for these operations before it
+   *                       will start. Currently not implemented.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
+   */
+  CCLO *allreduce(dataType src_data_type, dataType dst_data_type, unsigned int count,
+                  reduceFunction func, communicatorId comm_id = GLOBAL_COMM,
                   dataType compress_dtype = dataType::none,
                   bool run_async = false, std::vector<CCLO *> waitfor = {});
 
@@ -529,6 +898,79 @@ public:
                        bool run_async = false,
                        std::vector<CCLO *> waitfor = {});
 
+  /**
+   * Performs the reduce_scatter operation on the FPGA.
+   *
+   * @param src_data_type  Data type of input stream.
+   * @param recvbuf        Buffer of count elements to where the data should be
+   *                       reduced. Create a buffer using ACCL::create_buffer.
+   * @param count          Amount of elements to reduce per rank.
+   * @param func           Reduce function to use.
+   * @param comm_id        Index of communicator to use.
+   * @param to_fpga        Set to true if the reduced data will be used on the
+   *                       FPGA only.
+   * @param compress_dtype Datatype to compress buffers to over ethernet.
+   * @param run_async      Run the ACCL call asynchronously.
+   * @param waitfor        ACCL call will wait for these operations before it
+   *                       will start. Currently not implemented.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
+   */
+  CCLO *reduce_scatter(dataType src_data_type, BaseBuffer &recvbuf,
+                       unsigned int count, reduceFunction func,
+                       communicatorId comm_id = GLOBAL_COMM,
+                       bool to_fpga = false,
+                       dataType compress_dtype = dataType::none,
+                       bool run_async = false,
+                       std::vector<CCLO *> waitfor = {});
+
+  /**
+   * Performs the reduce_scatter operation on the FPGA.
+   *
+   * @param sendbuf        Buffer of count × world size elements that contains
+   *                       the data to be reduced. Create a buffer using
+   *                       ACCL::create_buffer.
+   * @param dst_data_type  Data type of output stream.
+   * @param count          Amount of elements to reduce per rank.
+   * @param func           Reduce function to use.
+   * @param comm_id        Index of communicator to use.
+   * @param from_fpga      Set to true if the data is already on the FPGA.
+   * @param compress_dtype Datatype to compress buffers to over ethernet.
+   * @param run_async      Run the ACCL call asynchronously.
+   * @param waitfor        ACCL call will wait for these operations before it
+   *                       will start. Currently not implemented.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
+   */
+  CCLO *reduce_scatter(BaseBuffer &sendbuf, dataType dst_data_type,
+                       unsigned int count, reduceFunction func,
+                       communicatorId comm_id = GLOBAL_COMM,
+                       bool from_fpga = false,
+                       dataType compress_dtype = dataType::none,
+                       bool run_async = false,
+                       std::vector<CCLO *> waitfor = {});
+
+  /**
+   * Performs the reduce_scatter operation on the FPGA.
+   *
+   * @param src_data_type  Data type of input stream.
+   * @param dst_data_type  Data type of output stream.
+   * @param count          Amount of elements to reduce per rank.
+   * @param func           Reduce function to use.
+   * @param comm_id        Index of communicator to use.
+   * @param compress_dtype Datatype to compress buffers to over ethernet.
+   * @param run_async      Run the ACCL call asynchronously.
+   * @param waitfor        ACCL call will wait for these operations before it
+   *                       will start. Currently not implemented.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
+   */
+  CCLO *reduce_scatter(dataType src_data_type, dataType dst_data_type,
+                       unsigned int count, reduceFunction func,
+                       communicatorId comm_id = GLOBAL_COMM,
+                       dataType compress_dtype = dataType::none,
+                       bool run_async = false,
+                       std::vector<CCLO *> waitfor = {});
   /**
    * Performs a barrier on the FPGA.
    *
@@ -866,6 +1308,39 @@ private:
   const std::vector<int> rxbufmem;
   const int networkmem;
   xrt::device device;
+
+  CCLO *allgather(BaseBuffer *sendbuf,
+                      BaseBuffer *recvbuf, unsigned int count,
+                      communicatorId comm_id, bool from_fpga, bool to_fpga,
+                      dataType compress_dtype,
+                      streamFlags stream_flags, dataType src_data_type, 
+                      dataType dst_data_type, bool run_async,
+                      std::vector<CCLO *> waitfor);
+
+  CCLO *reduce(BaseBuffer *sendbuf,
+                    BaseBuffer *recvbuf, unsigned int count, unsigned int root,
+                    reduceFunction func, communicatorId comm_id, bool from_fpga,
+                    bool to_fpga, dataType compress_dtype,
+                    streamFlags stream_flags, dataType src_data_type, 
+                    dataType dst_data_type, bool run_async,
+                    std::vector<CCLO *> waitfor);
+          
+  CCLO *allreduce(BaseBuffer *sendbuf,
+                      BaseBuffer *recvbuf, unsigned int count,
+                      reduceFunction func, communicatorId comm_id,
+                      bool from_fpga, bool to_fpga, dataType compress_dtype,
+                      streamFlags stream_flags, dataType src_data_type, 
+                      dataType dst_data_type, 
+                      bool run_async, std::vector<CCLO *> waitfor);
+
+  CCLO *reduce_scatter(BaseBuffer *sendbuf,
+                           BaseBuffer *recvbuf, unsigned int count,
+                           reduceFunction func, communicatorId comm_id,
+                           bool from_fpga, bool to_fpga,
+                           dataType compress_dtype,
+                           streamFlags stream_flags, dataType src_data_type, 
+                           dataType dst_data_type,  bool run_async,
+                           std::vector<CCLO *> waitfor);
 
   void initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
                        int nbufs, addr_t bufsize);
