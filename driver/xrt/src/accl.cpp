@@ -21,7 +21,7 @@
 #include <set>
 #include <stdexcept>
 #include "accl.hpp"
-#include "dummybuffer.hpp"
+#include "accl/dummybuffer.hpp"
 
 // 64 MB
 #define NETWORK_BUF_SIZE (64 << 20)

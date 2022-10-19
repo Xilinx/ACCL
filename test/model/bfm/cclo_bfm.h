@@ -18,7 +18,7 @@
 #pragma once
 #include "zmq_client.h"
 #include "accl_hls.h"
-#include "simbuffer.hpp"
+#include "accl/simbuffer.hpp"
 #include <vector>
 
 /**

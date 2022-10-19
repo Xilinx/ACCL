@@ -18,16 +18,16 @@
 
 #pragma once
 
-#include "arithconfig.hpp"
-#include "buffer.hpp"
-#include "cclo.hpp"
-#include "communicator.hpp"
-#include "constants.hpp"
-#include "fpgabuffer.hpp"
-#include "fpgabufferp2p.hpp"
-#include "fpgadevice.hpp"
-#include "simbuffer.hpp"
-#include "simdevice.hpp"
+#include "accl/arithconfig.hpp"
+#include "accl/buffer.hpp"
+#include "accl/cclo.hpp"
+#include "accl/communicator.hpp"
+#include "accl/constants.hpp"
+#include "accl/fpgabuffer.hpp"
+#include "accl/fpgabufferp2p.hpp"
+#include "accl/fpgadevice.hpp"
+#include "accl/simbuffer.hpp"
+#include "accl/simdevice.hpp"
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -217,7 +217,7 @@ public:
    */
   CCLO *stream_put(BaseBuffer &srcbuf, unsigned int count,
                    unsigned int dst, unsigned int stream_id, communicatorId comm_id = GLOBAL_COMM,
-                   bool from_fpga = false, dataType compress_dtype = dataType::none, 
+                   bool from_fpga = false, dataType compress_dtype = dataType::none,
                    bool run_async = false, std::vector<CCLO *> waitfor = {});
 
     /**
@@ -265,7 +265,7 @@ public:
              std::vector<CCLO *> waitfor = {});
 
     /**
-   * Performs the receive operation on the FPGA and directs the received data to 
+   * Performs the receive operation on the FPGA and directs the received data to
    * the data stream of the CCLO.
    *
    * @param dst_data_type  Data Type of the received data.
