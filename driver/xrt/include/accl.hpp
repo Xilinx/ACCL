@@ -303,7 +303,7 @@ public:
    *                       waitfor; nullptr if run_async is false.
    */
   CCLO *copy(BaseBuffer &srcbuf, BaseBuffer &dstbuf, unsigned int count,
-             bool from_fpga = false, bool to_fpga = false, streamFlags stream_flags = streamFlags::NO_STREAM,
+             bool from_fpga = false, bool to_fpga = false,
              bool run_async = false, std::vector<CCLO *> waitfor = {});
 
   /**
@@ -330,8 +330,6 @@ public:
    *                       buffer using ACCL::create_buffer.
    * @param count          Amount of elements in buffer to copy.
    * @param from_fpga      Set to true if the data is already on the FPGA.
-   * @param to_fpga        Set to true if the copied data will be used on the
-   *                       FPGA only.
    * @param run_async      Run the ACCL call asynchronously.
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
@@ -916,6 +914,11 @@ private:
   const std::vector<int> rxbufmem;
   const int networkmem;
   xrt::device device;
+
+  CCLO *copy(BaseBuffer *srcbuf, BaseBuffer *dstbuf, unsigned int count,
+                 bool from_fpga, bool to_fpga, streamFlags stream_flags,
+                 dataType data_type, bool run_async,
+                 std::vector<CCLO *> waitfor);
 
   void initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
                        int nbufs, addr_t bufsize);
