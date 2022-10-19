@@ -16,7 +16,7 @@
 #
 *******************************************************************************/
 
-#include "common.hpp"
+#include "accl/common.hpp"
 #include <cmath>
 #include <cstdlib>
 #ifdef ACCL_DEBUG

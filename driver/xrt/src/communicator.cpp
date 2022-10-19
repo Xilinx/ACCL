@@ -16,8 +16,8 @@
 #
 *******************************************************************************/
 
-#include "communicator.hpp"
-#include "constants.hpp"
+#include "accl/communicator.hpp"
+#include "accl/constants.hpp"
 #include <arpa/inet.h>
 #include <sstream>
 
