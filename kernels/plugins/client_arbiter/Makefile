@@ -15,15 +15,13 @@
 #
 # *******************************************************************************/
 
-TARGET=ip
 DEVICE=xcu250-figd2104-2L-e
-DTYPES=float half double int32_t int64_t
-DWIDTH=512
-REDUCE_IP = reduce_sum.xo
+ARBITER_IP=client_arbiter.xo
+TARGET=ip
+NCLIENTS=3
 
-all: $(REDUCE_IP)
+all: $(ARBITER_IP) 
 
-reduce_sum.xo: build.tcl reduce_sum.cpp
-	vitis_hls $< -tclargs $(TARGET) $(DEVICE)
-
+$(ARBITER_IP): build_client_arbiter.tcl client_arbiter.cpp client_arbiter.h
+	vitis_hls $< -tclargs $(TARGET) $(DEVICE) $(NCLIENTS)
 

@@ -26,17 +26,18 @@
 #include <fstream>
 #include "ap_int.h"
 #include <stdint.h>
-#include "reduce_sum.h"
+#include "reduce_ops.h"
 #include "hp_compression.h"
 #include "eth_intf.h"
 #include "dummy_tcp_stack.h"
 #include "stream_segmenter.h"
+#include "client_arbiter.h"
+#include "hostctrl.h"
 #include "rxbuf_offload.h"
 #include "dma_mover.h"
 #include "ccl_offload_control.h"
 #include <zmqpp/zmqpp.hpp>
 #include <string>
-#include <jsoncpp/json/json.h>
 #include <chrono>
 #include <numeric>
 #include <mpi.h>
@@ -194,6 +195,47 @@ void axis_mux(Stream<stream_word> &s0, Stream<stream_word> &s1, Stream<stream_wo
     }
 }
 
+//wrap a host controller
+void controller(Stream<command_word> &cmdin, Stream<command_word> &cmdout,
+                Stream<command_word> &stsin, Stream<command_word> &stsout){
+    //gather arguments from input command queue
+    ap_uint<32> scenario = cmdin.Pop().data;
+    ap_uint<32> count = cmdin.Pop().data;
+    ap_uint<32> comm = cmdin.Pop().data;
+    ap_uint<32> root_src_dst = cmdin.Pop().data;
+    ap_uint<32> function = cmdin.Pop().data;
+    ap_uint<32> tag = cmdin.Pop().data;
+    ap_uint<32> arithcfg = cmdin.Pop().data;
+    ap_uint<32> compression_flags = cmdin.Pop().data;
+    ap_uint<32> stream_flags = cmdin.Pop().data;
+    ap_uint<64> addr_0 = cmdin.Pop().data;
+    addr_0(63,32) = cmdin.Pop().data;
+    ap_uint<64> addr_1 = cmdin.Pop().data;
+    addr_1(63,32) = cmdin.Pop().data;
+    ap_uint<64> addr_2 = cmdin.Pop().data;
+    addr_2(63,32) = cmdin.Pop().data;
+    //execute host controller
+    logger << log_level::verbose << "Controller forwarding call with scenario " << scenario << endl;
+    hostctrl(	scenario, count, comm, root_src_dst, function, tag, arithcfg, 
+				compression_flags, stream_flags,
+				addr_0, addr_1, addr_2,
+				cmdout, stsin   );
+    //signal upstream
+    stsout.Push({.data=0, .last=1});
+}
+
+//wrap a host controller
+void controller_bypass(Stream<command_word> &cmdin, Stream<command_word> &cmdout,
+                Stream<command_word> &stsin, Stream<command_word> &stsout){
+    //gather arguments from input command queue
+    for(int i=0; i<15; i++){
+        cmdout.Push(cmdin.Pop());
+    }
+    logger << log_level::verbose << "Controller bypass: pushed arguments" << endl;
+    stsout.Push(stsin.Pop());
+    logger << log_level::verbose << "Controller bypass: pushed status" << endl;
+}
+
 void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsigned int world_size) {
     vector<char> devicemem;
 
@@ -250,6 +292,7 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsign
     Stream<pkt16> eth_listen_port;
     Stream<pkt8> eth_port_status;
     Stream<pkt64> eth_open_connection;
+    Stream<pkt16> eth_close_connection;
     Stream<pkt128> eth_open_status;
 
     Stream<ap_uint<96> > cmd_txHandler;
@@ -266,6 +309,12 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsign
     Stream<stream_word, 1024> eth_rx_data_int;
     Stream<stream_word> eth_tx_data_stack;
     Stream<stream_word> eth_rx_data_stack;
+
+    Stream<command_word> callreq_fifos[NUM_CTRL_STREAMS];
+    Stream<command_word> callack_fifos[NUM_CTRL_STREAMS];
+
+    Stream<command_word, 512> callreq_arb[NUM_CTRL_STREAMS], callack_arb[NUM_CTRL_STREAMS];
+    Stream<command_word, 512> callreq_arb_host, callack_arb_host;
 
     unsigned int max_words_per_pkt = MAX_PACKETSIZE/DATAPATH_WIDTH_BYTES;
 
@@ -323,7 +372,7 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsign
     HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, clane2_res,                   switch_s[SWITCH_S_CLANE2], seg_cmd[12], seg_sts[12]);   //clane2 result
     HLSLIB_FREERUNNING_FUNCTION(axis_mux, accl_to_krnl_seg, switch_m[SWITCH_M_BYPASS], accl_to_krnl_data);
     //ARITH
-    HLSLIB_FREERUNNING_FUNCTION(reduce_sum, arith_op0, arith_op1, arith_res);
+    HLSLIB_FREERUNNING_FUNCTION(reduce_ops, arith_op0, arith_op1, arith_res);
     //COMPRESS 0, 1, 2
     HLSLIB_FREERUNNING_FUNCTION(hp_compression, clane0_op, clane0_res);
     HLSLIB_FREERUNNING_FUNCTION(hp_compression, clane1_op, clane1_res);
@@ -339,7 +388,7 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsign
             cmd_fifos[CMD_NET_PORT], sts_fifos[STS_NET_PORT],
             cmd_fifos[CMD_NET_CON], sts_fifos[STS_NET_CON],
             eth_listen_port, eth_port_status,
-            eth_open_connection, eth_open_status
+            eth_open_connection, eth_close_connection, eth_open_status
         );
         //instantiate dummy TCP stack which responds to appropriate comm patterns
         HLSLIB_FREERUNNING_FUNCTION(
@@ -347,7 +396,7 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsign
             eth_notif, eth_read_pkg,
             eth_rx_meta, eth_rx_data_stack,
             eth_tx_meta, eth_tx_data_stack, eth_tx_status,
-            eth_open_connection, eth_open_status,
+            eth_open_connection, eth_open_status, eth_close_connection,
             eth_listen_port, eth_port_status,
             eth_rx_data, eth_tx_data
         );
@@ -359,8 +408,15 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsign
     HLSLIB_FREERUNNING_FUNCTION(krnl_endpoint_egress_port, ctx, accl_to_krnl_data);
     HLSLIB_FREERUNNING_FUNCTION(krnl_endpoint_ingress_port, ctx, krnl_to_accl_data);
 
+    //emulated hostcontrollers
+    HLSLIB_FREERUNNING_FUNCTION(controller, callreq_fifos[0], callreq_arb[0], callack_arb[0], callack_fifos[0]);
+    HLSLIB_FREERUNNING_FUNCTION(controller, callreq_fifos[1], callreq_arb[1], callack_arb[1], callack_fifos[1]);
+    HLSLIB_FREERUNNING_FUNCTION(controller_bypass, callreq_fifos[2], callreq_arb[2], callack_arb[2], callack_fifos[2]);
+    HLSLIB_FREERUNNING_FUNCTION(client_arbiter, callreq_arb[0], callack_arb[0], callreq_arb[1], callack_arb[1], callreq_arb_host, callack_arb_host);
+    HLSLIB_FREERUNNING_FUNCTION(client_arbiter, callreq_arb_host, callack_arb_host, callreq_arb[2], callack_arb[2], sts_fifos[CMD_CALL], cmd_fifos[STS_CALL]);
+
     //ZMQ to host process
-    HLSLIB_FREERUNNING_FUNCTION(serve_zmq, ctx, cfgmem, devicemem, sts_fifos[CMD_CALL], cmd_fifos[STS_CALL]);
+    HLSLIB_FREERUNNING_FUNCTION(serve_zmq, ctx, cfgmem, devicemem, callreq_fifos, callack_fifos);
     //ZMQ to other nodes process(es)
     HLSLIB_FREERUNNING_FUNCTION(eth_endpoint_egress_port, ctx, eth_tx_data, local_rank, use_tcp && world_size > 1);
     HLSLIB_FREERUNNING_FUNCTION(eth_endpoint_ingress_port, ctx, eth_rx_data);

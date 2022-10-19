@@ -1,5 +1,5 @@
-/*******************************************************************************
-#  Copyright (C) 2021 Xilinx, Inc
+# /*******************************************************************************
+#  Copyright (C) 2021 Advanced Micro Devices, Inc
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -15,12 +15,12 @@
 #
 # *******************************************************************************/
 
-#include "streamdefines.h"
-#include "ap_int.h"
-#include <stdint.h>
+DEVICE=xcu250-figd2104-2L-e
+VADD_IP=vadd_put.xo
+TARGET=ip
 
+all: $(VADD_IP) 
 
-// template<unsigned int data_width, unsigned int dest_width, typename T>
-// void stream_add(STREAM<ap_axiu<2*data_width,0,0,dest_width> > & in, STREAM<ap_axiu<data_width,0,0,dest_width> > & out);
+$(VADD_IP): build_vadd_put.tcl vadd_put.cpp
+	vitis_hls $< -tclargs $(TARGET) $(DEVICE)
 
-void reduce_sum(STREAM<stream_word> & in0, STREAM<stream_word> & in1, STREAM<stream_word> & out);

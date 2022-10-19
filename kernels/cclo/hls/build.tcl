@@ -56,12 +56,13 @@ set fw_dir "[pwd]/../../fw/sw_apps/ccl_offload_control/src/"
 set eth_dir "[pwd]/../eth_intf/"
 set seg_dir "[pwd]/../segmenter/"
 set rx_dir "[pwd]/../rxbuf_offload/"
+set drv_dir "[pwd]/../../../../driver/hls/"
 
 open_project build_$ipname
 
-add_files $ipname.cpp -cflags "-std=c++14 -I. -I../ -I$hlslib_dir -I$fw_dir -I$eth_dir -I$seg_dir -I$rx_dir -DACCL_SYNTHESIS"
+add_files $ipname.cpp -cflags "-std=c++14 -I. -I../ -I$drv_dir -I$hlslib_dir -I$fw_dir -I$eth_dir -I$seg_dir -I$rx_dir -DACCL_SYNTHESIS"
 if {$do_sim || $do_cosim} {
-    add_files -tb tb_$ipname.cpp -cflags "-std=c++14 -I. -I../ -I$hlslib_dir -I$fw_dir -I$eth_dir -I$seg_dir -I$rx_dir -DACCL_SYNTHESIS"
+    add_files -tb tb_$ipname.cpp -cflags "-std=c++14 -I. -I../ -I$drv_dir -I$hlslib_dir -I$fw_dir -I$eth_dir -I$seg_dir -I$rx_dir -DACCL_SYNTHESIS"
 }
 
 set_top $ipname

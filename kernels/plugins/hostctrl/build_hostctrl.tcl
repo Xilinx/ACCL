@@ -53,8 +53,7 @@ switch $command {
 
 open_project build_hostctrl
 
-add_files hostctrl.cpp -cflags "-std=c++14 -I../../../driver/hls/"
-add_files -tb tb_hostctrl.cpp -cflags "-std=c++14 -I../../../driver/hls/"
+add_files hostctrl.cpp -cflags "-std=c++14 -I. -I../../../driver/hls/ -DACCL_SYNTHESIS"
 
 set_top hostctrl
 

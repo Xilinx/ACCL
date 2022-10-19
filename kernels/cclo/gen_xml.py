@@ -60,6 +60,7 @@ if sys.argv[1] == "TCP":
     xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "m_axis_eth_tx_meta", True, 32, id)
     xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "s_axis_eth_tx_status", False, 64, id)
     xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "m_axis_eth_open_connection", True, 64, id)
+    xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "m_axis_eth_close_connection", True, 16, id)
     xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "s_axis_eth_open_status", False, 128, id)
     xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "m_axis_eth_listen_port", True, 16, id)
     xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "s_axis_eth_port_status", False, 8, id)

@@ -33,8 +33,20 @@ endif()
 get_directory_property(HAS_PARENT PARENT_DIRECTORY)
 
 set(ACCL_SOURCE_PATH ${CMAKE_CURRENT_LIST_DIR}/src)
+set(ACCL_HEADER_PATH ${CMAKE_CURRENT_LIST_DIR}/include)
+set(ACCL_DOCS_PATH ${CMAKE_CURRENT_LIST_DIR}/docs)
 set(ACCL_REPO_ROOT ${CMAKE_CURRENT_LIST_DIR}/../../)
 set(ZMQ_INTF_DIR ${ACCL_REPO_ROOT}/test/model/zmq)
+
+set(ACCL_HEADERS
+    ${ACCL_HEADER_PATH}/accl.hpp
+    ${ACCL_HEADER_PATH}/common.hpp
+    ${ACCL_HEADER_PATH}/communicator.hpp
+    ${ACCL_HEADER_PATH}/constants.hpp
+    ${ACCL_HEADER_PATH}/simdevice.hpp
+    ${ACCL_HEADER_PATH}/simbuffer.hpp
+    ${ACCL_HEADER_PATH}/fpgadevice.hpp
+)
 
 set(ACCL_SOURCES
     ${ACCL_SOURCE_PATH}/accl.cpp
@@ -46,6 +58,16 @@ set(ACCL_SOURCES
     ${ACCL_SOURCE_PATH}/fpgadevice.cpp
     ${ZMQ_INTF_DIR}/zmq_client.cpp
     ${ZMQ_INTF_DIR}/zmq_common.cpp
+)
+
+set(ACCL_DOCS_RST
+    ${ACCL_DOCS_PATH}/index.rst
+    ${ACCL_DOCS_PATH}/Cpp_reference/index.rst
+    ${ACCL_DOCS_PATH}/Cpp_reference/accl.rst
+    ${ACCL_DOCS_PATH}/Cpp_reference/buffer.rst
+    ${ACCL_DOCS_PATH}/Cpp_reference/cclo.rst
+    ${ACCL_DOCS_PATH}/Cpp_reference/communicator.rst
+    ${ACCL_DOCS_PATH}/Cpp_reference/misc.rst
 )
 
 set(ACCL_INCLUDE_PATH ${CMAKE_CURRENT_LIST_DIR}/include ${ZMQ_INTF_DIR})
@@ -66,7 +88,7 @@ target_link_libraries(accl PUBLIC xilinxopencl xrt_coreutil xrt_core)
 target_include_directories(accl PUBLIC $ENV{XILINX_XRT}/include)
 
 # ZMQ
-target_link_libraries(accl PUBLIC zmqpp)
+target_link_libraries(accl PUBLIC zmqpp zmq pthread)
 
 # Json
 find_package(jsoncpp REQUIRED)
@@ -89,18 +111,47 @@ set_target_properties(accl PROPERTIES
 # docs
 find_package(Doxygen)
 
+# Add the cmake folder so the FindSphinx module is found
+set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake" ${CMAKE_MODULE_PATH})
+find_package(Sphinx)
+
 if (HAS_PARENT)
   set(DOC_TARGET accl_docs)
 else (HAS_PARENT)
   set(DOC_TARGET docs)
 endif (HAS_PARENT)
 
-if (DOXYGEN_FOUND)
-    add_custom_target(${DOC_TARGET}
+if (DOXYGEN_FOUND AND SPHINX_FOUND)
+    set(DOXYGEN_INDEX_FILE ${CMAKE_CURRENT_LIST_DIR}/docs/xml/index.xml)
+    set(SPHINX_INDEX_FILE ${CMAKE_CURRENT_LIST_DIR}/docs/sphinx/index.html)
+    add_custom_command(OUTPUT ${DOXYGEN_INDEX_FILE}
         COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_LIST_DIR}/Doxyfile
         WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
+        BYPRODUCTS
+        ${CMAKE_CURRENT_LIST_DIR}/docs/xml
+        ${CMAKE_CURRENT_LIST_DIR}/docs/latex
+        ${CMAKE_CURRENT_LIST_DIR}/docs/html
+        DEPENDS ${ACCL_HEADERS}
+        MAIN_DEPENDENCY ${CMAKE_CURRENT_LIST_DIR}/Doxyfile
         COMMENT "Generating API documentation with Doxygen"
         VERBATIM )
-else (DOXYGEN_FOUND)
+
+    add_custom_target(${DOC_TARGET}_doxygen ALL DEPENDS ${DOXYGEN_INDEX_FILE})
+
+    add_custom_command(OUTPUT ${SPHINX_INDEX_FILE}
+        COMMAND ${SPHINX_EXECUTABLE} -b html ${CMAKE_CURRENT_LIST_DIR}/docs ${CMAKE_CURRENT_LIST_DIR}/docs/sphinx
+        WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
+        BYPRODUCTS
+        ${CMAKE_CURRENT_LIST_DIR}/docs/sphinx
+        DEPENDS ${ACCL_DOCS_RST}
+        MAIN_DEPENDENCY ${DOXYGEN_INDEX_FILE}
+        COMMENT "Generating API documentation with Sphinx"
+        VERBATIM
+        )
+
+    add_custom_target(${DOC_TARGET} ALL DEPENDS ${SPHINX_INDEX_FILE})
+
+    set_target_properties(${DOC_TARGET}_doxygen ${DOC_TARGET} PROPERTIES EXCLUDE_FROM_ALL 1 EXCLUDE_FROM_DEFAULT_BUILD 1)
+else()
     message("Doxygen needs to be installed to generate the doxygen documentation")
-endif (DOXYGEN_FOUND)
+endif()

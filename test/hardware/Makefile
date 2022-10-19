@@ -48,9 +48,11 @@ CMAC_TCP_XO=Vitis_with_100Gbps_TCP-IP/_x.hw.$(XSA)/cmac_krnl.xo
 XCLBIN=$(BUILD_DIR)/ccl_offload.xclbin
 
 HOSTCTRL_XO=../../kernels/plugins/hostctrl/hostctrl.xo
-SUM_XO=../../kernels/plugins/reduce_sum/reduce_sum.xo
+CLIENT_ARB_XO=../../kernels/plugins/client_arbiter/client_arbiter.xo
+SUM_XO=../../kernels/plugins/reduce_ops/reduce_ops.xo
 COMPRESSION_XO=../../kernels/plugins/hp_compression/hp_compression.xo
 LOOPBACK_XO=../../kernels/plugins/loopback/loopback.xo
+VADD_XO=../../kernels/plugins/vadd_put/vadd_put.xo
 
 ARITHMETIC_XO = $(SUM_XO) $(COMPRESSION_XO)
 
@@ -85,19 +87,19 @@ CONFIGFILE := config/link_config_$(BOARD)_$(MODE).ini
 CONFIG := --config $(CONFIGFILE)
 ifeq (udp,$(MODE))
 	ifeq (u50,$(findstring u50, $(PLATFORM)))
-		HLS_IP_FOLDER  = $(shell readlink -f ./$(NETLAYERHLS)/synthesis_results_HMB)
+		HLS_IP_FOLDER  = $(shell readlink -f ./$(NETLAYERHLS)/synthesis_results_HBM)
 	endif
 	ifeq (u55c,$(findstring u55c, $(PLATFORM)))
-		HLS_IP_FOLDER  = $(shell readlink -f ./$(NETLAYERHLS)/synthesis_results_HMB)
+		HLS_IP_FOLDER  = $(shell readlink -f ./$(NETLAYERHLS)/synthesis_results_HBM)
 	endif
 	ifeq (u200,$(findstring u200, $(PLATFORM)))
-		HLS_IP_FOLDER  = $(shell readlink -f ./$(NETLAYERHLS)/synthesis_results_noHMB)
+		HLS_IP_FOLDER  = $(shell readlink -f ./$(NETLAYERHLS)/synthesis_results_noHBM)
 	endif
 	ifeq (u250,$(findstring u250, $(PLATFORM)))
-		HLS_IP_FOLDER  = $(shell readlink -f ./$(NETLAYERHLS)/synthesis_results_noHMB)
+		HLS_IP_FOLDER  = $(shell readlink -f ./$(NETLAYERHLS)/synthesis_results_noHBM)
 	endif
 	ifeq (u280,$(findstring u280, $(PLATFORM)))
-		HLS_IP_FOLDER  = $(shell readlink -f ./$(NETLAYERHLS)/synthesis_results_HMB)
+		HLS_IP_FOLDER  = $(shell readlink -f ./$(NETLAYERHLS)/synthesis_results_HBM)
 	endif
 	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/$(VNX)/Ethernet/post_sys_link.tcl
 	NET_XO = $(CMAC_UDP_XO) $(UDP_XO)
@@ -109,6 +111,14 @@ else ifeq (axis3x,$(MODE))
 	ETH_IF := none
 	NET_XO = $(TCP_DUMMY_XO)
 	OTHER_XO = $(LOOPBACK_XO)
+	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/tcl/post_sys_link_tri.tcl
+	CCLO_STACK_TYPE = TCP
+	CCLO_EN_FANIN = 1
+	CCLO_MB_DEBUG_LEVEL = 2
+else ifeq (axis3x_vadd,$(MODE))
+	ETH_IF := none
+	NET_XO = $(TCP_DUMMY_XO)
+	OTHER_XO = $(VADD_XO)
 	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/tcl/post_sys_link_tri.tcl
 	CCLO_STACK_TYPE = TCP
 	CCLO_EN_FANIN = 1
@@ -147,24 +157,25 @@ $(CMAC_TCP_XO):
 $(TCP_DUMMY_XO):
 	$(MAKE) -C ../../kernels/plugins/dummy_tcp_stack DEVICE=$(FPGAPART) all
 
-.PHONY: network_krnl
-network_krnl: $(TCP_XO)
+.PHONY: tcp_stack
+tcp_stack: $(TCP_XO)
 
-$(TCP_XO):
+$(TCP_XO): tcp_stack_ips
 	git submodule update --init --recursive Vitis_with_100Gbps_TCP-IP
 	$(MAKE) -C Vitis_with_100Gbps_TCP-IP/ network_krnl DEVICE=$(PLATFORM) TEMP_DIR=_x.hw.$(XSA)/ XSA=$(XSA)
 
+.PHONY: tcp_stack_ips
 tcp_stack_ips:
 	git submodule update --init --recursive Vitis_with_100Gbps_TCP-IP
-	rm -rf Vitis_with_100Gbps_TCP-IP/build
-	mkdir Vitis_with_100Gbps_TCP-IP/build
+	mkdir -p Vitis_with_100Gbps_TCP-IP/build
 	cmake -S Vitis_with_100Gbps_TCP-IP/ -BVitis_with_100Gbps_TCP-IP/build/ -DFDEV_NAME=$(BOARD) -DVIVADO_HLS_ROOT_DIR=$(TCP_HLS_ROOTDIR) -DVIVADO_ROOT_DIR=$(TCP_VIVADO_ROOTDIR) -DTCP_STACK_EN=1 -DTCP_STACK_RX_DDR_BYPASS_EN=1 -DTCP_STACK_WINDOW_SCALING=0 
 	$(MAKE) -C Vitis_with_100Gbps_TCP-IP/build installip
 
 $(XCLBIN): $(NET_XO) $(CONFIGFILE)
 	$(MAKE) -C ../../kernels/cclo PLATFORM=$(PLATFORM) STACK_TYPE=$(CCLO_STACK_TYPE) EN_FANIN=$(CCLO_EN_FANIN) MB_DEBUG_LEVEL=$(CCLO_MB_DEBUG_LEVEL)
 	$(MAKE) -C ../../kernels/plugins PLATFORM=$(PLATFORM) DEBUG=$(DEBUG)
-	v++ --link --platform $(PLATFORM) --kernel_frequency $(FREQUENCY) --save-temps --temp_dir $(BUILD_DIR) $(CONFIG) -o $@ $(CCLO_XO) $(HOSTCTRL_XO) $(ARITHMETIC_XO) $(NET_XO) $(OTHER_XO)
+	v++ --link --platform $(PLATFORM) --kernel_frequency $(FREQUENCY) --save-temps --temp_dir $(BUILD_DIR) $(CONFIG) -o $@ $(CCLO_XO) $(HOSTCTRL_XO) $(CLIENT_ARB_XO) $(ARITHMETIC_XO) $(NET_XO) $(OTHER_XO)
 
+.PHONY: distclean
 distclean:
 	git clean -xfd

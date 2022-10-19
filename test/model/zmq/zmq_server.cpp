@@ -33,11 +33,11 @@ zmq_intf_context zmq_server_intf(unsigned int starting_port, unsigned int local_
     zmq_intf_context ctx;
 
     logger = &log;
-    ctx.cmd_socket = new zmqpp::socket(ctx.context, zmqpp::socket_type::reply);
-    ctx.eth_tx_socket = new zmqpp::socket(ctx.context, zmqpp::socket_type::pub);
-    ctx.eth_rx_socket = new zmqpp::socket(ctx.context, zmqpp::socket_type::sub);
-    ctx.krnl_tx_socket = new zmqpp::socket(ctx.context, zmqpp::socket_type::pub);
-    ctx.krnl_rx_socket = new zmqpp::socket(ctx.context, zmqpp::socket_type::sub);
+    ctx.cmd_socket = std::make_unique<zmqpp::socket>(ctx.context, zmqpp::socket_type::reply);
+    ctx.eth_tx_socket = std::make_unique<zmqpp::socket>(ctx.context, zmqpp::socket_type::pub);
+    ctx.eth_rx_socket = std::make_unique<zmqpp::socket>(ctx.context, zmqpp::socket_type::sub);
+    ctx.krnl_tx_socket = std::make_unique<zmqpp::socket>(ctx.context, zmqpp::socket_type::pub);
+    ctx.krnl_rx_socket = std::make_unique<zmqpp::socket>(ctx.context, zmqpp::socket_type::sub);
 
     const string endpoint_base = "tcp://127.0.0.1:";
 
@@ -84,10 +84,9 @@ zmq_intf_context zmq_server_intf(unsigned int starting_port, unsigned int local_
     *logger << log_level::info << "Rank " << local_rank << " connecting to " << krnl_endpoint << " (KRNL)" << endl;
     ctx.krnl_rx_socket->connect(krnl_endpoint);
     this_thread::sleep_for(chrono::milliseconds(1000));
-    //subscribe to dst == local_rank
-    string krnl_subscribe = kernel_loopback ? "" : to_string(local_rank);
-    *logger << log_level::info << "Rank " << local_rank << " subscribing to " << krnl_subscribe << " (KRNL)" << endl;
-    ctx.krnl_rx_socket->subscribe(krnl_subscribe);
+    //subscribing to all (for now)
+    *logger << log_level::info << "Rank " << local_rank << " subscribing to all (KRNL)" << endl;
+    ctx.krnl_rx_socket->subscribe("");
     this_thread::sleep_for(chrono::milliseconds(1000));
 
     *logger << log_level::info << "ZMQ Context established for rank " << local_rank << endl;
@@ -230,7 +229,7 @@ void krnl_endpoint_ingress_port(zmq_intf_context *ctx, Stream<stream_word > &out
     if(!ctx->krnl_rx_socket->receive(message, true)) return;
 
     // decompose the message
-    string msg_text, dst_text;;
+    string msg_text, dst_text;
 
     //get and check destination ID
     message >> dst_text;
@@ -264,7 +263,7 @@ void krnl_endpoint_ingress_port(zmq_intf_context *ctx, Stream<stream_word > &out
 
 }
 
-void serve_zmq(zmq_intf_context *ctx, uint32_t *cfgmem, vector<char> &devicemem, Stream<ap_axiu<32,0,0,0> > &cmd, Stream<ap_axiu<32,0,0,0> > &sts){
+void serve_zmq(zmq_intf_context *ctx, uint32_t *cfgmem, vector<char> &devicemem, Stream<command_word> cmd[NUM_CTRL_STREAMS], Stream<command_word> sts[NUM_CTRL_STREAMS]){
 
     Json::Reader reader;
     Json::StreamWriterBuilder builder;
@@ -289,6 +288,8 @@ void serve_zmq(zmq_intf_context *ctx, uint32_t *cfgmem, vector<char> &devicemem,
     int adr, val, len;
     uint64_t dma_addr;
     Json::Value dma_wdata;
+    unsigned int ctrl_id;
+
     switch(request["type"].asUInt()){
         // MMIO read request  {"type": 0, "addr": <uint>}
         // MMIO read response {"status": OK|ERR, "rdata": <uint>}
@@ -357,27 +358,46 @@ void serve_zmq(zmq_intf_context *ctx, uint32_t *cfgmem, vector<char> &devicemem,
         // Call request  {"type": 5, arg names and values}
         // Call response {"status": OK|ERR}
         case 5:
-            *logger << log_level::info << "Call with scenario " << request["scenario"].asUInt() << endl;
-            cmd.Push((ap_axiu<32,0,0,0>){.data=request["scenario"].asUInt(), .last=0});
-            cmd.Push((ap_axiu<32,0,0,0>){.data=request["count"].asUInt(), .last=0});
-            cmd.Push((ap_axiu<32,0,0,0>){.data=request["comm"].asUInt(), .last=0});
-            cmd.Push((ap_axiu<32,0,0,0>){.data=request["root_src_dst"].asUInt(), .last=0});
-            cmd.Push((ap_axiu<32,0,0,0>){.data=request["function"].asUInt(), .last=0});
-            cmd.Push((ap_axiu<32,0,0,0>){.data=request["tag"].asUInt(), .last=0});
-            cmd.Push((ap_axiu<32,0,0,0>){.data=request["arithcfg"].asUInt(), .last=0});
-            cmd.Push((ap_axiu<32,0,0,0>){.data=request["compression_flags"].asUInt(), .last=0});
-            cmd.Push((ap_axiu<32,0,0,0>){.data=request["stream_flags"].asUInt(), .last=0});
-            dma_addr = request["addr_0"].asUInt64();
-            cmd.Push((ap_axiu<32,0,0,0>){.data=(uint32_t)(dma_addr & 0xffffffff), .last=0});
-            cmd.Push((ap_axiu<32,0,0,0>){.data=(uint32_t)(dma_addr >> 32), .last=0});
-            dma_addr = request["addr_1"].asUInt64();
-            cmd.Push((ap_axiu<32,0,0,0>){.data=(uint32_t)(dma_addr & 0xffffffff), .last=0});
-            cmd.Push((ap_axiu<32,0,0,0>){.data=(uint32_t)(dma_addr >> 32), .last=0});
-            dma_addr = request["addr_2"].asUInt64();
-            cmd.Push((ap_axiu<32,0,0,0>){.data=(uint32_t)(dma_addr & 0xffffffff), .last=0});
-            cmd.Push((ap_axiu<32,0,0,0>){.data=(uint32_t)(dma_addr >> 32), .last=1});
-            //pop the status queue to wait for call completion
-            sts.Pop();
+            ctrl_id = request["ctrl_id"].asUInt();
+            *logger << log_level::info << "Call with scenario " << request["scenario"].asUInt() << " on controller " << ctrl_id << endl;
+            if(ctrl_id >= NUM_CTRL_STREAMS){
+                response["status"] = -1;
+            } else{
+                cmd[ctrl_id].Push((command_word){.data=request["scenario"].asUInt(), .last=0});
+                cmd[ctrl_id].Push((command_word){.data=request["count"].asUInt(), .last=0});
+                cmd[ctrl_id].Push((command_word){.data=request["comm"].asUInt(), .last=0});
+                cmd[ctrl_id].Push((command_word){.data=request["root_src_dst"].asUInt(), .last=0});
+                cmd[ctrl_id].Push((command_word){.data=request["function"].asUInt(), .last=0});
+                cmd[ctrl_id].Push((command_word){.data=request["tag"].asUInt(), .last=0});
+                cmd[ctrl_id].Push((command_word){.data=request["arithcfg"].asUInt(), .last=0});
+                cmd[ctrl_id].Push((command_word){.data=request["compression_flags"].asUInt(), .last=0});
+                cmd[ctrl_id].Push((command_word){.data=request["stream_flags"].asUInt(), .last=0});
+                dma_addr = request["addr_0"].asUInt64();
+                cmd[ctrl_id].Push((command_word){.data=(uint32_t)(dma_addr & 0xffffffff), .last=0});
+                cmd[ctrl_id].Push((command_word){.data=(uint32_t)(dma_addr >> 32), .last=0});
+                dma_addr = request["addr_1"].asUInt64();
+                cmd[ctrl_id].Push((command_word){.data=(uint32_t)(dma_addr & 0xffffffff), .last=0});
+                cmd[ctrl_id].Push((command_word){.data=(uint32_t)(dma_addr >> 32), .last=0});
+                dma_addr = request["addr_2"].asUInt64();
+                cmd[ctrl_id].Push((command_word){.data=(uint32_t)(dma_addr & 0xffffffff), .last=0});
+                cmd[ctrl_id].Push((command_word){.data=(uint32_t)(dma_addr >> 32), .last=1});
+                response["status"] = 0;
+            }
+            break;
+        // Call wait request  {"type": 6, arg controller id}
+        // Call wait response {"status": OK|NOK|ERR}
+        case 6:
+            ctrl_id = request["ctrl_id"].asUInt();
+            *logger << log_level::debug << "Call wait on controller " << ctrl_id << endl;
+            //pop the corresponding status queue if possible
+            if(ctrl_id >= NUM_CTRL_STREAMS){
+                response["status"] = -1;
+            } else if(sts[ctrl_id].IsEmpty()){
+                response["status"] = 1;
+            } else {
+                sts[ctrl_id].Pop();
+                response["status"] = 0;
+            }
             break;
         default:
             (*logger)("Unrecognized message\n", log_level::warning);
@@ -422,6 +442,9 @@ void serve_zmq(zmq_intf_context *ctx,
     ap_uint<64> mem_addr;
     ap_uint<512> mem_data;
     ap_uint<64> mem_strb;
+    unsigned int ctrl_id;
+    unsigned int ctrl_offset;
+
     switch(request["type"].asUInt()){
         // MMIO read request  {"type": 0, "addr": <uint>}
         // MMIO read response {"status": OK|ERR, "rdata": <uint>}
@@ -532,41 +555,120 @@ void serve_zmq(zmq_intf_context *ctx,
                 *logger << log_level::error << "Mem allocate outside available range (256KB) at addr: " << adr << " len: " << len << endl;
             }
             break;
-        // Call request  {"type": 5, arg names and values}
-        // Call response {"status": OK|ERR}
+        // Call start request  {"type": 5, controller id, arg values}
+        // Call start response {"status": OK|ERR}
         case 5:
-            *logger << log_level::info << "Call with scenario " << request["scenario"].asUInt() << endl;
-            callreq.Push(request["scenario"].asUInt());
-            callreq.Push(request["count"].asUInt());
-            callreq.Push(request["comm"].asUInt());
-            callreq.Push(request["root_src_dst"].asUInt());
-            callreq.Push(request["function"].asUInt());
-            callreq.Push(request["tag"].asUInt());
-            callreq.Push(request["arithcfg"].asUInt());
-            callreq.Push(request["compression_flags"].asUInt());
-            callreq.Push(request["stream_flags"].asUInt());
-            dma_addr = request["addr_0"].asUInt64();
-            callreq.Push((uint32_t)(dma_addr & 0xffffffff));
-            callreq.Push((uint32_t)(dma_addr >> 32));
-            dma_addr = request["addr_1"].asUInt64();
-            callreq.Push((uint32_t)(dma_addr & 0xffffffff));
-            callreq.Push((uint32_t)(dma_addr >> 32));
-            dma_addr = request["addr_2"].asUInt64();
-            callreq.Push((uint32_t)(dma_addr & 0xffffffff));
-            callreq.Push((uint32_t)(dma_addr >> 32));
-            //pop the status queue to wait for call completion
-            while(!ctx->stop){
-                if(!callack.IsEmpty()){
-                    callack.Pop();
-                    break;
-                } else{
-                    this_thread::sleep_for(chrono::milliseconds(1));
+            ctrl_id = request["ctrl_id"].asUInt();
+            *logger << log_level::info << "Call with scenario " << request["scenario"].asUInt() << " on control stream " << ctrl_id << endl;
+            if(ctrl_id >= NUM_CTRL_STREAMS){
+                response["status"] = -1;
+            }else if(ctrl_id < 2){
+                //start a hostcontroller
+                ctrl_offset = 0x2000 * (ctrl_id+1);
+                axilite_wr_addr.Push(ctrl_offset+0x10);
+                axilite_wr_data.Push(request["scenario"].asUInt());
+                axilite_wr_addr.Push(ctrl_offset+0x18);
+                axilite_wr_data.Push(request["count"].asUInt());
+                axilite_wr_addr.Push(ctrl_offset+0x20);
+                axilite_wr_data.Push(request["comm"].asUInt());
+                axilite_wr_addr.Push(ctrl_offset+0x28);
+                axilite_wr_data.Push(request["root_src_dst"].asUInt());
+                axilite_wr_addr.Push(ctrl_offset+0x30);
+                axilite_wr_data.Push(request["function"].asUInt());
+                axilite_wr_addr.Push(ctrl_offset+0x38);
+                axilite_wr_data.Push(request["tag"].asUInt());
+                axilite_wr_addr.Push(ctrl_offset+0x40);
+                axilite_wr_data.Push(request["arithcfg"].asUInt());
+                axilite_wr_addr.Push(ctrl_offset+0x48);
+                axilite_wr_data.Push(request["compression_flags"].asUInt());
+                axilite_wr_addr.Push(ctrl_offset+0x50);
+                axilite_wr_data.Push(request["stream_flags"].asUInt());
+                axilite_wr_addr.Push(ctrl_offset+0x58);
+                dma_addr = request["addr_0"].asUInt64();
+                axilite_wr_data.Push((uint32_t)(dma_addr & 0xffffffff));
+                axilite_wr_addr.Push(ctrl_offset+0x5c);
+                axilite_wr_data.Push((uint32_t)(dma_addr >> 32));
+                axilite_wr_addr.Push(ctrl_offset+0x64);
+                dma_addr = request["addr_1"].asUInt64();
+                axilite_wr_data.Push((uint32_t)(dma_addr & 0xffffffff));
+                axilite_wr_addr.Push(ctrl_offset+0x68);
+                axilite_wr_data.Push((uint32_t)(dma_addr >> 32));
+                axilite_wr_addr.Push(ctrl_offset+0x70);
+                dma_addr = request["addr_2"].asUInt64();
+                axilite_wr_data.Push((uint32_t)(dma_addr & 0xffffffff));
+                axilite_wr_addr.Push(ctrl_offset+0x74);
+                axilite_wr_data.Push((uint32_t)(dma_addr >> 32));
+                this_thread::sleep_for(chrono::milliseconds(500));
+                //start the controller
+                axilite_wr_addr.Push(ctrl_offset);
+                axilite_wr_data.Push(1);
+                this_thread::sleep_for(chrono::milliseconds(1500));
+                response["status"] = 0;
+            }else{
+                //push a command into the call stream
+                callreq.Push(request["scenario"].asUInt());
+                callreq.Push(request["count"].asUInt());
+                callreq.Push(request["comm"].asUInt());
+                callreq.Push(request["root_src_dst"].asUInt());
+                callreq.Push(request["function"].asUInt());
+                callreq.Push(request["tag"].asUInt());
+                callreq.Push(request["arithcfg"].asUInt());
+                callreq.Push(request["compression_flags"].asUInt());
+                callreq.Push(request["stream_flags"].asUInt());
+                dma_addr = request["addr_0"].asUInt64();
+                callreq.Push((uint32_t)(dma_addr & 0xffffffff));
+                callreq.Push((uint32_t)(dma_addr >> 32));
+                dma_addr = request["addr_1"].asUInt64();
+                callreq.Push((uint32_t)(dma_addr & 0xffffffff));
+                callreq.Push((uint32_t)(dma_addr >> 32));
+                dma_addr = request["addr_2"].asUInt64();
+                callreq.Push((uint32_t)(dma_addr & 0xffffffff));
+                callreq.Push((uint32_t)(dma_addr >> 32));
+                response["status"] = 0;
+            }
+            break;
+        // Call wait request  {"type": 6, arg controller id}
+        // Call wait response {"status": OK|NOK|ERR}
+        case 6:
+            ctrl_id = request["ctrl_id"].asUInt();
+            *logger << log_level::verbose << "Call wait on control stream " << ctrl_id << endl;
+            //pop the corresponding status queue if possible
+            if(ctrl_id >= NUM_CTRL_STREAMS){
+                response["status"] = -1;
+            } else {
+                if(ctrl_id < 2){
+                    //we handle this request by checking on a hostctrl
+                    ctrl_offset = 0x2000 * (ctrl_id+1);
+                    *logger << log_level::verbose << "Status read on controller " << ctrl_id << endl;
+                    axilite_rd_addr.Push(ctrl_offset);
+                    //wait for a response to come back
+                    while(!ctx->stop && axilite_rd_data.IsEmpty()){
+                        *logger << log_level::debug << "Read wait on controller " << ctrl_id << endl;
+                        this_thread::sleep_for(chrono::milliseconds(50));
+                    }
+                    unsigned int resp;
+                    if(!axilite_rd_data.IsEmpty()){
+                        resp = axilite_rd_data.Pop();
+                        *logger << log_level::debug << "Read response: " << resp << endl;
+                    } else{
+                        resp = 0;
+                    }
+                    response["status"] = (resp & 0x2) ? 0 : 1;
+
+                } else {
+                    //we handle this request checking the status stream
+                    if(callack.IsEmpty()){
+                        response["status"] = 1;
+                    } else {
+                        callack.Pop();
+                        response["status"] = 0;
+                    }
                 }
             }
             break;
         default:
             (*logger)("Unrecognized message\n", log_level::warning);
-            response["status"] = 1;
+            response["status"] = -1;
 
     }
     //return message to client

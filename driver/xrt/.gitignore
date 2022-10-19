@@ -24,5 +24,8 @@ Makefile
 cmake_install.cmake
 doxygen.log
 bin
-docs
+docs/html
+docs/latex
+docs/xml
+docs/sphinx
 lib

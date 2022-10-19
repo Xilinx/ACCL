@@ -17,10 +17,42 @@
 *******************************************************************************/
 #pragma once
 
-#include "hls_stream.h"
 #include "ap_int.h"
 #include "ap_utils.h"
 #include "ap_axi_sdata.h"
+
+#define DATA_WIDTH 512
+#define DEST_WIDTH 8
+
+typedef ap_axiu<DATA_WIDTH, 0, 0, DEST_WIDTH> stream_word;
+typedef ap_axiu<32, 0, 0, 0> command_word;
+
+//this is a work-around for hlslib streams not synthesizing
+//with vitis hls. Instead, we test a macro definition to select
+//between simulation behaviour (use hlslib streams) and
+//synthesis behaviour (use hls streams)
+//all code using these macros should make sure it doesnt use features
+//that aren't supported by both types of streams. For example,
+//hlslib stream depths and storage types can't be defined on declaration
+#ifdef ACCL_SYNTHESIS
+//use hls streams
+#include "hls_stream.h"
+#define STREAM hls::stream 
+#define STREAM_IS_EMPTY(s) s.empty()
+#define STREAM_IS_FULL(s) s.full()
+#define STREAM_READ(s) s.read()
+#define STREAM_WRITE(s, val) s.write(val)
+#else
+//use hlslib streams
+#include "Stream.h"
+// #include <sstream>
+// #include <iostream>
+#define STREAM hlslib::Stream 
+#define STREAM_IS_EMPTY(s) s.IsEmpty()
+#define STREAM_IS_FULL(s) s.IsFull()
+#define STREAM_READ(s) s.Pop()
+#define STREAM_WRITE(s, val) s.Push(val)
+#endif
 
 namespace accl_hls {
 
@@ -54,7 +86,7 @@ class ACCLCommand{
          * @param cflags Compression flags
          * @param sflags Stream flags
          */
-        ACCLCommand(hls::stream<ap_uint<32> > &cmd, hls::stream<ap_uint<32> > &sts,
+        ACCLCommand(STREAM<command_word > &cmd, STREAM<command_word > &sts,
                     ap_uint<32> comm_adr, ap_uint<32> dpcfg_adr,
                     ap_uint<32> cflags, ap_uint<32> sflags) : 
                     cmd(cmd), sts(sts), comm_adr(comm_adr), dpcfg_adr(dpcfg_adr), cflags(cflags), sflags(sflags) {}
@@ -65,12 +97,12 @@ class ACCLCommand{
          * @param cmd Reference to command stream to CCLO
          * @param sts Reference to status stream to CCLO
          */
-        ACCLCommand(hls::stream<ap_uint<32> > &cmd, hls::stream<ap_uint<32> > &sts) : 
+        ACCLCommand(STREAM<command_word > &cmd, STREAM<command_word > &sts) : 
                     ACCLCommand(cmd, sts, 0, 0, 0, 0) {}
 
     protected:
-        hls::stream<ap_uint<32> > &cmd;
-        hls::stream<ap_uint<32> > &sts;
+        STREAM<command_word > &cmd;
+        STREAM<command_word > &sts;
         ap_uint<32> comm_adr;
         ap_uint<32> dpcfg_adr;
         ap_uint<32> cflags;
@@ -108,37 +140,54 @@ class ACCLCommand{
             ap_uint<64> addrb,
             ap_uint<64> addrc
         ){
+            command_word tmp;
+            tmp.keep = 0xf;
             io_section:{
                 #pragma HLS protocol fixed
-                cmd.write(scenario);
+                tmp.data=scenario; tmp.last=0;
+                STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                cmd.write(len);
+                tmp.data=len; tmp.last=0;
+                STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                cmd.write(comm);
+                tmp.data=comm; tmp.last=0;
+                STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                cmd.write(root_src_dst);
+                tmp.data=root_src_dst; tmp.last=0;
+                STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                cmd.write(function);
+                tmp.data=function; tmp.last=0;
+                STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                cmd.write(msg_tag);
+                tmp.data=msg_tag; tmp.last=0;
+                STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                cmd.write(datapath_cfg);
+                tmp.data=datapath_cfg; tmp.last=0;
+                STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                cmd.write(compression_flags);
+                tmp.data=compression_flags; tmp.last=0;
+                STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                cmd.write(stream_flags);
+                tmp.data=stream_flags; tmp.last=0;
+                STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                cmd.write(addra(31,0));
+                tmp.data=addra(31,0); tmp.last=0;
+                STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                cmd.write(addra(63,32));
+                tmp.data=addra(63,32); tmp.last=0;
+                STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                cmd.write(addrb(31,0));
+                tmp.data=addrb(31,0); tmp.last=0;
+                STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                cmd.write(addrb(63,32));
+                tmp.data=addrb(63,32); tmp.last=0;
+                STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                cmd.write(addrc(31,0));
+                tmp.data=addrc(31,0); tmp.last=0;
+                STREAM_WRITE(cmd, tmp);
                 ap_wait();
-                cmd.write(addrc(63,32));
+                tmp.data=addrc(63,32); tmp.last=1;
+                STREAM_WRITE(cmd, tmp);
                 ap_wait();
             }  
         }
@@ -148,7 +197,7 @@ class ACCLCommand{
          * 
          */
         void finalize_call(){
-            sts.read();
+            STREAM_READ(sts);
         }
 
         /**
@@ -192,7 +241,7 @@ class ACCLCommand{
         }
 
         /**
-         * @brief 
+         * @brief Send data to a remote peer. Two-sided, i.e. requires a recv on remote end.
          * 
          * @param len Number of array elements
          * @param tag Message tag
@@ -213,7 +262,29 @@ class ACCLCommand{
         }
 
         /**
-         * @brief 
+         * @brief One-sided data transfer to a stream on a remote peer. 
+         * 
+         * @param len Number of array elements
+         * @param stream_id Stream ID at destination. IDs 0-8 are reserved, call will not execute if set in this range
+         * @param dst_rank Rank ID of destination
+         * @param src_addr Source array address
+         */
+        void stream_put(ap_uint<32> len,
+                        ap_uint<32> stream_id,
+                        ap_uint<32> dst_rank,
+                        ap_uint<64> src_addr
+        ){
+            if(stream_id < 9) return;
+            start_call(
+                ACCL_SEND, len, comm_adr, dst_rank, 0, stream_id-9, 
+                dpcfg_adr, cflags, sflags | 0x2, 
+                src_addr, 0, 0
+            );
+            finalize_call();
+        }
+
+        /**
+         * @brief Receive data send from a remote peer.
          * 
          * @param len Number of array elements
          * @param tag Message tag
@@ -234,7 +305,7 @@ class ACCLCommand{
         }
 
         /**
-         * @brief 
+         * @brief Broadcast data to members of the communicator
          * 
          * @param len Number of array elements
          * @param root Rank ID of root node
@@ -253,7 +324,7 @@ class ACCLCommand{
         }
 
         /**
-         * @brief 
+         * @brief Scatter data to members of the communicator
          * 
          * @param len Number of array elements
          * @param root Rank ID of root node
@@ -274,7 +345,7 @@ class ACCLCommand{
         }
 
         /**
-         * @brief 
+         * @brief Gather data from members of the communicator
          * 
          * @param len Number of array elements
          * @param root Rank ID of root node
@@ -295,7 +366,7 @@ class ACCLCommand{
         }
 
         /**
-         * @brief 
+         * @brief All-gather data in the communicator. Equivalent to gather followed by broadcast
          * 
          * @param len Number of array elements
          * @param src_addr Source array address
@@ -314,7 +385,7 @@ class ACCLCommand{
         }
 
         /**
-         * @brief 
+         * @brief Reduce data from members of the communicator
          * 
          * @param len Number of array elements
          * @param root Rank ID of root node
@@ -337,7 +408,7 @@ class ACCLCommand{
         }
 
         /**
-         * @brief 
+         * @brief Reduce-scatter data in the communicator. Equivalent to reduce followed by scatter
          * 
          * @param len Number of array elements
          * @param function Reduction function ID
@@ -358,7 +429,7 @@ class ACCLCommand{
         }
 
         /**
-         * @brief 
+         * @brief All-reduce data in the communicator. Equivalent to reduce followed by broadcast
          * 
          * @param len Number of array elements
          * @param function Reduction function ID
@@ -391,12 +462,12 @@ class ACCLData{
          * @param krnl2cclo Reference to data stream from user kernel to CCLO
          * @param cclo2krnl Reference to data stream from CCLO to user kernel
          */
-        ACCLData(hls::stream<ap_axiu<512, 0, 0, 8> > &krnl2cclo, hls::stream<ap_axiu<512, 0, 0, 8> > &cclo2krnl) : 
+        ACCLData(STREAM<stream_word> &krnl2cclo, STREAM<stream_word> &cclo2krnl) : 
                     cclo2krnl(cclo2krnl), krnl2cclo(krnl2cclo){}
 
     protected:
-        hls::stream<ap_axiu<512, 0, 0, 8> > &krnl2cclo;
-        hls::stream<ap_axiu<512, 0, 0, 8> > &cclo2krnl;
+        STREAM<stream_word> &krnl2cclo;
+        STREAM<stream_word> &cclo2krnl;
 
     public:
         /**
@@ -405,10 +476,11 @@ class ACCLData{
          * @param data Data word (64B)
          * @param dest Destination value (potentially used in routing)
          */
-        void push(ap_uint<512> data, ap_uint<8> dest){
-            ap_axiu<512, 0, 0, 8> tmp;
+        void push(ap_uint<DATA_WIDTH> data, ap_uint<DEST_WIDTH> dest){
+            stream_word tmp;
             tmp.data = data;
             tmp.dest = dest;
+            tmp.last = 1;
             tmp.keep = -1;
             krnl2cclo.write(tmp);
         }
@@ -416,9 +488,9 @@ class ACCLData{
         /**
          * @brief Pull data from CCLO stream
          * 
-         * @return ap_axiu<512, 0, 0, 8> 
+         * @return stream_word
          */
-        ap_axiu<512, 0, 0, 8> pull(){
+        stream_word pull(){
             return cclo2krnl.read();   
         }
 };

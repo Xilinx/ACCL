@@ -18,7 +18,7 @@
 set command [lindex $argv 0]
 set device [lindex $argv 1]
 
-set ipname reduce_sum
+set ipname reduce_ops
 
 set do_sim 0
 set do_syn 0
@@ -55,7 +55,7 @@ switch $command {
 
 open_project build_${ipname}
 
-add_files reduce_sum.cpp -cflags "-std=c++14 -I[pwd]/ -I[pwd]/../../cclo/hls -DACCL_SYNTHESIS"
+add_files reduce_ops.cpp -cflags "-std=c++14 -I[pwd]/ -I[pwd]/../../../driver/hls/ -DACCL_SYNTHESIS"
 
 set_top ${ipname}
 

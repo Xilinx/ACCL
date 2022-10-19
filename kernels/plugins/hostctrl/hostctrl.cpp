@@ -15,7 +15,7 @@
 #
 # *******************************************************************************/
 
-#include "accl_hls.h"
+#include "hostctrl.h"
 
 using namespace hls;
 using namespace std;
@@ -32,8 +32,8 @@ void hostctrl(	ap_uint<32> scenario,
 				ap_uint<64> addra,
 				ap_uint<64> addrb,
 				ap_uint<64> addrc,
-				stream<ap_uint<32>> &cmd,
-				stream<ap_uint<32>> &sts
+				STREAM<command_word> &cmd,
+				STREAM<command_word> &sts
 ) {
 #pragma HLS INTERFACE s_axilite port=scenario
 #pragma HLS INTERFACE s_axilite port=len
@@ -50,13 +50,15 @@ void hostctrl(	ap_uint<32> scenario,
 #pragma HLS INTERFACE axis port=cmd
 #pragma HLS INTERFACE axis port=sts
 #pragma HLS INTERFACE s_axilite port=return
-
 	accl_hls::ACCLCommand accl(cmd, sts);
-	accl.start_call(
-		scenario, len, comm, root_src_dst, function,
-		msg_tag, datapath_cfg, compression_flags, stream_flags,
-		addra, addrb, addrc
-	);
-	accl.finalize_call();
-
+	io_section:{
+		#pragma HLS protocol fixed
+		accl.start_call(
+			scenario, len, comm, root_src_dst, function,
+			msg_tag, datapath_cfg, compression_flags, stream_flags,
+			addra, addrb, addrc
+		);
+		ap_wait();
+		accl.finalize_call();
+	}
 }

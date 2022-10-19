@@ -196,6 +196,13 @@ module ccl_offload
   output [7:0] m_axis_eth_open_connection_tstrb,
   output m_axis_eth_open_connection_tvalid,
 
+  output [15:0] m_axis_eth_close_connection_tdata,
+  output [1:0] m_axis_eth_close_connection_tkeep,
+  output [0:0] m_axis_eth_close_connection_tlast,
+  input m_axis_eth_close_connection_tready,
+  output [1:0] m_axis_eth_close_connection_tstrb,
+  output m_axis_eth_close_connection_tvalid,
+
   output [31:0] m_axis_eth_read_pkg_tdata,
   output [3:0] m_axis_eth_read_pkg_tkeep,
   output [0:0] m_axis_eth_read_pkg_tlast,
@@ -312,11 +319,11 @@ module ccl_offload
   output s_axis_call_req_tready,
   input s_axis_call_req_tvalid,
 
-  input [12:0] s_axi_control_araddr,
+  input [`AXILITE_ADR_BITS-1:0] s_axi_control_araddr,
   input [2:0] s_axi_control_arprot,
   output s_axi_control_arready,
   input s_axi_control_arvalid,
-  input [12:0] s_axi_control_awaddr,
+  input [`AXILITE_ADR_BITS-1:0] s_axi_control_awaddr,
   input [2:0] s_axi_control_awprot,
   output s_axi_control_awready,
   input s_axi_control_awvalid,
@@ -442,12 +449,14 @@ module ccl_offload
         .m_axis_krnl_tdata(m_axis_krnl_tdata),
         .m_axis_krnl_tkeep(m_axis_krnl_tkeep),
         .m_axis_krnl_tlast(m_axis_krnl_tlast),
+        .m_axis_krnl_tdest(m_axis_krnl_tdest),
         .m_axis_krnl_tready(m_axis_krnl_tready),
         .m_axis_krnl_tvalid(m_axis_krnl_tvalid),
 
         .s_axis_krnl_tdata(s_axis_krnl_tdata),
         .s_axis_krnl_tkeep(s_axis_krnl_tkeep),
         .s_axis_krnl_tlast(s_axis_krnl_tlast),
+        .s_axis_krnl_tdest(s_axis_krnl_tdest),
         .s_axis_krnl_tready(s_axis_krnl_tready),
         .s_axis_krnl_tvalid(s_axis_krnl_tvalid),
 `endif

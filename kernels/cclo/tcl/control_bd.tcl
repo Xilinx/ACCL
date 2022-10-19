@@ -18,8 +18,6 @@
 # Hierarchical cell: microblaze_0_local_memory
 proc create_hier_cell_microblaze_0_local_memory { parentCell nameHier } {
 
-  variable script_folder
-
   if { $parentCell eq "" || $nameHier eq "" } {
      catch {common::send_gid_msg -ssname BD::TCL -id 2092 -severity "ERROR" "create_hier_cell_microblaze_0_local_memory() - Empty argument(s)!"}
      return
@@ -105,8 +103,6 @@ proc create_hier_cell_microblaze_0_local_memory { parentCell nameHier } {
 
 # Hierarchical cell: exchange_mem
 proc create_hier_cell_exchange_mem { parentCell nameHier } {
-
-  variable script_folder
 
   if { $parentCell eq "" || $nameHier eq "" } {
      catch {common::send_gid_msg -ssname BD::TCL -id 2092 -severity "ERROR" "create_hier_cell_exchange_mem() - Empty argument(s)!"}
@@ -276,10 +272,41 @@ proc create_dma_infrastructure { dmaIndex } {
                                       [get_bd_pins fifo_dma${dmaIndex}_s2mm_cmd/s_axis_aclk]
 }
 
+# Command arbiter
+proc create_hier_cell_cmd_arbiter { parentCell nameHier {numCmdStreams 1} } {
+
+  if { $parentCell eq "" || $nameHier eq "" } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2092 -severity "ERROR" "create_hier_cell_cmd_arbiter() - Empty argument(s)!"}
+     return
+  }
+
+  # Get object for parentCell
+  set parentObj [get_bd_cells $parentCell]
+  if { $parentObj == "" } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2090 -severity "ERROR" "Unable to find parent cell <$parentCell>!"}
+     return
+  }
+
+  # Make sure parentObj is hier blk
+  set parentType [get_property TYPE $parentObj]
+  if { $parentType ne "hier" } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2091 -severity "ERROR" "Parent <$parentObj> has TYPE = <$parentType>. Expected to be <hier>."}
+     return
+  }
+
+  # Save current instance; Restore later
+  set oldCurInst [current_bd_instance .]
+
+  # Create cell and set as current instance
+  set hier_obj [create_bd_cell -type hier $nameHier]
+  current_bd_instance $hier_obj
+
+  # Restore current instance
+  current_bd_instance $oldCurInst
+}
+
 # Hierarchical cell: control
 proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} {fanInSupport 0} } {
-
-  variable script_folder
 
   if { $parentCell eq "" || $nameHier eq "" } {
      catch {common::send_gid_msg -ssname BD::TCL -id 2092 -severity "ERROR" "create_hier_cell_control() - Empty argument(s)!"}
@@ -319,6 +346,7 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} {fanInSuppo
   create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 eth_packetizer_sts
   
   create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 eth_opencon_cmd
+  create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 eth_closecon_cmd
   create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 eth_opencon_sts
 
   create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 eth_openport_cmd
@@ -532,6 +560,7 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} {fanInSuppo
 
   connect_bd_intf_net -intf_net eth_openport_cmd [get_bd_intf_pins tcp_session/m_axis_tcp_listen_port] [get_bd_intf_pins eth_openport_cmd]
   connect_bd_intf_net -intf_net eth_opencon_cmd [get_bd_intf_pins tcp_session/m_axis_tcp_open_connection] [get_bd_intf_pins eth_opencon_cmd]
+  connect_bd_intf_net [get_bd_intf_pins tcp_session/m_axis_tcp_close_connection] [get_bd_intf_pins eth_closecon_cmd]
   connect_bd_intf_net -intf_net eth_packetizer_cmd [get_bd_intf_pins fifo_eth_packetizer_cmd/M_AXIS] [get_bd_intf_pins eth_packetizer_cmd]
   connect_bd_intf_net -intf_net eth_openport_sts [get_bd_intf_pins tcp_session/s_axis_tcp_port_status] [get_bd_intf_pins eth_openport_sts]
   connect_bd_intf_net -intf_net eth_opencon_sts [get_bd_intf_pins tcp_session/s_axis_tcp_open_status] [get_bd_intf_pins eth_opencon_sts]
