@@ -390,7 +390,7 @@ void test_stream_put(ACCL::ACCL &accl, options_t &options) {
   test_debug("Sending data on " + std::to_string(rank) + " to stream 0 " " on " +
                  std::to_string(next_rank) + "...",
              options);
-  accl.stream_put(*op_buf, count, next_rank, 9);
+  accl.stream_put(*op_buf, count, next_rank, 0);
 
   test_debug("Sending data on " + std::to_string(rank) + " from stream to " +
                  std::to_string(prev_rank) + "...",

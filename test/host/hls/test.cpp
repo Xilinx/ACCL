@@ -262,7 +262,8 @@ int main(int argc, char *argv[]) {
     if(!options.hardware){
         std::srand(42);
         for(int i=0; i<options.nruns; i++){
-            unsigned char stream_id = std::abs(std::rand()) % 256; 
+            unsigned char stream_id = std::abs(std::rand()) % 256;
+            if(stream_id > 246) continue;
             test_loopback(*accl, options, stream_id);
         }
         MPI_Barrier(MPI_COMM_WORLD);
