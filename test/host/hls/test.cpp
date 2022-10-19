@@ -28,7 +28,6 @@
 #include "cclo_bfm.h"
 #include <xrt/xrt_device.h>
 #include <iostream>
-#include "dummybuffer.hpp"
 
 using namespace ACCL;
 
@@ -165,14 +164,14 @@ void test_copy(ACCL::ACCL& accl, options_t options) {
         dst_buffer->buffer()[i] = 0;
     }
 
-    accl.copy(*src_buffer, dummy_buffer, options.count, false, false, ACCL::streamFlags::RES_STREAM);
+    accl.copy_to_stream(*src_buffer, options.count, false);
 
     //loop back data (divide count by 16 and round up to get number of stream words)
     for (int i=0; i < (options.count+15)/16; i++) {
         data_krnl2cclo.write(data_cclo2krnl.read());
     }
 
-    accl.copy(dummy_buffer, *dst_buffer, options.count, false, false, ACCL::streamFlags::OP0_STREAM);
+    accl.copy_from_stream(*dst_buffer, options.count, false);
 
     //check HLS function outputs
     unsigned int err_count = 0;
