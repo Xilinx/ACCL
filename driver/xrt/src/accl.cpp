@@ -29,33 +29,34 @@ namespace ACCL {
 ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
            xrt::device &device, xrt::ip &cclo_ip, xrt::kernel &hostctrl_ip,
            int devicemem, const std::vector<int> &rxbufmem, 
-           networkProtocol protocol, int nbufs, addr_t bufsize,
+           networkProtocol protocol, int nbufs, addr_t bufsize, addr_t segsize,
            const arithConfigMap &arith_config)
     : arith_config(arith_config), protocol(protocol), sim_mode(false),
       _devicemem(devicemem), rxbufmem(rxbufmem), 
       device(device) {
   cclo = new FPGADevice(cclo_ip, hostctrl_ip);
-  initialize_accl(ranks, local_rank, nbufs, bufsize);
+  initialize_accl(ranks, local_rank, nbufs, bufsize, segsize);
 }
 
 // Simulation constructor
 ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
            unsigned int sim_start_port, networkProtocol protocol, int nbufs,
-           addr_t bufsize, const arithConfigMap &arith_config)
+           addr_t bufsize, addr_t segsize, const arithConfigMap &arith_config)
     : arith_config(arith_config), protocol(protocol), sim_mode(true),
       _devicemem(0), rxbufmem({}) {
   cclo = new SimDevice(sim_start_port, local_rank);
-  initialize_accl(ranks, local_rank, nbufs, bufsize);
+  debug("initialize_accl");
+  initialize_accl(ranks, local_rank, nbufs, bufsize, segsize);
 }
 
 ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
            unsigned int sim_start_port, xrt::device &device,
-           networkProtocol protocol, int nbufs, addr_t bufsize,
+           networkProtocol protocol, int nbufs, addr_t bufsize, addr_t segsize,
            const arithConfigMap &arith_config)
     : arith_config(arith_config), protocol(protocol), sim_mode(true),
       _devicemem(0), rxbufmem({}), device(device) {
   cclo = new SimDevice(sim_start_port, local_rank);
-  initialize_accl(ranks, local_rank, nbufs, bufsize);
+  initialize_accl(ranks, local_rank, nbufs, bufsize, segsize);
 }
 
 ACCL::~ACCL() {
@@ -774,8 +775,8 @@ std::string ACCL::dump_rx_buffers(size_t nbufs) {
 }
 
 void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
-                           int nbufs, addr_t bufsize) {
-  // reset_log();
+                           int nbufs, addr_t bufsize , addr_t segsize) {
+  // reset_log(local_rank);
   debug("CCLO HWID: " + std::to_string(get_hwid()) + " at 0x" +
         debug_hex(cclo->get_base_addr()));
 
@@ -794,9 +795,11 @@ void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
   configure_arithmetic();
 
   // Mark CCLO as configured
+  debug("CCLO configured");
   cclo->write(CFGRDY_OFFSET, 1);
   config_rdy = true;
 
+  debug("Set timeout");
   set_timeout(1000000);
 
   CCLO::Options options{};
@@ -804,7 +807,8 @@ void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
   options.cfg_function = cfgFunc::enable_pkt;
   call_sync(options);
 
-  set_max_segment_size(bufsize);
+  debug("Set max segment size[B]:"+std::to_string(segsize));
+  set_max_segment_size(segsize);
   switch (protocol) {
   case networkProtocol::UDP:
     use_udp();
@@ -817,11 +821,6 @@ void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
         "Requested network protocol is not yet supported.");
   }
   
-  // if (protocol == networkProtocol::TCP) {
-  //   debug("Starting connections to communicator ranks");
-  //   init_connection();
-  // }
-
   debug("Accelerator ready!");
 }
 

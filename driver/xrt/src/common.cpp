@@ -21,10 +21,11 @@
 #include <cstdlib>
 #ifdef ACCL_DEBUG
 #include <fstream>
+#include <string> 
 #endif
 
-#define ACCL_SEND_LOG_FILE(i)                                                  \
-  (std::string("accl_send") + i + std::string(".log"))
+#define ACCL_LOG_FILE(i)                                                  \
+  (std::string("accl") + i + std::string(".log"))
 
 namespace ACCL {
 
@@ -60,31 +61,22 @@ void write_arithconfig(CCLO &cclo, ArithConfig &arithcfg, addr_t *addr) {
 }
 
 #ifdef ACCL_DEBUG
-std::string get_rank() {
-  char *ompi_rank = std::getenv("OMPI_COMM_WORLD_RANK");
-  if (!ompi_rank) {
-    return "0";
-  } else {
-    return ompi_rank;
-  }
-}
 
-void reset_log() {
-  std::string rank = get_rank();
-  std::string filename = ACCL_SEND_LOG_FILE(rank);
+void reset_log(int rank) {
+  std::string str_rank = std::to_string(rank);
+  std::string filename = ACCL_LOG_FILE(str_rank);
   std::ofstream outfile;
   outfile.open(filename, std::ios::out);
+  outfile<<"collective,number_of_nodes,rank_id,number_of_banks,size[B],rx_buffer_size[B],segment_size[B],execution_time[us],throughput[Gbps]"<<std::endl;
   outfile.close();
 }
 
-void accl_send_log(const std::string &label, const std::string &message) {
-  std::string rank = get_rank();
-  std::string filename = ACCL_SEND_LOG_FILE(rank);
+void accl_log(int rank, const std::string &message) {
+  std::string str_rank = std::to_string(rank);
+  std::string filename = ACCL_LOG_FILE(str_rank);
   std::ofstream outfile;
   outfile.open(filename, std::ios::out | std::ios_base::app);
-  outfile << "Json request " << label << ":" << std::endl
-          << message << std::endl
-          << std::endl;
+  outfile << message << std::endl;
   outfile.close();
 }
 #endif

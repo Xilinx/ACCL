@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<root versionMajor="1" versionMinor="6">
+  <kernel name="hw_bench" language="ip_c" vlnv="xilinx.com:RTLKernel:hw_bench:1.0" attributes="" preferredWorkGroupSizeMultiple="0" workGroupSize="1" interrupt="false" hwControlProtocol="ap_ctrl_none">
+    <ports>
+      <port name="cmdIn" mode="read_only" dataWidth="32" portType="stream"/>
+      <port name="cmdOut1" mode="write_only" dataWidth="32" portType="stream"/>
+      <port name="cmdOut2" mode="write_only" dataWidth="32" portType="stream"/>
+      <port name="cmdTimestamp" mode="write_only" dataWidth="64" portType="stream"/>
+      <port name="stsIn" mode="read_only" dataWidth="32" portType="stream"/>
+      <port name="stsOut1" mode="write_only" dataWidth="32" portType="stream"/>
+      <port name="stsOut2" mode="write_only" dataWidth="32" portType="stream"/>
+      <port name="stsTimestamp" mode="write_only" dataWidth="64" portType="stream"/>
+    </ports>
+    <args>
+      <arg name="cmdIn" addressQualifier="4" id="0" port="cmdIn" size="0x4" offset="0x010" hostOffset="0x0" hostSize="0x4" type="stream&lt;ap_axiu&lt;32,0,0,0>>&amp;" />
+      <arg name="cmdOut1" addressQualifier="4" id="1" port="cmdOut1" size="0x4" offset="0x018" hostOffset="0x0" hostSize="0x4" type="stream&lt;ap_axiu&lt;32,0,0,0>>&amp;" />
+      <arg name="cmdOut2" addressQualifier="4" id="2" port="cmdOut2" size="0x4" offset="0x020" hostOffset="0x0" hostSize="0x4" type="stream&lt;ap_axiu&lt;32,0,0,0>>&amp;" />
+      <arg name="cmdTimestamp" addressQualifier="4" id="3" port="cmdTimestamp" size="0x4" offset="0x028" hostOffset="0x0" hostSize="0x4" type="stream&lt;ap_axiu&lt;64,0,0,0>>&amp;" />
+      <arg name="stsIn" addressQualifier="4" id="4" port="stsIn" size="0x4" offset="0x030" hostOffset="0x0" hostSize="0x4" type="stream&lt;ap_axiu&lt;32,0,0,0>>&amp;" />
+      <arg name="stsOut1" addressQualifier="4" id="5" port="stsOut1" size="0x4" offset="0x038" hostOffset="0x0" hostSize="0x4" type="stream&lt;ap_axiu&lt;32,0,0,0>>&amp;" />
+      <arg name="stsOut2" addressQualifier="4" id="6" port="stsOut2" size="0x4" offset="0x040" hostOffset="0x0" hostSize="0x4" type="stream&lt;ap_axiu&lt;32,0,0,0>>&amp;" />
+      <arg name="stsTimestamp" addressQualifier="4" id="7" port="stsTimestamp" size="0x4" offset="0x048" hostOffset="0x0" hostSize="0x4" type="stream&lt;ap_axiu&lt;64,0,0,0>>&amp;" />
+    </args>
+  </kernel>
+</root>
+

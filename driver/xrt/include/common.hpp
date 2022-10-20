@@ -71,9 +71,9 @@ void *allocate_aligned_buffer(size_t size,
  *
  */
 #ifdef ACCL_DEBUG
-void reset_log();
+void reset_log(int rank);
 #else
-inline void reset_log() {
+inline void reset_log(int rank) {
   // NOP
 }
 #endif
@@ -85,10 +85,9 @@ inline void reset_log() {
  * @param message Message to write to log file.
  */
 #ifdef ACCL_DEBUG
-void accl_send_log(const std::string &label, const std::string &message);
+void accl_log(int rank, const std::string &message);
 #else
-inline void accl_send_log(const std::string &label,
-                          const std::string &message) {
+inline void accl_log(int rank, const std::string &message) {
   // NOP
 }
 #endif
