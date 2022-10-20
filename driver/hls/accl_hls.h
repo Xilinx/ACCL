@@ -276,7 +276,7 @@ class ACCLCommand{
         ){
             if(stream_id > 246) return;
             start_call(
-                ACCL_SEND, len, comm_adr, dst_rank, 0, stream_id-9, 
+                ACCL_SEND, len, comm_adr, dst_rank, 0, stream_id, 
                 dpcfg_adr, cflags, sflags | 0x2, 
                 src_addr, 0, 0
             );

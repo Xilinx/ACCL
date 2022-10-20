@@ -246,10 +246,6 @@ void start_move(
     }
     //get send related stuff, if result is remote or stream
     if(res_is_remote || res_opcode == MOVE_STREAM){
-        //if sending to remote stream, adjust tag
-        if(res_is_remote && res_opcode == MOVE_STREAM){
-            tx_tag += 9;
-        }
         putd(CMD_DMA_MOVE, tx_tag);
     }
     if(res_is_remote || op1_opcode == MOVE_ON_RECV){
