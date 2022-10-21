@@ -110,6 +110,7 @@ int openCon()
     unsigned int local_rank = world.local_rank;
 
     //open connection to all the ranks except for the local rank
+    ret = NO_ERROR;
     for (int i = 0; i < size; i++)
     {
         if (i != local_rank)
@@ -119,37 +120,44 @@ int openCon()
             //send open connection request to the packetizer
             putd(CMD_NET_CON, cur_rank_ip);
             putd(CMD_NET_CON, cur_rank_port);
-        }
-    }
-    ret = NO_ERROR;
-    //wait until the connections status are all returned
-    for (int i = 0; i < size -1 ; i++)
-    {	
-        //ask: tngetd or the stack will return a non-success? 
-        session 	= getd(STS_NET_CON);
-        dst_ip 		= getd(STS_NET_CON);
-        dst_port 	= getd(STS_NET_CON);
-        success 	= getd(STS_NET_CON);
 
-        if (success)
-        {
-            //store the session ID into corresponding rank
-            for (int j = 0; j < size ; ++j)
-            {
-                cur_rank_ip 	= world.ranks[j].ip;
-                cur_rank_port 	= world.ranks[j].port;
-                if ((dst_ip == cur_rank_ip) && (dst_port == cur_rank_port))
-                {
-                    world.ranks[j].session = session;
-                    break;
-                }
+            //wait until the connections status is returned
+            session = getd(STS_NET_CON);
+            dst_ip = getd(STS_NET_CON);
+            dst_port = getd(STS_NET_CON);
+            success = getd(STS_NET_CON);
+
+            if(success){
+                world.ranks[i].session = session;
+            } else {
+                ret = OPEN_CON_NOT_SUCCEEDED;
             }
         }
-        else
+    }
+    return ret;
+}
+
+//close connection with every other rank in the communicator
+int closeCon()
+{
+    unsigned int cur_rank_sess_id;
+    int ret = NO_ERROR;
+
+    unsigned int size 		= world.size;
+    unsigned int local_rank = world.local_rank;
+
+    //close connection to all the ranks except for the local rank
+    for (int i = 0; i < size; i++)
+    {
+        if (i != local_rank)
         {
-            ret = OPEN_CON_NOT_SUCCEEDED;
+            cur_rank_sess_id 	= world.ranks[i].session;
+            //send close connection request to the packetizer
+            putd(CMD_NET_CON, 0);
+            putd(CMD_NET_CON, cur_rank_sess_id);
         }
     }
+
     return ret;
 }
 
@@ -384,16 +392,17 @@ int recv(	unsigned int src_rank,
             unsigned int comm_offset,
             unsigned int arcfg_offset,
             unsigned int src_tag,
-            unsigned int compression){
+            unsigned int compression,
+            unsigned int stream){
     //if ETH_COMPRESSED is set, also set OP1_COMPRESSED
     compression |= (compression & ETH_COMPRESSED) >> 2;
     return move(
         MOVE_NONE,
         MOVE_ON_RECV, 
-        MOVE_IMMEDIATE, 
+        (stream & RES_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE, 
         compression, RES_LOCAL, 0,
         count, comm_offset, arcfg_offset, 0, 0, dst_addr, 0, 0, 0,
-        src_rank, src_tag, 0, 0
+        src_rank, src_tag, 0, (stream & RES_STREAM) ? src_tag : 0
     );
 }
 
@@ -1330,7 +1339,7 @@ void run() {
                 retval = send(root_src_dst, count, op0_addr, comm, datapath_cfg, msg_tag, compression_flags, stream_flags);
                 break;
             case ACCL_RECV:
-                retval = recv(root_src_dst, count, res_addr, comm, datapath_cfg, msg_tag, compression_flags);
+                retval = recv(root_src_dst, count, res_addr, comm, datapath_cfg, msg_tag, compression_flags, stream_flags);
                 break;
             case ACCL_BCAST:
                 retval = broadcast(count, root_src_dst, op0_addr, comm, datapath_cfg, compression_flags, stream_flags);

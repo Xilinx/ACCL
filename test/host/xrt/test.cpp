@@ -102,7 +102,7 @@ struct timestamp_t {
 //Primitives
 #define ACCL_COPY           1
 #define ACCL_COMBINE        2
-#define ACCL_SEND           3 
+#define ACCL_SEND           3
 #define ACCL_RECV           4
 //Collectives
 #define ACCL_BCAST          5
@@ -303,7 +303,7 @@ void printTimeStamp(timestamp_t timestamp, options_t &options)
     double tput = (options.count*sizeof(float)*8.0)/(durationUs*1000.0); // only useful for send/recv
     accl_log(rank, format_log(exp, options, durationUs, tput));
   }
-  
+
 }
 
 
@@ -606,6 +606,8 @@ void test_sendrcv(ACCL::ACCL &accl, options_t &options) {
   }
 }
 
+
+
 void test_sendrcv_bench(ACCL::ACCL &accl, options_t &options) {
   std::cout << "Start send recv H2H test with 2 ranks..." << std::endl;
   unsigned int count = options.count;
@@ -625,7 +627,7 @@ void test_sendrcv_bench(ACCL::ACCL &accl, options_t &options) {
                  std::to_string(next_rank) + "...",
              options);
     accl.send(*op_buf, count, next_rank, 0);
-  } else if (rank == 1) 
+  } else if (rank == 1)
   {
     test_debug("Receiving data on " + std::to_string(rank) + " from " +
                  std::to_string(prev_rank) + "...",
@@ -649,7 +651,7 @@ void test_sendrcv_bench(ACCL::ACCL &accl, options_t &options) {
                  std::to_string(next_rank) + "...",
              options);
     accl.send(*op_buf, count, next_rank, 0, GLOBAL_COMM, true);
-  } else if (rank == 1) 
+  } else if (rank == 1)
   {
     test_debug("Receiving data on " + std::to_string(rank) + " from " +
                  std::to_string(prev_rank) + "...",
@@ -665,6 +667,51 @@ void test_sendrcv_bench(ACCL::ACCL &accl, options_t &options) {
   }
 }
 
+void test_sendrcv_stream(ACCL::ACCL &accl, options_t &options) {
+  std::cout << "Start streaming send recv test..." << std::endl;
+  unsigned int count = options.count;
+  auto op_buf = accl.create_buffer<float>(count, dataType::float32);
+  auto res_buf = accl.create_buffer<float>(count, dataType::float32);
+  random_array(op_buf->buffer(), count);
+  int next_rank = (rank + 1) % size;
+  int prev_rank = (rank + size - 1) % size;
+
+  test_debug("Sending data on " + std::to_string(rank) + " to " +
+             std::to_string(next_rank) + "...", options);
+  accl.send(*op_buf, count, next_rank, 0);
+
+  test_debug("Receiving data on " + std::to_string(rank) + " from " +
+             std::to_string(prev_rank) + "...", options);
+  accl.recv(dataType::float32, count, prev_rank, 0, GLOBAL_COMM);
+
+  test_debug("Sending data on " + std::to_string(rank) + " to " +
+             std::to_string(prev_rank) + "...", options);
+  accl.send(dataType::float32, count, prev_rank, 1, GLOBAL_COMM);
+
+  test_debug("Receiving data on " + std::to_string(rank) + " from " +
+             std::to_string(next_rank) + "...", options);
+  accl.recv(*res_buf, count, next_rank, 1);
+
+  int errors = 0;
+  for (unsigned int i = 0; i < count; ++i) {
+    float res = (*res_buf)[i];
+    float ref = (*op_buf)[i];
+    if (res != ref) {
+      std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
+                       std::to_string(res) + " != " + std::to_string(ref) + ")"
+                << std::endl;
+      errors += 1;
+    }
+  }
+
+  if (errors > 0) {
+    std::cout << std::to_string(errors) + " errors!" << std::endl;
+    failed_tests++;
+  } else {
+    std::cout << "Test is successful!" << std::endl;
+  }
+}
+
 void test_stream_put(ACCL::ACCL &accl, options_t &options) {
   std::cout << "Start stream put test..." << std::endl;
   unsigned int count = options.count;
@@ -674,19 +721,16 @@ void test_stream_put(ACCL::ACCL &accl, options_t &options) {
   int next_rank = (rank + 1) % size;
   int prev_rank = (rank + size - 1) % size;
 
-  test_debug("Sending data on " + std::to_string(rank) + " to stream 0 " " on " +
-                 std::to_string(next_rank) + "...",
-             options);
+  test_debug("Sending data on " + std::to_string(rank) + " to stream 0 on " +
+             std::to_string(next_rank) + "...", options);
   accl.stream_put(*op_buf, count, next_rank, 9);
 
   test_debug("Sending data on " + std::to_string(rank) + " from stream to " +
-                 std::to_string(prev_rank) + "...",
-             options);
-  accl.send(*res_buf, count, prev_rank, 1, GLOBAL_COMM, false, streamFlags::OP0_STREAM);
+             std::to_string(prev_rank) + "...", options);
+  accl.send(dataType::float32, count, prev_rank, 1, GLOBAL_COMM);
 
   test_debug("Receiving data on " + std::to_string(rank) + " from " +
-                 std::to_string(next_rank) + "...",
-             options);
+             std::to_string(next_rank) + "...", options);
   accl.recv(*res_buf, count, next_rank, 1);
 
   int errors = 0;
@@ -724,13 +768,13 @@ void test_sendrcv_compressed(ACCL::ACCL &accl, options_t &options) {
                  std::to_string(next_rank) + "...",
              options);
   accl.send(*op_buf, count, next_rank, 0, GLOBAL_COMM, false,
-            streamFlags::NO_STREAM, dataType::float16);
+            dataType::float16);
 
   test_debug("Receiving data on " + std::to_string(rank) + " from " +
                  std::to_string(prev_rank) + "...",
              options);
   accl.recv(*res_buf, count, prev_rank, 0, GLOBAL_COMM, false,
-            streamFlags::NO_STREAM, dataType::float16);
+            dataType::float16);
 
   for (unsigned int i = 0; i < count; ++i) {
     float res = (*res_buf)[i];
@@ -747,13 +791,13 @@ void test_sendrcv_compressed(ACCL::ACCL &accl, options_t &options) {
                  std::to_string(prev_rank) + "...",
              options);
   accl.send(*op_buf, count, prev_rank, 1, GLOBAL_COMM, false,
-            streamFlags::NO_STREAM, dataType::float16);
+            dataType::float16);
 
   test_debug("Receiving data on " + std::to_string(rank) + " from " +
                  std::to_string(next_rank) + "...",
              options);
   accl.recv(*res_buf, count, next_rank, 1, GLOBAL_COMM, false,
-            streamFlags::NO_STREAM, dataType::float16);
+            dataType::float16);
 
   for (unsigned int i = 0; i < count; ++i) {
     float res = (*res_buf)[i];
@@ -895,7 +939,7 @@ void test_scatter(ACCL::ACCL &accl, options_t &options, int root) {
   random_array(op_buf->buffer(), count * size);
 
   test_debug("Scatter data from " + std::to_string(rank) + "...", options);
-  
+
   MPI_Barrier(MPI_COMM_WORLD);
   double durationUs = 0.0;
   auto start = std::chrono::high_resolution_clock::now();
@@ -951,7 +995,7 @@ void test_scatter_compressed(ACCL::ACCL &accl, options_t &options, int root) {
   test_debug("Scatter data from " + std::to_string(rank) + "...", options);
   accl.scatter(*op_buf, *res_buf, count, root, GLOBAL_COMM, false, false,
                dataType::float16);
-  
+
   int errors = 0;
   for (unsigned int i = 0; i < count; ++i) {
     float res = (*res_buf)[i];
@@ -1023,7 +1067,7 @@ void test_gather(ACCL::ACCL &accl, options_t &options, int root) {
 
   std::cout << "Start gather test F2F with root " + std::to_string(root) + "..."
             << std::endl;
-  
+
   test_debug("Gather data from " + std::to_string(rank) + "...", options);
 
   MPI_Barrier(MPI_COMM_WORLD);
@@ -1580,7 +1624,7 @@ void test_allreduce_compressed(ACCL::ACCL &accl, options_t &options,
 
 void test_user_kernel( xrt::device &device, ACCL::ACCL &accl, options_t &options)
 {
-  std::cout << "Start user kernel test " 
+  std::cout << "Start user kernel test "
             << std::endl;
 
   auto user_kernel = xrt::kernel(device, device.get_xclbin_uuid(), "vadd_put:{vadd_0_0}",
@@ -1597,7 +1641,7 @@ void test_user_kernel( xrt::device &device, ACCL::ACCL &accl, options_t &options
   src_bo.sync(XCL_BO_SYNC_BO_TO_DEVICE);
 
   MPI_Barrier(MPI_COMM_WORLD);
-  auto run = user_kernel(src_bo, dst_bo, options.count, (rank+1)%size, accl.get_communicator_adr(), 
+  auto run = user_kernel(src_bo, dst_bo, options.count, (rank+1)%size, accl.get_communicator_adr(),
                     accl.get_arithmetic_config_addr({dataType::float32, dataType::float32}));
   run.wait(10000);
 
@@ -1623,6 +1667,62 @@ void test_barrier(ACCL::ACCL &accl) {
   std::cout << "Start barrier test " << std::endl;
   accl.barrier();
   std::cout << "Test is successful!" << std::endl;
+}
+
+bool check_arp(Networklayer &network_layer, std::vector<rank_t> &ranks,
+               options_t &options) {
+  std::map<unsigned, bool> ranks_checked;
+  for (unsigned i = 0; i < static_cast<unsigned>(size); ++i) {
+    ranks_checked[i] = false;
+  }
+
+  bool sanity_check = true;
+  const std::map<int, std::pair<std::string, std::string>> arp =
+      network_layer.read_arp_table(size);
+
+  std::ostringstream ss_arp;
+  ss_arp << "ARP table:";
+
+  for (const std::pair<const int, std::pair<std::string, std::string>> &elem :
+       arp) {
+    const unsigned index = elem.first;
+    const std::pair<std::string, std::string> &entry = elem.second;
+    const std::string &mac = entry.first;
+    const std::string &ip = entry.second;
+    ss_arp << "\n(" << index << ") " << mac << ": " << ip;
+
+    for (unsigned i = 0; i < static_cast<unsigned>(size); ++i) {
+      if (ranks[i].ip == ip) {
+        if (ranks_checked[i]) {
+          std::cout << "Double entry for " << ip << " in arp table!"
+                    << std::endl;
+          sanity_check = false;
+        } else {
+          ranks_checked[i] = true;
+        }
+      }
+    }
+  }
+
+  test_debug(ss_arp.str(), options);
+
+  if (!sanity_check) {
+    return false;
+  }
+
+  unsigned hosts = 0;
+  for (unsigned i = 0; i < static_cast<unsigned>(size); ++i) {
+    if (ranks_checked[i]) {
+      hosts += 1;
+    }
+  }
+  if (hosts < static_cast<unsigned>(size) - 1) {
+    std::cout << "Found only " << hosts << " hosts out of " << size - 1 << "!"
+              << std::endl;
+    return false;
+  }
+
+  return true;
 }
 
 void configure_vnx(CMAC &cmac, Networklayer &network_layer,
@@ -1657,6 +1757,8 @@ void configure_vnx(CMAC &cmac, Networklayer &network_layer,
     exit(1);
   }
 
+  MPI_Barrier(MPI_COMM_WORLD);
+
   std::cout << "Populating socket table..." << std::endl;
 
   network_layer.update_ip_address(ranks[rank].ip);
@@ -1673,16 +1775,23 @@ void configure_vnx(CMAC &cmac, Networklayer &network_layer,
 
   std::cout << "Starting ARP discovery..." << std::endl;
   std::this_thread::sleep_for(std::chrono::seconds(4));
+  MPI_Barrier(MPI_COMM_WORLD);
   network_layer.arp_discovery();
   std::cout << "Finishing ARP discovery..." << std::endl;
   std::this_thread::sleep_for(std::chrono::seconds(2));
+  MPI_Barrier(MPI_COMM_WORLD);
   network_layer.arp_discovery();
   std::cout << "ARP discovery finished!" << std::endl;
+
+  if (!check_arp(network_layer, ranks, options)) {
+    std::this_thread::sleep_for(std::chrono::seconds(3));
+    exit(1);
+  }
+
+  MPI_Barrier(MPI_COMM_WORLD);
 }
 
-
-
-void start_test(options_t options) {
+int start_test(options_t options) {
   std::vector<rank_t> ranks = {};
   failed_tests = 0;
   skipped_tests = 0;
@@ -1716,10 +1825,10 @@ void start_test(options_t options) {
   }
 
   // uint64_t *host_ptr_hw_bench_cmd;
-  // xrt::bo buf_hw_bench_cmd; 
+  // xrt::bo buf_hw_bench_cmd;
   // uint64_t *host_ptr_hw_bench_sts;
-  // xrt::bo buf_hw_bench_sts; 
-  
+  // xrt::bo buf_hw_bench_sts;
+
   if (options.hardware) {
     std::string cclo_id;
     if (options.axis3) {
@@ -1730,9 +1839,9 @@ void start_test(options_t options) {
     auto xclbin_uuid = device.load_xclbin(options.xclbin);
     auto cclo_ip = xrt::ip(device, xclbin_uuid,
                            "ccl_offload:{ccl_offload_" + cclo_id + "}");
-    auto hostctrl_ip =
-        xrt::kernel(device, xclbin_uuid, "hostctrl:{hostctrl_" + cclo_id + "_0}",
-                    xrt::kernel::cu_access_mode::exclusive);
+    auto hostctrl_ip = xrt::kernel(device, xclbin_uuid,
+                                   "hostctrl:{hostctrl_" + cclo_id + "_0}",
+                                   xrt::kernel::cu_access_mode::exclusive);
 
     int devicemem;
     std::vector<int> rxbufmem;
@@ -1784,7 +1893,8 @@ void start_test(options_t options) {
 
     accl = std::make_unique<ACCL::ACCL>(
         ranks, rank, device, cclo_ip, hostctrl_ip, devicemem, rxbufmem,
-        options.udp ? networkProtocol::UDP : networkProtocol::TCP,
+        options.udp || options.axis3 ? networkProtocol::UDP
+                                     : networkProtocol::TCP,
         16, options.rxbuf_size, options.seg_size);
 
     if (options.tcp){
@@ -1806,14 +1916,14 @@ void start_test(options_t options) {
     // if (options.hw_bench)
     // {
     //   std::cout << "Enable hw bench kernel" << std::endl;
-    //   auto hw_bench_krnl = xrt::kernel(device, xclbin_uuid, "collector:{collector_0}",xrt::kernel::cu_access_mode::exclusive);  
+    //   auto hw_bench_krnl = xrt::kernel(device, xclbin_uuid, "collector:{collector_0}",xrt::kernel::cu_access_mode::exclusive);
 
     //   // Host Memory pointer aligned to 4K boundary
     //   posix_memalign((void**)&host_ptr_hw_bench_cmd,4096,8*1024*1024*sizeof(uint64_t));
     //   posix_memalign((void**)&host_ptr_hw_bench_sts,4096,8*1024*1024*sizeof(uint64_t));
     //   // Sample example filling the allocated host memory
     //   for(int i=0; i<8*1024*1024; i++) {
-    //     host_ptr_hw_bench_cmd[i] = 0; 
+    //     host_ptr_hw_bench_cmd[i] = 0;
     //     host_ptr_hw_bench_sts[i] = 0;
     //   }
     //   buf_hw_bench_cmd = xrt::bo (device, host_ptr_hw_bench_cmd, 8*1024*1024*sizeof(uint64_t), hw_bench_krnl.group_id(1));
@@ -1826,15 +1936,22 @@ void start_test(options_t options) {
     //   uint32_t cmd_addr_reg = hw_bench_krnl.read_register(0x018);
     //   uint32_t sts_addr_reg = hw_bench_krnl.read_register(0x024);
     //   std::cout<< std::hex << "round_reg: "<< round_reg <<" cmd_addr_reg: "<<cmd_addr_reg<<" sts_addr_reg: "<<sts_addr_reg<<std::endl;
-      
+
     // }
-    
+
   } else {
     accl = std::make_unique<ACCL::ACCL>(ranks, rank, options.start_port, device,
                                         options.udp ? networkProtocol::UDP
                                                     : networkProtocol::TCP,
                                         16, options.rxbuf_size);
   }
+  if (!options.udp) {
+    MPI_Barrier(MPI_COMM_WORLD);
+    accl->open_port();
+    MPI_Barrier(MPI_COMM_WORLD);
+    accl->open_con();
+  }
+
   accl->set_timeout(1e6);
 
   // barrier here to make sure all the devices are configured before testing
@@ -1846,63 +1963,63 @@ void start_test(options_t options) {
   {
     MPI_Barrier(MPI_COMM_WORLD);
     test_copy(*accl, options);
-  } 
+  }
   if(options.test_mode == ACCL_COMBINE || options.test_mode == 0)
   {
     MPI_Barrier(MPI_COMM_WORLD);
     test_combine_sum(*accl, options);
     MPI_Barrier(MPI_COMM_WORLD);
     test_combine_max(*accl, options);
-  } 
+  }
   if(options.test_mode == ACCL_SEND || options.test_mode == ACCL_RECV || options.test_mode == 0)
   {
     MPI_Barrier(MPI_COMM_WORLD);
     test_sendrcv_bench(*accl, options);
-  } 
+  }
   if(options.test_mode == ACCL_BCAST || options.test_mode == 0)
   {
     int root = 0;
     MPI_Barrier(MPI_COMM_WORLD);
     test_bcast(*accl, options, root);
-  } 
+  }
   if(options.test_mode == ACCL_SCATTER || options.test_mode == 0)
   {
     int root = 0;
     MPI_Barrier(MPI_COMM_WORLD);
     test_scatter(*accl, options, root);
-  } 
+  }
   if(options.test_mode == ACCL_GATHER || options.test_mode == 0)
   {
     int root = 0;
     MPI_Barrier(MPI_COMM_WORLD);
     test_gather(*accl, options, root);
-  } 
+  }
   if(options.test_mode == ACCL_REDUCE || options.test_mode == 0)
   {
     int root = 0;
     MPI_Barrier(MPI_COMM_WORLD);
     test_reduce(*accl, options, root, reduceFunction::SUM);
-  } 
+  }
   if(options.test_mode == ACCL_ALLGATHER || options.test_mode == 0)
   {
     MPI_Barrier(MPI_COMM_WORLD);
     test_allgather(*accl, options);
-  } 
+  }
   if(options.test_mode == ACCL_ALLREDUCE || options.test_mode == 0)
   {
     test_allreduce(*accl, options, reduceFunction::SUM);
     MPI_Barrier(MPI_COMM_WORLD);
-  } 
+  }
   if(options.test_mode == ACCL_REDUCE_SCATTER || options.test_mode == 0)
   {
     MPI_Barrier(MPI_COMM_WORLD);
     test_reduce_scatter(*accl, options, reduceFunction::SUM);
-  } 
+  }
   if(options.test_mode == ACCL_BARRIER || options.test_mode == 0)
   {
     MPI_Barrier(MPI_COMM_WORLD);
     test_barrier(*accl);
-  } 
+  }
 
   // test_mode 0 runs all
   if (options.test_mode == 0)
@@ -1938,7 +2055,7 @@ void start_test(options_t options) {
     MPI_Barrier(MPI_COMM_WORLD);
 
     for (int root = 0; root < size; ++root) {
-      
+
       MPI_Barrier(MPI_COMM_WORLD);
       test_bcast_compressed(*accl, options, root);
       MPI_Barrier(MPI_COMM_WORLD);
@@ -1950,7 +2067,7 @@ void start_test(options_t options) {
       MPI_Barrier(MPI_COMM_WORLD);
     }
   }
-  
+
   std::cout << failed_tests << " tests failed on rank " << rank;
   if (skipped_tests > 0) {
     std::cout << " (skipped " << skipped_tests << " tests)";
@@ -1960,7 +2077,7 @@ void start_test(options_t options) {
   if (options.hw_bench)
   {
     std::cout << "Enable hw bench kernel" << std::endl;
-    auto hw_bench_krnl = xrt::kernel(device, device.get_xclbin_uuid(), "collector:{collector_0}",xrt::kernel::cu_access_mode::exclusive);  
+    auto hw_bench_krnl = xrt::kernel(device, device.get_xclbin_uuid(), "collector:{collector_0}",xrt::kernel::cu_access_mode::exclusive);
 
     std::cout << "Allocate Buffer in Global Memory\n";
     auto buf_hw_bench_cmd = xrt::bo (device, 8*1024*1024*sizeof(uint64_t), hw_bench_krnl.group_id(1));
@@ -1982,11 +2099,11 @@ void start_test(options_t options) {
     uint32_t cmd_addr_reg = hw_bench_krnl.read_register(0x018);
     uint32_t sts_addr_reg = hw_bench_krnl.read_register(0x024);
     std::cout<< std::hex << "round_reg: "<< round_reg <<" cmd_addr_reg: "<<cmd_addr_reg<<" sts_addr_reg: "<<sts_addr_reg<<std::endl;
-      
+
     run.wait(1000);
-    
+
     std::cout <<"Sync hw_bench mem to host"<< std::endl;
-    
+
     buf_hw_bench_cmd.sync(XCL_BO_SYNC_BO_FROM_DEVICE);
     unsigned int cmd_mem_offset = 0;
     buf_hw_bench_sts.sync(XCL_BO_SYNC_BO_FROM_DEVICE);
@@ -1996,14 +2113,12 @@ void start_test(options_t options) {
       timestamp_t timestamp = readTimeStamp(host_ptr_hw_bench_cmd, host_ptr_hw_bench_sts, cmd_mem_offset, sts_mem_offset);
       printTimeStamp(timestamp, options);
     }
-      
+
   }
 
 
   MPI_Barrier(MPI_COMM_WORLD);
-  if (failed_tests > 1) {
-    MPI_Abort(MPI_COMM_WORLD, 1);
-  }
+  return failed_tests;
 }
 
 bool xrt_simulator_ready(const options_t &opts) {
@@ -2083,7 +2198,7 @@ options_t parse_options(int argc, char *argv[]) {
 					throw std::runtime_error("When using hardware axis3 mode, tcp or udp can not be used.");
 				}
 				std::cout << "Hardware axis3 mode" << std::endl;
-			}  
+			}
 			if (udp_arg.getValue())
 			{
 				if (axis3_arg.getValue() || tcp_arg.getValue()){
@@ -2140,7 +2255,7 @@ options_t parse_options(int argc, char *argv[]) {
     exit(1);
   }
 
-  
+
 }
 
 int main(int argc, char *argv[]) {
@@ -2160,8 +2275,8 @@ int main(int argc, char *argv[]) {
          << std::endl;
   std::cout << stream.str();
 
-  start_test(options);
+  int errors = start_test(options);
 
   MPI_Finalize();
-  return 0;
+  return errors;
 }

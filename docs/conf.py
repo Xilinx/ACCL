@@ -43,6 +43,7 @@ author = 'Advanced Micro Devices Inc'
 breathe_projects = {}
 breathe_projects['ACCL'] = '../driver/xrt/docs/xml'
 breathe_projects['ACCL_HLS'] = '../driver/hls/docs/xml'
+breathe_projects['CCLO_BFM'] = '../test/model/bfm/docs/xml'
 
 # Check if we're running on Read the Docs' servers
 read_the_docs_build = os.environ.get('READTHEDOCS', None) == 'True'
@@ -54,7 +55,7 @@ read_the_docs_build = os.environ.get('READTHEDOCS', None) == 'True'
 # ones.
 #...
 
-extensions = [ "breathe" ]
+extensions = [ "breathe", 'sphinxcontrib.tikz']
 
 #...
 
@@ -84,3 +85,7 @@ breathe_default_project = "ACCL"
 
 subprocess.call('doxygen ./Doxyfile', shell=True, cwd='../driver/xrt')
 subprocess.call('doxygen ./Doxyfile', shell=True, cwd='../driver/hls')
+subprocess.call('doxygen ./Doxyfile', shell=True, cwd='../test/model/bfm')
+
+# Tikz configuration, as indicated in https://github.com/sphinx-contrib/tikz
+tikz_proc_suite = 'GhostScript'

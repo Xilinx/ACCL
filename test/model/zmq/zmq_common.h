@@ -17,25 +17,26 @@
 #pragma once
 #include <json/json.h>
 #include <zmqpp/zmqpp.hpp>
+#include <memory>
 
 /**
  * @brief ZMQ interface context, consisting of ZMQ sockets
- * 
+ *
  */
 struct zmq_intf_context{
     zmqpp::context context;
-    zmqpp::socket *cmd_socket;
-    zmqpp::socket *eth_tx_socket;
-    zmqpp::socket *eth_rx_socket;
-    zmqpp::socket *krnl_tx_socket;
-    zmqpp::socket *krnl_rx_socket;
+    std::unique_ptr<zmqpp::socket> cmd_socket;
+    std::unique_ptr<zmqpp::socket> eth_tx_socket;
+    std::unique_ptr<zmqpp::socket> eth_rx_socket;
+    std::unique_ptr<zmqpp::socket> krnl_tx_socket;
+    std::unique_ptr<zmqpp::socket> krnl_rx_socket;
     bool stop = false;
     zmq_intf_context() : context() {}
 };
 
 /**
  * @brief Convert a ZMQ message to JSON
- * 
+ *
  * @param message Reference to the ZMQ message, as received from the socket
  * @return Json::Value The JSON equivalent
  */
@@ -43,7 +44,7 @@ Json::Value to_json(zmqpp::message &message);
 
 /**
  * @brief Convert a JSON to a ZMQ message
- * 
+ *
  * @param request_json The JSON input
  * @param request Reference to the ZMQ message, ready for sending
  */

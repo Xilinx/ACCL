@@ -28,7 +28,7 @@ zmq_intf_context zmq_client_intf(unsigned int starting_port, unsigned int local_
     zmq_intf_context ctx;
     const string endpoint_base = "tcp://127.0.0.1:";
 
-    ctx.cmd_socket = new zmqpp::socket(ctx.context, zmqpp::socket_type::request);
+    ctx.cmd_socket = std::make_unique<zmqpp::socket>(ctx.context, zmqpp::socket_type::request);
 
     string cmd_endpoint = endpoint_base + to_string(starting_port + local_rank);
     cout << "Endpoint: " << cmd_endpoint << endl;
@@ -42,8 +42,8 @@ zmq_intf_context zmq_client_intf(unsigned int starting_port, unsigned int local_
     cout << "ZMQ Client Command Context established for rank " << local_rank << endl;
 
     if(krnl_dest.size() > 0){
-        ctx.krnl_tx_socket = new zmqpp::socket(ctx.context, zmqpp::socket_type::sub);
-        ctx.krnl_rx_socket = new zmqpp::socket(ctx.context, zmqpp::socket_type::pub);
+        ctx.krnl_tx_socket = std::make_unique<zmqpp::socket>(ctx.context, zmqpp::socket_type::sub);
+        ctx.krnl_rx_socket = std::make_unique<zmqpp::socket>(ctx.context, zmqpp::socket_type::pub);
 
         //bind to tx socket
         string krnl_endpoint = endpoint_base + to_string(starting_port+2*world_size+local_rank);
