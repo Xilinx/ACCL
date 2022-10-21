@@ -150,10 +150,13 @@ void test_copy(ACCL::ACCL& accl, options_t options) {
     hlslib::Stream<stream_word, 512> data_cclo2krnl("cclo2krnl"), data_krnl2cclo("krnl2cclo");
 
     std::vector<unsigned int> dest = {0};
+    std::unique_ptr<CCLO_BFM> cclo;
 
-    CCLO_BFM cclo(options.start_port, rank, size, dest, callreq, callack, data_cclo2krnl, data_krnl2cclo);
-    cclo.run();
-    std::cout << "CCLO BFM started" << std::endl;
+    if (!options.hardware) {
+        cclo = std::make_unique<CCLO_BFM>(options.start_port, rank, size, dest, callreq, callack, data_cclo2krnl, data_krnl2cclo);
+        cclo->run();
+        std::cout << "CCLO BFM started" << std::endl;
+    }
     MPI_Barrier(MPI_COMM_WORLD);
 
     //allocate float arrays for the HLS function to use
@@ -180,8 +183,10 @@ void test_copy(ACCL::ACCL& accl, options_t options) {
     }
 
     std::cout << "Test finished with " << err_count << " errors" << std::endl;
-    //clean up
-    cclo.stop();
+    if (!options.hardware) {
+        //clean up
+        cclo->stop();
+    }
 }
 
 void test_loopback_local_res(ACCL::ACCL& accl, options_t options) {
