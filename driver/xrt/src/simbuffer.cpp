@@ -16,7 +16,7 @@
 #
 *******************************************************************************/
 
-#include "simbuffer.hpp"
+#include "accl/simbuffer.hpp"
 
 namespace ACCL {
     /* Can't define variable in header */
