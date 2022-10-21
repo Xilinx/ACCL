@@ -894,7 +894,7 @@ std::string ACCL::dump_rx_buffers(size_t nbufs, bool dump_data) {
 
 void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
                            int nbufs, addr_t bufsize , addr_t segsize) {
-  // reset_log(local_rank);
+  reset_log();
   debug("CCLO HWID: " + std::to_string(get_hwid()) + " at 0x" +
         debug_hex(cclo->get_base_addr()));
 
@@ -925,7 +925,7 @@ void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
   options.cfg_function = cfgFunc::enable_pkt;
   call_sync(options);
 
-  debug("Set max segment size[B]:"+std::to_string(segsize));
+  debug("Set max segment size: " + std::to_string(segsize));
   set_max_segment_size(segsize);
   switch (protocol) {
   case networkProtocol::UDP:
@@ -1217,15 +1217,6 @@ void ACCL::close_con(communicatorId comm_id) {
   con_open = false;
 }
 
-void ACCL::close_con(communicatorId comm_id) {
-  CCLO::Options options{};
-  options.scenario = operation::config;
-  options.comm = communicators[comm_id].communicators_addr();
-  options.cfg_function = cfgFunc::close_con;
-  call_sync(options);
-  check_return_value("close_con");
-}
-
 void ACCL::use_udp(communicatorId comm_id) {
   CCLO::Options options{};
   options.scenario = operation::config;
@@ -1298,17 +1289,13 @@ void ACCL::check_tcp_ready() {
     return;
   }
 
-  if (!open_port) {
+  if (!port_open) {
     throw std::runtime_error("ACCL not ready yet; port still closed!");
   }
 
-  if (!open_con) {
+  if (!con_open) {
     throw std::runtime_error("ACCL not ready yet; connection still closed!");
   }
-}
-
-addr_t ACCL::get_communicator_addr(communicatorId comm_id){
-  return communicators[comm_id].communicators_addr();
 }
 
 } // namespace ACCL

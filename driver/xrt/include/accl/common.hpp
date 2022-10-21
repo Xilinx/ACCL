@@ -22,6 +22,7 @@
 #include "constants.hpp"
 #include <iostream>
 #include <sstream>
+#include <string>
 
 /** @file common.hpp */
 
@@ -71,9 +72,9 @@ void *allocate_aligned_buffer(size_t size,
  *
  */
 #ifdef ACCL_DEBUG
-void reset_log(int rank);
+void reset_log();
 #else
-inline void reset_log(int rank) {
+inline void reset_log() {
   // NOP
 }
 #endif
@@ -85,9 +86,10 @@ inline void reset_log(int rank) {
  * @param message Message to write to log file.
  */
 #ifdef ACCL_DEBUG
-void accl_log(int rank, const std::string &message);
+void accl_send_log(const std::string &label, const std::string &message);
 #else
-inline void accl_log(int rank, const std::string &message) {
+inline void accl_send_log(const std::string &label,
+                          const std::string &message) {
   // NOP
 }
 #endif
@@ -101,5 +103,19 @@ inline void accl_log(int rank, const std::string &message) {
  * @param addr     Address on the FPGA to write arithmetic configuration to.
  */
 void write_arithconfig(CCLO &cclo, ArithConfig &arithcfg, addr_t *addr);
+
+/**
+ * Encode an IP address from string to integer.
+ *
+ * @param ip       IP string to encode.
+ */
+uint32_t ip_encode(std::string ip);
+
+/**
+ * Decode an IP address from integer to string.
+ *
+ * @param ip       Encoded IP integer to decode.
+ */
+std::string ip_decode(uint32_t ip);
 
 } // namespace ACCL

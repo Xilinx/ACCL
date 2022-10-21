@@ -33,7 +33,7 @@
 //Datapath width (in bytes) for all streams everywhere in the design
 #define DATAPATH_WIDTH_BYTES 64
 
-//AXIS interfaces to/from MB 
+//AXIS interfaces to/from MB
 
 #define CMD_CALL     0
 #define CMD_DMA_MOVE 1
@@ -47,9 +47,9 @@
 
 
 //PACKT CONST
-#define MAX_PACKETSIZE 4096
+#define MAX_PACKETSIZE 1536
 #define MAX_SEG_SIZE 1048576
-//DMA CONST 
+//DMA CONST
 #define DMA_MAX_BTT              ((1<<23)/64*64)
 #define DMA_MAX_TRANSACTIONS     20
 #define DMA_TRANSACTION_SIZE     4194304 //info: can correspond to MAX_BTT
@@ -63,7 +63,7 @@
 //Primitives
 #define ACCL_COPY           1
 #define ACCL_COMBINE        2
-#define ACCL_SEND           3 
+#define ACCL_SEND           3
 #define ACCL_RECV           4
 //Collectives
 #define ACCL_BCAST          5
@@ -92,7 +92,7 @@
 #define RETVAL_OFFSET     0x1FFC
 #define END_OF_EXCHMEM    0x2000
 
-#ifndef MB_FW_EMULATION  
+#ifndef MB_FW_EMULATION
 #define EXCHMEM_BASEADDR      0x0
 #define NET_RXPKT_BASEADDR    0x30000
 #define NET_TXPKT_BASEADDR    0x40000
@@ -100,7 +100,7 @@
 #define RX_ENQUEUE_BASEADDR   0x60000
 #define RX_SEEK_BASEADDR      0x70000
 #define GPIO_BASEADDR         0x40000000
-#else       
+#else
 #define EXCHMEM_BASEADDR      0x0000
 #define NET_RXPKT_BASEADDR    0x3000
 #define NET_TXPKT_BASEADDR    0x4000
@@ -114,7 +114,7 @@
 //https://www.xilinx.com/html_docs/xilinx2020_2/vitis_doc/managing_interface_synthesis.html#tzw1539734223235
 #define CONTROL_START_MASK      0x00000001
 #define CONTROL_DONE_MASK       0x00000001 << 1
-#define CONTROL_IDLE_MASK       0x00000001 << 2 
+#define CONTROL_IDLE_MASK       0x00000001 << 2
 #define CONTROL_READY_MASK      0x00000001 << 3
 #define CONTROL_REPEAT_MASK     0x00000001 << 7
 
@@ -124,15 +124,15 @@
 #define GPIO_SWRST_MASK       0x00000002
 
 //EXCEPTIONS
-#define NO_ERROR                                      0   
-#define DMA_MISMATCH_ERROR                            (1<< 0)    
-#define DMA_INTERNAL_ERROR                            (1<< 1)    
-#define DMA_DECODE_ERROR                              (1<< 2) 
+#define NO_ERROR                                      0
+#define DMA_MISMATCH_ERROR                            (1<< 0)
+#define DMA_INTERNAL_ERROR                            (1<< 1)
+#define DMA_DECODE_ERROR                              (1<< 2)
 #define DMA_SLAVE_ERROR                               (1<< 3)
-#define DMA_NOT_OKAY_ERROR                            (1<< 4)    
-#define DMA_NOT_END_OF_PACKET_ERROR                   (1<< 5)            
+#define DMA_NOT_OKAY_ERROR                            (1<< 4)
+#define DMA_NOT_END_OF_PACKET_ERROR                   (1<< 5)
 #define DMA_NOT_EXPECTED_BTT_ERROR                    (1<< 6)
-#define DMA_TIMEOUT_ERROR                             (1<< 7)            
+#define DMA_TIMEOUT_ERROR                             (1<< 7)
 #define CONFIG_SWITCH_ERROR                           (1<< 8)
 #define DEQUEUE_BUFFER_TIMEOUT_ERROR                  (1<< 9)
 #define DEQUEUE_BUFFER_SPARE_BUFFER_STATUS_ERROR      (1<<10)
@@ -144,7 +144,7 @@
 #define OPEN_PORT_NOT_SUCCEEDED                       (1<<16)
 #define OPEN_CON_NOT_SUCCEEDED                        (1<<17)
 #define DMA_SIZE_ERROR                                (1<<18)
-#define ARITH_ERROR                                   (1<<19) 
+#define ARITH_ERROR                                   (1<<19)
 #define PACK_TIMEOUT_STS_ERROR                        (1<<20)
 #define PACK_SEQ_NUMBER_ERROR                         (1<<21)
 #define COMPRESSION_ERROR                             (1<<22)
@@ -166,7 +166,7 @@
 
 //define compression flags; these are one-hot, one bit per parameter
 //ETH_COMPRESSED is a meta-flag, it's passed in the call to the CCLO,
-//but it does not go down into the move operation, but instead 
+//but it does not go down into the move operation, but instead
 //influences the value of the actual compression flags for each move step
 //e.g. a broadcast with just ETH_COMPRESSED flag turns into:
 //(on root) multiple moves (MOVE_IMMEDIATE then MOVE_STRIDE or MOVE_INCREMENT) with RES_COMPRESSED set
@@ -261,9 +261,9 @@ typedef struct {
 #define RX_TAG_OFFSET           4
 #define RX_LEN_OFFSET           5
 #define RX_SRC_OFFSET           6
-#define SEQUENCE_NUMBER_OFFSET  7   
+#define SEQUENCE_NUMBER_OFFSET  7
 #define SPARE_BUFFER_SIZE       32
-#define SPARE_BUFFER_FIELDS     8       
+#define SPARE_BUFFER_FIELDS     8
 
 #define STATUS_IDLE     0x00
 #define STATUS_ENQUEUED 0x01

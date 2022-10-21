@@ -16,8 +16,7 @@
 #
 # *******************************************************************************/
 
-PERIPHERAL_IPS = hostctrl loopback reduce_ops hp_compression dummy_tcp_stack client_arbiter vadd_put collector 
-RTL_IPS= hw_bench
+PERIPHERAL_IPS = hostctrl loopback reduce_ops hp_compression dummy_tcp_stack client_arbiter vadd_put
 TARGET=ip
 PLATFORM ?= xilinx_u280_xdma_201920_3
 DEBUG ?= none
@@ -32,12 +31,9 @@ else
 	$(error Unsupported PLATFORM)
 endif
 
-all: $(PERIPHERAL_IPS) $(RTL_IPS)
+all: $(PERIPHERAL_IPS)
 
-.PHONY: hostctrl loopback reduce_ops hp_compression dummy_tcp_stack client_arbiter vadd_put collector hw_bench
+.PHONY: hostctrl loopback reduce_ops hp_compression dummy_tcp_stack client_arbiter vadd_put
 
 $(PERIPHERAL_IPS):
 	$(MAKE) -C $@ DEVICE=$(FPGAPART) TARGET=$(TARGET)
-
-$(RTL_IPS):
-	$(MAKE) -C $@ all DEVICE=$(FPGAPART) TARGET=$(TARGET)

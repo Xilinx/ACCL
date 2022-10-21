@@ -909,14 +909,6 @@ private:
 
   CCLO *call_sync(CCLO::Options &options);
 
-  void init_connection(communicatorId comm_id = GLOBAL_COMM);
-
-  // void open_port(communicatorId comm_id = GLOBAL_COMM);
-
-  // void open_con(communicatorId comm_id = GLOBAL_COMM);
-
-  void close_con(communicatorId comm_id = GLOBAL_COMM);
-
   void use_udp(communicatorId comm_id = GLOBAL_COMM);
 
   void use_tcp(communicatorId comm_id = GLOBAL_COMM);
