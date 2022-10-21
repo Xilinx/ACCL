@@ -18,7 +18,7 @@
 #include "cclo_bfm.h"
 #include "zmq_client.h"
 #include <stdexcept>
-#include "constants.hpp"
+#include "accl/constants.hpp"
 #include <iostream>
 #include <mutex>
 
@@ -28,7 +28,7 @@ unsigned int call_ctr;
 CCLO_BFM::CCLO_BFM(unsigned int zmqport, unsigned int local_rank, unsigned int world_size,  const std::vector<unsigned int>& krnl_dest,
             hlslib::Stream<command_word> &callreq, hlslib::Stream<command_word> &callack,
             hlslib::Stream<stream_word> &data_cclo2krnl, hlslib::Stream<stream_word> &data_krnl2cclo,
-            int target_ctrl_stream) : 
+            int target_ctrl_stream) :
             callreq(callreq), callack(callack), data_cclo2krnl(data_cclo2krnl), data_krnl2cclo(data_krnl2cclo), target_ctrl_stream(target_ctrl_stream) {
     //create ZMQ context
     std::cout << "CCLO BFM connecting to ZMQ on starting port " + std::to_string(zmqport) + " for rank " + std::to_string(local_rank) << std::endl;
@@ -137,7 +137,7 @@ void CCLO_BFM::pop_data(){
         std::vector<uint8_t> vec;
         vec = zmq_client_strmread(&zmq_ctx, true);
         if(vec.size() == 0) continue;
-        unsigned int idx;
+        unsigned int idx = 0;
         do{
             for(unsigned int i=0; i<DATA_WIDTH/8 && idx<vec.size(); i++){
                 tmp.data((i+1)*8-1,i*8) = vec.at(idx++);

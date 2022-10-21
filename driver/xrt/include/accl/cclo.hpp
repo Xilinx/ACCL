@@ -58,6 +58,9 @@ public:
     BaseBuffer *addr_0;                 /**< ACCL buffer of operand 0. */
     BaseBuffer *addr_1;                 /**< ACCL buffer of operand 1. */
     BaseBuffer *addr_2;                 /**< ACCL buffer of result. */
+    dataType data_type_io_0;            /**< Data type of ACCL input or output from stream. */
+    dataType data_type_io_1;            /**< Data type of ACCL input or output from stream. */
+    dataType data_type_io_2;            /**< Data type of ACCL input or output from stream. */
     std::vector<CCLO *> waitfor;        /**< Wait for these operations to
                                              complete; currently unsupported. */
 
@@ -72,7 +75,9 @@ public:
           arithcfg_addr(0x0), compress_dtype(dataType::none),
           compression_flags(compressionFlags::NO_COMPRESSION),
           stream_flags(streamFlags::NO_STREAM), addr_0(nullptr),
-          addr_1(nullptr), addr_2(nullptr), waitfor({}) {}
+          addr_1(nullptr), addr_2(nullptr),
+          data_type_io_0(dataType::none), data_type_io_1(dataType::none),
+          data_type_io_2(dataType::none), waitfor({}) {}
   };
 
   /**

@@ -18,16 +18,16 @@
 
 #pragma once
 
-#include "arithconfig.hpp"
-#include "buffer.hpp"
-#include "cclo.hpp"
-#include "communicator.hpp"
-#include "constants.hpp"
-#include "fpgabuffer.hpp"
-#include "fpgabufferp2p.hpp"
-#include "fpgadevice.hpp"
-#include "simbuffer.hpp"
-#include "simdevice.hpp"
+#include "accl/arithconfig.hpp"
+#include "accl/buffer.hpp"
+#include "accl/cclo.hpp"
+#include "accl/communicator.hpp"
+#include "accl/constants.hpp"
+#include "accl/fpgabuffer.hpp"
+#include "accl/fpgabufferp2p.hpp"
+#include "accl/fpgadevice.hpp"
+#include "accl/simbuffer.hpp"
+#include "accl/simdevice.hpp"
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -156,12 +156,12 @@ public:
   /**
    * Performs the send operation on the FPGA.
    *
-   * @param comm_id        Index of communicator to use.
    * @param srcbuf         Buffer that contains the data to be send. Create a
    *                       buffer using ACCL::create_buffer.
    * @param count          Amount of elements in buffer to send.
    * @param dst            Destination rank to send data to.
    * @param tag            Tag of send operation.
+   * @param comm_id        Index of communicator to use.
    * @param from_fpga      Set to true if the data is already on the FPGA.
    * @param stream_flags   Stream flags to use.
    * @param compress_dtype Datatype to compress buffers to over ethernet.
@@ -174,19 +174,38 @@ public:
   CCLO *send(BaseBuffer &srcbuf, unsigned int count, unsigned int dst,
              unsigned int tag = TAG_ANY, communicatorId comm_id = GLOBAL_COMM,
              bool from_fpga = false,
-             streamFlags stream_flags = streamFlags::NO_STREAM,
+             dataType compress_dtype = dataType::none, bool run_async = false,
+             std::vector<CCLO *> waitfor = {});
+
+  /**
+   * Performs the send operation on the FPGA using the data stream of the CCLO as input.
+   *
+   * @param src_data_type  Data type of the input.
+   * @param count          Amount of elements in buffer to send.
+   * @param dst            Destination rank to send data to.
+   * @param tag            Tag of send operation.
+   * @param comm_id        Index of communicator to use.
+   * @param compress_dtype Datatype to compress buffers to over ethernet.
+   * @param run_async      Run the ACCL call asynchronously.
+   * @param waitfor        ACCL call will wait for these operations before it
+   *                       will start. Currently not implemented.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
+   */
+  CCLO *send(dataType src_data_type, unsigned int count, unsigned int dst,
+             unsigned int tag = TAG_ANY, communicatorId comm_id = GLOBAL_COMM,
              dataType compress_dtype = dataType::none, bool run_async = false,
              std::vector<CCLO *> waitfor = {});
 
   /**
    * Performs a one-sided put to a stream on a remote FPGA.
    *
-   * @param comm_id        Index of communicator to use.
    * @param srcbuf         Buffer that contains the data to be send. Create a
    *                       buffer using ACCL::create_buffer.
    * @param count          Amount of elements in buffer to send.
    * @param dst            Destination rank to send data to.
    * @param stream_id      ID of target stream on destination rank. IDs 0-8 are reserved, throws exception if set in this range.
+   * @param comm_id        Index of communicator to use.
    * @param from_fpga      Set to true if the data is already on the FPGA.
    * @param stream_flags   Stream flags to use. Note that only OP0_STREAM is relevant.
    * @param compress_dtype Datatype to compress buffers to over ethernet.
@@ -198,7 +217,26 @@ public:
    */
   CCLO *stream_put(BaseBuffer &srcbuf, unsigned int count,
                    unsigned int dst, unsigned int stream_id, communicatorId comm_id = GLOBAL_COMM,
-                   bool from_fpga = false, streamFlags stream_flags = streamFlags::NO_STREAM,
+                   bool from_fpga = false, dataType compress_dtype = dataType::none,
+                   bool run_async = false, std::vector<CCLO *> waitfor = {});
+
+    /**
+   * Performs a one-sided put to a stream on a remote FPGA using the data stream of the CCLO as input.
+   *
+   * @param src_data_type  Data type of the input.
+   * @param count          Amount of elements in buffer to send.
+   * @param dst            Destination rank to send data to.
+   * @param stream_id      ID of target stream on destination rank. IDs 0-8 are reserved, throws exception if set in this range.
+   * @param comm_id        Index of communicator to use.
+   * @param compress_dtype Datatype to compress buffers to over ethernet.
+   * @param run_async      Run the ACCL call asynchronously.
+   * @param waitfor        ACCL call will wait for these operations before it
+   *                       will start. Currently not implemented.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
+   */
+  CCLO *stream_put(dataType src_data_type, unsigned int count,
+                   unsigned int dst, unsigned int stream_id, communicatorId comm_id = GLOBAL_COMM,
                    dataType compress_dtype = dataType::none, bool run_async = false,
                    std::vector<CCLO *> waitfor = {});
 
@@ -213,7 +251,6 @@ public:
    * @param comm_id        Index of communicator to use.
    * @param to_fpga        Set to true if the data will be used on the FPGA
    *                       only.
-   * @param stream_flags   Stream flags to use.
    * @param compress_dtype Datatype to compress buffers to over ethernet.
    * @param run_async      Run the ACCL call asynchronously.
    * @param waitfor        ACCL call will wait for these operations before it
@@ -224,7 +261,27 @@ public:
   CCLO *recv(BaseBuffer &dstbuf, unsigned int count, unsigned int src,
              unsigned int tag = TAG_ANY, communicatorId comm_id = GLOBAL_COMM,
              bool to_fpga = false,
-             streamFlags stream_flags = streamFlags::NO_STREAM,
+             dataType compress_dtype = dataType::none, bool run_async = false,
+             std::vector<CCLO *> waitfor = {});
+
+    /**
+   * Performs the receive operation on the FPGA and directs the received data to
+   * the data stream of the CCLO.
+   *
+   * @param dst_data_type  Data Type of the received data.
+   * @param count          Amount of elements to receive.
+   * @param src            Source rank to receive data from.
+   * @param tag            Tag of receive operation.
+   * @param comm_id        Index of communicator to use.
+   * @param compress_dtype Datatype to compress buffers to over ethernet.
+   * @param run_async      Run the ACCL call asynchronously.
+   * @param waitfor        ACCL call will wait for these operations before it
+   *                       will start. Currently not implemented.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
+   */
+  CCLO *recv(dataType dst_data_type, unsigned int count, unsigned int src,
+             unsigned int tag = TAG_ANY, communicatorId comm_id = GLOBAL_COMM,
              dataType compress_dtype = dataType::none, bool run_async = false,
              std::vector<CCLO *> waitfor = {});
 
@@ -728,20 +785,21 @@ public:
    * Dump the content of the RX buffers to a string for the first nbufs buffers.
    *
    * @param nbufs        Amount of buffers to dump the content of.
+   * @param dump_data    Dump buffer contents along with metadata.
    * @return std::string Content of the RX buffers.
    */
-  std::string dump_rx_buffers(size_t nbufs);
+  std::string dump_rx_buffers(size_t nbufs, bool dump_data=true);
 
   /**
    * Dump the content of all RX buffers to a string.
    *
    * @return std::string Content of all RX buffers.
    */
-  std::string dump_rx_buffers() {
+  std::string dump_rx_buffers(bool dump_data=true) {
     if (cclo->read(rx_buffers_adr) != rx_buffer_spares.size()) {
       throw std::runtime_error("CCLO inconsistent");
     }
-    return dump_rx_buffers(rx_buffer_spares.size());
+    return dump_rx_buffers(rx_buffer_spares.size(), dump_data);
   }
 
   /**
@@ -855,6 +913,14 @@ private:
   CCLO *call_async(CCLO::Options &options);
 
   CCLO *call_sync(CCLO::Options &options);
+
+  void init_connection(communicatorId comm_id = GLOBAL_COMM);
+
+  void open_port(communicatorId comm_id = GLOBAL_COMM);
+
+  void open_con(communicatorId comm_id = GLOBAL_COMM);
+
+  void close_con(communicatorId comm_id = GLOBAL_COMM);
 
   void use_udp(communicatorId comm_id = GLOBAL_COMM);
 

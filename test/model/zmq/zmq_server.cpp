@@ -33,11 +33,11 @@ zmq_intf_context zmq_server_intf(unsigned int starting_port, unsigned int local_
     zmq_intf_context ctx;
 
     logger = &log;
-    ctx.cmd_socket = new zmqpp::socket(ctx.context, zmqpp::socket_type::reply);
-    ctx.eth_tx_socket = new zmqpp::socket(ctx.context, zmqpp::socket_type::pub);
-    ctx.eth_rx_socket = new zmqpp::socket(ctx.context, zmqpp::socket_type::sub);
-    ctx.krnl_tx_socket = new zmqpp::socket(ctx.context, zmqpp::socket_type::pub);
-    ctx.krnl_rx_socket = new zmqpp::socket(ctx.context, zmqpp::socket_type::sub);
+    ctx.cmd_socket = std::make_unique<zmqpp::socket>(ctx.context, zmqpp::socket_type::reply);
+    ctx.eth_tx_socket = std::make_unique<zmqpp::socket>(ctx.context, zmqpp::socket_type::pub);
+    ctx.eth_rx_socket = std::make_unique<zmqpp::socket>(ctx.context, zmqpp::socket_type::sub);
+    ctx.krnl_tx_socket = std::make_unique<zmqpp::socket>(ctx.context, zmqpp::socket_type::pub);
+    ctx.krnl_rx_socket = std::make_unique<zmqpp::socket>(ctx.context, zmqpp::socket_type::sub);
 
     const string endpoint_base = "tcp://127.0.0.1:";
 
@@ -654,7 +654,7 @@ void serve_zmq(zmq_intf_context *ctx,
                         resp = 0;
                     }
                     response["status"] = (resp & 0x2) ? 0 : 1;
-                    
+
                 } else {
                     //we handle this request checking the status stream
                     if(callack.IsEmpty()){

@@ -333,6 +333,51 @@ void test_sendrcv(ACCL::ACCL &accl, options_t &options) {
   }
 }
 
+void test_sendrcv_stream(ACCL::ACCL &accl, options_t &options) {
+  std::cout << "Start streaming send recv test..." << std::endl;
+  unsigned int count = options.count;
+  auto op_buf = accl.create_buffer<float>(count, dataType::float32);
+  auto res_buf = accl.create_buffer<float>(count, dataType::float32);
+  random_array(op_buf->buffer(), count);
+  int next_rank = (rank + 1) % size;
+  int prev_rank = (rank + size - 1) % size;
+
+  test_debug("Sending data on " + std::to_string(rank) + " to " +
+             std::to_string(next_rank) + "...", options);
+  accl.send(*op_buf, count, next_rank, 0);
+
+  test_debug("Receiving data on " + std::to_string(rank) + " from " +
+             std::to_string(prev_rank) + "...", options);
+  accl.recv(dataType::float32, count, prev_rank, 0, GLOBAL_COMM);
+
+  test_debug("Sending data on " + std::to_string(rank) + " to " +
+             std::to_string(prev_rank) + "...", options);
+  accl.send(dataType::float32, count, prev_rank, 1, GLOBAL_COMM);
+
+  test_debug("Receiving data on " + std::to_string(rank) + " from " +
+             std::to_string(next_rank) + "...", options);
+  accl.recv(*res_buf, count, next_rank, 1);
+
+  int errors = 0;
+  for (unsigned int i = 0; i < count; ++i) {
+    float res = (*res_buf)[i];
+    float ref = (*op_buf)[i];
+    if (res != ref) {
+      std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
+                       std::to_string(res) + " != " + std::to_string(ref) + ")"
+                << std::endl;
+      errors += 1;
+    }
+  }
+
+  if (errors > 0) {
+    std::cout << std::to_string(errors) + " errors!" << std::endl;
+    failed_tests++;
+  } else {
+    std::cout << "Test is successful!" << std::endl;
+  }
+}
+
 void test_stream_put(ACCL::ACCL &accl, options_t &options) {
   std::cout << "Start stream put test..." << std::endl;
   unsigned int count = options.count;
@@ -342,19 +387,16 @@ void test_stream_put(ACCL::ACCL &accl, options_t &options) {
   int next_rank = (rank + 1) % size;
   int prev_rank = (rank + size - 1) % size;
 
-  test_debug("Sending data on " + std::to_string(rank) + " to stream 0 " " on " +
-                 std::to_string(next_rank) + "...",
-             options);
+  test_debug("Sending data on " + std::to_string(rank) + " to stream 0 on " +
+             std::to_string(next_rank) + "...", options);
   accl.stream_put(*op_buf, count, next_rank, 9);
 
   test_debug("Sending data on " + std::to_string(rank) + " from stream to " +
-                 std::to_string(prev_rank) + "...",
-             options);
-  accl.send(*res_buf, count, prev_rank, 1, GLOBAL_COMM, false, streamFlags::OP0_STREAM);
+             std::to_string(prev_rank) + "...", options);
+  accl.send(dataType::float32, count, prev_rank, 1, GLOBAL_COMM);
 
   test_debug("Receiving data on " + std::to_string(rank) + " from " +
-                 std::to_string(next_rank) + "...",
-             options);
+             std::to_string(next_rank) + "...", options);
   accl.recv(*res_buf, count, next_rank, 1);
 
   int errors = 0;
@@ -392,13 +434,13 @@ void test_sendrcv_compressed(ACCL::ACCL &accl, options_t &options) {
                  std::to_string(next_rank) + "...",
              options);
   accl.send(*op_buf, count, next_rank, 0, GLOBAL_COMM, false,
-            streamFlags::NO_STREAM, dataType::float16);
+            dataType::float16);
 
   test_debug("Receiving data on " + std::to_string(rank) + " from " +
                  std::to_string(prev_rank) + "...",
              options);
   accl.recv(*res_buf, count, prev_rank, 0, GLOBAL_COMM, false,
-            streamFlags::NO_STREAM, dataType::float16);
+            dataType::float16);
 
   for (unsigned int i = 0; i < count; ++i) {
     float res = (*res_buf)[i];
@@ -415,13 +457,13 @@ void test_sendrcv_compressed(ACCL::ACCL &accl, options_t &options) {
                  std::to_string(prev_rank) + "...",
              options);
   accl.send(*op_buf, count, prev_rank, 1, GLOBAL_COMM, false,
-            streamFlags::NO_STREAM, dataType::float16);
+            dataType::float16);
 
   test_debug("Receiving data on " + std::to_string(rank) + " from " +
                  std::to_string(next_rank) + "...",
              options);
   accl.recv(*res_buf, count, next_rank, 1, GLOBAL_COMM, false,
-            streamFlags::NO_STREAM, dataType::float16);
+            dataType::float16);
 
   for (unsigned int i = 0; i < count; ++i) {
     float res = (*res_buf)[i];
@@ -1106,6 +1148,62 @@ void test_barrier(ACCL::ACCL &accl) {
   std::cout << "Test is successful!" << std::endl;
 }
 
+bool check_arp(Networklayer &network_layer, std::vector<rank_t> &ranks,
+               options_t &options) {
+  std::map<unsigned, bool> ranks_checked;
+  for (unsigned i = 0; i < static_cast<unsigned>(size); ++i) {
+    ranks_checked[i] = false;
+  }
+
+  bool sanity_check = true;
+  const std::map<int, std::pair<std::string, std::string>> arp =
+      network_layer.read_arp_table(size);
+
+  std::ostringstream ss_arp;
+  ss_arp << "ARP table:";
+
+  for (const std::pair<const int, std::pair<std::string, std::string>> &elem :
+       arp) {
+    const unsigned index = elem.first;
+    const std::pair<std::string, std::string> &entry = elem.second;
+    const std::string &mac = entry.first;
+    const std::string &ip = entry.second;
+    ss_arp << "\n(" << index << ") " << mac << ": " << ip;
+
+    for (unsigned i = 0; i < static_cast<unsigned>(size); ++i) {
+      if (ranks[i].ip == ip) {
+        if (ranks_checked[i]) {
+          std::cout << "Double entry for " << ip << " in arp table!"
+                    << std::endl;
+          sanity_check = false;
+        } else {
+          ranks_checked[i] = true;
+        }
+      }
+    }
+  }
+
+  test_debug(ss_arp.str(), options);
+
+  if (!sanity_check) {
+    return false;
+  }
+
+  unsigned hosts = 0;
+  for (unsigned i = 0; i < static_cast<unsigned>(size); ++i) {
+    if (ranks_checked[i]) {
+      hosts += 1;
+    }
+  }
+  if (hosts < static_cast<unsigned>(size) - 1) {
+    std::cout << "Found only " << hosts << " hosts out of " << size - 1 << "!"
+              << std::endl;
+    return false;
+  }
+
+  return true;
+}
+
 void configure_vnx(CMAC &cmac, Networklayer &network_layer,
                    std::vector<rank_t> &ranks, options_t &options) {
   if (ranks.size() > max_sockets_size) {
@@ -1138,6 +1236,8 @@ void configure_vnx(CMAC &cmac, Networklayer &network_layer,
     exit(1);
   }
 
+  MPI_Barrier(MPI_COMM_WORLD);
+
   std::cout << "Populating socket table..." << std::endl;
 
   network_layer.update_ip_address(ranks[rank].ip);
@@ -1154,14 +1254,23 @@ void configure_vnx(CMAC &cmac, Networklayer &network_layer,
 
   std::cout << "Starting ARP discovery..." << std::endl;
   std::this_thread::sleep_for(std::chrono::seconds(4));
+  MPI_Barrier(MPI_COMM_WORLD);
   network_layer.arp_discovery();
   std::cout << "Finishing ARP discovery..." << std::endl;
   std::this_thread::sleep_for(std::chrono::seconds(2));
+  MPI_Barrier(MPI_COMM_WORLD);
   network_layer.arp_discovery();
   std::cout << "ARP discovery finished!" << std::endl;
+
+  if (!check_arp(network_layer, ranks, options)) {
+    std::this_thread::sleep_for(std::chrono::seconds(3));
+    exit(1);
+  }
+
+  MPI_Barrier(MPI_COMM_WORLD);
 }
 
-void start_test(options_t options) {
+int start_test(options_t options) {
   std::vector<rank_t> ranks = {};
   failed_tests = 0;
   skipped_tests = 0;
@@ -1194,9 +1303,9 @@ void start_test(options_t options) {
     auto xclbin_uuid = device.load_xclbin(options.xclbin);
     auto cclo_ip = xrt::ip(device, xclbin_uuid,
                            "ccl_offload:{ccl_offload_" + cclo_id + "}");
-    auto hostctrl_ip =
-        xrt::kernel(device, xclbin_uuid, "hostctrl:{hostctrl_" + cclo_id + "_0}",
-                    xrt::kernel::cu_access_mode::exclusive);
+    auto hostctrl_ip = xrt::kernel(device, xclbin_uuid,
+                                   "hostctrl:{hostctrl_" + cclo_id + "_0}",
+                                   xrt::kernel::cu_access_mode::exclusive);
 
     int devicemem;
     std::vector<int> rxbufmem;
@@ -1221,7 +1330,9 @@ void start_test(options_t options) {
 
     accl = std::make_unique<ACCL::ACCL>(
         ranks, rank, device, cclo_ip, hostctrl_ip, devicemem, rxbufmem,
-        networkmem, options.udp ? networkProtocol::UDP : networkProtocol::TCP,
+        networkmem,
+        options.udp || options.axis3 ? networkProtocol::UDP
+                                     : networkProtocol::TCP,
         16, options.rxbuf_size);
   } else {
     accl = std::make_unique<ACCL::ACCL>(ranks, rank, options.start_port, device,
@@ -1253,6 +1364,8 @@ void start_test(options_t options) {
   test_combine_max(*accl, options);
   MPI_Barrier(MPI_COMM_WORLD);
   test_sendrcv(*accl, options);
+  MPI_Barrier(MPI_COMM_WORLD);
+  test_sendrcv_stream(*accl, options);
   if (options.test_xrt_simulator) {
     MPI_Barrier(MPI_COMM_WORLD);
     test_sendrcv_bo(*accl, device, options);
@@ -1310,9 +1423,7 @@ void start_test(options_t options) {
   }
   std::cout << "." << std::endl;
   MPI_Barrier(MPI_COMM_WORLD);
-  if (failed_tests > 1) {
-    MPI_Abort(MPI_COMM_WORLD, 1);
-  }
+  return failed_tests;
 }
 
 bool xrt_simulator_ready(const options_t &opts) {
@@ -1411,8 +1522,8 @@ int main(int argc, char *argv[]) {
          << std::endl;
   std::cout << stream.str();
 
-  start_test(options);
+  int errors = start_test(options);
 
   MPI_Finalize();
-  return 0;
+  return errors;
 }
