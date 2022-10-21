@@ -1312,6 +1312,8 @@ int start_test(options_t options) {
 
   xrt::device device;
 
+  networkProtocol protocol;
+
   if (options.hardware || options.test_xrt_simulator) {
     device = xrt::device(options.device_index);
   }
@@ -1343,6 +1345,9 @@ int start_test(options_t options) {
       networkmem = 2;
     }
 
+    protocol = options.udp || options.axis3 ? networkProtocol::UDP
+                                            : networkProtocol::TCP;
+
     if (options.udp) {
       auto cmac = CMAC(xrt::ip(device, xclbin_uuid, "cmac_0:{cmac_0}"));
       auto network_layer = Networklayer(
@@ -1363,16 +1368,14 @@ int start_test(options_t options) {
 
     accl = std::make_unique<ACCL::ACCL>(
         ranks, rank, device, cclo_ip, hostctrl_ip, devicemem, rxbufmem,
-        options.udp || options.axis3 ? networkProtocol::UDP
-                                     : networkProtocol::TCP,
-        16, options.rxbuf_size);
+        protocol, 16, options.rxbuf_size);
   } else {
+    protocol = options.udp ? networkProtocol::UDP : networkProtocol::TCP;
     accl = std::make_unique<ACCL::ACCL>(ranks, rank, options.start_port, device,
-                                        options.udp ? networkProtocol::UDP
-                                                    : networkProtocol::TCP,
+                                        protocol,
                                         16, options.rxbuf_size);
   }
-  if (!options.udp) {
+  if (protocol == networkProtocol::TCP) {
     MPI_Barrier(MPI_COMM_WORLD);
     accl->open_port();
     MPI_Barrier(MPI_COMM_WORLD);

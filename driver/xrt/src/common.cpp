@@ -86,11 +86,21 @@ std::string ip_decode(uint32_t ip) {
 
 #ifdef ACCL_DEBUG
 std::string get_rank() {
-  char *ompi_rank = std::getenv("OMPI_COMM_WORLD_RANK");
-  if (!ompi_rank) {
-    return "0";
+  char *rank = std::getenv("RANK");
+  if (!rank) {
+    char *ompi_rank = std::getenv("OMPI_COMM_WORLD_RANK");
+    if (!ompi_rank) {
+      char *mpich_rank = std::getenv("PMI_RANK");
+      if (!mpich_rank) {
+        return "0";
+      } else {
+        return mpich_rank;
+      }
+    } else {
+      return ompi_rank;
+    }
   } else {
-    return ompi_rank;
+    return rank;
   }
 }
 
