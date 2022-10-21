@@ -181,7 +181,7 @@ CCLO *ACCL::stream_put(BaseBuffer &srcbuf, unsigned int count,
                  bool from_fpga, dataType compress_dtype, bool run_async,
                  std::vector<CCLO *> waitfor) {
   CCLO::Options options{};
-  if (stream_id < 9) throw std::invalid_argument("Stream ID must be >= 9");
+  if (stream_id > 246) throw std::invalid_argument("Stream ID must < 247");
   if (from_fpga == false) {
     srcbuf.sync_to_device();
   }
@@ -190,7 +190,7 @@ CCLO *ACCL::stream_put(BaseBuffer &srcbuf, unsigned int count,
   options.addr_0 = &srcbuf;
   options.count = count;
   options.root_src_dst = dst;
-  options.tag = stream_id - 9;
+  options.tag = stream_id;
   options.stream_flags = streamFlags::RES_STREAM;
   options.compress_dtype = compress_dtype;
   options.waitfor = waitfor;
@@ -211,14 +211,14 @@ CCLO *ACCL::stream_put(dataType src_data_type, unsigned int count,
                  dataType compress_dtype, bool run_async,
                  std::vector<CCLO *> waitfor) {
   CCLO::Options options{};
-  if (stream_id < 9) throw std::invalid_argument("Stream ID must be >= 9");
+  if (stream_id > 246) throw std::invalid_argument("Stream ID must < 247");
 
   options.scenario = operation::send;
   options.comm = communicators[comm_id].communicators_addr();
   options.data_type_io_0 = src_data_type;
   options.count = count;
   options.root_src_dst = dst;
-  options.tag = stream_id - 9;
+  options.tag = stream_id;
   options.stream_flags = streamFlags::OP0_STREAM | streamFlags::RES_STREAM;
   options.compress_dtype = compress_dtype;
   options.waitfor = waitfor;
