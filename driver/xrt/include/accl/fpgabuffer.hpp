@@ -175,7 +175,7 @@ public:
   }
 
 private:
-  bool is_aligned;
+  bool is_aligned = true;
   bool own_unaligned{};
   xrt::bo _bo;
   dtype *aligned_buffer;
