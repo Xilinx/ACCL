@@ -119,6 +119,37 @@ void test_copy(ACCL::ACCL &accl, options_t &options) {
   }
 }
 
+void test_copy_stream(ACCL::ACCL &accl, options_t &options) {
+  std::cout << "Start copy stream test..." << std::endl;
+  unsigned int count = options.count;
+  auto op_buf = accl.create_buffer<float>(count, dataType::float32);
+  auto res_buf = accl.create_buffer<float>(count, dataType::float32);
+  random_array(op_buf->buffer(), count);
+
+  test_debug("Copy data from buffer to stream", options);
+  accl.copy_to_stream(*op_buf, count, false);
+  test_debug("Copy data from stream to buffer", options);
+  accl.copy_from_stream(*res_buf, count, false);
+  int errors = 0;
+  for (unsigned int i = 0; i < count; ++i) {
+    float ref = (*op_buf)[i];
+    float res = (*res_buf)[i];
+    if (res != ref) {
+      std::cout << i + 1
+                << "th item is incorrect! (" + std::to_string(res) +
+                       " != " + std::to_string(ref) + ")"
+                << std::endl;
+      errors += 1;
+    }
+  }
+
+  if (errors > 0) {
+    std::cout << errors << " errors!" << std::endl;
+  } else {
+    std::cout << "Test succesfull!" << std::endl;
+  }
+}
+
 void test_copy_p2p(ACCL::ACCL &accl, options_t &options) {
   std::cout << "Start copy p2p test..." << std::endl;
   unsigned int count = options.count;
@@ -1349,6 +1380,8 @@ int start_test(options_t options) {
   test_barrier(*accl);
   MPI_Barrier(MPI_COMM_WORLD);
   test_copy(*accl, options);
+  MPI_Barrier(MPI_COMM_WORLD);
+  test_copy_stream(*accl, options);
   MPI_Barrier(MPI_COMM_WORLD);
   test_copy_p2p(*accl, options);
   MPI_Barrier(MPI_COMM_WORLD);
