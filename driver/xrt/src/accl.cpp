@@ -296,8 +296,9 @@ CCLO *ACCL::recv(dataType dst_data_type, unsigned int count,
   return nullptr;
 }
 
-CCLO *ACCL::copy(BaseBuffer &srcbuf, BaseBuffer &dstbuf, unsigned int count,
-                 bool from_fpga, bool to_fpga, bool run_async,
+CCLO *ACCL::copy(BaseBuffer *srcbuf, BaseBuffer *dstbuf, unsigned int count,
+                 bool from_fpga, bool to_fpga, streamFlags stream_flags,
+                 dataType data_type, bool run_async,
                  std::vector<CCLO *> waitfor) {
   CCLO::Options options{};
 
@@ -308,13 +309,16 @@ CCLO *ACCL::copy(BaseBuffer &srcbuf, BaseBuffer &dstbuf, unsigned int count,
   }
 
   if (from_fpga == false) {
-    srcbuf.sync_to_device();
+    srcbuf->sync_to_device();
   }
 
   options.scenario = operation::copy;
-  options.addr_0 = &srcbuf;
-  options.addr_2 = &dstbuf;
+  options.addr_0 = srcbuf;
+  options.addr_2 = dstbuf;
+  options.data_type_io_0 = data_type;
+  options.data_type_io_2 = data_type;
   options.count = count;
+  options.stream_flags = stream_flags;
   options.waitfor = waitfor;
   CCLO *handle = call_async(options);
 
@@ -323,12 +327,43 @@ CCLO *ACCL::copy(BaseBuffer &srcbuf, BaseBuffer &dstbuf, unsigned int count,
   } else {
     handle->wait();
     if (to_fpga == false) {
-      dstbuf.sync_from_device();
+      dstbuf->sync_from_device();
     }
     check_return_value("copy");
   }
 
   return nullptr;
+}
+
+CCLO *ACCL::copy(BaseBuffer &srcbuf, BaseBuffer &dstbuf, unsigned int count,
+                 bool from_fpga, bool to_fpga, bool run_async,
+                 std::vector<CCLO *> waitfor) {
+  return copy(&srcbuf, &dstbuf, count,
+                 from_fpga, to_fpga, streamFlags::NO_STREAM,
+                 dataType::none, run_async, waitfor);
+}
+
+CCLO *ACCL::copy_from_stream(BaseBuffer &dstbuf, unsigned int count,
+                 bool to_fpga, bool run_async,
+                 std::vector<CCLO *> waitfor) {
+  return copy(nullptr, &dstbuf, count,
+                 true, to_fpga, streamFlags::OP0_STREAM,
+                 dstbuf.type(), run_async, waitfor);
+}
+
+CCLO *ACCL::copy_to_stream(BaseBuffer &srcbuf, unsigned int count,
+                 bool from_fpga, bool run_async,
+                 std::vector<CCLO *> waitfor) {
+  return copy(&srcbuf, nullptr, count,
+                 from_fpga, true, streamFlags::RES_STREAM,
+                 srcbuf.type(), run_async, waitfor);
+}
+
+CCLO *ACCL::copy_from_to_stream(dataType data_type, unsigned int count,
+                 bool run_async, std::vector<CCLO *> waitfor) {
+  return copy(nullptr, nullptr, count,
+                 true, true, streamFlags::OP0_STREAM | streamFlags::RES_STREAM,
+                 data_type, run_async, waitfor);
 }
 
 CCLO *ACCL::combine(unsigned int count, reduceFunction function,

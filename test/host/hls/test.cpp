@@ -183,7 +183,6 @@ void test_loopback_local_res(ACCL::ACCL& accl, options_t options) {
     cclo.stop();
 }
 
-
 void test_loopback(ACCL::ACCL& accl, options_t options, unsigned char stream_id) {
 
     //run test here:
@@ -299,7 +298,6 @@ int main(int argc, char *argv[]) {
 
     auto accl = test_vadd_put(options);
     MPI_Barrier(MPI_COMM_WORLD);
-
     if(!options.hardware){
         std::srand(42);
         for(int i=0; i<options.nruns; i++){
