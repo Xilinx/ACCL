@@ -81,7 +81,7 @@ struct eth_header{
 typedef struct{
 	ap_uint<2>  type; //0 = Start of Message (SOM); 1 = Start of Fragment (SOF); 2 = End of Fragment (EOF); 3 = Reserved
 	ap_uint<16> session_id; //all types set session ID
-	ap_uint<16> length; //applicable to SOM and EOF; SOF does not set length
+	ap_uint<23> length; //applicable to SOM and EOF; SOF does not set length
 } eth_notification;
 
 void udp_packetizer(
@@ -104,7 +104,8 @@ void tcp_packetizer(
 void udp_depacketizer(
 	STREAM<stream_word > & in,
 	STREAM<stream_word > & out,
-	STREAM<eth_header> & sts
+	STREAM<eth_header> & sts,
+	STREAM<eth_notification> &notif_out
 );
 
 void tcp_depacketizer(

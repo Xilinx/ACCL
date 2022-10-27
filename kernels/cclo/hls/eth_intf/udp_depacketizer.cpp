@@ -23,18 +23,18 @@ using namespace std;
 // This block parses input data and splits it into messages and fragments, signalling up to the RX offload
 //
 // Definitions:
-// Message - a contiguously-sent sequence of data on a connection, prepended by a header as defined in eth_intf.h
-// Fragment - a contiguously-received sequence of data on a connection
+// Message - a contiguously-sent sequence of data on a connection, starting with a header as defined in eth_intf.h
+// Fragment - a contiguously-received part of a message on a connection
 //
-// A message is always sent in one chunk but at the receiver it may interleave with another message
+// Even if a message is sent in one chunk, at the receiver it may interleave with another message
 // on a different connection. In this case, the receiver will see data from each incoming message 
 // in interleaved fragments. The first fragment of each message carries the message's header.
 //
 // The ingress pipeline signals the connection ID in side-band AXI Stream signal TDEST
 // Each fragment signals its own end with AXI Stream TLAST
 //
-// Each message is 1 or more fragments at the receiver. Fragments are received as an integer number
-// of AXI Stream transactions. 
+// Each message is 1 or more fragments at the receiver. 
+// Fragments are received as an integer number of AXI Stream transactions. 
 // This means any one AXI Stream word can only have data from one message, not more.
 // The sender can ensure this by padding messages to a multiple of the AXI Stream width
 //
@@ -46,6 +46,11 @@ using namespace std;
 // - signal start of fragment (SOF) notification to RXBO
 // - forward message data to the RX DMA and keep track of how much data was forwarded
 // - on TLAST or end of message (calculated from message size), signal end of fragment (EOF) notification to RXBO
+// - on reaching a predefined number of bytes in the fragment, signal EOF to RXBO and begin a new fragment for the same connection
+// 
+// The depacketizer therefore issues a stream of fragment SOF and EOF, with occasional headers, to the RXBO,
+// ensuring that fragments remain within a user-defined size limit that may be e.g. the maximum number 
+// of bytes in a single DMA command.
 
 //how this works:
 //the UDP/ROCE POE pushes B bytes into the input stream for session S
@@ -55,21 +60,23 @@ using namespace std;
 //if remaining[S] == 0
 //    it means we're getting the start of a new message, so
 //        get the header from the input data stream, indicating how many bytes M are in the message, and destination stream strm
+//        remaining[S] = M
+//        store strm
 //        check strm in header; if strm is zero:
-//            put a notification in the notif_out stream; the notification signals session S and length M
+//            issue a SOM for session S and message length M
 //            copy the header to sts
-//        copy from in to out, with dest = strm, decrementing M along the way, until TLAST or M reaches zero; we keep track how much bytes we've copied (B)
+//        copy from in to out, with dest = strm, decrementing remaining[S] along the way, until TLAST or remaining[S] reaches zero; we keep track how much bytes we've copied (B)
 //        if strm is zero:
 //            put a notification in the notif_out stream; the notification signals S and remaining[S]
 //else
 //    it means we're continuing a previous message on this session, so
 //    write the input word to output (it's not a header in this case)
+//    get stored strm
 //    if strm is zero:
 //        put a notification in the notif_out stream; the notification signals session S and length remaining[S]
 //    copy from in to out, with dest = strm, decrementing remaining[S] along the way, until TLAST or remaining[S] reaches 0; we keep track how much bytes we've copied (B)
 //    if strm is zero:
 //        put a notification in the notif_out stream; the notification signals S and remaining[S]
-//remaining[S] = {M, strm}
 
 void udp_depacketizer(
     STREAM<stream_word > & in,
@@ -85,15 +92,18 @@ void udp_depacketizer(
 #pragma HLS PIPELINE II=1 style=flp
 
 	unsigned const bytes_per_word = DATA_WIDTH/8;
+	unsigned const max_dma_bytes = 8*1024*1024-1;//TODO: convert to argument?
+
+	//session states (for each session, remaining bytes and STRM values for ongoing messages)
 	static unsigned int remaining[1024] = {0};//one RAMB36 for max 1024 sessions
 	static ap_uint<DEST_WIDTH> target_strm[1024] = {0};//one RAMB18 for max 1024 sessions
 
-	static eth_notification notif;
-	static bool continue_notif = false;
+	eth_notification notif;
 
 	static unsigned int message_rem = 0;
-	static ap_uint<DEST_WIDTH> strm = 0;
+	static ap_uint<DEST_WIDTH> message_strm = 0;
 	static unsigned int prev_session_id = 0;
+	unsigned int current_bytes = 0;
 
 	stream_word inword;
 	eth_header hdr;
@@ -101,16 +111,15 @@ void udp_depacketizer(
 	if(STREAM_IS_EMPTY(in)) return;
 	inword = STREAM_READ(in);
 	notif.session_id = inword.dest;
-	notif.length = 0xffff;
 
 #ifndef ACCL_SYNTHESIS
 	std::stringstream ss;
 	ss << "UDP Depacketizer: Processing incoming fragment\n";
 	std::cout << ss.str();
+	ss.str(std::string());
 #endif
 
 	//get remaining message bytes, from local storage
-	//TODO: cache latest accessed value
 	if(prev_session_id != notif.session_id){
 		message_rem = remaining[notif.session_id];
 	}
@@ -119,41 +128,44 @@ void udp_depacketizer(
 		//get header and some important info from it
 		hdr = eth_header(inword.data(HEADER_LENGTH-1,0));
 		message_rem = hdr.count;//length of upcoming message (excluding the header itself)
-		strm = hdr.strm;//target of message (0 is targeting memory so managed, everything else is  stream so unmanaged)
-		if(strm == 0){
-			//put notification, header in output streams
-			STREAM_WRITE(sts, hdr);
-		}
+		message_strm = hdr.strm;//target of message (0 is targeting memory so managed, everything else is  stream so unmanaged)
 		//decrement the length to reflect the fact that we have removed the 64B header
 		//Note: the rxHandler must make sure to not give us fragments less than 64B
-		notif.length -= bytes_per_word;
-		target_strm[notif.session_id] = strm;
+		notif.length = message_rem;
+		notif.type = 0; //for SOM
+		target_strm[notif.session_id] = message_strm;
+		if(message_strm == 0){
+			//put SOM notification and header in output streams
+			STREAM_WRITE(sts, hdr);
+			STREAM_WRITE(notif_out, notif);
+		}
 	} else{//if remaining bytes is not zero, then this is a continuation of an old message
-		strm = target_strm[notif.session_id];
+		message_strm = target_strm[notif.session_id];
 		STREAM_WRITE(out, inword);
 	}
-	//write out notification
-	//in case the fragment spans the end of the current message and beginning of another,
-	//only notify for the part up to the end of the current message
-	if(strm == 0){
-		eth_notification downstream_notif;
-		downstream_notif.session_id = notif.session_id;
-		downstream_notif.length = (message_rem < notif.length) ? message_rem : (unsigned int)notif.length;
-		STREAM_WRITE(notif_out, downstream_notif);
+	//write out SOF
+	if(message_strm == 0){
+		notif.length = max_dma_bytes;
+		notif.type = 1; //for SOF
+		STREAM_WRITE(notif_out, notif);
 	}
 	//copy data in -> out
 	do{
 		#pragma HLS PIPELINE II=1
 		inword = STREAM_READ(in);
-		inword.dest = strm;
+		inword.dest = message_strm;
 		STREAM_WRITE(out, inword);
-		notif.length = (notif.length < bytes_per_word) ? 0u : (unsigned int)notif.length-bytes_per_word;//floor at zero
+		current_bytes += (message_rem < bytes_per_word) ? message_rem : bytes_per_word;
 		message_rem = (message_rem < bytes_per_word) ? 0u : message_rem-bytes_per_word;//slight problem here if the message doesnt end on a 64B boundary...
-	} while(inword.last != 0 && message_rem > 0);
+	} while(inword.last != 0 && message_rem > 0 && current_bytes < (max_dma_bytes-bytes_per_word));
+	//write out EOF
+	if(message_strm == 0){
+		notif.length = current_bytes;
+		notif.type = 2; //for EOF
+		STREAM_WRITE(notif_out, notif);
+	}
 	//update session info (remaining bytes and target of currently processing message)
 	remaining[notif.session_id] = message_rem;
-	//if we're not finished with this fragment, skip notification read on the next run
-	continue_notif = (notif.length > 0);
 	//update session id for caching
 	prev_session_id = notif.session_id;
 }
