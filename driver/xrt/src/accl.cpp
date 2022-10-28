@@ -93,7 +93,7 @@ CCLO *ACCL::set_timeout(unsigned int value, bool run_async,
   options.scenario = operation::config;
   options.count = value;
   options.cfg_function = cfgFunc::set_timeout;
-  CCLO *handle = call_async(options);
+  CCLO *handle = call_async(options, false);
 
   if (run_async) {
     return handle;
@@ -106,8 +106,6 @@ CCLO *ACCL::set_timeout(unsigned int value, bool run_async,
 }
 
 CCLO *ACCL::nop(bool run_async, std::vector<CCLO *> waitfor) {
-  check_tcp_ready();
-
   CCLO::Options options{};
   options.scenario = operation::nop;
   options.waitfor = waitfor;
@@ -126,8 +124,6 @@ CCLO *ACCL::send(BaseBuffer &srcbuf, unsigned int count,
                  unsigned int dst, unsigned int tag, communicatorId comm_id,
                  bool from_fpga, dataType compress_dtype, bool run_async,
                  std::vector<CCLO *> waitfor) {
-  check_tcp_ready();
-
   CCLO::Options options{};
   if (from_fpga == false) {
     srcbuf.sync_to_device();
@@ -156,8 +152,6 @@ CCLO *ACCL::send(dataType src_data_type, unsigned int count,
                  unsigned int dst, unsigned int tag, communicatorId comm_id,
                  dataType compress_dtype, bool run_async,
                  std::vector<CCLO *> waitfor) {
-  check_tcp_ready();
-
   CCLO::Options options{};
 
   options.scenario = operation::send;
@@ -185,8 +179,6 @@ CCLO *ACCL::stream_put(BaseBuffer &srcbuf, unsigned int count,
                  unsigned int dst, unsigned int stream_id, communicatorId comm_id,
                  bool from_fpga, dataType compress_dtype, bool run_async,
                  std::vector<CCLO *> waitfor) {
-  check_tcp_ready();
-
   CCLO::Options options{};
   if (stream_id > 246) throw std::invalid_argument("Stream ID must < 247");
   if (from_fpga == false) {
@@ -217,8 +209,6 @@ CCLO *ACCL::stream_put(dataType src_data_type, unsigned int count,
                  unsigned int dst, unsigned int stream_id, communicatorId comm_id,
                  dataType compress_dtype, bool run_async,
                  std::vector<CCLO *> waitfor) {
-  check_tcp_ready();
-
   CCLO::Options options{};
   if (stream_id > 246) throw std::invalid_argument("Stream ID must < 247");
 
@@ -247,8 +237,6 @@ CCLO *ACCL::recv(BaseBuffer &dstbuf, unsigned int count,
                  unsigned int src, unsigned int tag, communicatorId comm_id,
                  bool to_fpga, dataType compress_dtype, bool run_async,
                  std::vector<CCLO *> waitfor) {
-  check_tcp_ready();
-
   CCLO::Options options{};
 
   if (to_fpga == false && run_async == true) {
@@ -284,8 +272,6 @@ CCLO *ACCL::recv(dataType dst_data_type, unsigned int count,
                  unsigned int src, unsigned int tag, communicatorId comm_id,
                  dataType compress_dtype, bool run_async,
                  std::vector<CCLO *> waitfor) {
-  check_tcp_ready();
-
   CCLO::Options options{};
 
   options.scenario = operation::recv;
@@ -313,8 +299,6 @@ CCLO *ACCL::copy(BaseBuffer *srcbuf, BaseBuffer *dstbuf, unsigned int count,
                  bool from_fpga, bool to_fpga, streamFlags stream_flags,
                  dataType data_type, bool run_async,
                  std::vector<CCLO *> waitfor) {
-  check_tcp_ready();
-
   CCLO::Options options{};
 
   if (to_fpga == false && run_async == true) {
@@ -385,8 +369,6 @@ CCLO *ACCL::combine(unsigned int count, reduceFunction function,
                     BaseBuffer &val1, BaseBuffer &val2, BaseBuffer &result,
                     bool val1_from_fpga, bool val2_from_fpga, bool to_fpga,
                     bool run_async, std::vector<CCLO *> waitfor) {
-  check_tcp_ready();
-
   CCLO::Options options{};
 
   if (to_fpga == false && run_async == true) {
@@ -429,8 +411,6 @@ CCLO *ACCL::bcast(BaseBuffer &buf, unsigned int count,
                   unsigned int root, communicatorId comm_id, bool from_fpga,
                   bool to_fpga, dataType compress_dtype, bool run_async,
                   std::vector<CCLO *> waitfor) {
-  check_tcp_ready();
-
   CCLO::Options options{};
 
   const Communicator &communicator = communicators[comm_id];
@@ -479,8 +459,6 @@ CCLO *ACCL::scatter(BaseBuffer &sendbuf,
                     communicatorId comm_id, bool from_fpga, bool to_fpga,
                     dataType compress_dtype, bool run_async,
                     std::vector<CCLO *> waitfor) {
-  check_tcp_ready();
-
   CCLO::Options options{};
 
   const Communicator &communicator = communicators[comm_id];
@@ -531,8 +509,6 @@ CCLO *ACCL::gather(BaseBuffer &sendbuf,
                    communicatorId comm_id, bool from_fpga, bool to_fpga,
                    dataType compress_dtype, bool run_async,
                    std::vector<CCLO *> waitfor) {
-  check_tcp_ready();
-
   CCLO::Options options{};
 
   const Communicator &communicator = communicators[comm_id];
@@ -593,8 +569,6 @@ CCLO *ACCL::allgather(BaseBuffer &sendbuf,
                       communicatorId comm_id, bool from_fpga, bool to_fpga,
                       dataType compress_dtype, bool run_async,
                       std::vector<CCLO *> waitfor) {
-  check_tcp_ready();
-
   CCLO::Options options{};
 
   const Communicator &communicator = communicators[comm_id];
@@ -652,8 +626,6 @@ CCLO *ACCL::reduce(BaseBuffer &sendbuf,
                    reduceFunction func, communicatorId comm_id, bool from_fpga,
                    bool to_fpga, dataType compress_dtype, bool run_async,
                    std::vector<CCLO *> waitfor) {
-  check_tcp_ready();
-
   CCLO::Options options{};
 
   const Communicator &communicator = communicators[comm_id];
@@ -706,8 +678,6 @@ CCLO *ACCL::allreduce(BaseBuffer &sendbuf,
                       reduceFunction func, communicatorId comm_id,
                       bool from_fpga, bool to_fpga, dataType compress_dtype,
                       bool run_async, std::vector<CCLO *> waitfor) {
-  check_tcp_ready();
-
   CCLO::Options options{};
 
   const Communicator &communicator = communicators[comm_id];
@@ -758,8 +728,6 @@ CCLO *ACCL::reduce_scatter(BaseBuffer &sendbuf,
                            bool from_fpga, bool to_fpga,
                            dataType compress_dtype, bool run_async,
                            std::vector<CCLO *> waitfor) {
-  check_tcp_ready();
-
   CCLO::Options options{};
 
   const Communicator &communicator = communicators[comm_id];
@@ -806,8 +774,6 @@ CCLO *ACCL::reduce_scatter(BaseBuffer &sendbuf,
 
 void ACCL::barrier(communicatorId comm_id,
                     std::vector<CCLO *> waitfor) {
-  check_tcp_ready();
-
   CCLO::Options options{};
 
   const Communicator &communicator = communicators[comm_id];
@@ -1067,8 +1033,18 @@ void ACCL::check_return_value(const std::string function_name) {
   }
 }
 
-void ACCL::prepare_call(CCLO::Options &options) {
+void ACCL::prepare_call(CCLO::Options &options, bool check_tcp) {
   const ArithConfig *arithcfg;
+
+  if (check_tcp && protocol == networkProtocol::TCP) {
+    if (!port_open) {
+      throw std::runtime_error("ACCL not ready yet; port still closed!");
+    }
+
+    if (!con_open) {
+      throw std::runtime_error("ACCL not ready yet; connection still closed!");
+    }
+  }
 
   std::set<dataType> dtypes;
 
@@ -1184,22 +1160,22 @@ void ACCL::prepare_call(CCLO::Options &options) {
   options.arithcfg_addr = arithcfg->addr();
 }
 
-CCLO *ACCL::call_async(CCLO::Options &options) {
+CCLO *ACCL::call_async(CCLO::Options &options, bool check_tcp) {
   if (!config_rdy) {
     throw std::runtime_error("CCLO not configured, cannot call");
   }
 
-  prepare_call(options);
+  prepare_call(options, check_tcp);
   cclo->start(options);
   return cclo;
 }
 
-CCLO *ACCL::call_sync(CCLO::Options &options) {
+CCLO *ACCL::call_sync(CCLO::Options &options, bool check_tcp) {
   if (!config_rdy) {
     throw std::runtime_error("CCLO not configured, cannot call");
   }
 
-  prepare_call(options);
+  prepare_call(options, check_tcp);
   cclo->call(options);
   return cclo;
 }
@@ -1317,20 +1293,6 @@ std::string ACCL::dump_communicator() {
 
 addr_t ACCL::get_communicator_addr(communicatorId comm_id){
   return communicators[comm_id].communicators_addr();
-}
-
-void ACCL::check_tcp_ready() {
-  if (protocol != networkProtocol::TCP) {
-    return;
-  }
-
-  if (!port_open) {
-    throw std::runtime_error("ACCL not ready yet; port still closed!");
-  }
-
-  if (!con_open) {
-    throw std::runtime_error("ACCL not ready yet; connection still closed!");
-  }
 }
 
 } // namespace ACCL

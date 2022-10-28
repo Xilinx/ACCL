@@ -29,7 +29,7 @@ FREQUENCY = 250
 CCLO_XO = ../../kernels/cclo/ccl_offload.xo
 CCLO_MB_DEBUG_LEVEL ?= 0
 
-VNX = xup_vitis_network_example
+VNX=xup_vitis_network_example
 NETLAYERDIR = $(VNX)/NetLayers
 CMACDIR     = $(VNX)/Ethernet
 NETLAYERHLS = $(NETLAYERDIR)/100G-fpga-network-stack-core
@@ -142,8 +142,8 @@ all: $(XCLBIN)
 .PHONY: vnx
 vnx: $(CMAC_UDP_XO) $(UDP_XO)
 
-$(CMAC_UDP_XO) &:
-	git submodule update --init --recursive xup_vitis_network_example
+$(CMAC_UDP_XO) &:	
+	git submodule update --init --recursive xup_vitis_network_example	
 	$(MAKE) -C xup_vitis_network_example/Ethernet DEVICE=$(PLATFORM) INTERFACE=$(ETH_IF) all
 
 $(UDP_XO):
@@ -168,7 +168,7 @@ $(TCP_XO): tcp_stack_ips
 tcp_stack_ips:
 	git submodule update --init --recursive Vitis_with_100Gbps_TCP-IP
 	mkdir -p Vitis_with_100Gbps_TCP-IP/build
-	cmake -S Vitis_with_100Gbps_TCP-IP/ -BVitis_with_100Gbps_TCP-IP/build/ -DFDEV_NAME=$(BOARD) -DVIVADO_HLS_ROOT_DIR=$(TCP_HLS_ROOTDIR) -DVIVADO_ROOT_DIR=$(TCP_VIVADO_ROOTDIR) -DTCP_STACK_EN=1 -DTCP_STACK_RX_DDR_BYPASS_EN=1 -DTCP_STACK_WINDOW_SCALING=0
+	cmake -S Vitis_with_100Gbps_TCP-IP/ -BVitis_with_100Gbps_TCP-IP/build/ -DFDEV_NAME=$(BOARD) -DVIVADO_HLS_ROOT_DIR=$(TCP_HLS_ROOTDIR) -DVIVADO_ROOT_DIR=$(TCP_VIVADO_ROOTDIR) -DTCP_STACK_EN=1 -DTCP_STACK_RX_DDR_BYPASS_EN=1 -DTCP_STACK_WINDOW_SCALING=0 
 	$(MAKE) -C Vitis_with_100Gbps_TCP-IP/build installip
 
 $(XCLBIN): $(NET_XO) $(CONFIGFILE)

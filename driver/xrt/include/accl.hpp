@@ -953,15 +953,13 @@ private:
     return setup_rx_buffers(nbufs, bufsize, mems);
   }
 
-  void check_tcp_ready();
-
   void check_return_value(const std::string function_name);
 
-  void prepare_call(CCLO::Options &options);
+  void prepare_call(CCLO::Options &options, bool check_tcp);
 
-  CCLO *call_async(CCLO::Options &options);
+  CCLO *call_async(CCLO::Options &options, bool check_tcp = true);
 
-  CCLO *call_sync(CCLO::Options &options);
+  CCLO *call_sync(CCLO::Options &options, bool check_tcp = true);
 
   void use_udp(communicatorId comm_id = GLOBAL_COMM);
 
