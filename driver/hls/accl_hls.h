@@ -265,7 +265,7 @@ class ACCLCommand{
          * @brief One-sided data transfer to a stream on a remote peer. 
          * 
          * @param len Number of array elements
-         * @param stream_id Stream ID at destination. IDs 0-8 are reserved, call will not execute if set in this range
+         * @param stream_id Stream ID at destination. IDs >=247 are reserved, call will not execute if set in this range
          * @param dst_rank Rank ID of destination
          * @param src_addr Source array address
          */
@@ -274,9 +274,9 @@ class ACCLCommand{
                         ap_uint<32> dst_rank,
                         ap_uint<64> src_addr
         ){
-            if(stream_id < 9) return;
+            if(stream_id > 246) return;
             start_call(
-                ACCL_SEND, len, comm_adr, dst_rank, 0, stream_id-9, 
+                ACCL_SEND, len, comm_adr, dst_rank, 0, stream_id, 
                 dpcfg_adr, cflags, sflags | 0x2, 
                 src_addr, 0, 0
             );

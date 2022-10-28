@@ -189,7 +189,7 @@ CCLO *ACCL::stream_put(BaseBuffer &srcbuf, unsigned int count,
   check_tcp_ready();
 
   CCLO::Options options{};
-  if (stream_id < 9) throw std::invalid_argument("Stream ID must be >= 9");
+  if (stream_id > 246) throw std::invalid_argument("Stream ID must < 247");
   if (from_fpga == false) {
     srcbuf.sync_to_device();
   }
@@ -198,7 +198,7 @@ CCLO *ACCL::stream_put(BaseBuffer &srcbuf, unsigned int count,
   options.addr_0 = &srcbuf;
   options.count = count;
   options.root_src_dst = dst;
-  options.tag = stream_id - 9;
+  options.tag = stream_id;
   options.stream_flags = streamFlags::RES_STREAM;
   options.compress_dtype = compress_dtype;
   options.waitfor = waitfor;
@@ -221,14 +221,14 @@ CCLO *ACCL::stream_put(dataType src_data_type, unsigned int count,
   check_tcp_ready();
 
   CCLO::Options options{};
-  if (stream_id < 9) throw std::invalid_argument("Stream ID must be >= 9");
+  if (stream_id > 246) throw std::invalid_argument("Stream ID must < 247");
 
   options.scenario = operation::send;
   options.comm = communicators[comm_id].communicators_addr();
   options.data_type_io_0 = src_data_type;
   options.count = count;
   options.root_src_dst = dst;
-  options.tag = stream_id - 9;
+  options.tag = stream_id;
   options.stream_flags = streamFlags::OP0_STREAM | streamFlags::RES_STREAM;
   options.compress_dtype = compress_dtype;
   options.waitfor = waitfor;
@@ -310,8 +310,9 @@ CCLO *ACCL::recv(dataType dst_data_type, unsigned int count,
   return nullptr;
 }
 
-CCLO *ACCL::copy(BaseBuffer &srcbuf, BaseBuffer &dstbuf, unsigned int count,
-                 bool from_fpga, bool to_fpga, bool run_async,
+CCLO *ACCL::copy(BaseBuffer *srcbuf, BaseBuffer *dstbuf, unsigned int count,
+                 bool from_fpga, bool to_fpga, streamFlags stream_flags,
+                 dataType data_type, bool run_async,
                  std::vector<CCLO *> waitfor) {
   check_tcp_ready();
 
@@ -324,13 +325,16 @@ CCLO *ACCL::copy(BaseBuffer &srcbuf, BaseBuffer &dstbuf, unsigned int count,
   }
 
   if (from_fpga == false) {
-    srcbuf.sync_to_device();
+    srcbuf->sync_to_device();
   }
 
   options.scenario = operation::copy;
-  options.addr_0 = &srcbuf;
-  options.addr_2 = &dstbuf;
+  options.addr_0 = srcbuf;
+  options.addr_2 = dstbuf;
+  options.data_type_io_0 = data_type;
+  options.data_type_io_2 = data_type;
   options.count = count;
+  options.stream_flags = stream_flags;
   options.waitfor = waitfor;
   CCLO *handle = call_async(options);
 
@@ -339,12 +343,43 @@ CCLO *ACCL::copy(BaseBuffer &srcbuf, BaseBuffer &dstbuf, unsigned int count,
   } else {
     handle->wait();
     if (to_fpga == false) {
-      dstbuf.sync_from_device();
+      dstbuf->sync_from_device();
     }
     check_return_value("copy");
   }
 
   return nullptr;
+}
+
+CCLO *ACCL::copy(BaseBuffer &srcbuf, BaseBuffer &dstbuf, unsigned int count,
+                 bool from_fpga, bool to_fpga, bool run_async,
+                 std::vector<CCLO *> waitfor) {
+  return copy(&srcbuf, &dstbuf, count,
+                 from_fpga, to_fpga, streamFlags::NO_STREAM,
+                 dataType::none, run_async, waitfor);
+}
+
+CCLO *ACCL::copy_from_stream(BaseBuffer &dstbuf, unsigned int count,
+                 bool to_fpga, bool run_async,
+                 std::vector<CCLO *> waitfor) {
+  return copy(nullptr, &dstbuf, count,
+                 true, to_fpga, streamFlags::OP0_STREAM,
+                 dstbuf.type(), run_async, waitfor);
+}
+
+CCLO *ACCL::copy_to_stream(BaseBuffer &srcbuf, unsigned int count,
+                 bool from_fpga, bool run_async,
+                 std::vector<CCLO *> waitfor) {
+  return copy(&srcbuf, nullptr, count,
+                 from_fpga, true, streamFlags::RES_STREAM,
+                 srcbuf.type(), run_async, waitfor);
+}
+
+CCLO *ACCL::copy_from_to_stream(dataType data_type, unsigned int count,
+                 bool run_async, std::vector<CCLO *> waitfor) {
+  return copy(nullptr, nullptr, count,
+                 true, true, streamFlags::OP0_STREAM | streamFlags::RES_STREAM,
+                 data_type, run_async, waitfor);
 }
 
 CCLO *ACCL::combine(unsigned int count, reduceFunction function,

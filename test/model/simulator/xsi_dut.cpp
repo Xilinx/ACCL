@@ -73,7 +73,9 @@ XSI_DUT::XSI_DUT(const string& design_libname, const string& simkernel_libname,
     cycle_count = 0;
 }
 
-XSI_DUT::~XSI_DUT(){}
+XSI_DUT::~XSI_DUT(){
+    xsi.close();
+}
 
 void XSI_DUT::run_ncycles(unsigned int n){
     for(int i=0; i<n; i++){

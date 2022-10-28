@@ -307,6 +307,54 @@ public:
              bool run_async = false, std::vector<CCLO *> waitfor = {});
 
   /**
+   * Copy a buffer on the FPGA.
+   *
+   * @param dstbuf         Buffer where the data should be stored to. Create a
+   *                       buffer using ACCL::create_buffer.
+   * @param count          Amount of elements in buffer to copy.
+   * @param to_fpga        Set to true if the data is already on the FPGA.
+   * @param run_async      Run the ACCL call asynchronously.
+   * @param waitfor        ACCL call will wait for these operations before it
+   *                       will start. Currently not implemented.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
+   */
+  CCLO *copy_from_stream(BaseBuffer &dstbuf, unsigned int count,
+             bool to_fpga = false,
+             bool run_async = false, std::vector<CCLO *> waitfor = {});
+
+  /**
+   * Copy a buffer on the FPGA.
+   *
+   * @param srcbuf         Buffer that contains the data to be copied. Create a
+   *                       buffer using ACCL::create_buffer.
+   * @param count          Amount of elements in buffer to copy.
+   * @param from_fpga      Set to true if the data is already on the FPGA.
+   * @param run_async      Run the ACCL call asynchronously.
+   * @param waitfor        ACCL call will wait for these operations before it
+   *                       will start. Currently not implemented.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
+   */
+  CCLO *copy_to_stream(BaseBuffer &srcbuf, unsigned int count,
+             bool from_fpga = false,
+             bool run_async = false, std::vector<CCLO *> waitfor = {});
+
+  /**
+   * Copy a buffer on the FPGA.
+   *
+   * @param dst_data_type  Data type of input and output to stream.
+   * @param count          Amount of elements in buffer to copy.
+   * @param run_async      Run the ACCL call asynchronously.
+   * @param waitfor        ACCL call will wait for these operations before it
+   *                       will start. Currently not implemented.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
+   */
+  CCLO *copy_from_to_stream(dataType dst_data_type, unsigned int count,
+             bool run_async = false, std::vector<CCLO *> waitfor = {});
+
+  /**
    * Perform reduce operation on two buffers on the FPGA.
    *
    * @param count           Amount of elements to perform reduce operation on.
@@ -888,9 +936,15 @@ private:
   const int networkmem;
   xrt::device device;
 
+
   // TCP safety flags
   bool port_open{};
   bool con_open{};
+
+  CCLO *copy(BaseBuffer *srcbuf, BaseBuffer *dstbuf, unsigned int count,
+                 bool from_fpga, bool to_fpga, streamFlags stream_flags,
+                 dataType data_type, bool run_async,
+                 std::vector<CCLO *> waitfor);
 
   void initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
                        int nbufs, addr_t bufsize);
