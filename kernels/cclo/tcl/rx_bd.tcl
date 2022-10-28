@@ -53,7 +53,7 @@ proc create_udp_rx_subsystem { parentCell nameHier } {
   create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_data
   create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:aximm_rtl:1.0 s_axi_control
   create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_status
-
+  create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_notification
 
   # Create pins
   create_bd_pin -dir I -type clk ap_clk
@@ -77,6 +77,7 @@ proc create_udp_rx_subsystem { parentCell nameHier } {
   connect_bd_intf_net -intf_net fifo2dpkt [get_bd_intf_pins rx_fifo/M_AXIS] [get_bd_intf_pins udp_depacketizer_0/in_r]
   connect_bd_intf_net -intf_net dpkt2out [get_bd_intf_pins m_axis_data] [get_bd_intf_pins udp_depacketizer_0/out_r]
   connect_bd_intf_net -intf_net status [get_bd_intf_pins m_axis_status] [get_bd_intf_pins udp_depacketizer_0/sts]
+  connect_bd_intf_net [get_bd_intf_pins m_axis_notification] [get_bd_intf_pins udp_depacketizer_0/notif_out] 
 
   # Create port connections
   connect_bd_net -net ap_clk [get_bd_pins ap_clk]  [get_bd_pins rx_fifo/s_axis_aclk] [get_bd_pins udp_depacketizer_0/ap_clk]
