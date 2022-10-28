@@ -61,7 +61,7 @@ public:
        xrt::ip &cclo_ip, xrt::kernel &hostctrl_ip, int devicemem,
        const std::vector<int> &rxbufmem, 
        networkProtocol protocol = networkProtocol::TCP, int nbufs = 16,
-       addr_t bufsize = 1024, addr_t segsize = 1024,
+       addr_t bufsize = 1024, addr_t segsize = 1024, int max_pkt_size = 1536,
        const arithConfigMap &arith_config = DEFAULT_ARITH_CONFIG);
 
   /**
@@ -78,7 +78,7 @@ public:
    */
   ACCL(const std::vector<rank_t> &ranks, int local_rank,
        unsigned int start_port, networkProtocol protocol = networkProtocol::TCP,
-       int nbufs = 16, addr_t bufsize = 1024, addr_t segsize = 1024,
+       int nbufs = 16, addr_t bufsize = 1024, addr_t segsize = 1024, int max_pkt_size = 1536,
        const arithConfigMap &arith_config = DEFAULT_ARITH_CONFIG);
 
   /**
@@ -99,7 +99,7 @@ public:
   ACCL(const std::vector<rank_t> &ranks, int local_rank,
        unsigned int start_port, xrt::device &device,
        networkProtocol protocol = networkProtocol::TCP, int nbufs = 16,
-       addr_t bufsize = 1024, addr_t segsize = 1024,
+       addr_t bufsize = 1024, addr_t segsize = 1024, int max_pkt_size = 1536,
        const arithConfigMap &arith_config = DEFAULT_ARITH_CONFIG);
 
   /**
@@ -809,7 +809,7 @@ private:
   xrt::device device;
 
   void initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
-                       int nbufs, addr_t bufsize, addr_t segsize);
+                       int nbufs, addr_t bufsize, addr_t segsize, int max_pkt_size);
 
   void configure_arithmetic();
 

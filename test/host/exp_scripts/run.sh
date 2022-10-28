@@ -10,7 +10,7 @@ cd $SCRIPT_DIR/../xrt && make
 cd $SCRIPT_DIR
 
 # server IDs (u55c)
-SERVID=(9 10)
+SERVID=(3 4)
 rm $SCRIPT_DIR/host
 rm $SCRIPT_DIR/fpga
 num_process=0
@@ -24,7 +24,7 @@ done
 
 # Bitstream and argument configuration
 HW_BENCH=0
-USER_KERNEL=1
+USER_KERNEL=0
 
 if [[ ($USER_KERNEL -eq 1) && ($HW_BENCH -eq 1)]]
 then
@@ -64,13 +64,14 @@ XCLBIN=$SCRIPT_DIR/../../../test/hardware/link_${PREFIX}_eth_0_debug_none_xilinx
 #define ACCL_BARRIER        12
 
 TEST_MODE=(3)
-NUM_ELE_KILO=(2 4 8)
+NUM_ELE_KILO=(1)
 for np in `seq 2 $num_process`; do
     for test_mode in ${TEST_MODE[@]}; do 
         for num_ele_kilo in ${NUM_ELE_KILO[@]}; do 
             num_ele=$(((num_ele_kilo) * 1024))
             mpirun -n $np -f ./host --iface ens4f0 $SCRIPT_DIR/../xrt/bin/test $ARG -y $test_mode -c $num_ele -l $SCRIPT_DIR/fpga -x $XCLBIN &
-            sleep 40
+            sleeptime=$(((np-2) * 2+30))
+            sleep $sleeptime
             parallel-ssh -H "$hostlist" "kill -9 \$(ps -aux | grep test | awk '{print \$2}')" 
             parallel-ssh -H "$hostlist" "/opt/xilinx/xrt/bin/xbutil reset --force --device 0000:c4:00.1"
         done

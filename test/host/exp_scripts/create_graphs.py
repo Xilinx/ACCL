@@ -392,14 +392,14 @@ def sizeof_fmt(num, suffix='B'):
 #         plot_lines("compare_OMPI"+("H2H" if H2H else "") + ("F2F" if F2F else "")+collective.replace("/", ""), series_x, series_y, series_label, styles, y_label='Latency [us]', logx=True, legend_loc ="upper left", y_errors=(stdevs if error else None))
 
 
-def compare_latency(df_accl, df_mpi, number_of_nodes=4, error=False):
+def compare_latency(df_accl, df_mpi, number_of_nodes=8, error=False):
     df_accl              = df_accl[ (df_accl["rank_id"] == 0) & (df_accl["number_of_nodes"]==number_of_nodes)]
     collectives     = df_accl['collective'].apply(lambda r: '_'.join(r.split('_')[:-1])).unique()
     print(collectives)
     segment_size    = 4*1024*1024
     for collective in collectives:
-        subset              = df_accl[(df_accl["collective"].str.startswith(collective)) & (df_accl["segment_size[B]"] == segment_size) & (df_accl["number_of_banks"] == 6) ]
-        # print(subset)
+        subset              = df_accl[(df_accl["collective"].str.startswith(collective)) & (df_accl["segment_size[B]"] == segment_size) & (df_accl["number_of_banks"] == 4) ]
+        print(subset)
         grouped             = subset.groupby(["collective", "size[B]"]).agg({'execution_time[us]':['mean','std']})
         grouped.reset_index(inplace=True)
         grouped             = grouped.groupby(["collective"])
@@ -837,7 +837,7 @@ def compare_latency(df_accl, df_mpi, number_of_nodes=4, error=False):
 
 #         #plot_clustered_bars(collective, series_x, series_y, series_label)
 
-def compare_rank_with_fixed_bsize(df_accl, error=False):
+def compare_rank_with_fixed_bsize(df_accl, df_mpi, error=False):
     df_accl              = df_accl[ (df_accl["rank_id"] == 0) ]
     collectives     = df_accl['collective'].apply(lambda r: '_'.join(r.split('_')[:-1])).unique()
     bsizes           = df_accl[ "size[B]"].unique()
@@ -878,46 +878,44 @@ def compare_rank_with_fixed_bsize(df_accl, error=False):
                         stdevs.append(exe_std)
                         styles.append(f"C{i+1}+-")
                         i+=1
-
-        
-                # exe          = grouped['execution_time[us]']['mean'].to_numpy()
-                # exe_std      = grouped['execution_time[us]']['std'].to_numpy()
-                # num_nodes    = grouped['number_of_nodes']
-                
-                # if np.any(exe != 0):
-                #     series_label.append("ACCL {}")
-                #     series_y.append(exe)
-                #     series_x.append(num_nodes)
-                #     stdevs.append(exe_std)
-                #     styles.append(f"C2-+")
                 
                 #OpenMPI
-                # subset              = df_accl[(df_accl["collective"] == collective) & (df_accl[ "size[B]"] == bsize) & (df_accl["board_instance"].str.contains("OpenMPI") ) & (df_accl["number_of_nodes"] > 2)]
-                # i=2
-                # for board_name, group in subset.groupby(["board_instance"]): 
-                #     grouped             = group.groupby(["number_of_nodes"]).agg({'execution_time[us]':['mean','std'], 'execution_time_fullpath[us]':['mean','std']})
-                #     grouped.reset_index(inplace=True)
+                subset              = df_mpi[(df_mpi["collective name"].str.startswith(collective)) & (df_mpi["board_instance"]=="OpenMPI") & (df_mpi[ "buffer size[KB]"] == bsize/1024) & (df_mpi["number of nodes"] > 2)]
+                print(subset)
+                grouped             = subset.groupby(["board_instance", "number of nodes"]).agg({'execution_time[us]':['mean','std'], 'execution_time_fullpath[us]':['mean','std']})
+                grouped.reset_index(inplace=True)
+                grouped             = grouped.groupby(["board_instance"])
+                print(grouped)
+                for board, group in grouped:
+                    exe          = group['execution_time[us]']['mean'].to_numpy()
+                    exe_std      = group['execution_time[us]']['std'].to_numpy()
+                    num_nodes    = group['number of nodes'].to_numpy()
+                    exe_full     = group['execution_time_fullpath[us]']['mean'].to_numpy()
+                    exe_full_std = group['execution_time_fullpath[us]']['std'].to_numpy()
 
-        
+                # for board_name, group in subset.groupby(["board_instance"]): 
+                #     grouped             = group.groupby(["number of nodes"]).agg({'execution_time[us]':['mean','std']})
+                #     print(grouped)
+                #     grouped.reset_index(inplace=True)
+                #     # print(grouped)
                 #     exe          = grouped['execution_time[us]']['mean'].to_numpy()
                 #     exe_std      = grouped['execution_time[us]']['std'].to_numpy()
-                #     num_nodes    = grouped['number_of_nodes'].to_numpy()
-                #     exe_full     = grouped['execution_time_fullpath[us]']['mean'].to_numpy()
-                #     exe_full_std = grouped['execution_time_fullpath[us]']['std'].to_numpy()
-                #     i+=1
-                #     if np.any(exe != 0) and F2F:
-                #         series_label.append(f"{board_name}")
-                #         series_y.append(exe)
-                #         series_x.append(num_nodes[:len(exe)])
-                #         stdevs.append(exe_std)
-                #         styles.append(f"C{i}-+")
+                #     num_nodes    = grouped['number of nodes'].to_numpy()
+                    
+                    # if np.any(exe != 0):
+                    #     series_label.append(f"{board}")
+                    #     series_y.append(exe)
+                    #     series_x.append(num_nodes[:len(exe)])
+                    #     stdevs.append(exe_std)
+                    #     styles.append(f"C{i+1}+-")
 
-                #     if np.any(exe_full) and H2H:
-                #             series_label.append(f"{board_name} H2H")
-                #             series_y.append(exe_full)
-                #             series_x.append(num_nodes)
-                #             stdevs.append(exe_full_std)
-                #             styles.append(f"C{i}--+")
+                    if np.any(exe_full):
+                            series_label.append(f"{board}_H2H")
+                            series_y.append(exe_full)
+                            series_x.append(num_nodes)
+                            stdevs.append(exe_full_std)
+                            styles.append(f"C{i+1}+-")
+                            i+=1
 
                 
                 plot_lines("rank_comparison_"+collective.replace("/", "")+"_"+str(bsize), series_x, series_y, series_label, styles, x_label="Number of ranks", y_label='Latency [us]', legend_loc ="upper left", logx=False, logy = False, y_errors=(stdevs if error else None))
@@ -1074,13 +1072,14 @@ def compare_throughput(df_accl, df_mpi):
     df_accl              = df_accl[ (df_accl["rank_id"] == 0)  & ( (df_accl["collective"] == "sendrecv_H2H") | (df_accl["collective"] == "sendrecv_F2F") | (df_accl["collective"] == "sendrecv_K2K"))]
     print(df_accl)
     segment_size    = 4194304
+    max_pkt_size    = 1536
     series_label = []
     series_y     = []
     series_x     = []
     styles       = []
     stdevs       = []
 
-    subset              = df_accl[(df_accl["segment_size[B]"] == segment_size) & (df_accl["number_of_banks"] == 6)]
+    subset              = df_accl[(df_accl["segment_size[B]"] == segment_size) & (df_accl["number_of_banks"] == 4) & (df_accl["max_pkt_size[B]"] == max_pkt_size)]
     grouped             = subset.groupby(["collective","size[B]"]).agg({'throughput[Gbps]':['mean','std']})
     grouped.reset_index(inplace=True)
     print(grouped)
@@ -1102,7 +1101,8 @@ def compare_throughput(df_accl, df_mpi):
             j+=1
         
     #OpenMPI
-    subset              = df_mpi[( (df_mpi["rank id"] == 0) & (df_mpi["board_instance"] == "OpenMPI" ) & ( df_mpi["collective name"] == "Send/recv") )]
+    subset              = df_mpi[( (df_mpi["rank id"] == 0) & (df_mpi["board_instance"] == "OpenMPI" ) & ( df_mpi["collective name"] == "sendrecv") )]
+    print(subset)
     grouped             = subset.groupby(["buffer size[KB]"]).agg({'throughput[Gbps]':['mean','std'], 'throughput_fullpath[Gbps]':['mean','std']})
     grouped.reset_index(inplace=True)
 
@@ -1182,7 +1182,7 @@ if __name__ == "__main__":
     # if args.board:
     #     compare_board(df_accl)
     if args.rank:
-        compare_rank_with_fixed_bsize(df_accl)
+        compare_rank_with_fixed_bsize(df_accl, df_mpi)
     # if args.rank2_number:
     #     compare_rank_with_fixed_bsize(df_accl, error=True)
     # if args.statistic:

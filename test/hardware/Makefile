@@ -25,7 +25,7 @@ XSA := $(strip $(patsubst %.xpfm, % , $(shell basename $(PLATFORM))))
 DEBUG ?= none
 PROFILE ?= none
 MODE ?= tcp
-FREQUENCY = 200
+FREQUENCY = 250
 CCLO_XO = ../../kernels/cclo/ccl_offload.xo
 CCLO_MB_DEBUG_LEVEL ?= 0
 
@@ -183,11 +183,11 @@ $(TCP_XO): tcp_stack_ips
 	$(MAKE) -C Vitis_with_100Gbps_TCP-IP/ network_krnl DEVICE=$(PLATFORM) TEMP_DIR=_x.hw.$(XSA)/ XSA=$(XSA)
 
 .PHONY: tcp_stack_ips
-# tcp_stack_ips:
-# 	# git submodule update --init --recursive Vitis_with_100Gbps_TCP-IP
-# 	# mkdir -p Vitis_with_100Gbps_TCP-IP/build
-# 	# cmake -S Vitis_with_100Gbps_TCP-IP/ -BVitis_with_100Gbps_TCP-IP/build/ -DFDEV_NAME=$(BOARD) -DVIVADO_HLS_ROOT_DIR=$(TCP_HLS_ROOTDIR) -DVIVADO_ROOT_DIR=$(TCP_VIVADO_ROOTDIR) -DTCP_STACK_EN=1 -DTCP_STACK_RX_DDR_BYPASS_EN=1 -DTCP_STACK_WINDOW_SCALING=0 
-# 	# $(MAKE) -C Vitis_with_100Gbps_TCP-IP/build installip
+tcp_stack_ips:
+	git submodule update --init --recursive Vitis_with_100Gbps_TCP-IP
+	mkdir -p Vitis_with_100Gbps_TCP-IP/build
+	cmake -S Vitis_with_100Gbps_TCP-IP/ -BVitis_with_100Gbps_TCP-IP/build/ -DFDEV_NAME=$(BOARD) -DVIVADO_HLS_ROOT_DIR=$(TCP_HLS_ROOTDIR) -DVIVADO_ROOT_DIR=$(TCP_VIVADO_ROOTDIR) -DTCP_STACK_EN=1 -DTCP_STACK_RX_DDR_BYPASS_EN=1 -DTCP_STACK_WINDOW_SCALING_EN=0 
+	$(MAKE) -C Vitis_with_100Gbps_TCP-IP/build installip
 
 $(XCLBIN): $(NET_XO) $(CONFIGFILE)
 	$(MAKE) -C ../../kernels/cclo PLATFORM=$(PLATFORM) STACK_TYPE=$(CCLO_STACK_TYPE) EN_FANIN=$(CCLO_EN_FANIN) MB_DEBUG_LEVEL=$(CCLO_MB_DEBUG_LEVEL)

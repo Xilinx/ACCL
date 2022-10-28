@@ -67,7 +67,7 @@ void reset_log(int rank) {
   std::string filename = ACCL_LOG_FILE(str_rank);
   std::ofstream outfile;
   outfile.open(filename, std::ios::out);
-  outfile<<"collective,number_of_nodes,rank_id,number_of_banks,size[B],rx_buffer_size[B],segment_size[B],execution_time[us],throughput[Gbps]"<<std::endl;
+  outfile<<"collective,number_of_nodes,rank_id,number_of_banks,size[B],rx_buffer_size[B],segment_size[B],max_pkt_size[B],execution_time[us],throughput[Gbps]"<<std::endl;
   outfile.close();
 }
 

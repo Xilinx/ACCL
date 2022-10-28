@@ -42,7 +42,8 @@ using namespace vnx;
 #define FLOAT16ATOL 0.05
 
 #define MAX_HW_BENCH_RECORD 10
-#define FREQ 200
+#define FREQ 250
+#define MAX_PKT_SIZE 1536
 
 int rank, size;
 unsigned failed_tests;
@@ -126,7 +127,7 @@ struct timestamp_t {
 #define HOUSEKEEP_CLOSE_CON            7
 
 std::string format_log(std::string collective, options_t options, double time, double tput){
-  std::string log_str = collective+","+std::to_string(size)+","+std::to_string(rank)+","+std::to_string(options.num_rxbufmem)+","+std::to_string(options.count*sizeof(float))+","+std::to_string(options.rxbuf_size)+","+std::to_string(options.rxbuf_size)+","+std::to_string(time)+","+std::to_string(tput);
+  std::string log_str = collective+","+std::to_string(size)+","+std::to_string(rank)+","+std::to_string(options.num_rxbufmem)+","+std::to_string(options.count*sizeof(float))+","+std::to_string(options.rxbuf_size)+","+std::to_string(options.rxbuf_size)+","+std::to_string(MAX_PKT_SIZE)+","+std::to_string(time)+","+std::to_string(tput);
   return log_str;
 }
 
@@ -218,7 +219,7 @@ void printTimeStamp(timestamp_t timestamp, options_t &options)
           break;
       case ACCL_GATHER:
           std::cout<<"ACCL_GATHER";
-          exp="allgather_K2K";
+          exp="gather_K2K";
           writeToLog=true;
           break;
       case ACCL_REDUCE:
@@ -1332,10 +1333,10 @@ void test_reduce(ACCL::ACCL &accl, options_t &options, int root,
       float ref = (*op_buf)[i] * size;
 
       if (res != ref) {
-        std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
-                         std::to_string(res) + " != " + std::to_string(ref) +
-                         ")"
-                  << std::endl;
+        // std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
+        //                  std::to_string(res) + " != " + std::to_string(ref) +
+        //                  ")"
+        //           << std::endl;
         errors += 1;
       }
     }
@@ -1514,9 +1515,9 @@ void test_allreduce(ACCL::ACCL &accl, options_t &options,
     float ref = (*op_buf)[i] * size;
 
     if (res != ref) {
-      std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
-                       std::to_string(res) + " != " + std::to_string(ref) + ")"
-                << std::endl;
+      // std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
+      //                  std::to_string(res) + " != " + std::to_string(ref) + ")"
+      //           << std::endl;
       errors += 1;
     }
   }
@@ -1763,21 +1764,31 @@ void start_test(options_t options) {
 			std::cout << "Configure TCP Network Kernel" << std::endl;
 			auto network_krnl = xrt::kernel(device, xclbin_uuid, "network_krnl:{network_krnl_0}",
                     xrt::kernel::cu_access_mode::exclusive);
-			Buffer<int8_t> *tx_buf_network = new FPGABuffer<int8_t>(64*1024*1024, dataType::int8,
-                                              device, networkmem);
-			Buffer<int8_t> *rx_buf_network = new FPGABuffer<int8_t>(64*1024*1024, dataType::int8,
-                                              device, networkmem);
-			tx_buf_network->sync_to_device();
-      rx_buf_network->sync_to_device();
-
-			uint localFPGAIP = ip_encode(ipList[rank]);
+      
+      uint localFPGAIP = ip_encode(ipList[rank]);
 			std::cout << "rank: "<< rank << " FPGA IP: "<<std::hex << localFPGAIP << std::endl;
 
-			network_krnl(localFPGAIP, uint(rank), localFPGAIP, tx_buf_network->bo(), rx_buf_network->bo());
+			// Buffer<int8_t> *tx_buf_network = new FPGABuffer<int8_t>(32*1024*1024, dataType::int8,
+      //                                         device, networkmem);
+			// Buffer<int8_t> *rx_buf_network = new FPGABuffer<int8_t>(32*1024*1024, dataType::int8,
+      //                                         device, networkmem);
+			// tx_buf_network->sync_to_device();
+      // rx_buf_network->sync_to_device();
+
+			// network_krnl(localFPGAIP, uint(rank), localFPGAIP, tx_buf_network->bo(), rx_buf_network->bo());
+
+      auto tx_buf_network = xrt::bo (device, 8*1024*1024*sizeof(int8_t), networkmem);
+      tx_buf_network.sync(XCL_BO_SYNC_BO_TO_DEVICE);
+      auto rx_buf_network = xrt::bo (device, 8*1024*1024*sizeof(int8_t), networkmem);
+      rx_buf_network.sync(XCL_BO_SYNC_BO_TO_DEVICE);
+
+      network_krnl(localFPGAIP, uint(rank), localFPGAIP, tx_buf_network, rx_buf_network);
 
       uint32_t ip_reg = network_krnl.read_register(0x010);
       uint32_t board_reg = network_krnl.read_register(0x018);
-      std::cout<< std::hex << "ip_reg: "<< ip_reg << " board_reg IP: " << board_reg << std::endl;
+      uint64_t ptr0 = network_krnl.read_register(0x028);
+      uint64_t ptr1 = network_krnl.read_register(0x034);
+      std::cout<< std::hex << "ip_reg: "<< ip_reg << " board_reg IP: " << board_reg <<" tx_ptr:"<<ptr0<<" rx_ptr:"<<ptr1<<std::endl;
 		}
 
 		MPI_Barrier(MPI_COMM_WORLD);
@@ -1802,32 +1813,6 @@ void start_test(options_t options) {
       MPI_Barrier(MPI_COMM_WORLD);
       test_user_kernel(device, *accl, options);
     }
-
-    // if (options.hw_bench)
-    // {
-    //   std::cout << "Enable hw bench kernel" << std::endl;
-    //   auto hw_bench_krnl = xrt::kernel(device, xclbin_uuid, "collector:{collector_0}",xrt::kernel::cu_access_mode::exclusive);  
-
-    //   // Host Memory pointer aligned to 4K boundary
-    //   posix_memalign((void**)&host_ptr_hw_bench_cmd,4096,8*1024*1024*sizeof(uint64_t));
-    //   posix_memalign((void**)&host_ptr_hw_bench_sts,4096,8*1024*1024*sizeof(uint64_t));
-    //   // Sample example filling the allocated host memory
-    //   for(int i=0; i<8*1024*1024; i++) {
-    //     host_ptr_hw_bench_cmd[i] = 0; 
-    //     host_ptr_hw_bench_sts[i] = 0;
-    //   }
-    //   buf_hw_bench_cmd = xrt::bo (device, host_ptr_hw_bench_cmd, 8*1024*1024*sizeof(uint64_t), hw_bench_krnl.group_id(1));
-    //   buf_hw_bench_cmd.sync(XCL_BO_SYNC_BO_TO_DEVICE);
-    //   buf_hw_bench_sts = xrt::bo (device, host_ptr_hw_bench_sts, 8*1024*1024*sizeof(uint64_t), hw_bench_krnl.group_id(2));
-    //   buf_hw_bench_sts.sync(XCL_BO_SYNC_BO_TO_DEVICE);
-
-    //   hw_bench_krnl(MAX_HW_BENCH_RECORD, buf_hw_bench_cmd, buf_hw_bench_sts);
-    //   uint32_t round_reg = hw_bench_krnl.read_register(0x010);
-    //   uint32_t cmd_addr_reg = hw_bench_krnl.read_register(0x018);
-    //   uint32_t sts_addr_reg = hw_bench_krnl.read_register(0x024);
-    //   std::cout<< std::hex << "round_reg: "<< round_reg <<" cmd_addr_reg: "<<cmd_addr_reg<<" sts_addr_reg: "<<sts_addr_reg<<std::endl;
-      
-    // }
     
   } else {
     accl = std::make_unique<ACCL::ACCL>(ranks, rank, options.start_port, device,
@@ -2048,7 +2033,7 @@ options_t parse_options(int argc, char *argv[]) {
                                           "positive integer");
     cmd.add(seg_arg);
     TCLAP::ValueArg<uint16_t> num_rxbufmem_arg ("m", "num_rxbufmem",
-                                          "Number of memory banks used for rxbuf", false, 6,
+                                          "Number of memory banks used for rxbuf", false, 4,
                                           "positive integer");
     cmd.add(num_rxbufmem_arg);
     TCLAP::ValueArg<uint16_t> test_mode_arg ("y", "test_mode",
@@ -2105,6 +2090,9 @@ options_t parse_options(int argc, char *argv[]) {
       if (hwbench_arg.getValue() && hardware_arg.getValue()==false)
       {
         throw std::runtime_error("Hardware bench mode should be set with hardware mode.");
+      }
+      if(hwbench_arg.getValue() && (test_mode_arg.getValue()==0)){
+        throw std::runtime_error("Hardware bench mode can not run will test mode ALL, run single collective bench.");
       }
     }
 

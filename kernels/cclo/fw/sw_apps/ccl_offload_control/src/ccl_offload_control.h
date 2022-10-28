@@ -47,8 +47,8 @@
 
 
 //PACKT CONST
-#define MAX_PACKETSIZE 4096
-#define MAX_SEG_SIZE 1048576
+// #define MAX_PACKETSIZE 2048
+// #define MAX_SEG_SIZE 1048576
 //DMA CONST 
 #define DMA_MAX_BTT              ((1<<23)/64*64)
 #define DMA_MAX_TRANSACTIONS     20

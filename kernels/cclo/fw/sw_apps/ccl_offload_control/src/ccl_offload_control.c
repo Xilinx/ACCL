@@ -1369,7 +1369,7 @@ void run() {
                         return;
                     case HOUSEKEEP_PKTEN:
                         start_depacketizer();
-                        start_packetizer(MAX_PACKETSIZE);
+                        start_packetizer(count);
                         start_offload_engines();
                         break;
                     case HOUSEKEEP_TIMEOUT:

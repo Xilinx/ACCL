@@ -29,34 +29,34 @@ namespace ACCL {
 ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
            xrt::device &device, xrt::ip &cclo_ip, xrt::kernel &hostctrl_ip,
            int devicemem, const std::vector<int> &rxbufmem, 
-           networkProtocol protocol, int nbufs, addr_t bufsize, addr_t segsize,
+           networkProtocol protocol, int nbufs, addr_t bufsize, addr_t segsize, int max_pkt_size,
            const arithConfigMap &arith_config)
     : arith_config(arith_config), protocol(protocol), sim_mode(false),
       _devicemem(devicemem), rxbufmem(rxbufmem), 
       device(device) {
   cclo = new FPGADevice(cclo_ip, hostctrl_ip);
-  initialize_accl(ranks, local_rank, nbufs, bufsize, segsize);
+  initialize_accl(ranks, local_rank, nbufs, bufsize, segsize, max_pkt_size);
 }
 
 // Simulation constructor
 ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
            unsigned int sim_start_port, networkProtocol protocol, int nbufs,
-           addr_t bufsize, addr_t segsize, const arithConfigMap &arith_config)
+           addr_t bufsize, addr_t segsize, int max_pkt_size, const arithConfigMap &arith_config)
     : arith_config(arith_config), protocol(protocol), sim_mode(true),
       _devicemem(0), rxbufmem({}) {
   cclo = new SimDevice(sim_start_port, local_rank);
   debug("initialize_accl");
-  initialize_accl(ranks, local_rank, nbufs, bufsize, segsize);
+  initialize_accl(ranks, local_rank, nbufs, bufsize, segsize, max_pkt_size);
 }
 
 ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
            unsigned int sim_start_port, xrt::device &device,
-           networkProtocol protocol, int nbufs, addr_t bufsize, addr_t segsize,
+           networkProtocol protocol, int nbufs, addr_t bufsize, addr_t segsize, int max_pkt_size,
            const arithConfigMap &arith_config)
     : arith_config(arith_config), protocol(protocol), sim_mode(true),
       _devicemem(0), rxbufmem({}), device(device) {
   cclo = new SimDevice(sim_start_port, local_rank);
-  initialize_accl(ranks, local_rank, nbufs, bufsize, segsize);
+  initialize_accl(ranks, local_rank, nbufs, bufsize, segsize, max_pkt_size);
 }
 
 ACCL::~ACCL() {
@@ -775,7 +775,7 @@ std::string ACCL::dump_rx_buffers(size_t nbufs) {
 }
 
 void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
-                           int nbufs, addr_t bufsize , addr_t segsize) {
+                           int nbufs, addr_t bufsize , addr_t segsize, int max_pkt_size) {
   // reset_log(local_rank);
   debug("CCLO HWID: " + std::to_string(get_hwid()) + " at 0x" +
         debug_hex(cclo->get_base_addr()));
@@ -805,6 +805,7 @@ void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
   CCLO::Options options{};
   options.scenario = operation::config;
   options.cfg_function = cfgFunc::enable_pkt;
+  options.count = max_pkt_size;
   call_sync(options);
 
   debug("Set max segment size[B]:"+std::to_string(segsize));
