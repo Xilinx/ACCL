@@ -119,6 +119,37 @@ void test_copy(ACCL::ACCL &accl, options_t &options) {
   }
 }
 
+void test_copy_stream(ACCL::ACCL &accl, options_t &options) {
+  std::cout << "Start copy stream test..." << std::endl;
+  unsigned int count = options.count;
+  auto op_buf = accl.create_buffer<float>(count, dataType::float32);
+  auto res_buf = accl.create_buffer<float>(count, dataType::float32);
+  random_array(op_buf->buffer(), count);
+
+  test_debug("Copy data from buffer to stream", options);
+  accl.copy_to_stream(*op_buf, count, false);
+  test_debug("Copy data from stream to buffer", options);
+  accl.copy_from_stream(*res_buf, count, false);
+  int errors = 0;
+  for (unsigned int i = 0; i < count; ++i) {
+    float ref = (*op_buf)[i];
+    float res = (*res_buf)[i];
+    if (res != ref) {
+      std::cout << i + 1
+                << "th item is incorrect! (" + std::to_string(res) +
+                       " != " + std::to_string(ref) + ")"
+                << std::endl;
+      errors += 1;
+    }
+  }
+
+  if (errors > 0) {
+    std::cout << errors << " errors!" << std::endl;
+  } else {
+    std::cout << "Test succesfull!" << std::endl;
+  }
+}
+
 void test_copy_p2p(ACCL::ACCL &accl, options_t &options) {
   std::cout << "Start copy p2p test..." << std::endl;
   unsigned int count = options.count;
@@ -343,19 +374,19 @@ void test_sendrcv_stream(ACCL::ACCL &accl, options_t &options) {
   int prev_rank = (rank + size - 1) % size;
 
   test_debug("Sending data on " + std::to_string(rank) + " to " +
-                 std::to_string(next_rank) + "...", options);
+             std::to_string(next_rank) + "...", options);
   accl.send(*op_buf, count, next_rank, 0);
 
   test_debug("Receiving data on " + std::to_string(rank) + " from " +
-                 std::to_string(prev_rank) + "...", options);
+             std::to_string(prev_rank) + "...", options);
   accl.recv(dataType::float32, count, prev_rank, 0, GLOBAL_COMM);
 
   test_debug("Sending data on " + std::to_string(rank) + " to " +
-                 std::to_string(prev_rank) + "...", options);
+             std::to_string(prev_rank) + "...", options);
   accl.send(dataType::float32, count, prev_rank, 1, GLOBAL_COMM);
 
   test_debug("Receiving data on " + std::to_string(rank) + " from " +
-                 std::to_string(next_rank) + "...", options);
+             std::to_string(next_rank) + "...", options);
   accl.recv(*res_buf, count, next_rank, 1);
 
   int errors = 0;
@@ -387,19 +418,16 @@ void test_stream_put(ACCL::ACCL &accl, options_t &options) {
   int next_rank = (rank + 1) % size;
   int prev_rank = (rank + size - 1) % size;
 
-  test_debug("Sending data on " + std::to_string(rank) + " to stream 0 " " on " +
-                 std::to_string(next_rank) + "...",
-             options);
+  test_debug("Sending data on " + std::to_string(rank) + " to stream 0 on " +
+             std::to_string(next_rank) + "...", options);
   accl.stream_put(*op_buf, count, next_rank, 9);
 
   test_debug("Sending data on " + std::to_string(rank) + " from stream to " +
-                 std::to_string(prev_rank) + "...",
-             options);
+             std::to_string(prev_rank) + "...", options);
   accl.send(dataType::float32, count, prev_rank, 1, GLOBAL_COMM);
 
   test_debug("Receiving data on " + std::to_string(rank) + " from " +
-                 std::to_string(next_rank) + "...",
-             options);
+             std::to_string(next_rank) + "...", options);
   accl.recv(*res_buf, count, next_rank, 1);
 
   int errors = 0;
@@ -1151,19 +1179,22 @@ void test_barrier(ACCL::ACCL &accl) {
   std::cout << "Test is successful!" << std::endl;
 }
 
-bool check_arp(Networklayer &network_layer, std::vector<rank_t> &ranks, options_t &options) {
+bool check_arp(Networklayer &network_layer, std::vector<rank_t> &ranks,
+               options_t &options) {
   std::map<unsigned, bool> ranks_checked;
   for (unsigned i = 0; i < static_cast<unsigned>(size); ++i) {
     ranks_checked[i] = false;
   }
 
   bool sanity_check = true;
-  const std::map<int, std::pair<std::string, std::string>> arp = network_layer.read_arp_table(size);
+  const std::map<int, std::pair<std::string, std::string>> arp =
+      network_layer.read_arp_table(size);
 
   std::ostringstream ss_arp;
   ss_arp << "ARP table:";
 
-  for (const std::pair<const int, std::pair<std::string, std::string>> &elem : arp) {
+  for (const std::pair<const int, std::pair<std::string, std::string>> &elem :
+       arp) {
     const unsigned index = elem.first;
     const std::pair<std::string, std::string> &entry = elem.second;
     const std::string &mac = entry.first;
@@ -1173,7 +1204,8 @@ bool check_arp(Networklayer &network_layer, std::vector<rank_t> &ranks, options_
     for (unsigned i = 0; i < static_cast<unsigned>(size); ++i) {
       if (ranks[i].ip == ip) {
         if (ranks_checked[i]) {
-          std::cout << "Double entry for " << ip << " in arp table!" << std::endl;
+          std::cout << "Double entry for " << ip << " in arp table!"
+                    << std::endl;
           sanity_check = false;
         } else {
           ranks_checked[i] = true;
@@ -1195,7 +1227,8 @@ bool check_arp(Networklayer &network_layer, std::vector<rank_t> &ranks, options_
     }
   }
   if (hosts < static_cast<unsigned>(size) - 1) {
-    std::cout << "Found only " << hosts << " hosts out of " << size - 1 << "!" << std::endl;
+    std::cout << "Found only " << hosts << " hosts out of " << size - 1 << "!"
+              << std::endl;
     return false;
   }
 
@@ -1301,9 +1334,9 @@ int start_test(options_t options) {
     auto xclbin_uuid = device.load_xclbin(options.xclbin);
     auto cclo_ip = xrt::ip(device, xclbin_uuid,
                            "ccl_offload:{ccl_offload_" + cclo_id + "}");
-    auto hostctrl_ip =
-        xrt::kernel(device, xclbin_uuid, "hostctrl:{hostctrl_" + cclo_id + "_0}",
-                    xrt::kernel::cu_access_mode::exclusive);
+    auto hostctrl_ip = xrt::kernel(device, xclbin_uuid,
+                                   "hostctrl:{hostctrl_" + cclo_id + "_0}",
+                                   xrt::kernel::cu_access_mode::exclusive);
 
     int devicemem;
     std::vector<int> rxbufmem;
@@ -1328,7 +1361,9 @@ int start_test(options_t options) {
 
     accl = std::make_unique<ACCL::ACCL>(
         ranks, rank, device, cclo_ip, hostctrl_ip, devicemem, rxbufmem,
-        networkmem, options.udp ? networkProtocol::UDP : networkProtocol::TCP,
+        networkmem,
+        options.udp || options.axis3 ? networkProtocol::UDP
+                                     : networkProtocol::TCP,
         16, options.rxbuf_size);
   } else {
     accl = std::make_unique<ACCL::ACCL>(ranks, rank, options.start_port, device,
@@ -1345,6 +1380,8 @@ int start_test(options_t options) {
   test_barrier(*accl);
   MPI_Barrier(MPI_COMM_WORLD);
   test_copy(*accl, options);
+  MPI_Barrier(MPI_COMM_WORLD);
+  test_copy_stream(*accl, options);
   MPI_Barrier(MPI_COMM_WORLD);
   test_copy_p2p(*accl, options);
   MPI_Barrier(MPI_COMM_WORLD);

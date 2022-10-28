@@ -236,6 +236,14 @@ void controller_bypass(Stream<command_word> &cmdin, Stream<command_word> &cmdout
     logger << log_level::verbose << "Controller bypass: pushed status" << endl;
 }
 
+//emulate a subset-converter based TDEST adjustment (for streaming to PL kernels)
+void axis_ssc(Stream<stream_word> &in, Stream<stream_word> &out, int adj){
+    stream_word word;
+    word = in.Pop();
+    word.dest = (unsigned int)((int)word.dest + adj);
+    out.Push(word);
+}
+
 void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsigned int world_size) {
     vector<char> devicemem;
 
@@ -272,6 +280,7 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsign
     Stream<segmenter_cmd> seg_cmd[13];
     Stream<ap_uint<32> > seg_sts[13];
     Stream<stream_word > accl_to_krnl_seg;
+    Stream<stream_word > accl_to_krnl_ssc;
 
     Stream<eth_header > eth_tx_cmd;
     Stream<ap_uint<32> > eth_tx_sts;
@@ -364,7 +373,8 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsign
     HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, clane1_res,                   switch_s[SWITCH_S_CLANE1], seg_cmd[10], seg_sts[10]);   //clane1 result
     HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, switch_m[SWITCH_M_CLANE2], clane2_op,                    seg_cmd[11], seg_sts[11]);   //clane2 op
     HLSLIB_FREERUNNING_FUNCTION(stream_segmenter, clane2_res,                   switch_s[SWITCH_S_CLANE2], seg_cmd[12], seg_sts[12]);   //clane2 result
-    HLSLIB_FREERUNNING_FUNCTION(axis_mux, accl_to_krnl_seg, switch_m[SWITCH_M_BYPASS], accl_to_krnl_data);
+    HLSLIB_FREERUNNING_FUNCTION(axis_ssc, switch_m[SWITCH_M_BYPASS], accl_to_krnl_ssc, -9);
+    HLSLIB_FREERUNNING_FUNCTION(axis_mux, accl_to_krnl_seg, accl_to_krnl_ssc, accl_to_krnl_data);
     //ARITH
     HLSLIB_FREERUNNING_FUNCTION(reduce_ops, arith_op0, arith_op1, arith_res);
     //COMPRESS 0, 1, 2

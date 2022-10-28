@@ -43,9 +43,9 @@ and cast back to FP32 at the destination, as in the following example:
    auto op_buf = accl.create_buffer<float>(count, dataType::float32);
    auto res_buf = accl.create_buffer<float>(count, dataType::float32);
    accl.send(*op_buf, count, 1, TAG_ANY, GLOBAL_COMM, false,
-               streamFlags::NO_STREAM, dataType::float16);
+               dataType::float16);
    accl.recv(*res_buf, count, 0, TAG_ANY, GLOBAL_COMM, false,
-               streamFlags::NO_STREAM, dataType::float16);
+               dataType::float16);
 
 Notice we're passing `dataType::float16` as the final argument indicating we want FP16 compression over the wire.
 All of the ACCL collectives support transparent FP16 compression, and other compression mechanisms

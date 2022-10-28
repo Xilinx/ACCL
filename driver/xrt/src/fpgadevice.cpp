@@ -16,8 +16,8 @@
 #
 *******************************************************************************/
 
-#include "fpgadevice.hpp"
-#include "common.hpp"
+#include "accl/fpgadevice.hpp"
+#include "accl/common.hpp"
 
 
 namespace ACCL {

@@ -16,8 +16,8 @@
 #
 *******************************************************************************/
 
-#include "simdevice.hpp"
-#include "common.hpp"
+#include "accl/simdevice.hpp"
+#include "accl/common.hpp"
 #include "zmq_client.h"
 
 namespace ACCL {
