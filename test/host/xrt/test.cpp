@@ -1314,7 +1314,7 @@ void configure_tcp(BaseBuffer &tx_buf_network, BaseBuffer &rx_buf_network,
             << std::endl;
 
   network_krnl(local_fpga_ip, static_cast<uint32_t>(rank), local_fpga_ip,
-               tx_buf_network.bo(), rx_buf_network.bo());
+               *(tx_buf_network.bo()), *(rx_buf_network.bo()));
 
   uint32_t ip_reg = network_krnl.read_register(0x010);
   uint32_t board_reg = network_krnl.read_register(0x018);
@@ -1373,7 +1373,7 @@ int start_test(options_t options) {
     } else {
       devicemem = 0;
       rxbufmem = {1};
-      networkmem = 2;
+      networkmem = 6;
     }
 
     protocol = options.udp || options.axis3 ? networkProtocol::UDP
