@@ -1481,10 +1481,10 @@ options_t parse_options(int argc, char *argv[]) {
       "s", "start-port", "Start of range of ports usable for sim", false, 5500,
       "positive integer");
   cmd.add(start_port_arg);
-  TCLAP::ValueArg<uint16_t> count_arg("c", "count", "How many bytes per buffer",
+  TCLAP::ValueArg<unsigned int> count_arg("c", "count", "How many bytes per buffer",
                                       false, 16, "positive integer");
   cmd.add(count_arg);
-  TCLAP::ValueArg<uint16_t> bufsize_arg("b", "rxbuf-size",
+  TCLAP::ValueArg<unsigned int> bufsize_arg("b", "rxbuf-size",
                                         "How many KB per RX buffer", false, 1,
                                         "positive integer");
   cmd.add(bufsize_arg);
