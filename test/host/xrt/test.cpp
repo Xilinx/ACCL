@@ -20,6 +20,8 @@
 #include <cstdlib>
 #include <experimental/xrt_ip.h>
 #include <functional>
+#include <fstream>
+#include <json/json.h>
 #include <mpi.h>
 #include <random>
 #include <sstream>
@@ -56,6 +58,8 @@ struct options_t {
   bool udp;
   bool tcp;
   std::string xclbin;
+  std::string config_file;
+  std::vector<std::string> ips;
 };
 
 void test_debug(std::string message, options_t &options) {
@@ -1322,18 +1326,43 @@ void configure_tcp(BaseBuffer &tx_buf_network, BaseBuffer &rx_buf_network,
             << " board_reg IP: " << board_reg << std::endl;
 }
 
+std::vector<std::string> get_ips(std::string config_file, bool local) {
+  std::vector<std::string> ips;
+  if (config_file == "") {
+    for (int i = 0; i < size; ++i) {
+      if (local) {
+        ips.emplace_back("127.0.0.1");
+      } else {
+        ips.emplace_back("10.10.10." + std::to_string(i));
+      }
+    }
+  } else {
+    Json::Value config;
+    std::ifstream config_file_stream(config_file);
+    config_file_stream >> config;
+    Json::Value ip_config = config["ips"];
+    for (int i = 0; i < size; ++i) {
+      std::string ip = ip_config[i].asString();
+      if (ip == "") {
+        throw std::runtime_error("No ip for rank " + std::to_string(i)
+                                 + " in config file.");
+      }
+      ips.push_back(ip);
+    }
+  }
+
+  return ips;
+}
+
 int start_test(options_t options) {
   std::vector<rank_t> ranks = {};
   failed_tests = 0;
   skipped_tests = 0;
+  options.ips = get_ips(options.config_file,
+                        !options.hardware || options.axis3);
   for (int i = 0; i < size; ++i) {
-    std::string ip;
-    if (options.hardware && !options.axis3) {
-      ip = "10.10.10." + std::to_string(i);
-    } else {
-      ip = "127.0.0.1";
-    }
-    rank_t new_rank = {ip, options.start_port + i, i, options.rxbuf_size};
+    rank_t new_rank = {options.ips[i], options.start_port + i, i,
+                       options.rxbuf_size};
     ranks.emplace_back(new_rank);
   }
 
@@ -1520,10 +1549,10 @@ options_t parse_options(int argc, char *argv[]) {
                                           false, 1, "positive integer");
   cmd.add(nruns_arg);
   TCLAP::ValueArg<uint16_t> start_port_arg(
-      "s", "start-port", "Start of range of ports usable for sim", false, 5500,
+      "p", "start-port", "Start of range of ports usable for sim", false, 5500,
       "positive integer");
   cmd.add(start_port_arg);
-  TCLAP::ValueArg<uint16_t> count_arg("c", "count", "How many bytes per buffer",
+  TCLAP::ValueArg<uint16_t> count_arg("s", "count", "How many items per test",
                                       false, 16, "positive integer");
   cmd.add(count_arg);
   TCLAP::ValueArg<uint16_t> bufsize_arg("b", "rxbuf-size",
@@ -1545,6 +1574,10 @@ options_t parse_options(int argc, char *argv[]) {
       "i", "device-index", "device index of FPGA if hardware mode is used",
       false, 0, "positive integer");
   cmd.add(device_index_arg);
+  TCLAP::ValueArg<std::string> config_arg(
+      "c", "config", "Config file containing IP mapping",
+      false, "", "JSON file");
+  cmd.add(config_arg);
 
   try {
     cmd.parse(argc, argv);
@@ -1576,6 +1609,7 @@ options_t parse_options(int argc, char *argv[]) {
   opts.device_index = device_index_arg.getValue();
   opts.xclbin = xclbin_arg.getValue();
   opts.test_xrt_simulator = xrt_simulator_ready(opts);
+  opts.config_file = config_arg.getValue();
   return opts;
 }
 
