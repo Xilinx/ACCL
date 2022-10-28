@@ -67,9 +67,8 @@ void vadd_put(
         word_count++;
     }
     //send command to CCLO
-    //we're passing src as source 
+    //we're passing src as source and targeting stream 9
     //because we're streaming data, the address will be ignored
-    //we're passing 9 as stream ID, because IDs 0-8 are reserved
     accl.stream_put(count, 9, destination, (ap_uint<64>)src);
     //pull data from CCLO and write it to dst
     int wr_count = count;
