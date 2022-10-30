@@ -106,14 +106,12 @@ ifeq (udp,$(MODE))
 	OTHER_XO = $(LOOPBACK_XO)
 	CONFIG += --user_ip_repo_paths $(HLS_IP_FOLDER)
 	CCLO_STACK_TYPE = UDP
-	CCLO_EN_FANIN = 0
 else ifeq (axis3x,$(MODE))
 	ETH_IF := none
 	NET_XO = $(TCP_DUMMY_XO)
 	OTHER_XO = $(LOOPBACK_XO)
 	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/tcl/post_sys_link_tri.tcl
 	CCLO_STACK_TYPE = TCP
-	CCLO_EN_FANIN = 1
 	CCLO_MB_DEBUG_LEVEL = 2
 else ifeq (axis3x_vadd,$(MODE))
 	ETH_IF := none
@@ -121,7 +119,6 @@ else ifeq (axis3x_vadd,$(MODE))
 	OTHER_XO = $(VADD_XO)
 	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/tcl/post_sys_link_tri.tcl
 	CCLO_STACK_TYPE = TCP
-	CCLO_EN_FANIN = 1
 	CCLO_MB_DEBUG_LEVEL = 2
 else ifeq (tcp, $(MODE))
 	CMAC_TCP_XO=Vitis_with_100Gbps_TCP-IP/_x.hw.$(XSA)/cmac_krnl.xo
@@ -130,7 +127,6 @@ else ifeq (tcp, $(MODE))
 	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/Vitis_with_100Gbps_TCP-IP/scripts/post_sys_link.tcl
 	CONFIG += --user_ip_repo_paths Vitis_with_100Gbps_TCP-IP/build/fpga-network-stack/iprepo
 	CCLO_STACK_TYPE = TCP
-	CCLO_EN_FANIN = 1
 else
 	$(error Unsupported MODE)
 endif
@@ -172,7 +168,7 @@ tcp_stack_ips:
 	$(MAKE) -C Vitis_with_100Gbps_TCP-IP/build installip
 
 $(XCLBIN): $(NET_XO) $(CONFIGFILE)
-	$(MAKE) -C ../../kernels/cclo PLATFORM=$(PLATFORM) STACK_TYPE=$(CCLO_STACK_TYPE) EN_FANIN=$(CCLO_EN_FANIN) MB_DEBUG_LEVEL=$(CCLO_MB_DEBUG_LEVEL)
+	$(MAKE) -C ../../kernels/cclo PLATFORM=$(PLATFORM) STACK_TYPE=$(CCLO_STACK_TYPE) MB_DEBUG_LEVEL=$(CCLO_MB_DEBUG_LEVEL)
 	$(MAKE) -C ../../kernels/plugins PLATFORM=$(PLATFORM) DEBUG=$(DEBUG)
 	v++ --link --platform $(PLATFORM) --kernel_frequency $(FREQUENCY) --save-temps --temp_dir $(BUILD_DIR) $(CONFIG) -o $@ $(CCLO_XO) $(HOSTCTRL_XO) $(CLIENT_ARB_XO) $(ARITHMETIC_XO) $(NET_XO) $(OTHER_XO)
 
