@@ -15,7 +15,7 @@
 #
 # *******************************************************************************/
 
-PLATFORM ?= xilinx_u280_xdma_201920_3
+PLATFORM ?= xilinx_u55c_gen3x16_xdma_3_202210_1
 # Supported Alveo platforms are:
 # U55C: xilinx_u55c_gen3x16_xdma_3_202210_1
 # U280: xilinx_u280_xdma_201920_3
@@ -45,6 +45,7 @@ TCP_XO=Vitis_with_100Gbps_TCP-IP/_x.hw.$(XSA)/network_krnl.xo
 TCP_VIVADO_ROOTDIR ?= $$XILINX_VIVADO
 TCP_HLS_ROOTDIR ?= $$XILINX_HLS
 CMAC_TCP_XO=Vitis_with_100Gbps_TCP-IP/_x.hw.$(XSA)/cmac_krnl.xo
+ROCE_XO=HiveNet/build/HiveNet_kernel_0.xo
 XCLBIN=$(BUILD_DIR)/ccl_offload.xclbin
 
 HOSTCTRL_XO=../../kernels/plugins/hostctrl/hostctrl.xo
@@ -127,6 +128,11 @@ else ifeq (tcp, $(MODE))
 	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/Vitis_with_100Gbps_TCP-IP/scripts/post_sys_link.tcl
 	CONFIG += --user_ip_repo_paths Vitis_with_100Gbps_TCP-IP/build/fpga-network-stack/iprepo
 	CCLO_STACK_TYPE = TCP
+else ifeq (roce, $(MODE))
+	NET_XO = $(ROCE_XO) $(CMAC_UDP_XO)
+	OTHER_XO = $(LOOPBACK_XO)
+	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/$(VNX)/Ethernet/post_sys_link.tcl
+	CCLO_STACK_TYPE = UDP
 else
 	$(error Unsupported MODE)
 endif
@@ -159,6 +165,9 @@ tcp_stack: $(TCP_XO)
 $(TCP_XO): tcp_stack_ips
 	git submodule update --init --recursive Vitis_with_100Gbps_TCP-IP
 	$(MAKE) -C Vitis_with_100Gbps_TCP-IP/ network_krnl DEVICE=$(PLATFORM) TEMP_DIR=_x.hw.$(XSA)/ XSA=$(XSA)
+
+$(ROCE_XO):
+	cd HiveNet && ./build.sh
 
 .PHONY: tcp_stack_ips
 tcp_stack_ips:

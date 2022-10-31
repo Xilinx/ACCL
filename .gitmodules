@@ -24,3 +24,6 @@
 [submodule "hlslib"]
 	path = hlslib
 	url = https://github.com/quetric/hlslib.git
+[submodule "test/hardware/HiveNet"]
+	path = test/hardware/HiveNet
+	url = git@github.com:quetric/HiveNet.git
