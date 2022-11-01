@@ -199,7 +199,7 @@ CCLO *ACCL::stream_put(BaseBuffer &srcbuf, unsigned int count,
     return handle;
   } else {
     handle->wait();
-    check_return_value("send");
+    check_return_value("stream_put");
   }
 
   return nullptr;
@@ -227,7 +227,7 @@ CCLO *ACCL::stream_put(dataType src_data_type, unsigned int count,
     return handle;
   } else {
     handle->wait();
-    check_return_value("send");
+    check_return_value("stream_put");
   }
 
   return nullptr;
@@ -262,7 +262,7 @@ CCLO *ACCL::recv(BaseBuffer &dstbuf, unsigned int count,
     if (to_fpga == false) {
       dstbuf.sync_from_device();
     }
-    check_return_value("send");
+    check_return_value("recv");
   }
 
   return nullptr;
@@ -289,7 +289,7 @@ CCLO *ACCL::recv(dataType dst_data_type, unsigned int count,
     return handle;
   } else {
     handle->wait();
-    check_return_value("send");
+    check_return_value("recv");
   }
 
   return nullptr;
