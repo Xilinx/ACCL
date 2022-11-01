@@ -868,14 +868,14 @@ int reduce( unsigned int count,
         //corner-case copy for when running a single-node reduction
         return copy(count, src_addr, dst_addr, arcfg_offset, compression, stream);
     }else if( prev_in_ring == root_rank){
-        //non root ranks immediately after the root sends
-        return send(next_in_ring, count, src_addr, comm_offset, arcfg_offset, TAG_ANY, compression, stream);
+        //non root ranks immediately after the root sends; only OP0_STREAM flag is relevant here
+        return send(next_in_ring, count, src_addr, comm_offset, arcfg_offset, TAG_ANY, compression, (stream & OP0_STREAM));
     }else if (world.local_rank != root_rank){
-        //non root ranks sends their data + data received from previous rank to the next rank in sequence as a daisy chain
-        return fused_recv_reduce_send(prev_in_ring, next_in_ring, count, func, src_addr, comm_offset, arcfg_offset, TAG_ANY, compression, stream);
+        //non root ranks sends their data + data received from previous rank to the next rank in sequence as a daisy chain; only OP0_STREAM flag is relevant here
+        return fused_recv_reduce_send(prev_in_ring, next_in_ring, count, func, src_addr, comm_offset, arcfg_offset, TAG_ANY, compression, (stream & OP0_STREAM));
     }else{	
         //root only receive from previous node in the ring, add its local buffer and save in destination buffer 
-        return fused_recv_reduce(prev_in_ring, count, func, src_addr, dst_addr, comm_offset, arcfg_offset, TAG_ANY, compression,stream);
+        return fused_recv_reduce(prev_in_ring, count, func, src_addr, dst_addr, comm_offset, arcfg_offset, TAG_ANY, compression, stream);
     }
 }
 

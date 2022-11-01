@@ -1027,6 +1027,45 @@ void test_reduce_compressed(ACCL::ACCL &accl, options_t &options, int root,
   }
 }
 
+void test_reduce_stream(ACCL::ACCL &accl, options_t &options, int root,
+                 reduceFunction function) {
+  std::cout << "Start stream reduce test..." << std::endl;
+  unsigned int count = options.count;
+  auto op_buf = accl.create_buffer<float>(count, dataType::float32);
+  auto res_buf = accl.create_buffer<float>(count, dataType::float32);
+  random_array(op_buf->buffer(), count);
+
+  test_debug("Loading stream on rank" + std::to_string(rank) + "...", options);
+  accl.copy_to_stream(*op_buf, count, false);
+  test_debug("Reduce data to " + std::to_string(root) + "...", options);
+  accl.reduce(dataType::float32, *res_buf, count, root, function);
+
+  if (rank == root) {
+    int errors = 0;
+
+    for (unsigned int i = 0; i < count; ++i) {
+      float res = (*res_buf)[i];
+      float ref = (*op_buf)[i] * size;
+
+      if (res != ref) {
+        std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
+                         std::to_string(res) + " != " + std::to_string(ref) +
+                         ")"
+                  << std::endl;
+        errors += 1;
+      }
+    }
+
+    if (errors > 0) {
+      std::cout << std::to_string(errors) + " errors!" << std::endl;
+      failed_tests++;
+    } else {
+      std::cout << "Test is successful!" << std::endl;
+    }
+  }
+}
+
+
 void test_reduce_scatter(ACCL::ACCL &accl, options_t &options,
                          reduceFunction function) {
   std::cout << "Start reduce scatter test and reduce function " +
@@ -1511,6 +1550,8 @@ int start_test(options_t options) {
     test_reduce(*accl, options, root, reduceFunction::SUM);
     MPI_Barrier(MPI_COMM_WORLD);
     test_reduce_compressed(*accl, options, root, reduceFunction::SUM);
+    MPI_Barrier(MPI_COMM_WORLD);
+    test_reduce_stream(*accl, options, root, reduceFunction::SUM);
     MPI_Barrier(MPI_COMM_WORLD);
   }
 
