@@ -52,7 +52,6 @@ public:
    * @param hostctrl_ip   The hostctrl kernel on the FPGA
    * @param devicemem     Memory bank of device memory
    * @param rxbufmem      Memory banks of rxbuf memory
-   * @param networkmem    Memory bank of network memory
    * @param protocol      Network protocol to use
    * @param nbufs         Amount of buffers to use
    * @param bufsize       Size of buffers
@@ -60,9 +59,9 @@ public:
    */
   ACCL(const std::vector<rank_t> &ranks, int local_rank, xrt::device &device,
        xrt::ip &cclo_ip, xrt::kernel &hostctrl_ip, int devicemem,
-       const std::vector<int> &rxbufmem, int networkmem,
+       const std::vector<int> &rxbufmem,
        networkProtocol protocol = networkProtocol::TCP, int nbufs = 16,
-       addr_t bufsize = 1024,
+       addr_t bufsize = 1024, addr_t segsize = 1024,
        const arithConfigMap &arith_config = DEFAULT_ARITH_CONFIG);
 
   /**
@@ -79,7 +78,7 @@ public:
    */
   ACCL(const std::vector<rank_t> &ranks, int local_rank,
        unsigned int start_port, networkProtocol protocol = networkProtocol::TCP,
-       int nbufs = 16, addr_t bufsize = 1024,
+       int nbufs = 16, addr_t bufsize = 1024, addr_t segsize = 1024,
        const arithConfigMap &arith_config = DEFAULT_ARITH_CONFIG);
 
   /**
@@ -100,7 +99,7 @@ public:
   ACCL(const std::vector<rank_t> &ranks, int local_rank,
        unsigned int start_port, xrt::device &device,
        networkProtocol protocol = networkProtocol::TCP, int nbufs = 16,
-       addr_t bufsize = 1024,
+       addr_t bufsize = 1024, addr_t segsize = 1024,
        const arithConfigMap &arith_config = DEFAULT_ARITH_CONFIG);
 
   /**
@@ -880,6 +879,27 @@ public:
    */
   int devicemem() { return _devicemem; }
 
+  /**
+   * Open port on network interface of FPGA to exchange ACCL message.
+   *
+   * @param comm_id Numerical ID of the target communicator.
+   */
+  void open_port(communicatorId comm_id = GLOBAL_COMM);
+
+  /**
+   * Open connections with other ranks.
+   *
+   * @param comm_id Numerical ID of the target communicator.
+   */
+  void open_con(communicatorId comm_id = GLOBAL_COMM);
+
+  /**
+   * Close connections with other ranks.
+   *
+   * @param comm_id Numerical ID of the target communicator.
+   */
+  void close_con(communicatorId comm_id = GLOBAL_COMM);
+
 private:
   CCLO *cclo{};
   // Supported types and corresponding arithmetic config
@@ -891,9 +911,6 @@ private:
   std::vector<Buffer<int8_t> *> rx_buffer_spares;
   addr_t rx_buffer_size{};
   addr_t rx_buffers_adr{};
-  // Buffers for POE
-  Buffer<int8_t> *tx_buf_network{};
-  Buffer<int8_t> *rx_buf_network{};
   // Spare buffer for general use
   Buffer<int8_t> *utility_spare{};
   // List of communicators, to which users will add
@@ -912,8 +929,12 @@ private:
   // memory banks for hardware
   const int _devicemem;
   const std::vector<int> rxbufmem;
-  const int networkmem;
   xrt::device device;
+
+
+  // TCP safety flags
+  bool port_open{};
+  bool con_open{};
 
   CCLO *copy(BaseBuffer *srcbuf, BaseBuffer *dstbuf, unsigned int count,
                  bool from_fpga, bool to_fpga, streamFlags stream_flags,
@@ -921,7 +942,7 @@ private:
                  std::vector<CCLO *> waitfor);
 
   void initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
-                       int nbufs, addr_t bufsize);
+                       int nbufs, addr_t bufsize, addr_t segsize);
 
   void configure_arithmetic();
 
@@ -934,19 +955,11 @@ private:
 
   void check_return_value(const std::string function_name);
 
-  void prepare_call(CCLO::Options &options);
+  void prepare_call(CCLO::Options &options, bool check_tcp);
 
-  CCLO *call_async(CCLO::Options &options);
+  CCLO *call_async(CCLO::Options &options, bool check_tcp = true);
 
-  CCLO *call_sync(CCLO::Options &options);
-
-  void init_connection(communicatorId comm_id = GLOBAL_COMM);
-
-  void open_port(communicatorId comm_id = GLOBAL_COMM);
-
-  void open_con(communicatorId comm_id = GLOBAL_COMM);
-
-  void close_con(communicatorId comm_id = GLOBAL_COMM);
+  CCLO *call_sync(CCLO::Options &options, bool check_tcp = true);
 
   void use_udp(communicatorId comm_id = GLOBAL_COMM);
 

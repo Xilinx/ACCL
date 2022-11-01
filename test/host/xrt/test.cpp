@@ -20,6 +20,8 @@
 #include <cstdlib>
 #include <experimental/xrt_ip.h>
 #include <functional>
+#include <fstream>
+#include <json/json.h>
 #include <mpi.h>
 #include <random>
 #include <sstream>
@@ -54,7 +56,10 @@ struct options_t {
   bool hardware;
   bool axis3;
   bool udp;
+  bool tcp;
   std::string xclbin;
+  std::string config_file;
+  std::vector<std::string> ips;
 };
 
 void test_debug(std::string message, options_t &options) {
@@ -1301,24 +1306,73 @@ void configure_vnx(CMAC &cmac, Networklayer &network_layer,
   MPI_Barrier(MPI_COMM_WORLD);
 }
 
+void configure_tcp(BaseBuffer &tx_buf_network, BaseBuffer &rx_buf_network,
+                   xrt::kernel &network_krnl, std::vector<rank_t> &ranks,
+                   options_t &options) {
+  std::cout << "Configure TCP Network Kernel" << std::endl;
+  tx_buf_network.sync_to_device();
+  rx_buf_network.sync_to_device();
+
+  uint local_fpga_ip = ip_encode(ranks[rank].ip);
+  std::cout << "rank: " << rank << " FPGA IP: " << std::hex << local_fpga_ip
+            << std::endl;
+
+  network_krnl(local_fpga_ip, static_cast<uint32_t>(rank), local_fpga_ip,
+               *(tx_buf_network.bo()), *(rx_buf_network.bo()));
+
+  uint32_t ip_reg = network_krnl.read_register(0x010);
+  uint32_t board_reg = network_krnl.read_register(0x018);
+  std::cout << std::hex << "ip_reg: " << ip_reg
+            << " board_reg IP: " << board_reg << std::endl;
+}
+
+std::vector<std::string> get_ips(std::string config_file, bool local) {
+  std::vector<std::string> ips;
+  if (config_file == "") {
+    for (int i = 0; i < size; ++i) {
+      if (local) {
+        ips.emplace_back("127.0.0.1");
+      } else {
+        ips.emplace_back("10.10.10." + std::to_string(i));
+      }
+    }
+  } else {
+    Json::Value config;
+    std::ifstream config_file_stream(config_file);
+    config_file_stream >> config;
+    Json::Value ip_config = config["ips"];
+    for (int i = 0; i < size; ++i) {
+      std::string ip = ip_config[i].asString();
+      if (ip == "") {
+        throw std::runtime_error("No ip for rank " + std::to_string(i)
+                                 + " in config file.");
+      }
+      ips.push_back(ip);
+    }
+  }
+
+  return ips;
+}
+
 int start_test(options_t options) {
   std::vector<rank_t> ranks = {};
   failed_tests = 0;
   skipped_tests = 0;
+  options.ips = get_ips(options.config_file,
+                        !options.hardware || options.axis3);
   for (int i = 0; i < size; ++i) {
-    std::string ip;
-    if (options.hardware && !options.axis3) {
-      ip = "10.10.10." + std::to_string(i);
-    } else {
-      ip = "127.0.0.1";
-    }
-    rank_t new_rank = {ip, options.start_port + i, i, options.rxbuf_size};
+    rank_t new_rank = {options.ips[i], options.start_port + i, i,
+                       options.rxbuf_size};
     ranks.emplace_back(new_rank);
   }
 
   std::unique_ptr<ACCL::ACCL> accl;
+  std::unique_ptr<ACCL::BaseBuffer> tx_buf_network;
+  std::unique_ptr<ACCL::BaseBuffer> rx_buf_network;
 
   xrt::device device;
+
+  networkProtocol protocol;
 
   if (options.hardware || options.test_xrt_simulator) {
     device = xrt::device(options.device_index);
@@ -1348,8 +1402,11 @@ int start_test(options_t options) {
     } else {
       devicemem = 0;
       rxbufmem = {1};
-      networkmem = 2;
+      networkmem = 6;
     }
+
+    protocol = options.udp || options.axis3 ? networkProtocol::UDP
+                                            : networkProtocol::TCP;
 
     if (options.udp) {
       auto cmac = CMAC(xrt::ip(device, xclbin_uuid, "cmac_0:{cmac_0}"));
@@ -1357,21 +1414,35 @@ int start_test(options_t options) {
           xrt::ip(device, xclbin_uuid, "networklayer:{networklayer_0}"));
 
       configure_vnx(cmac, network_layer, ranks, options);
+    } else if (options.tcp) {
+      tx_buf_network = std::unique_ptr<BaseBuffer>(new FPGABuffer<int8_t>(
+          64 * 1024 * 1024, dataType::int8, device, networkmem));
+      rx_buf_network = std::unique_ptr<BaseBuffer>(new FPGABuffer<int8_t>(
+          64 * 1024 * 1024, dataType::int8, device, networkmem));
+      auto network_krnl =
+          xrt::kernel(device, xclbin_uuid, "network_krnl:{network_krnl_0}",
+                      xrt::kernel::cu_access_mode::exclusive);
+      configure_tcp(*tx_buf_network, *rx_buf_network, network_krnl, ranks,
+                    options);
     }
 
     accl = std::make_unique<ACCL::ACCL>(
         ranks, rank, device, cclo_ip, hostctrl_ip, devicemem, rxbufmem,
-        networkmem,
-        options.udp || options.axis3 ? networkProtocol::UDP
-                                     : networkProtocol::TCP,
-        16, options.rxbuf_size);
+        protocol, 16, options.rxbuf_size);
   } else {
+    protocol = options.udp ? networkProtocol::UDP : networkProtocol::TCP;
     accl = std::make_unique<ACCL::ACCL>(ranks, rank, options.start_port, device,
-                                        options.udp ? networkProtocol::UDP
-                                                    : networkProtocol::TCP,
+                                        protocol,
                                         16, options.rxbuf_size);
   }
-  accl->set_timeout(1e8);
+  if (protocol == networkProtocol::TCP) {
+    MPI_Barrier(MPI_COMM_WORLD);
+    accl->open_port();
+    MPI_Barrier(MPI_COMM_WORLD);
+    accl->open_con();
+  }
+
+  accl->set_timeout(1e6);
 
   // barrier here to make sure all the devices are configured before testing
   MPI_Barrier(MPI_COMM_WORLD);
@@ -1478,11 +1549,12 @@ options_t parse_options(int argc, char *argv[]) {
                                           false, 1, "positive integer");
   cmd.add(nruns_arg);
   TCLAP::ValueArg<uint16_t> start_port_arg(
-      "s", "start-port", "Start of range of ports usable for sim", false, 5500,
+      "p", "start-port", "Start of range of ports usable for sim", false, 5500,
       "positive integer");
   cmd.add(start_port_arg);
-  TCLAP::ValueArg<unsigned int> count_arg("c", "count", "How many bytes per buffer",
-                                      false, 16, "positive integer");
+  TCLAP::ValueArg<unsigned int> count_arg("s", "count",
+                                          "How many items per test",
+                                          false, 16, "positive integer");
   cmd.add(count_arg);
   TCLAP::ValueArg<unsigned int> bufsize_arg("b", "rxbuf-size",
                                         "How many KB per RX buffer", false, 1,
@@ -1494,6 +1566,7 @@ options_t parse_options(int argc, char *argv[]) {
   TCLAP::SwitchArg axis3_arg("a", "axis3", "Use axis3 hardware setup", cmd,
                              false);
   TCLAP::SwitchArg udp_arg("u", "udp", "Use UDP hardware setup", cmd, false);
+  TCLAP::SwitchArg tcp_arg("t", "tcp", "Use TCP hardware setup", cmd, false);
   TCLAP::ValueArg<std::string> xclbin_arg(
       "x", "xclbin", "xclbin of accl driver if hardware mode is used", false,
       "accl.xclbin", "file");
@@ -1502,13 +1575,17 @@ options_t parse_options(int argc, char *argv[]) {
       "i", "device-index", "device index of FPGA if hardware mode is used",
       false, 0, "positive integer");
   cmd.add(device_index_arg);
+  TCLAP::ValueArg<std::string> config_arg(
+      "c", "config", "Config file containing IP mapping",
+      false, "", "JSON file");
+  cmd.add(config_arg);
 
   try {
     cmd.parse(argc, argv);
     if (hardware_arg.getValue()) {
-      if (axis3_arg.getValue() == udp_arg.getValue()) {
-        throw std::runtime_error("When using hardware, specify either axis3 or "
-                                 "udp mode, but not both.");
+      if (axis3_arg.getValue() + udp_arg.getValue() + tcp_arg.getValue() != 1) {
+        throw std::runtime_error("When using hardware, specify one of axis3, "
+                                 "tcp, or udp mode, but not both.");
       }
     }
   } catch (std::exception &e) {
@@ -1529,9 +1606,11 @@ options_t parse_options(int argc, char *argv[]) {
   opts.hardware = hardware_arg.getValue();
   opts.axis3 = axis3_arg.getValue();
   opts.udp = udp_arg.getValue();
+  opts.tcp = tcp_arg.getValue();
   opts.device_index = device_index_arg.getValue();
   opts.xclbin = xclbin_arg.getValue();
   opts.test_xrt_simulator = xrt_simulator_ready(opts);
+  opts.config_file = config_arg.getValue();
   return opts;
 }
 

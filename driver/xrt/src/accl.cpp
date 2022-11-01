@@ -29,41 +29,40 @@
 namespace ACCL {
 ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
            xrt::device &device, xrt::ip &cclo_ip, xrt::kernel &hostctrl_ip,
-           int devicemem, const std::vector<int> &rxbufmem, int networkmem,
-           networkProtocol protocol, int nbufs, addr_t bufsize,
+           int devicemem, const std::vector<int> &rxbufmem,
+           networkProtocol protocol, int nbufs, addr_t bufsize, addr_t segsize,
            const arithConfigMap &arith_config)
     : arith_config(arith_config), protocol(protocol), sim_mode(false),
-      _devicemem(devicemem), rxbufmem(rxbufmem), networkmem(networkmem),
+      _devicemem(devicemem), rxbufmem(rxbufmem),
       device(device) {
   cclo = new FPGADevice(cclo_ip, hostctrl_ip);
-  initialize_accl(ranks, local_rank, nbufs, bufsize);
+  initialize_accl(ranks, local_rank, nbufs, bufsize, segsize);
 }
 
 // Simulation constructor
 ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
            unsigned int sim_start_port, networkProtocol protocol, int nbufs,
-           addr_t bufsize, const arithConfigMap &arith_config)
+           addr_t bufsize, addr_t segsize, const arithConfigMap &arith_config)
     : arith_config(arith_config), protocol(protocol), sim_mode(true),
-      _devicemem(0), rxbufmem({}), networkmem(0) {
+      _devicemem(0), rxbufmem({}) {
   cclo = new SimDevice(sim_start_port, local_rank);
-  initialize_accl(ranks, local_rank, nbufs, bufsize);
+  debug("initialize_accl");
+  initialize_accl(ranks, local_rank, nbufs, bufsize, segsize);
 }
 
 ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
            unsigned int sim_start_port, xrt::device &device,
-           networkProtocol protocol, int nbufs, addr_t bufsize,
+           networkProtocol protocol, int nbufs, addr_t bufsize, addr_t segsize,
            const arithConfigMap &arith_config)
     : arith_config(arith_config), protocol(protocol), sim_mode(true),
-      _devicemem(0), rxbufmem({}), networkmem(0), device(device) {
+      _devicemem(0), rxbufmem({}), device(device) {
   cclo = new SimDevice(sim_start_port, local_rank);
-  initialize_accl(ranks, local_rank, nbufs, bufsize);
+  initialize_accl(ranks, local_rank, nbufs, bufsize, segsize);
 }
 
 ACCL::~ACCL() {
   deinit();
   delete cclo;
-  delete tx_buf_network;
-  delete rx_buf_network;
 }
 
 void ACCL::deinit() {
@@ -94,7 +93,7 @@ CCLO *ACCL::set_timeout(unsigned int value, bool run_async,
   options.scenario = operation::config;
   options.count = value;
   options.cfg_function = cfgFunc::set_timeout;
-  CCLO *handle = call_async(options);
+  CCLO *handle = call_async(options, false);
 
   if (run_async) {
     return handle;
@@ -895,7 +894,7 @@ std::string ACCL::dump_rx_buffers(size_t nbufs, bool dump_data) {
 }
 
 void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
-                           int nbufs, addr_t bufsize) {
+                           int nbufs, addr_t bufsize , addr_t segsize) {
   reset_log();
   debug("CCLO HWID: " + std::to_string(get_hwid()) + " at 0x" +
         debug_hex(cclo->get_base_addr()));
@@ -915,9 +914,11 @@ void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
   configure_arithmetic();
 
   // Mark CCLO as configured
+  debug("CCLO configured");
   cclo->write(CFGRDY_OFFSET, 1);
   config_rdy = true;
 
+  debug("Set timeout");
   set_timeout(1000000);
 
   CCLO::Options options{};
@@ -925,30 +926,18 @@ void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
   options.cfg_function = cfgFunc::enable_pkt;
   call_sync(options);
 
-  set_max_segment_size(bufsize);
+  debug("Set max segment size: " + std::to_string(segsize));
+  set_max_segment_size(segsize);
   switch (protocol) {
   case networkProtocol::UDP:
     use_udp();
     break;
   case networkProtocol::TCP:
-    if (!sim_mode) {
-      tx_buf_network = new FPGABuffer<int8_t>(NETWORK_BUF_SIZE, dataType::int8,
-                                              device, networkmem);
-      rx_buf_network = new FPGABuffer<int8_t>(NETWORK_BUF_SIZE, dataType::int8,
-                                              device, networkmem);
-      tx_buf_network->sync_to_device();
-      rx_buf_network->sync_to_device();
-    }
     use_tcp();
     break;
   default:
     throw std::runtime_error(
         "Requested network protocol is not yet supported.");
-  }
-
-  if (protocol == networkProtocol::TCP) {
-    debug("Starting connections to communicator ranks");
-    init_connection();
   }
 
   debug("Accelerator ready!");
@@ -1044,8 +1033,18 @@ void ACCL::check_return_value(const std::string function_name) {
   }
 }
 
-void ACCL::prepare_call(CCLO::Options &options) {
+void ACCL::prepare_call(CCLO::Options &options, bool check_tcp) {
   const ArithConfig *arithcfg;
+
+  if (check_tcp && protocol == networkProtocol::TCP) {
+    if (!port_open) {
+      throw std::runtime_error("ACCL not ready yet; port still closed!");
+    }
+
+    if (!con_open) {
+      throw std::runtime_error("ACCL not ready yet; connection still closed!");
+    }
+  }
 
   std::set<dataType> dtypes;
 
@@ -1161,58 +1160,72 @@ void ACCL::prepare_call(CCLO::Options &options) {
   options.arithcfg_addr = arithcfg->addr();
 }
 
-CCLO *ACCL::call_async(CCLO::Options &options) {
+CCLO *ACCL::call_async(CCLO::Options &options, bool check_tcp) {
   if (!config_rdy) {
     throw std::runtime_error("CCLO not configured, cannot call");
   }
 
-  prepare_call(options);
+  prepare_call(options, check_tcp);
   cclo->start(options);
   return cclo;
 }
 
-CCLO *ACCL::call_sync(CCLO::Options &options) {
+CCLO *ACCL::call_sync(CCLO::Options &options, bool check_tcp) {
   if (!config_rdy) {
     throw std::runtime_error("CCLO not configured, cannot call");
   }
 
-  prepare_call(options);
+  prepare_call(options, check_tcp);
   cclo->call(options);
   return cclo;
 }
 
-void ACCL::init_connection(communicatorId comm_id) {
-  debug("Opening ports to communicator ranks");
-  open_port(comm_id);
-  debug("Starting session to communicator ranks");
-  open_con(comm_id);
-}
-
 void ACCL::open_port(communicatorId comm_id) {
+  if (port_open) {
+    throw std::runtime_error("Port already open");
+  }
+
+  debug("Opening ports...");
+
   CCLO::Options options{};
   options.scenario = operation::config;
   options.comm = communicators[comm_id].communicators_addr();
   options.cfg_function = cfgFunc::open_port;
   call_sync(options);
   check_return_value("open_port");
+  port_open = true;
+  debug("Ports open!");
 }
 
 void ACCL::open_con(communicatorId comm_id) {
+  if (con_open) {
+    throw std::runtime_error("Connection already open");
+  }
+
+  debug("Opening connections...");
+
   CCLO::Options options{};
   options.scenario = operation::config;
   options.comm = communicators[comm_id].communicators_addr();
   options.cfg_function = cfgFunc::open_con;
   call_sync(options);
   check_return_value("open_con");
+  con_open = true;
+  debug("Connections open!");
 }
 
 void ACCL::close_con(communicatorId comm_id) {
+    if (!con_open) {
+    throw std::runtime_error("Connection not open yet");
+  }
+
   CCLO::Options options{};
   options.scenario = operation::config;
   options.comm = communicators[comm_id].communicators_addr();
   options.cfg_function = cfgFunc::close_con;
   call_sync(options);
   check_return_value("close_con");
+  con_open = false;
 }
 
 void ACCL::use_udp(communicatorId comm_id) {
