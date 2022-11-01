@@ -72,7 +72,7 @@ void ACCL::deinit() {
   options.scenario = operation::config;
   options.comm = communicators[GLOBAL_COMM].communicators_addr();
   options.cfg_function = cfgFunc::reset_periph;
-  call_sync(options);
+  call_sync(options, false);
 
   for (auto &buf : rx_buffer_spares) {
     buf->free_buffer();
@@ -924,7 +924,7 @@ void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
   CCLO::Options options{};
   options.scenario = operation::config;
   options.cfg_function = cfgFunc::enable_pkt;
-  call_sync(options);
+  call_sync(options, false);
 
   debug("Set max segment size: " + std::to_string(segsize));
   set_max_segment_size(segsize);
@@ -1191,7 +1191,7 @@ void ACCL::open_port(communicatorId comm_id) {
   options.scenario = operation::config;
   options.comm = communicators[comm_id].communicators_addr();
   options.cfg_function = cfgFunc::open_port;
-  call_sync(options);
+  call_sync(options, false);
   check_return_value("open_port");
   port_open = true;
   debug("Ports open!");
@@ -1208,7 +1208,7 @@ void ACCL::open_con(communicatorId comm_id) {
   options.scenario = operation::config;
   options.comm = communicators[comm_id].communicators_addr();
   options.cfg_function = cfgFunc::open_con;
-  call_sync(options);
+  call_sync(options, false);
   check_return_value("open_con");
   con_open = true;
   debug("Connections open!");
@@ -1223,7 +1223,7 @@ void ACCL::close_con(communicatorId comm_id) {
   options.scenario = operation::config;
   options.comm = communicators[comm_id].communicators_addr();
   options.cfg_function = cfgFunc::close_con;
-  call_sync(options);
+  call_sync(options, false);
   check_return_value("close_con");
   con_open = false;
 }
@@ -1234,7 +1234,7 @@ void ACCL::use_udp(communicatorId comm_id) {
   options.comm = communicators[comm_id].communicators_addr();
   options.cfg_function = cfgFunc::set_stack_type;
   options.count = 0;
-  call_sync(options);
+  call_sync(options, false);
   check_return_value("use_udp");
 }
 
@@ -1244,7 +1244,7 @@ void ACCL::use_tcp(communicatorId comm_id) {
   options.comm = communicators[comm_id].communicators_addr();
   options.cfg_function = cfgFunc::set_stack_type;
   options.count = 1;
-  call_sync(options);
+  call_sync(options, false);
   check_return_value("use_tcp");
 }
 
@@ -1264,7 +1264,7 @@ void ACCL::set_max_segment_size(unsigned int value) {
   options.scenario = operation::config;
   options.cfg_function = cfgFunc::set_max_segment_size;
   options.count = value;
-  call_sync(options);
+  call_sync(options, false);
   segment_size = value;
   check_return_value("set_max_segment_size");
 }
