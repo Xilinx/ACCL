@@ -22,6 +22,7 @@
 #include "constants.hpp"
 #include <iostream>
 #include <sstream>
+#include <string>
 
 /** @file common.hpp */
 
@@ -102,5 +103,19 @@ inline void accl_send_log(const std::string &label,
  * @param addr     Address on the FPGA to write arithmetic configuration to.
  */
 void write_arithconfig(CCLO &cclo, ArithConfig &arithcfg, addr_t *addr);
+
+/**
+ * Encode an IP address from string to integer.
+ *
+ * @param ip       IP string to encode.
+ */
+uint32_t ip_encode(std::string ip);
+
+/**
+ * Decode an IP address from integer to string.
+ *
+ * @param ip       Encoded IP integer to decode.
+ */
+std::string ip_decode(uint32_t ip);
 
 } // namespace ACCL

@@ -144,8 +144,8 @@ all: $(XCLBIN)
 .PHONY: vnx
 vnx: $(CMAC_UDP_XO) $(UDP_XO)
 
-$(CMAC_UDP_XO) &:	
-	git submodule update --init --recursive xup_vitis_network_example	
+$(CMAC_UDP_XO) &:
+	git submodule update --init --recursive xup_vitis_network_example
 	$(MAKE) -C xup_vitis_network_example/Ethernet DEVICE=$(PLATFORM) INTERFACE=$(ETH_IF) all
 
 $(UDP_XO):
@@ -173,7 +173,7 @@ $(ROCE_XO):
 tcp_stack_ips:
 	git submodule update --init --recursive Vitis_with_100Gbps_TCP-IP
 	mkdir -p Vitis_with_100Gbps_TCP-IP/build
-	cmake -S Vitis_with_100Gbps_TCP-IP/ -BVitis_with_100Gbps_TCP-IP/build/ -DFDEV_NAME=$(BOARD) -DVIVADO_HLS_ROOT_DIR=$(TCP_HLS_ROOTDIR) -DVIVADO_ROOT_DIR=$(TCP_VIVADO_ROOTDIR) -DTCP_STACK_EN=1 -DTCP_STACK_RX_DDR_BYPASS_EN=1 -DTCP_STACK_WINDOW_SCALING=0 
+	cmake -S Vitis_with_100Gbps_TCP-IP/ -BVitis_with_100Gbps_TCP-IP/build/ -DFDEV_NAME=$(BOARD) -DVIVADO_HLS_ROOT_DIR=$(TCP_HLS_ROOTDIR) -DVIVADO_ROOT_DIR=$(TCP_VIVADO_ROOTDIR) -DTCP_STACK_EN=1 -DTCP_STACK_RX_DDR_BYPASS_EN=1 -DDTCP_STACK_WINDOW_SCALING_EN=0
 	$(MAKE) -C Vitis_with_100Gbps_TCP-IP/build installip
 
 $(XCLBIN): $(NET_XO) $(CONFIGFILE)

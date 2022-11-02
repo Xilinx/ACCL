@@ -64,7 +64,6 @@ void tx_handler (
         }
     break;
     case WRITE_STATUS:
-        if (!STREAM_IS_FULL(m_axis_tcp_tx_status))
         {
             pkt64 tx_status_pkt;
             tx_status_pkt.data(15,0) = session;
