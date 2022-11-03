@@ -167,7 +167,7 @@ $(TCP_XO): tcp_stack_ips
 	$(MAKE) -C Vitis_with_100Gbps_TCP-IP/ network_krnl DEVICE=$(PLATFORM) TEMP_DIR=_x.hw.$(XSA)/ XSA=$(XSA)
 
 $(ROCE_XO):
-	cd HiveNet && ./build.sh
+	$(MAKE) -C HiveNet
 
 .PHONY: tcp_stack_ips
 tcp_stack_ips:
