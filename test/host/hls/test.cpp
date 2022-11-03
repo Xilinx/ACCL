@@ -70,7 +70,7 @@ std::unique_ptr<ACCL::ACCL> test_vadd_put(options_t options) {
 
         accl = std::make_unique<ACCL::ACCL>(
             ranks, rank, device, cclo_ip, hostctrl_ip, devicemem, rxbufmem,
-            networkmem, networkProtocol::UDP, 16, options.rxbuf_size);
+            networkProtocol::UDP, 16, options.rxbuf_size);
     } else {
         accl = std::make_unique<ACCL::ACCL>(ranks, rank, options.start_port,
                                                 options.udp ? networkProtocol::UDP : networkProtocol::TCP, 16,
@@ -100,7 +100,7 @@ std::unique_ptr<ACCL::ACCL> test_vadd_put(options_t options) {
 
         src_bo.write(src);
         src_bo.sync(XCL_BO_SYNC_BO_TO_DEVICE);
-        auto run = vadd_ip(src_bo, dst_bo, options.count, (rank+1)%size, accl->get_communicator_addr(), 
+        auto run = vadd_ip(src_bo, dst_bo, options.count, (rank+1)%size, accl->get_communicator_addr(),
                     accl->get_arithmetic_config_addr({dataType::float32, dataType::float32}));
         run.wait(10000);
 
@@ -117,11 +117,11 @@ std::unique_ptr<ACCL::ACCL> test_vadd_put(options_t options) {
         MPI_Barrier(MPI_COMM_WORLD);
 
         //run the hls function, using the global communicator
-        vadd_put(   src, dst, options.count, 
+        vadd_put(   src, dst, options.count,
                     (rank+1)%size,
-                    accl->get_communicator_addr(), 
-                    accl->get_arithmetic_config_addr({dataType::float32, dataType::float32}), 
-                    callreq, callack, 
+                    accl->get_communicator_addr(),
+                    accl->get_arithmetic_config_addr({dataType::float32, dataType::float32}),
+                    callreq, callack,
                     data_krnl2cclo, data_cclo2krnl);
         //stop the BFM
         cclo.stop();
