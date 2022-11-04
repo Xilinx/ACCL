@@ -114,7 +114,7 @@ void udp_depacketizer(
 
 #ifndef ACCL_SYNTHESIS
 	std::stringstream ss;
-	ss << "UDP Depacketizer: Processing incoming fragment\n";
+	ss << "UDP Depacketizer: Processing incoming fragment for session " << notif.session_id << "\n";
 	std::cout << ss.str();
 	ss.str(std::string());
 #endif
@@ -143,7 +143,8 @@ void udp_depacketizer(
 		message_strm = target_strm[notif.session_id];
 		inword.dest = message_strm;
 		STREAM_WRITE(out, inword);
-		current_bytes += bytes_per_word;
+		current_bytes += (message_rem < bytes_per_word) ? message_rem : bytes_per_word;
+		message_rem = (message_rem < bytes_per_word) ? 0u : message_rem-bytes_per_word;
 	}
 	//write out SOF
 	if(message_strm == 0){
