@@ -68,20 +68,31 @@ proc create_udp_rx_subsystem { parentCell nameHier } {
    CONFIG.TDATA_NUM_BYTES {64} \
  ] $rx_fifo
 
+  set dpkt_fifo [ create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 dpkt_fifo ]
+  set_property -dict [ list \
+   CONFIG.HAS_TKEEP {1} \
+   CONFIG.HAS_TLAST {1} \
+   CONFIG.IS_ACLK_ASYNC {0} \
+   CONFIG.TDATA_NUM_BYTES {64} \
+   CONFIG.FIFO_DEPTH {32} \
+   CONFIG.FIFO_MEMORY_TYPE {distributed} \
+ ] $dpkt_fifo
+
   # Create instance: udp_depacketizer_0, and set properties
   set udp_depacketizer_0 [ create_bd_cell -type ip -vlnv xilinx.com:hls:udp_depacketizer:1.0 udp_depacketizer_0 ]
 
   # Create interface connections
-  connect_bd_intf_net -intf_net control [get_bd_intf_pins s_axi_control] [get_bd_intf_pins udp_depacketizer_0/s_axi_control]
-  connect_bd_intf_net -intf_net in2fifo [get_bd_intf_pins s_axis_data] [get_bd_intf_pins rx_fifo/S_AXIS]
-  connect_bd_intf_net -intf_net fifo2dpkt [get_bd_intf_pins rx_fifo/M_AXIS] [get_bd_intf_pins udp_depacketizer_0/in_r]
-  connect_bd_intf_net -intf_net dpkt2out [get_bd_intf_pins m_axis_data] [get_bd_intf_pins udp_depacketizer_0/out_r]
-  connect_bd_intf_net -intf_net status [get_bd_intf_pins m_axis_status] [get_bd_intf_pins udp_depacketizer_0/sts]
-  connect_bd_intf_net [get_bd_intf_pins m_axis_notification] [get_bd_intf_pins udp_depacketizer_0/notif_out] 
+  connect_bd_intf_net [get_bd_intf_pins s_axi_control] [get_bd_intf_pins udp_depacketizer_0/s_axi_control]
+  connect_bd_intf_net [get_bd_intf_pins s_axis_data] [get_bd_intf_pins rx_fifo/S_AXIS]
+  connect_bd_intf_net [get_bd_intf_pins rx_fifo/M_AXIS] [get_bd_intf_pins udp_depacketizer_0/in_r]
+  connect_bd_intf_net [get_bd_intf_pins udp_depacketizer_0/out_r] [get_bd_intf_pins dpkt_fifo/S_AXIS]
+  connect_bd_intf_net [get_bd_intf_pins dpkt_fifo/M_AXIS] [get_bd_intf_pins m_axis_data]
+  connect_bd_intf_net [get_bd_intf_pins udp_depacketizer_0/sts] [get_bd_intf_pins m_axis_status] 
+  connect_bd_intf_net [get_bd_intf_pins udp_depacketizer_0/notif_out] [get_bd_intf_pins m_axis_notification]
 
   # Create port connections
-  connect_bd_net -net ap_clk [get_bd_pins ap_clk]  [get_bd_pins rx_fifo/s_axis_aclk] [get_bd_pins udp_depacketizer_0/ap_clk]
-  connect_bd_net -net ap_rst_n [get_bd_pins ap_rst_n] [get_bd_pins rx_fifo/s_axis_aresetn] [get_bd_pins udp_depacketizer_0/ap_rst_n]
+  connect_bd_net -net ap_clk [get_bd_pins ap_clk] [get_bd_pins rx_fifo/s_axis_aclk] [get_bd_pins dpkt_fifo/s_axis_aclk] [get_bd_pins udp_depacketizer_0/ap_clk]
+  connect_bd_net -net ap_rst_n [get_bd_pins ap_rst_n] [get_bd_pins rx_fifo/s_axis_aresetn] [get_bd_pins dpkt_fifo/s_axis_aresetn] [get_bd_pins udp_depacketizer_0/ap_rst_n]
 
   # Restore current instance
   current_bd_instance $oldCurInst

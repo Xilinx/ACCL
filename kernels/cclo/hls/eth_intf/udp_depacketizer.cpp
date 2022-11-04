@@ -141,7 +141,9 @@ void udp_depacketizer(
 		}
 	} else{//if remaining bytes is not zero, then this is a continuation of an old message
 		message_strm = target_strm[notif.session_id];
+		inword.dest = message_strm;
 		STREAM_WRITE(out, inword);
+		current_bytes += bytes_per_word;
 	}
 	//write out SOF
 	if(message_strm == 0){
@@ -157,7 +159,7 @@ void udp_depacketizer(
 		STREAM_WRITE(out, inword);
 		current_bytes += (message_rem < bytes_per_word) ? message_rem : bytes_per_word;
 		message_rem = (message_rem < bytes_per_word) ? 0u : message_rem-bytes_per_word;//slight problem here if the message doesnt end on a 64B boundary...
-	} while(inword.last != 0 && message_rem > 0 && current_bytes < (max_dma_bytes-bytes_per_word));
+	} while(inword.last == 0 && message_rem > 0 && current_bytes < (max_dma_bytes-bytes_per_word));
 	//write out EOF
 	if(message_strm == 0){
 		notif.length = current_bytes;
