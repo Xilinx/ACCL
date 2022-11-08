@@ -343,7 +343,7 @@ int send(
     unsigned int dst_tag,
     unsigned int compression,
     unsigned int stream
-){
+) {
     //if ETH_COMPRESSED is set, also set RES_COMPRESSED
     compression |= (compression & ETH_COMPRESSED) >> 1;
     //TODO: when doing a one-sided send to a remote stream, check:
@@ -362,14 +362,16 @@ int send(
 
 //waits for a messages to come and move their contents in a buffer
 //use MOVE_ON_RECV
-int recv(	unsigned int src_rank,
-            unsigned int count,
-            uint64_t dst_addr,
-            unsigned int comm_offset,
-            unsigned int arcfg_offset,
-            unsigned int src_tag,
-            unsigned int compression,
-            unsigned int stream){
+int recv(
+    unsigned int src_rank,
+    unsigned int count,
+    uint64_t dst_addr,
+    unsigned int comm_offset,
+    unsigned int arcfg_offset,
+    unsigned int src_tag,
+    unsigned int compression,
+    unsigned int stream
+) {
     //if ETH_COMPRESSED is set, also set OP1_COMPRESSED
     compression |= (compression & ETH_COMPRESSED) >> 2;
     return move(
@@ -1014,6 +1016,8 @@ int allreduce(
         //if count does not divide by world.size, the chunk with the largest index (tail) will be smaller
         bulk_count = (elems + world.size - 1) / world.size;//equivalent to ceil(elems/world.size)
         tail_count = elems - bulk_count * (world.size - 1);
+
+        printf("[***###DEBUG###***] Starting allreduce starting at offset %ld (%d elems left) with bulk %d and tail %d\n", seg_src_buf_addr - src_buf_addr, elems_remaining, bulk_count, tail_count);
 
         //preamble: send our data to next in ring
         //prime the address slots for the source and destination,

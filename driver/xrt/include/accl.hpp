@@ -541,8 +541,8 @@ public:
    * @return CCLO*         CCLO object that can be waited on and passed to
    *                       waitfor; nullptr if run_async is false.
    */
-  CCLO *reduce(dataType src_data_type, BaseBuffer &recvbuf, unsigned int count, 
-                unsigned int root, reduceFunction func, 
+  CCLO *reduce(dataType src_data_type, BaseBuffer &recvbuf, unsigned int count,
+                unsigned int root, reduceFunction func,
                 communicatorId comm_id = GLOBAL_COMM,
                 bool to_fpga = false, dataType compress_dtype = dataType::none,
                 bool run_async = false, std::vector<CCLO *> waitfor = {});
@@ -574,7 +574,7 @@ public:
                bool run_async = false, std::vector<CCLO *> waitfor = {});
 
   /**
-   * Performs the stream to stream reduce operation on the FPGA 
+   * Performs the stream to stream reduce operation on the FPGA
    *
    * @param src_data_type  Data type of the input.
    * @param dst_data_type  Data type of the output.
@@ -591,8 +591,8 @@ public:
    * @return CCLO*         CCLO object that can be waited on and passed to
    *                       waitfor; nullptr if run_async is false.
    */
-  CCLO *reduce(dataType src_data_type, dataType dst_data_type, unsigned int count, 
-                unsigned int root, reduceFunction func, 
+  CCLO *reduce(dataType src_data_type, dataType dst_data_type, unsigned int count,
+                unsigned int root, reduceFunction func,
                 communicatorId comm_id = GLOBAL_COMM,
                 dataType compress_dtype = dataType::none,
                 bool run_async = false, std::vector<CCLO *> waitfor = {});
