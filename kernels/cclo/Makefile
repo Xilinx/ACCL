@@ -93,7 +93,7 @@ $(CCLO_DCP): tcl/generate_dcp.tcl $(CCLO_ELF)
 xo: $(CCLO_XO)
 
 ccl_offload.xml:
-	python gen_xml.py $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) 
+	python3 gen_xml.py $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL)
 
 $(CCLO_XO): tcl/generate_xo.tcl ccl_offload.xml $(CCLO_DCP)
 	rm -rf ccl_offload_ex/ccl_offload

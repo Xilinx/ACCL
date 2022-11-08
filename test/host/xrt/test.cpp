@@ -1467,12 +1467,12 @@ int start_test(options_t options) {
 
     accl = std::make_unique<ACCL::ACCL>(
         ranks, rank, device, cclo_ip, hostctrl_ip, devicemem, rxbufmem,
-        protocol, 16, options.rxbuf_size);
+        protocol, 16, options.rxbuf_size, options.rxbuf_size);
   } else {
     protocol = options.udp ? networkProtocol::UDP : networkProtocol::TCP;
     accl = std::make_unique<ACCL::ACCL>(ranks, rank, options.start_port, device,
-                                        protocol,
-                                        16, options.rxbuf_size);
+                                        protocol, 16, options.rxbuf_size,
+                                        options.rxbuf_size);
   }
   if (protocol == networkProtocol::TCP) {
     MPI_Barrier(MPI_COMM_WORLD);
