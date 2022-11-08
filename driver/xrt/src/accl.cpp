@@ -730,8 +730,6 @@ CCLO *ACCL::reduce(BaseBuffer &sendbuf, dataType dst_data_type,
 
   const Communicator &communicator = communicators[comm_id];
 
-  bool is_root = communicator.local_rank() == root;
-
   if (count == 0) {
     std::cerr << "ACCL: zero size buffer" << std::endl;
     return nullptr;
@@ -772,8 +770,6 @@ CCLO *ACCL::reduce(dataType src_data_type, dataType dst_data_type,
   CCLO::Options options{};
 
   const Communicator &communicator = communicators[comm_id];
-
-  bool is_root = communicator.local_rank() == root;
 
   if (count == 0) {
     std::cerr << "ACCL: zero size buffer" << std::endl;
