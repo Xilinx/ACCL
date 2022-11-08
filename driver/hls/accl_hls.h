@@ -385,7 +385,7 @@ class ACCLCommand{
         }
 
         /**
-         * @brief Reduce data from members of the communicator
+         * @brief Reduce data memory to memory
          * 
          * @param len Number of array elements
          * @param root Rank ID of root node
@@ -403,6 +403,46 @@ class ACCLCommand{
                 ACCL_REDUCE, len, comm_adr, root, function, 0, 
                 dpcfg_adr, cflags, sflags, 
                 src_addr, 0, dst_addr
+            );
+            finalize_call();
+        }
+
+        /**
+         * @brief Reduce data stream to memory
+         * 
+         * @param len Number of array elements
+         * @param root Rank ID of root node
+         * @param function Reduction function ID
+         * @param dst_addr Destination array address
+         */
+        void reduce(ap_uint<32> len,
+                    ap_uint<32> root,
+                    ap_uint<32> function,
+                    ap_uint<64> dst_addr
+        ){
+            start_call(
+                ACCL_REDUCE, len, comm_adr, root, function, 0, 
+                dpcfg_adr, cflags, 1, 
+                0, 0, dst_addr
+            );
+            finalize_call();
+        }
+
+        /**
+         * @brief Reduce data stream to stream
+         * 
+         * @param len Number of array elements
+         * @param root Rank ID of root node
+         * @param function Reduction function ID
+         */
+        void reduce(ap_uint<32> len,
+                    ap_uint<32> root,
+                    ap_uint<32> function
+        ){
+            start_call(
+                ACCL_REDUCE, len, comm_adr, root, function, 0, 
+                dpcfg_adr, cflags, 3, 
+                0, 0, 0
             );
             finalize_call();
         }
