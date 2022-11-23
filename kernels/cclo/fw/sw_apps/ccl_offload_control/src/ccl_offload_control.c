@@ -512,6 +512,44 @@ int fused_recv_reduce_send(
     return err;
 }
 
+//1) receives from a rank 
+//2) sums with a a buffer
+//3) result is put to another rank, with stream_id=0
+int fused_recv_reduce_put(
+        unsigned int src_rank,
+        unsigned int dst_rank,
+        unsigned int count,
+        unsigned int func,
+        uint64_t op0_addr,
+        unsigned int comm_offset,
+        unsigned int arcfg_offset,
+        unsigned int mpi_tag,
+        unsigned int compression,
+        unsigned int stream)
+    {
+
+    unsigned int err = NO_ERROR;
+
+    //figure out compression
+    //if ETH_COMPRESSED flag is set, then we need to set OP1_COMPRESSED (for the recv)
+    //and RES_COMPRESSED (for the send)
+    //keep OP0_COMPRESSED as-is
+    compression = (compression & OP0_COMPRESSED) | ((compression & ETH_COMPRESSED) >> 1) | ((compression & ETH_COMPRESSED) >> 2);
+
+    err |= move(
+        (stream & OP0_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE, 
+        MOVE_ON_RECV,
+        MOVE_STREAM, 
+        compression, RES_REMOTE, func,
+        count,
+        comm_offset, arcfg_offset, 
+        op0_addr, 0, 0, 0, 0, 0,
+        src_rank, mpi_tag, dst_rank, 0
+    );
+
+    return err;
+}
+
 //COLLECTIVES
 
 //root reads multiple times the same segment and send it to each rank before 
@@ -877,6 +915,39 @@ int reduce( unsigned int count,
         //root only receive from previous node in the ring, add its local buffer and save in destination buffer 
         return fused_recv_reduce(prev_in_ring, count, func, src_addr, dst_addr, comm_offset, arcfg_offset, TAG_ANY, compression, stream);
     }
+}
+
+//every rank receives a buffer it reduces its own buffer and forwards to next rank in the ring
+//the final step to the root is with a put instead of a send, and the root does not sum its own data
+//(in fact root is completely passive, only receives result)
+int reduce_put( unsigned int count,
+            unsigned int func,
+            unsigned int root_rank,
+            uint64_t src_addr,
+            uint64_t dst_addr,
+            unsigned int comm_offset,
+            unsigned int arcfg_offset,
+            unsigned int compression,
+            unsigned int stream){
+
+    unsigned int next_in_ring = (world.local_rank + 1) % world.size;
+    unsigned int prev_in_ring = (world.local_rank + world.size-1) % world.size;
+
+    if(world.size == 1){
+        //no op when world size is 1
+        return NO_ERROR;
+    }else if( prev_in_ring == root_rank){
+        //non root ranks immediately after the root sends; only OP0_STREAM flag is relevant here
+        return send(next_in_ring, count, src_addr, comm_offset, arcfg_offset, TAG_ANY, compression, (stream & OP0_STREAM));
+    }else if (next_in_ring == root_rank){
+        //non root ranks immediately before the root puts the result of the sum
+        return fused_recv_reduce_put(prev_in_ring, next_in_ring, count, func, src_addr, comm_offset, arcfg_offset, TAG_ANY, compression, (stream & OP0_STREAM));
+    }else if (world.local_rank != root_rank){
+        //non root ranks sends their data + data received from previous rank to the next rank in sequence as a daisy chain; only OP0_STREAM flag is relevant here
+        return fused_recv_reduce_send(prev_in_ring, next_in_ring, count, func, src_addr, comm_offset, arcfg_offset, TAG_ANY, compression, (stream & OP0_STREAM));
+    }
+    //no op for root
+    return NO_ERROR;
 }
 
 //reduce_scatter: (a,b,c), (1,2,3), (X,Y,Z) -> (a+1+X,,) (,b+2+Y,) (,,c+3+Z)
@@ -1343,6 +1414,9 @@ void run() {
                 break;
             case ACCL_ALLTOALL:
                 retval = all_to_all();
+                break;
+            case ACCL_REDUCE_PUT:
+                retval = reduce_put(count, function, root_src_dst, op0_addr, res_addr, comm, datapath_cfg, compression_flags, stream_flags);
                 break;
             case ACCL_CONFIG:
                 retval = 0;

@@ -83,6 +83,8 @@ enum class operation {
                              and scatter to all ranks */
   barrier = 12,         /**< barrier kernel */
   all_to_all = 13,      /**< All-to-all kernel */
+  reduce_put = 14,      /**< Reduce exclusive of the root, with final result
+                             delivery via put */
   nop = 255             /**< NOP operation */
 };
 
