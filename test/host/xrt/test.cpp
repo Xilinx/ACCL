@@ -19,11 +19,13 @@
 #include <accl.hpp>
 #include <cstdlib>
 #include <experimental/xrt_ip.h>
-#include <functional>
 #include <fstream>
+#include <functional>
 #include <json/json.h>
 #include <mpi.h>
 #include <random>
+#include <roce/cmac.hpp>
+#include <roce/hivenet.hpp>
 #include <sstream>
 #include <tclap/CmdLine.h>
 #include <vector>
@@ -34,7 +36,6 @@
 #include <xrt/xrt_kernel.h>
 
 using namespace ACCL;
-using namespace vnx;
 
 // Set the tolerance for compressed datatypes high enough, since we do currently
 // not replicate the float32 -> float16 conversion for our reference results
@@ -57,6 +58,7 @@ struct options_t {
   bool axis3;
   bool udp;
   bool tcp;
+  bool roce;
   std::string xclbin;
   std::string config_file;
   std::vector<std::string> ips;
@@ -68,10 +70,12 @@ void test_debug(std::string message, options_t &options) {
   }
 }
 
-template<typename T> void report_incorrect_item(int idx, T res, T ref, options_t &options){
-  test_debug(std::to_string(idx + 1) +
-            "th item is incorrect! (" + std::to_string(res) +
-                  " != " + std::to_string(ref) + ")" + "\n", options);
+template <typename T>
+void report_incorrect_item(int idx, T res, T ref, options_t &options) {
+  test_debug(std::to_string(idx + 1) + "th item is incorrect! (" +
+                 std::to_string(res) + " != " + std::to_string(ref) + ")" +
+                 "\n",
+             options);
 }
 
 void check_usage(int argc, char *argv[]) {}
@@ -974,7 +978,7 @@ void test_reduce_compressed(ACCL::ACCL &accl, options_t &options, int root,
 }
 
 void test_reduce_stream2mem(ACCL::ACCL &accl, options_t &options, int root,
-                 reduceFunction function) {
+                            reduceFunction function) {
   std::cout << "Start stream to mem reduce test..." << std::endl;
   unsigned int count = options.count;
   auto op_buf = accl.create_buffer<float>(count, dataType::float32);
@@ -1009,7 +1013,7 @@ void test_reduce_stream2mem(ACCL::ACCL &accl, options_t &options, int root,
 }
 
 void test_reduce_mem2stream(ACCL::ACCL &accl, options_t &options, int root,
-                 reduceFunction function) {
+                            reduceFunction function) {
   std::cout << "Start mem to stream reduce test..." << std::endl;
   unsigned int count = options.count;
   auto op_buf = accl.create_buffer<float>(count, dataType::float32);
@@ -1024,7 +1028,8 @@ void test_reduce_mem2stream(ACCL::ACCL &accl, options_t &options, int root,
   if (rank == root) {
     int errors = 0;
 
-    test_debug("Unloading stream on rank" + std::to_string(rank) + "...", options);
+    test_debug("Unloading stream on rank" + std::to_string(rank) + "...",
+               options);
     accl.copy_from_stream(*res_buf, count, false);
 
     for (unsigned int i = 0; i < count; ++i) {
@@ -1050,7 +1055,7 @@ void test_reduce_mem2stream(ACCL::ACCL &accl, options_t &options, int root,
 }
 
 void test_reduce_stream2stream(ACCL::ACCL &accl, options_t &options, int root,
-                 reduceFunction function) {
+                               reduceFunction function) {
   std::cout << "Start stream to stream reduce test..." << std::endl;
   unsigned int count = options.count;
   auto op_buf = accl.create_buffer<float>(count, dataType::float32);
@@ -1067,7 +1072,8 @@ void test_reduce_stream2stream(ACCL::ACCL &accl, options_t &options, int root,
   if (rank == root) {
     int errors = 0;
 
-    test_debug("Unloading stream on rank" + std::to_string(rank) + "...", options);
+    test_debug("Unloading stream on rank" + std::to_string(rank) + "...",
+               options);
     accl.copy_from_stream(*res_buf, count, false);
 
     for (unsigned int i = 0; i < count; ++i) {
@@ -1241,7 +1247,7 @@ void test_barrier(ACCL::ACCL &accl) {
   std::cout << "Test is successful!" << std::endl;
 }
 
-bool check_arp(Networklayer &network_layer, std::vector<rank_t> &ranks,
+bool check_arp(vnx::Networklayer &network_layer, std::vector<rank_t> &ranks,
                options_t &options) {
   std::map<unsigned, bool> ranks_checked;
   for (unsigned i = 0; i < static_cast<unsigned>(size); ++i) {
@@ -1297,11 +1303,12 @@ bool check_arp(Networklayer &network_layer, std::vector<rank_t> &ranks,
   return true;
 }
 
-void configure_vnx(CMAC &cmac, Networklayer &network_layer,
+void configure_vnx(vnx::CMAC &cmac, vnx::Networklayer &network_layer,
                    std::vector<rank_t> &ranks, options_t &options) {
-  if (ranks.size() > max_sockets_size) {
+  if (ranks.size() > vnx::max_sockets_size) {
     throw std::runtime_error("Too many ranks. VNX supports up to " +
-                             std::to_string(max_sockets_size) + " sockets.");
+                             std::to_string(vnx::max_sockets_size) +
+                             " sockets.");
   }
 
   std::cout << "Testing UDP link status: ";
@@ -1383,6 +1390,36 @@ void configure_tcp(BaseBuffer &tx_buf_network, BaseBuffer &rx_buf_network,
             << " board_reg IP: " << board_reg << std::endl;
 }
 
+void configure_roce(roce::CMAC &cmac, roce::Hivenet &hivenet,
+                    std::vector<rank_t> &ranks, options_t &options) {
+  uint32_t subnet_e = ip_encode(ranks[rank].ip) & 0xFFFFFF00;
+  std::string subnet = ip_decode(subnet_e);
+  uint32_t local_id = hivenet.get_local_id();
+  std::string internal_ip = ip_decode(subnet_e + local_id);
+
+  if (ranks[rank].ip != internal_ip) {
+    throw std::runtime_error(
+      "IP address set (" + ranks[rank].ip + ") mismatches with internal " +
+      "hivenet IP (" + internal_ip + "). The internal ip is determined by " +
+      "adding the rank (" + std::to_string(rank) + ") to the subnet (" +
+      subnet + ").");
+  }
+
+  hivenet.set_ip_subnet(subnet);
+  hivenet.set_mac_subnet(0x347844332211);
+  cmac.set_rs_fec(true);
+
+  std::cout << "Testing RoCE link status: ";
+
+  const auto link_status = cmac.link_status();
+
+  if (link_status.at("rx_status")) {
+    std::cout << "Link successful!" << std::endl;
+  } else {
+    std::cout << "No link found." << std::endl;
+  }
+}
+
 std::vector<std::string> get_ips(std::string config_file, bool local) {
   std::vector<std::string> ips;
   if (config_file == "") {
@@ -1401,8 +1438,8 @@ std::vector<std::string> get_ips(std::string config_file, bool local) {
     for (int i = 0; i < size; ++i) {
       std::string ip = ip_config[i].asString();
       if (ip == "") {
-        throw std::runtime_error("No ip for rank " + std::to_string(i)
-                                 + " in config file.");
+        throw std::runtime_error("No ip for rank " + std::to_string(i) +
+                                 " in config file.");
       }
       ips.push_back(ip);
     }
@@ -1415,8 +1452,8 @@ int start_test(options_t options) {
   std::vector<rank_t> ranks = {};
   failed_tests = 0;
   skipped_tests = 0;
-  options.ips = get_ips(options.config_file,
-                        !options.hardware || options.axis3);
+  options.ips =
+      get_ips(options.config_file, !options.hardware || options.axis3);
   for (int i = 0; i < size; ++i) {
     rank_t new_rank = {options.ips[i], options.start_port + i, i,
                        options.rxbuf_size};
@@ -1462,12 +1499,11 @@ int start_test(options_t options) {
       networkmem = 6;
     }
 
-    protocol = options.udp || options.axis3 ? networkProtocol::UDP
-                                            : networkProtocol::TCP;
+    protocol = options.tcp ? networkProtocol::TCP : networkProtocol::UDP;
 
     if (options.udp) {
-      auto cmac = CMAC(xrt::ip(device, xclbin_uuid, "cmac_0:{cmac_0}"));
-      auto network_layer = Networklayer(
+      auto cmac = vnx::CMAC(xrt::ip(device, xclbin_uuid, "cmac_0:{cmac_0}"));
+      auto network_layer = vnx::Networklayer(
           xrt::ip(device, xclbin_uuid, "networklayer:{networklayer_0}"));
 
       configure_vnx(cmac, network_layer, ranks, options);
@@ -1481,16 +1517,23 @@ int start_test(options_t options) {
                       xrt::kernel::cu_access_mode::exclusive);
       configure_tcp(*tx_buf_network, *rx_buf_network, network_krnl, ranks,
                     options);
+    } else if (options.roce) {
+      auto cmac = roce::CMAC(xrt::ip(device, xclbin_uuid, "cmac_0:{cmac_0}"));
+      auto hivenet = roce::Hivenet(
+          xrt::ip(device, xclbin_uuid, "HiveNet_kernel_0:{networklayer_0}"),
+          rank);
+
+      configure_roce(cmac, hivenet, ranks, options);
     }
 
-    accl = std::make_unique<ACCL::ACCL>(
-        ranks, rank, device, cclo_ip, hostctrl_ip, devicemem, rxbufmem,
-        protocol, 16, options.rxbuf_size);
+    accl = std::make_unique<ACCL::ACCL>(ranks, rank, device, cclo_ip,
+                                        hostctrl_ip, devicemem, rxbufmem,
+                                        protocol, 16, options.rxbuf_size);
   } else {
-    protocol = options.udp ? networkProtocol::UDP : networkProtocol::TCP;
+    protocol = options.udp || options.roce ? networkProtocol::UDP
+                                           : networkProtocol::TCP;
     accl = std::make_unique<ACCL::ACCL>(ranks, rank, options.start_port, device,
-                                        protocol,
-                                        16, options.rxbuf_size);
+                                        protocol, 16, options.rxbuf_size);
   }
   if (protocol == networkProtocol::TCP) {
     MPI_Barrier(MPI_COMM_WORLD);
@@ -1615,13 +1658,12 @@ options_t parse_options(int argc, char *argv[]) {
       "p", "start-port", "Start of range of ports usable for sim", false, 5500,
       "positive integer");
   cmd.add(start_port_arg);
-  TCLAP::ValueArg<unsigned int> count_arg("s", "count",
-                                          "How many items per test",
-                                          false, 16, "positive integer");
+  TCLAP::ValueArg<unsigned int> count_arg(
+      "s", "count", "How many items per test", false, 16, "positive integer");
   cmd.add(count_arg);
   TCLAP::ValueArg<unsigned int> bufsize_arg("b", "rxbuf-size",
-                                        "How many KB per RX buffer", false, 1,
-                                        "positive integer");
+                                            "How many KB per RX buffer", false,
+                                            1, "positive integer");
   cmd.add(bufsize_arg);
   TCLAP::SwitchArg debug_arg("d", "debug", "Enable debug mode", cmd, false);
   TCLAP::SwitchArg hardware_arg("f", "hardware", "enable hardware mode", cmd,
@@ -1630,6 +1672,7 @@ options_t parse_options(int argc, char *argv[]) {
                              false);
   TCLAP::SwitchArg udp_arg("u", "udp", "Use UDP hardware setup", cmd, false);
   TCLAP::SwitchArg tcp_arg("t", "tcp", "Use TCP hardware setup", cmd, false);
+  TCLAP::SwitchArg roce_arg("r", "roce", "Use RoCE hardware setup", cmd, false);
   TCLAP::ValueArg<std::string> xclbin_arg(
       "x", "xclbin", "xclbin of accl driver if hardware mode is used", false,
       "accl.xclbin", "file");
@@ -1638,17 +1681,19 @@ options_t parse_options(int argc, char *argv[]) {
       "i", "device-index", "device index of FPGA if hardware mode is used",
       false, 0, "positive integer");
   cmd.add(device_index_arg);
-  TCLAP::ValueArg<std::string> config_arg(
-      "c", "config", "Config file containing IP mapping",
-      false, "", "JSON file");
+  TCLAP::ValueArg<std::string> config_arg("c", "config",
+                                          "Config file containing IP mapping",
+                                          false, "", "JSON file");
   cmd.add(config_arg);
 
   try {
     cmd.parse(argc, argv);
     if (hardware_arg.getValue()) {
-      if (axis3_arg.getValue() + udp_arg.getValue() + tcp_arg.getValue() != 1) {
+      if (axis3_arg.getValue() + udp_arg.getValue() + tcp_arg.getValue() +
+              roce_arg.getValue() !=
+          1) {
         throw std::runtime_error("When using hardware, specify one of axis3, "
-                                 "tcp, or udp mode, but not both.");
+                                 "tcp, udp, or roce mode, but not both.");
       }
     }
   } catch (std::exception &e) {
@@ -1670,6 +1715,7 @@ options_t parse_options(int argc, char *argv[]) {
   opts.axis3 = axis3_arg.getValue();
   opts.udp = udp_arg.getValue();
   opts.tcp = tcp_arg.getValue();
+  opts.roce = roce_arg.getValue();
   opts.device_index = device_index_arg.getValue();
   opts.xclbin = xclbin_arg.getValue();
   opts.test_xrt_simulator = xrt_simulator_ready(opts);
