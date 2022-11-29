@@ -67,12 +67,16 @@ std::string decode_ip_address(const uint32_t encoded_ip) {
 }
 
 uint16_t Hivenet::get_local_id() {
-  uint16_t localID = hivenet.read_register(localID_off);
-  return localID;
+  uint16_t local_id_hardware = hivenet.read_register(localID_off);
+  if (local_id_hardware != local_id) {
+    throw std::runtime_error("Hivenet local id on FPGA is incorrect.");
+  }
+  return local_id;
 }
 
 void Hivenet::init_hivenet() {
   reset_arp_table();
+  hivenet.write_register(localID_off, local_id);
   set_timeout(65535);
   set_retransmissions(3);
   set_udp_port(4971);

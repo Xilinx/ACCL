@@ -1409,6 +1409,7 @@ void configure_roce(roce::CMAC &cmac, roce::Hivenet &hivenet,
   hivenet.set_mac_subnet(0x347844332211);
   cmac.set_rs_fec(true);
 
+  MPI_Barrier(MPI_COMM_WORLD);
   std::cout << "Testing RoCE link status: ";
 
   const auto link_status = cmac.link_status();
@@ -1418,6 +1419,12 @@ void configure_roce(roce::CMAC &cmac, roce::Hivenet &hivenet,
   } else {
     std::cout << "No link found." << std::endl;
   }
+
+  MPI_Barrier(MPI_COMM_WORLD);
+  if (!link_status.at("rx_status")) {
+    throw std::runtime_error("No link on ethernet.");
+  }
+  MPI_Barrier(MPI_COMM_WORLD);
 }
 
 std::vector<std::string> get_ips(std::string config_file, bool local) {
