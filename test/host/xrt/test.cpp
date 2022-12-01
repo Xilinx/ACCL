@@ -1624,8 +1624,8 @@ int start_test(options_t options) {
     MPI_Barrier(MPI_COMM_WORLD);
     test_scatter(*accl, options, root);
     MPI_Barrier(MPI_COMM_WORLD);
-    test_scatter_compressed(*accl, options, root);
-    MPI_Barrier(MPI_COMM_WORLD);
+    // test_scatter_compressed(*accl, options, root);
+    // MPI_Barrier(MPI_COMM_WORLD);
     test_gather(*accl, options, root);
     MPI_Barrier(MPI_COMM_WORLD);
     test_gather_compressed(*accl, options, root);

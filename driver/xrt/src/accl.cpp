@@ -487,6 +487,7 @@ CCLO *ACCL::scatter(BaseBuffer &sendbuf,
   options.addr_2 = &recvbuf;
   options.count = count;
   options.root_src_dst = root;
+  options.compress_dtype = compress_dtype;
   options.waitfor = waitfor;
   CCLO *handle = call_async(options);
 
