@@ -1610,8 +1610,8 @@ int start_test(options_t options) {
   MPI_Barrier(MPI_COMM_WORLD);
   test_reduce_scatter(*accl, options, reduceFunction::SUM);
   MPI_Barrier(MPI_COMM_WORLD);
-  // test_reduce_scatter_compressed(*accl, options, reduceFunction::SUM);
-  // MPI_Barrier(MPI_COMM_WORLD);
+  test_reduce_scatter_compressed(*accl, options, reduceFunction::SUM);
+  MPI_Barrier(MPI_COMM_WORLD);
   test_multicomm(*accl, options);
   MPI_Barrier(MPI_COMM_WORLD);
   test_allgather_comms(*accl, options);
@@ -1624,8 +1624,8 @@ int start_test(options_t options) {
     MPI_Barrier(MPI_COMM_WORLD);
     test_scatter(*accl, options, root);
     MPI_Barrier(MPI_COMM_WORLD);
-    // test_scatter_compressed(*accl, options, root);
-    // MPI_Barrier(MPI_COMM_WORLD);
+    test_scatter_compressed(*accl, options, root);
+    MPI_Barrier(MPI_COMM_WORLD);
     test_gather(*accl, options, root);
     MPI_Barrier(MPI_COMM_WORLD);
     test_gather_compressed(*accl, options, root);
