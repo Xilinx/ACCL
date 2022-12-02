@@ -1017,8 +1017,6 @@ int allreduce(
         bulk_count = (elems + world.size - 1) / world.size;//equivalent to ceil(elems/world.size)
         tail_count = elems - bulk_count * (world.size - 1);
 
-        printf("[***###DEBUG###***] Starting allreduce starting at offset %ld (%d elems left) with bulk %d and tail %d\n", seg_src_buf_addr - src_buf_addr, elems_remaining, bulk_count, tail_count);
-
         //preamble: send our data to next in ring
         //prime the address slots for the source and destination,
         //so we can subsequently stride against them
