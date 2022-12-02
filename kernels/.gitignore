@@ -15,13 +15,8 @@
 #
 # *******************************************************************************/
 
-DEVICE=xcu250-figd2104-2L-e
-
-all:
-	$(MAKE) -C eth_intf DEVICE=$(DEVICE)
-	$(MAKE) -C rxbuf_offload DEVICE=$(DEVICE)
-	$(MAKE) -C dma_mover DEVICE=$(DEVICE)
-	$(MAKE) -C segmenter DEVICE=$(DEVICE)
-
-clean:
-	rm -rf dma_mover/build_* eth_intf/build_* rxbuf_offload/build_* segmenter/build_stream_segmenter
+.Xil
+ccl_offload_ex
+ccl_offload.xml
+ccl_offload.xo
+vitis_ws

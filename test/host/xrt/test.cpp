@@ -48,6 +48,7 @@ unsigned skipped_tests;
 struct options_t {
   int start_port;
   unsigned int rxbuf_size;
+  unsigned int segment_size;
   unsigned int count;
   unsigned int nruns;
   unsigned int device_index;
@@ -255,6 +256,13 @@ void test_combine_max(ACCL::ACCL &accl, options_t &options) {
 void test_sendrcv_bo(ACCL::ACCL &accl, xrt::device &dev, options_t &options) {
   std::cout << "Start send recv test bo..." << std::endl;
   unsigned int count = options.count;
+  unsigned int count_bytes = count * dataTypeSize.at(dataType::float32);
+  if (count_bytes > options.segment_size) {
+    std::cout << "Send recv currently doesn't support segmentation. "
+              << "Skipping test." << std::endl;
+    ++skipped_tests;
+    return;
+  }
 
   // Initialize bo
   float *data =
@@ -323,6 +331,14 @@ void test_sendrcv_bo(ACCL::ACCL &accl, xrt::device &dev, options_t &options) {
 void test_sendrcv(ACCL::ACCL &accl, options_t &options) {
   std::cout << "Start send recv test..." << std::endl;
   unsigned int count = options.count;
+  unsigned int count_bytes = count * dataTypeSize.at(dataType::float32);
+  if (count_bytes > options.segment_size) {
+    std::cout << "Send recv currently doesn't support segmentation. "
+              << "Skipping test." << std::endl;
+    ++skipped_tests;
+    return;
+  }
+
   auto op_buf = accl.create_buffer<float>(count, dataType::float32);
   auto res_buf = accl.create_buffer<float>(count, dataType::float32);
   random_array(op_buf->buffer(), count);
@@ -372,6 +388,14 @@ void test_sendrcv(ACCL::ACCL &accl, options_t &options) {
 void test_sendrcv_stream(ACCL::ACCL &accl, options_t &options) {
   std::cout << "Start streaming send recv test..." << std::endl;
   unsigned int count = options.count;
+  unsigned int count_bytes = count * dataTypeSize.at(dataType::float32);
+  if (count_bytes > options.segment_size) {
+    std::cout << "Send recv currently doesn't support segmentation. "
+              << "Skipping test." << std::endl;
+    ++skipped_tests;
+    return;
+  }
+
   auto op_buf = accl.create_buffer<float>(count, dataType::float32);
   auto res_buf = accl.create_buffer<float>(count, dataType::float32);
   random_array(op_buf->buffer(), count);
@@ -417,6 +441,14 @@ void test_sendrcv_stream(ACCL::ACCL &accl, options_t &options) {
 void test_stream_put(ACCL::ACCL &accl, options_t &options) {
   std::cout << "Start stream put test..." << std::endl;
   unsigned int count = options.count;
+  unsigned int count_bytes = count * dataTypeSize.at(dataType::float32);
+  if (count_bytes > options.segment_size) {
+    std::cout << "Send recv currently doesn't support segmentation. "
+              << "Skipping test." << std::endl;
+    ++skipped_tests;
+    return;
+  }
+
   auto op_buf = accl.create_buffer<float>(count, dataType::float32);
   auto res_buf = accl.create_buffer<float>(count, dataType::float32);
   random_array(op_buf->buffer(), count);
@@ -458,6 +490,14 @@ void test_stream_put(ACCL::ACCL &accl, options_t &options) {
 void test_sendrcv_compressed(ACCL::ACCL &accl, options_t &options) {
   std::cout << "Start send recv compression test..." << std::endl;
   unsigned int count = options.count;
+  unsigned int count_bytes = count * dataTypeSize.at(dataType::float32);
+  if (count_bytes > options.segment_size) {
+    std::cout << "Send recv currently doesn't support segmentation. "
+              << "Skipping test." << std::endl;
+    ++skipped_tests;
+    return;
+  }
+
   auto op_buf = accl.create_buffer<float>(count, dataType::float32);
   auto res_buf = accl.create_buffer<float>(count, dataType::float32);
   random_array(op_buf->buffer(), count);
@@ -609,6 +649,14 @@ void test_scatter(ACCL::ACCL &accl, options_t &options, int root) {
   std::cout << "Start scatter test with root " + std::to_string(root) + " ..."
             << std::endl;
   unsigned int count = options.count;
+  unsigned int count_bytes = count * dataTypeSize.at(dataType::float32);
+  if (count_bytes > options.segment_size) {
+    std::cout << "Scatter currently doesn't support segmentation. "
+              << "Skipping test." << std::endl;
+    ++skipped_tests;
+    return;
+  }
+
   auto op_buf = accl.create_buffer<float>(count * size, dataType::float32);
   auto res_buf = accl.create_buffer<float>(count, dataType::float32);
   random_array(op_buf->buffer(), count * size);
@@ -641,6 +689,14 @@ void test_scatter_compressed(ACCL::ACCL &accl, options_t &options, int root) {
                    std::to_string(root) + " ..."
             << std::endl;
   unsigned int count = options.count;
+  unsigned int count_bytes = count * dataTypeSize.at(dataType::float32);
+  if (count_bytes > options.segment_size) {
+    std::cout << "Scatter currently doesn't support segmentation. "
+              << "Skipping test." << std::endl;
+    ++skipped_tests;
+    return;
+  }
+
   auto op_buf = accl.create_buffer<float>(count * size, dataType::float32);
   auto res_buf = accl.create_buffer<float>(count, dataType::float32);
   random_array(op_buf->buffer(), count * size);
@@ -673,6 +729,14 @@ void test_gather(ACCL::ACCL &accl, options_t &options, int root) {
   std::cout << "Start gather test with root " + std::to_string(root) + "..."
             << std::endl;
   unsigned int count = options.count;
+  unsigned int count_bytes = count * dataTypeSize.at(dataType::float32);
+  if (count_bytes > options.segment_size) {
+    std::cout << "Gather currently doesn't support segmentation. "
+              << "Skipping test." << std::endl;
+    ++skipped_tests;
+    return;
+  }
+
   std::unique_ptr<float> host_op_buf = random_array<float>(count * size);
   auto op_buf = accl.create_buffer(host_op_buf.get() + count * rank, count,
                                    dataType::float32);
@@ -714,6 +778,14 @@ void test_gather_compressed(ACCL::ACCL &accl, options_t &options, int root) {
                    std::to_string(root) + "..."
             << std::endl;
   unsigned int count = options.count;
+  unsigned int count_bytes = count * dataTypeSize.at(dataType::float32);
+  if (count_bytes > options.segment_size) {
+    std::cout << "Gather currently doesn't support segmentation. "
+              << "Skipping test." << std::endl;
+    ++skipped_tests;
+    return;
+  }
+
   std::unique_ptr<float> host_op_buf = random_array<float>(count * size);
   auto op_buf = accl.create_buffer(host_op_buf.get() + count * rank, count,
                                    dataType::float32);
@@ -754,6 +826,14 @@ void test_gather_compressed(ACCL::ACCL &accl, options_t &options, int root) {
 void test_allgather(ACCL::ACCL &accl, options_t &options) {
   std::cout << "Start allgather test..." << std::endl;
   unsigned int count = options.count;
+  unsigned int count_bytes = count * dataTypeSize.at(dataType::float32);
+  if (count_bytes > options.segment_size) {
+    std::cout << "Allgather currently doesn't support segmentation. "
+              << "Skipping test." << std::endl;
+    ++skipped_tests;
+    return;
+  }
+
   std::unique_ptr<float> host_op_buf = random_array<float>(count * size);
   auto op_buf = accl.create_buffer(host_op_buf.get() + count * rank, count,
                                    dataType::float32);
@@ -785,6 +865,14 @@ void test_allgather(ACCL::ACCL &accl, options_t &options) {
 void test_allgather_compressed(ACCL::ACCL &accl, options_t &options) {
   std::cout << "Start allgather compression test..." << std::endl;
   unsigned int count = options.count;
+  unsigned int count_bytes = count * dataTypeSize.at(dataType::float32);
+  if (count_bytes > options.segment_size) {
+    std::cout << "Allgather currently doesn't support segmentation. "
+              << "Skipping test." << std::endl;
+    ++skipped_tests;
+    return;
+  }
+
   std::unique_ptr<float> host_op_buf = random_array<float>(count * size);
   auto op_buf = accl.create_buffer(host_op_buf.get() + count * rank, count,
                                    dataType::float32);
@@ -817,6 +905,14 @@ void test_allgather_compressed(ACCL::ACCL &accl, options_t &options) {
 void test_allgather_comms(ACCL::ACCL &accl, options_t &options) {
   std::cout << "Start allgather test with communicators..." << std::endl;
   unsigned int count = options.count;
+  unsigned int count_bytes = count * dataTypeSize.at(dataType::float32);
+  if (count_bytes > options.segment_size) {
+    std::cout << "Allgather currently doesn't support segmentation. "
+              << "Skipping test." << std::endl;
+    ++skipped_tests;
+    return;
+  }
+
   std::unique_ptr<float> host_op_buf(new float[count * size]);
   auto op_buf = accl.create_buffer(host_op_buf.get(), count, dataType::float32);
   auto res_buf = accl.create_buffer<float>(count * size, dataType::float32);
@@ -883,6 +979,14 @@ void test_allgather_comms(ACCL::ACCL &accl, options_t &options) {
 void test_multicomm(ACCL::ACCL &accl, options_t &options) {
   std::cout << "Start multi communicator test..." << std::endl;
   unsigned int count = options.count;
+  unsigned int count_bytes = count * dataTypeSize.at(dataType::float32);
+  if (count_bytes > options.segment_size) {
+    std::cout << "Send recv currently doesn't support segmentation. "
+              << "Skipping test." << std::endl;
+    ++skipped_tests;
+    return;
+  }
+
   auto group = accl.get_comm_group(GLOBAL_COMM);
   unsigned int own_rank = accl.get_comm_rank(GLOBAL_COMM);
   int errors = 0;
@@ -955,6 +1059,14 @@ void test_reduce(ACCL::ACCL &accl, options_t &options, int root,
                    std::to_string(static_cast<int>(function)) + "..."
             << std::endl;
   unsigned int count = options.count;
+  unsigned int count_bytes = count * dataTypeSize.at(dataType::float32);
+  if (count_bytes > options.segment_size) {
+    std::cout << "Reduce currently doesn't support segmentation. "
+              << "Skipping test." << std::endl;
+    ++skipped_tests;
+    return;
+  }
+
   auto op_buf = accl.create_buffer<float>(count, dataType::float32);
   auto res_buf = accl.create_buffer<float>(count, dataType::float32);
   random_array(op_buf->buffer(), count);
@@ -994,6 +1106,14 @@ void test_reduce_compressed(ACCL::ACCL &accl, options_t &options, int root,
                    std::to_string(static_cast<int>(function)) + "..."
             << std::endl;
   unsigned int count = options.count;
+  unsigned int count_bytes = count * dataTypeSize.at(dataType::float32);
+  if (count_bytes > options.segment_size) {
+    std::cout << "Reduce currently doesn't support segmentation. "
+              << "Skipping test." << std::endl;
+    ++skipped_tests;
+    return;
+  }
+
   auto op_buf = accl.create_buffer<float>(count, dataType::float32);
   auto res_buf = accl.create_buffer<float>(count, dataType::float32);
   random_array(op_buf->buffer(), count);
@@ -1031,6 +1151,14 @@ void test_reduce_stream2mem(ACCL::ACCL &accl, options_t &options, int root,
                  reduceFunction function) {
   std::cout << "Start stream to mem reduce test..." << std::endl;
   unsigned int count = options.count;
+  unsigned int count_bytes = count * dataTypeSize.at(dataType::float32);
+  if (count_bytes > options.segment_size) {
+    std::cout << "Reduce currently doesn't support segmentation. "
+              << "Skipping test." << std::endl;
+    ++skipped_tests;
+    return;
+  }
+
   auto op_buf = accl.create_buffer<float>(count, dataType::float32);
   auto res_buf = accl.create_buffer<float>(count, dataType::float32);
   random_array(op_buf->buffer(), count);
@@ -1069,6 +1197,14 @@ void test_reduce_mem2stream(ACCL::ACCL &accl, options_t &options, int root,
                  reduceFunction function) {
   std::cout << "Start mem to stream reduce test..." << std::endl;
   unsigned int count = options.count;
+  unsigned int count_bytes = count * dataTypeSize.at(dataType::float32);
+  if (count_bytes > options.segment_size) {
+    std::cout << "Reduce currently doesn't support segmentation. "
+              << "Skipping test." << std::endl;
+    ++skipped_tests;
+    return;
+  }
+
   auto op_buf = accl.create_buffer<float>(count, dataType::float32);
   auto res_buf = accl.create_buffer<float>(count, dataType::float32);
   random_array(op_buf->buffer(), count);
@@ -1110,6 +1246,14 @@ void test_reduce_stream2stream(ACCL::ACCL &accl, options_t &options, int root,
                  reduceFunction function) {
   std::cout << "Start stream to stream reduce test..." << std::endl;
   unsigned int count = options.count;
+  unsigned int count_bytes = count * dataTypeSize.at(dataType::float32);
+  if (count_bytes > options.segment_size) {
+    std::cout << "Reduce currently doesn't support segmentation. "
+              << "Skipping test." << std::endl;
+    ++skipped_tests;
+    return;
+  }
+
   auto op_buf = accl.create_buffer<float>(count, dataType::float32);
   auto res_buf = accl.create_buffer<float>(count, dataType::float32);
   random_array(op_buf->buffer(), count);
@@ -1155,6 +1299,14 @@ void test_reduce_scatter(ACCL::ACCL &accl, options_t &options,
                    std::to_string(static_cast<int>(function)) + "..."
             << std::endl;
   unsigned int count = options.count;
+  unsigned int count_bytes = count * dataTypeSize.at(dataType::float32);
+  if (count_bytes > options.segment_size) {
+    std::cout << "Reduce scatter currently doesn't support segmentation. "
+              << "Skipping test." << std::endl;
+    ++skipped_tests;
+    return;
+  }
+
   auto op_buf = accl.create_buffer<float>(count * size, dataType::float32);
   auto res_buf = accl.create_buffer<float>(count, dataType::float32);
   random_array(op_buf->buffer(), count * size);
@@ -1195,6 +1347,14 @@ void test_reduce_scatter_compressed(ACCL::ACCL &accl, options_t &options,
                    std::to_string(static_cast<int>(function)) + "..."
             << std::endl;
   unsigned int count = options.count;
+  unsigned int count_bytes = count * dataTypeSize.at(dataType::float32);
+  if (count_bytes > options.segment_size) {
+    std::cout << "Reduce scatter currently doesn't support segmentation. "
+              << "Skipping test." << std::endl;
+    ++skipped_tests;
+    return;
+  }
+
   auto op_buf = accl.create_buffer<float>(count * size, dataType::float32);
   auto res_buf = accl.create_buffer<float>(count, dataType::float32);
   random_array(op_buf->buffer(), count * size);
@@ -1550,12 +1710,12 @@ int start_test(options_t options) {
 
     accl = std::make_unique<ACCL::ACCL>(
         ranks, rank, device, cclo_ip, hostctrl_ip, devicemem, rxbufmem,
-        protocol, 16, options.rxbuf_size);
+        protocol, 16, options.rxbuf_size, options.segment_size);
   } else {
     protocol = options.udp ? networkProtocol::UDP : networkProtocol::TCP;
     accl = std::make_unique<ACCL::ACCL>(ranks, rank, options.start_port, device,
-                                        protocol,
-                                        16, options.rxbuf_size);
+                                        protocol, 16, options.rxbuf_size,
+                                        options.segment_size);
   }
   if (protocol == networkProtocol::TCP) {
     MPI_Barrier(MPI_COMM_WORLD);
@@ -1729,6 +1889,7 @@ options_t parse_options(int argc, char *argv[]) {
   opts.start_port = start_port_arg.getValue();
   opts.count = count_arg.getValue();
   opts.rxbuf_size = bufsize_arg.getValue() * 1024; // convert to bytes
+  opts.segment_size = opts.rxbuf_size;
   opts.nruns = nruns_arg.getValue();
   opts.debug = debug_arg.getValue();
   opts.hardware = hardware_arg.getValue();
