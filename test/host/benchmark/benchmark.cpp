@@ -46,6 +46,7 @@ unsigned skipped_tests;
 struct options_t {
   int start_port;
   unsigned int rxbuf_size;
+  unsigned int segment_size;
   unsigned int nruns;
   unsigned int device_index;
   bool axis3;
@@ -270,13 +271,15 @@ void benchmark(ACCL::ACCL &accl, unsigned int count, unsigned int run, options_t
   Timer timer{};
   MPI_Barrier(MPI_COMM_WORLD);
 
+  std::cerr << "Starting timer..." << std::endl;
   timer.start();
   if (rank == 0) {
-    accl.send(*buf, count, 0, 0);
+    accl.send(*buf, count, 1, 0);
   } else {
-    accl.recv(*buf, count, 1, 0);
+    accl.recv(*buf, count, 0, 0);
   }
   timer.end();
+  std::cerr << "Timer end." << std::endl;
 
   MPI_Barrier(MPI_COMM_WORLD);
   long double data_size = (count * 4) / 1e6L;
@@ -326,6 +329,10 @@ int start_test(options_t options) {
     devicemem = rank * 6;
     rxbufmem = {rank * 6 + 1};
     networkmem = rank * 6 + 2;
+  } else if (options.roce) {
+    devicemem = 3;
+    rxbufmem = {4};
+    networkmem = 6;
   } else {
     devicemem = 0;
     rxbufmem = {1};
@@ -361,7 +368,8 @@ int start_test(options_t options) {
 
   accl = std::make_unique<ACCL::ACCL>(ranks, rank, device, cclo_ip,
                                       hostctrl_ip, devicemem, rxbufmem,
-                                      protocol, 16, options.rxbuf_size);
+                                      protocol, 16, options.rxbuf_size,
+                                      options.segment_size);
 
   if (protocol == networkProtocol::TCP) {
     MPI_Barrier(MPI_COMM_WORLD);
@@ -372,6 +380,8 @@ int start_test(options_t options) {
 
   accl->set_timeout(1e6);
 
+  MPI_Barrier(MPI_COMM_WORLD);
+  accl->nop();
   MPI_Barrier(MPI_COMM_WORLD);
   for (unsigned int count : options.counts) {
     for (unsigned int run = 0; run < options.nruns; run++) {
@@ -443,6 +453,7 @@ options_t parse_options(int argc, char *argv[]) {
   opts.start_port = start_port_arg.getValue();
   opts.counts = count_arg.getValue();
   opts.rxbuf_size = bufsize_arg.getValue() * 1024; // convert to bytes
+  opts.segment_size = opts.rxbuf_size;
   opts.nruns = nruns_arg.getValue();
   opts.axis3 = axis3_arg.getValue();
   opts.udp = udp_arg.getValue();

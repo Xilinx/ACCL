@@ -1500,6 +1500,10 @@ int start_test(options_t options) {
       devicemem = rank * 6;
       rxbufmem = {rank * 6 + 1};
       networkmem = rank * 6 + 2;
+    } else if (options.roce) {
+      devicemem = 3;
+      rxbufmem = {4};
+      networkmem = 6;
     } else {
       devicemem = 0;
       rxbufmem = {1};
