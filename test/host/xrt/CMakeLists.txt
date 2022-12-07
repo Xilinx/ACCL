@@ -34,12 +34,15 @@ endif()
 
 set(CMAKE_BUILD_TYPE Debug)
 
-set(ACCL_DEBUG 1)
+set(ACCL_NETWORK_UTILS_MPI 1)
+set(ACCL_NETWORK_UTILS_DEBUG 1)
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../../../driver/utils/accl_network_utils ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/accl_network_utils)
 
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../driver/xrt "CMakeFiles/accl")
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../hardware/xup_vitis_network_example/xrt_host_api "CMakeFiles/xrt_host_api")
+set(ACCL_DEBUG 1)
 
 find_package(MPI REQUIRED)
 add_executable(test test.cpp)
-target_include_directories(test PUBLIC ${MPI_CXX_INCLUDE_PATH} ${ACCL_INCLUDE_PATH} ${VNX_INCLUDE_PATH})
-target_link_libraries(test PUBLIC MPI::MPI_CXX accl vnx)
+target_include_directories(test PUBLIC ${MPI_CXX_INCLUDE_PATH})
+# Explicitely link against vnx because CMake doesn't support nested object libraries
+# https://stackoverflow.com/a/71040950
+target_link_libraries(test PUBLIC MPI::MPI_CXX accl_network_utils vnx)
