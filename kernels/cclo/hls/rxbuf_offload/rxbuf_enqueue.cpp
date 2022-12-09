@@ -41,7 +41,7 @@ void rxbuf_enqueue(
 		}
 		rx_buffers++;
 	}
-	static ap_uint<4> tag = 0;
+	ap_uint<4> tag = 0;
 	hlslib::axi::Command<64, 23> cmd;
 	#pragma HLS data_pack variable=dma_cmd struct_level
 	//iterate until you run out of spare buffers
