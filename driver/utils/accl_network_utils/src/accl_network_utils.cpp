@@ -35,7 +35,7 @@ namespace {
  * Insert barrier when using MPI, otherwise sleep for 3 seconds.
  *
  */
-inline void pause() {
+inline void pause_barrier() {
 #ifdef ACCL_NETWORK_UTILS_MPI
   MPI_Barrier(MPI_COMM_WORLD);
 #else
@@ -170,10 +170,10 @@ void configure_vnx(CMAC &cmac, Networklayer &network_layer,
   network_layer.populate_socket_table();
 
   std::cout << "Starting ARP discovery..." << std::endl;
-  pause();
+  pause_barrier();
   network_layer.arp_discovery();
   std::cout << "Finishing ARP discovery..." << std::endl;
-  pause();
+  pause_barrier();
   network_layer.arp_discovery();
   std::cout << "ARP discovery finished!" << std::endl;
 
@@ -337,7 +337,7 @@ initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
   if (protocol == networkProtocol::TCP) {
     barrier();
     accl->open_port();
-    pause();
+    pause_barrier();
     accl->open_con();
   }
 
