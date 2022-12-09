@@ -18,21 +18,17 @@
 
 #include <accl.hpp>
 #include <accl/timing.hpp>
+#include <accl_network_utils.hpp>
 #include <experimental/xrt_ip.h>
 #include <fstream>
 #include <json/json.h>
 #include <numeric>
 #include <mpi.h>
-#include <roce/cmac.hpp>
-#include <roce/hivenet.hpp>
 #include <tclap/CmdLine.h>
 #include <vector>
-#include <vnx/cmac.hpp>
-#include <vnx/networklayer.hpp>
-#include <xrt/xrt_device.h>
-#include <xrt/xrt_kernel.h>
 
 using namespace ACCL;
+using namespace accl_network_utils;
 
 // Set the tolerance for compressed datatypes high enough, since we do currently
 // not replicate the float32 -> float16 conversion for our reference results
@@ -290,93 +286,32 @@ void benchmark(ACCL::ACCL &accl, unsigned int count, unsigned int run, options_t
 }
 
 int start_test(options_t options) {
-  std::vector<rank_t> ranks = {};
-  failed_tests = 0;
-  skipped_tests = 0;
-  options.ips =
-      get_ips(options.config_file, options.axis3);
-  for (int i = 0; i < size; ++i) {
-    rank_t new_rank = {options.ips[i], options.start_port + i, i,
-                       options.rxbuf_size};
-    ranks.emplace_back(new_rank);
-  }
+  std::vector<rank_t> ranks;
 
-  std::unique_ptr<ACCL::ACCL> accl;
-  std::unique_ptr<ACCL::BaseBuffer> tx_buf_network;
-  std::unique_ptr<ACCL::BaseBuffer> rx_buf_network;
-
-  xrt::device device = xrt::device(options.device_index);;
-
-  networkProtocol protocol;
-
-  std::string cclo_id;
-  if (options.axis3) {
-    cclo_id = std::to_string(rank);
+  if (options.config_file == "") {
+    ranks = generate_ranks(options.axis3, rank, size,
+                           options.start_port, options.rxbuf_size);
   } else {
-    cclo_id = "0";
+    ranks = generate_ranks(options.config_file, rank, options.start_port,
+                           options.rxbuf_size);
   }
-  auto xclbin_uuid = device.load_xclbin(options.xclbin);
-  auto cclo_ip = xrt::ip(device, xclbin_uuid,
-                          "ccl_offload:{ccl_offload_" + cclo_id + "}");
-  auto hostctrl_ip = xrt::kernel(device, xclbin_uuid,
-                                  "hostctrl:{hostctrl_" + cclo_id + "_0}",
-                                  xrt::kernel::cu_access_mode::exclusive);
 
-  int devicemem;
-  std::vector<int> rxbufmem;
-  int networkmem;
+  acclDesign design;
   if (options.axis3) {
-    devicemem = rank * 6;
-    rxbufmem = {rank * 6 + 1};
-    networkmem = rank * 6 + 2;
-  } else if (options.roce) {
-    devicemem = 3;
-    rxbufmem = {4};
-    networkmem = 6;
-  } else {
-    devicemem = 0;
-    rxbufmem = {1};
-    networkmem = 6;
-  }
-
-  protocol = options.tcp ? networkProtocol::TCP : networkProtocol::UDP;
-
-  if (options.udp) {
-    auto cmac = vnx::CMAC(xrt::ip(device, xclbin_uuid, "cmac_0:{cmac_0}"));
-    auto network_layer = vnx::Networklayer(
-        xrt::ip(device, xclbin_uuid, "networklayer:{networklayer_0}"));
-
-    configure_vnx(cmac, network_layer, ranks, options);
+    design = acclDesign::AXIS3x;
+  } else if (options.udp) {
+    design = acclDesign::UDP;
   } else if (options.tcp) {
-    tx_buf_network = std::unique_ptr<BaseBuffer>(new FPGABuffer<int8_t>(
-        64 * 1024 * 1024, dataType::int8, device, networkmem));
-    rx_buf_network = std::unique_ptr<BaseBuffer>(new FPGABuffer<int8_t>(
-        64 * 1024 * 1024, dataType::int8, device, networkmem));
-    auto network_krnl =
-        xrt::kernel(device, xclbin_uuid, "network_krnl:{network_krnl_0}",
-                    xrt::kernel::cu_access_mode::exclusive);
-    configure_tcp(*tx_buf_network, *rx_buf_network, network_krnl, ranks,
-                  options);
+    design = acclDesign::TCP;
   } else if (options.roce) {
-    auto cmac = roce::CMAC(xrt::ip(device, xclbin_uuid, "cmac_0:{cmac_0}"));
-    auto hivenet = roce::Hivenet(
-        xrt::ip(device, xclbin_uuid, "HiveNet_kernel_0:{networklayer_0}"),
-        rank);
-
-    configure_roce(cmac, hivenet, ranks, options);
+    design = acclDesign::ROCE;
   }
 
-  accl = std::make_unique<ACCL::ACCL>(ranks, rank, device, cclo_ip,
-                                      hostctrl_ip, devicemem, rxbufmem,
-                                      protocol, 16, options.rxbuf_size,
-                                      options.segment_size);
+  xrt::device device = xrt::device(options.device_index);
 
-  if (protocol == networkProtocol::TCP) {
-    MPI_Barrier(MPI_COMM_WORLD);
-    accl->open_port();
-    MPI_Barrier(MPI_COMM_WORLD);
-    accl->open_con();
-  }
+  std::unique_ptr<ACCL::ACCL> accl = initialize_accl(
+      ranks, rank, false, design, device, options.xclbin, 16,
+      options.rxbuf_size, options.segment_size);
 
   accl->set_timeout(1e6);
 
