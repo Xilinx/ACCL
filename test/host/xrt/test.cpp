@@ -25,8 +25,6 @@
 #include <json/json.h>
 #include <mpi.h>
 #include <random>
-#include <roce/cmac.hpp>
-#include <roce/hivenet.hpp>
 #include <sstream>
 #include <tclap/CmdLine.h>
 #include <vector>
