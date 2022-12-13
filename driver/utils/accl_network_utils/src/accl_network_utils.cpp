@@ -126,10 +126,17 @@ bool check_arp(Networklayer &network_layer, const std::vector<rank_t> &ranks,
 
 namespace accl_network_utils {
 void configure_vnx(CMAC &cmac, Networklayer &network_layer,
-                   const std::vector<rank_t> &ranks, int local_rank) {
+                   const std::vector<rank_t> &ranks, int local_rank,
+                   bool rsfec) {
   if (ranks.size() > max_sockets_size) {
     throw std::runtime_error("Too many ranks. VNX supports up to " +
                              std::to_string(max_sockets_size) + " sockets.");
+  }
+
+  if (cmac.get_rs_fec() != rsfec) {
+    std::cout << "Turning RS-FEC " << (rsfec ? "on" : "off") << "..."
+              << std::endl;
+    cmac.set_rs_fec(rsfec);
   }
 
   std::cout << "Testing UDP link status: ";
@@ -258,10 +265,15 @@ std::vector<rank_t> generate_ranks(bool local, int local_rank, int world_size,
 std::unique_ptr<ACCL::ACCL>
 initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
                 bool simulator, acclDesign design, xrt::device device,
-                fs::path xclbin, int nbufs, addr_t bufsize, addr_t segsize) {
+                fs::path xclbin, int nbufs, addr_t bufsize, addr_t segsize,
+                bool rsfec) {
   std::size_t world_size = ranks.size();
   networkProtocol protocol;
   std::unique_ptr<ACCL::ACCL> accl;
+
+  if (segsize == 0) {
+    segsize = bufsize;
+  }
 
   if (simulator) {
     if (design == acclDesign::UDP) {
@@ -313,7 +325,7 @@ initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
       auto network_layer = Networklayer(
           xrt::ip(device, xclbin_uuid, "networklayer:{networklayer_0}"));
 
-      configure_vnx(cmac, network_layer, ranks, local_rank);
+      configure_vnx(cmac, network_layer, ranks, local_rank, rsfec);
     } else if (design == acclDesign::TCP) {
       // Tx and Rx buffers will not be cleaned up properly and leak memory.
       // They need to live at least as long as ACCL so for now this is the best
