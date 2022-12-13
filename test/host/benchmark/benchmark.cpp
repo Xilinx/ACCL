@@ -45,6 +45,7 @@ struct options_t {
   bool udp;
   bool tcp;
   bool roce;
+  bool rsfec;
   std::vector<unsigned> counts;
   std::string xclbin;
   std::string config_file;
@@ -160,7 +161,7 @@ results_t start_benchmark(options_t options) {
 
   std::unique_ptr<ACCL::ACCL> accl = initialize_accl(
       ranks, rank, false, design, device, options.xclbin, 16,
-      options.rxbuf_size, options.segment_size);
+      options.rxbuf_size, options.segment_size, options.rsfec);
 
   accl->set_timeout(1e6);
 
@@ -260,6 +261,8 @@ options_t parse_options(int argc, char *argv[]) {
                                           "Config file containing IP mapping",
                                           false, "", "JSON file");
   cmd.add(config_arg);
+  TCLAP::SwitchArg rsfec_arg("", "rsfec", "Enables RS-FEC in CMAC.", cmd,
+                             false);
   TCLAP::UnlabeledMultiArg<unsigned int> count_arg(
      "count", "How many items per test", true, "counts to benchmark");
   cmd.add(count_arg);
@@ -292,6 +295,7 @@ options_t parse_options(int argc, char *argv[]) {
   opts.udp = udp_arg.getValue();
   opts.tcp = tcp_arg.getValue();
   opts.roce = roce_arg.getValue();
+  opts.rsfec = rsfec_arg.getValue();
   opts.device_index = device_index_arg.getValue();
   opts.xclbin = xclbin_arg.getValue();
   std::string result_file = file_arg.getValue();

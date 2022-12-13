@@ -70,7 +70,8 @@ void configure_tcp(ACCL::BaseBuffer &tx_buf_network,
 
 // Configure the RoCE kernel, this function is called by initialize_accl
 void configure_roce(roce::CMAC &cmac, roce::Hivenet &hivenet,
-                    const std::vector<ACCL::rank_t> &ranks, int local_rank);
+                    const std::vector<ACCL::rank_t> &ranks, int local_rank,
+                    bool rsfec = false);
 
 // Get IPs from config file, this function is called by generate_ranks
 std::vector<std::string> get_ips(std::filesystem::path config_file);

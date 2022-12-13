@@ -212,7 +212,8 @@ void configure_tcp(BaseBuffer &tx_buf_network, BaseBuffer &rx_buf_network,
 }
 
 void configure_roce(roce::CMAC &cmac, roce::Hivenet &hivenet,
-                    const std::vector<rank_t> &ranks, int local_rank) {
+                    const std::vector<rank_t> &ranks, int local_rank,
+                    bool rsfec) {
   uint32_t subnet_e = ip_encode(ranks[local_rank].ip) & 0xFFFFFF00;
   std::string subnet = ip_decode(subnet_e);
   uint32_t local_id = hivenet.get_local_id();
@@ -228,7 +229,12 @@ void configure_roce(roce::CMAC &cmac, roce::Hivenet &hivenet,
 
   hivenet.set_ip_subnet(subnet);
   hivenet.set_mac_subnet(0x347844332211);
-  cmac.set_rs_fec(true);
+
+  if (cmac.get_rs_fec() != rsfec) {
+    std::cout << "Turning RS-FEC " << (rsfec ? "on" : "off") << "..."
+              << std::endl;
+    cmac.set_rs_fec(rsfec);
+  }
 
   std::cout << "Testing RoCE link status: ";
   barrier();
@@ -385,7 +391,7 @@ initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
           xrt::ip(device, xclbin_uuid, "HiveNet_kernel_0:{networklayer_0}"),
           local_rank);
 
-      configure_roce(cmac, hivenet, ranks, local_rank);
+      configure_roce(cmac, hivenet, ranks, local_rank, rsfec);
     }
 
     accl = std::make_unique<ACCL::ACCL>(ranks, local_rank, device, cclo_ip,
