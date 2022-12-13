@@ -57,6 +57,7 @@ struct options_t {
   bool udp;
   bool tcp;
   bool roce;
+  bool return_error;
   std::string xclbin;
   std::string config_file;
 };
@@ -1579,7 +1580,10 @@ options_t parse_options(int argc, char *argv[]) {
                                           "Config file containing IP mapping",
                                           false, "", "JSON file");
   cmd.add(config_arg);
-
+  TCLAP::SwitchArg return_error_arg(
+      "", "return-error", "Sets the exit code of the program to the "
+      "amount of failed tests. Disabled by default since this causes issues "
+      "with OpenMPI.", cmd, false);
   try {
     cmd.parse(argc, argv);
     if (hardware_arg.getValue()) {
@@ -1615,6 +1619,7 @@ options_t parse_options(int argc, char *argv[]) {
   opts.xclbin = xclbin_arg.getValue();
   opts.test_xrt_simulator = xrt_simulator_ready(opts);
   opts.config_file = config_arg.getValue();
+  opts.return_error = return_error_arg.getValue();
   return opts;
 }
 
@@ -1640,5 +1645,5 @@ int main(int argc, char *argv[]) {
   }
 
   MPI_Finalize();
-  return errors;
+  return options.return_error ? errors : 0;
 }
