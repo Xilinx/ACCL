@@ -58,6 +58,7 @@ struct options_t {
   bool tcp;
   bool roce;
   bool return_error;
+  bool rsfec;
   std::string xclbin;
   std::string config_file;
 };
@@ -1435,7 +1436,7 @@ int start_test(options_t options) {
 
   std::unique_ptr<ACCL::ACCL> accl = initialize_accl(
       ranks, rank, !options.hardware, design, device, options.xclbin, 16,
-      options.rxbuf_size, options.segment_size);
+      options.rxbuf_size, options.segment_size, options.rsfec);
 
   accl->set_timeout(1e6);
 
@@ -1580,6 +1581,8 @@ options_t parse_options(int argc, char *argv[]) {
                                           "Config file containing IP mapping",
                                           false, "", "JSON file");
   cmd.add(config_arg);
+  TCLAP::SwitchArg rsfec_arg("", "rsfec", "Enables RS-FEC in CMAC.", cmd,
+                             false);
   TCLAP::SwitchArg return_error_arg(
       "", "return-error", "Sets the exit code of the program to the "
       "amount of failed tests. Disabled by default since this causes issues "
@@ -1620,6 +1623,7 @@ options_t parse_options(int argc, char *argv[]) {
   opts.test_xrt_simulator = xrt_simulator_ready(opts);
   opts.config_file = config_arg.getValue();
   opts.return_error = return_error_arg.getValue();
+  opts.rsfec = rsfec_arg.getValue();
   return opts;
 }
 
