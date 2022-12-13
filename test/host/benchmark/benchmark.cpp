@@ -20,15 +20,18 @@
 #include <accl/timing.hpp>
 #include <accl_network_utils.hpp>
 #include <experimental/xrt_ip.h>
+#include <filesystem>
 #include <fstream>
 #include <json/json.h>
 #include <numeric>
 #include <mpi.h>
+#include <regex>
 #include <tclap/CmdLine.h>
 #include <vector>
 
 using namespace ACCL;
 using namespace accl_network_utils;
+namespace fs = std::filesystem;
 
 int rank, size;
 
@@ -45,7 +48,14 @@ struct options_t {
   std::vector<unsigned> counts;
   std::string xclbin;
   std::string config_file;
+  fs::path result_file;
   std::vector<std::string> ips;
+};
+
+struct results_t {
+  std::vector<long double> latency;
+  std::vector<long double> rtt;
+  std::map<unsigned, std::vector<long double>> throughput;
 };
 
 long double benchmark_latency(ACCL::ACCL &accl, unsigned int run, options_t &options) {
@@ -124,7 +134,7 @@ long double benchmark_throughput(ACCL::ACCL &accl, unsigned int count, unsigned 
   return time;
 }
 
-int start_test(options_t options) {
+results_t start_benchmark(options_t options) {
   std::vector<rank_t> ranks;
 
   if (options.config_file == "") {
@@ -154,27 +164,60 @@ int start_test(options_t options) {
 
   accl->set_timeout(1e6);
 
-  std::vector<long double> latencies(options.nruns), rtts(options.nruns);
-  std::map<unsigned int, std::vector<long double>> throughputs;
+  results_t results{};
 
 
   for (unsigned int run = 0; run < options.nruns; run++) {
     long double latency = benchmark_latency(*accl, run, options);
-    latencies.emplace_back(latency);
+    results.latency.emplace_back(latency);
     long double rtt = benchmark_rtt(*accl, run, options);
-    rtts.emplace_back(rtt);
+    results.rtt.emplace_back(rtt);
   }
 
   for (unsigned int count : options.counts) {
-    std::vector<long double> throughputs_count(options.nruns);
+    std::vector<long double> throughputs(options.nruns);
     for (unsigned int run = 0; run < options.nruns; run++) {
       long double throughput = benchmark_throughput(*accl, count, run, options);
-      throughputs_count.emplace_back(throughput);
+      throughputs.emplace_back(throughput);
     }
-    throughputs.emplace(count, throughputs_count);
+    results.throughput.emplace(count, throughputs);
   }
 
-  return 0;
+  return results;
+}
+
+void write_results_to_file(const results_t &results, fs::path file) {
+  Json::Value result;
+
+  Json::Value latency;
+  for (long double l : results.latency) {
+    latency.append(static_cast<double>(l));
+  }
+  result["latency"] = latency;
+
+  Json::Value rtt;
+  for (auto &&r : results.rtt) {
+    rtt.append(static_cast<double>(r));
+  }
+  result["rtt"] = rtt;
+
+  Json::Value throughputs;
+  for (auto &&item : results.throughput) {
+    Json::Value throughput;
+    for (auto &&t : item.second) {
+      throughput.append(static_cast<double>(t));
+    }
+    throughputs[std::to_string(item.first)] = throughput;
+  }
+
+  result["throughput"] = throughputs;
+
+  Json::StreamWriterBuilder builder;
+  std::unique_ptr<Json::StreamWriter> writer(builder.newStreamWriter());
+  std::ofstream f;
+  f.open(file);
+  writer->write(result, &f);
+  f.close();
 }
 
 options_t parse_options(int argc, char *argv[]) {
@@ -199,6 +242,12 @@ options_t parse_options(int argc, char *argv[]) {
   TCLAP::SwitchArg udp_arg("u", "udp", "Use UDP hardware setup", cmd, false);
   TCLAP::SwitchArg tcp_arg("t", "tcp", "Use TCP hardware setup", cmd, false);
   TCLAP::SwitchArg roce_arg("r", "roce", "Use RoCE hardware setup", cmd, false);
+  TCLAP::ValueArg<std::string> file_arg(
+      "", "results-file",
+      "JSON file to write results to. {rank} will be replaced by the rank. "
+      "Defaults to 'results-{rank}.json'",
+      false, "results-{rank}.json", "string");
+  cmd.add(file_arg);
   TCLAP::ValueArg<std::string> xclbin_arg(
       "x", "xclbin", "xclbin of accl driver if hardware mode is used", false,
       "accl.xclbin", "file");
@@ -219,8 +268,7 @@ options_t parse_options(int argc, char *argv[]) {
     cmd.parse(argc, argv);
     if (hardware_arg.getValue()) {
       if (axis3_arg.getValue() + udp_arg.getValue() + tcp_arg.getValue() +
-              roce_arg.getValue() !=
-          1) {
+          roce_arg.getValue() != 1) {
         throw std::runtime_error("When using hardware, specify one of axis3, "
                                  "tcp, udp, or roce mode, but not both.");
       }
@@ -246,6 +294,9 @@ options_t parse_options(int argc, char *argv[]) {
   opts.roce = roce_arg.getValue();
   opts.device_index = device_index_arg.getValue();
   opts.xclbin = xclbin_arg.getValue();
+  std::string result_file = file_arg.getValue();
+  opts.result_file = std::regex_replace(result_file, std::regex("\\{rank\\}"),
+                                        std::to_string(rank));
   opts.config_file = config_arg.getValue();
   return opts;
 }
@@ -259,12 +310,20 @@ int main(int argc, char *argv[]) {
   options_t options = parse_options(argc, argv);
 
   std::ostringstream stream;
-  stream << "rank " << rank << " size " << size
-         << std::endl;
+  stream << "rank " << rank << " size " << size << std::endl;
   std::cout << stream.str();
+  results_t results;
 
-  int errors = start_test(options);
+  try {
+    results = start_benchmark(options);
+  } catch (network_error &e) {
+    std::cout << "ACCL network error: " << e.what() << std::endl;
+    std::this_thread::sleep_for(std::chrono::seconds(5));
+    MPI_Finalize();
+    return 1;
+  }
 
+  write_results_to_file(results, options.result_file);
   MPI_Finalize();
-  return errors;
+  return 0;
 }
