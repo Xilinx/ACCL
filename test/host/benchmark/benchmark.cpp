@@ -30,14 +30,7 @@
 using namespace ACCL;
 using namespace accl_network_utils;
 
-// Set the tolerance for compressed datatypes high enough, since we do currently
-// not replicate the float32 -> float16 conversion for our reference results
-#define FLOAT16RTOL 0.005
-#define FLOAT16ATOL 0.05
-
 int rank, size;
-unsigned failed_tests;
-unsigned skipped_tests;
 
 struct options_t {
   int start_port;
@@ -55,212 +48,55 @@ struct options_t {
   std::vector<std::string> ips;
 };
 
-bool check_arp(vnx::Networklayer &network_layer, std::vector<rank_t> &ranks,
-               options_t &options) {
-  std::map<unsigned, bool> ranks_checked;
-  for (unsigned i = 0; i < static_cast<unsigned>(size); ++i) {
-    ranks_checked[i] = false;
+long double benchmark_latency(ACCL::ACCL &accl, unsigned int run, options_t &options) {
+  if (rank != 0) {
+    return 0.0L;
   }
+  std::cerr << "Start latency benchmark (" << run << ")..." << std::endl;
+  Timer timer{};
 
-  bool sanity_check = true;
-  const std::map<int, std::pair<std::string, std::string>> arp =
-      network_layer.read_arp_table(size);
+  std::cerr << "Starting timer..." << std::endl;
+  timer.start();
+  accl.nop();
+  timer.end();
+  std::cerr << "Timer end." << std::endl;
 
-  std::ostringstream ss_arp;
-  ss_arp << "ARP table:";
-
-  for (const std::pair<const int, std::pair<std::string, std::string>> &elem :
-       arp) {
-    const unsigned index = elem.first;
-    const std::pair<std::string, std::string> &entry = elem.second;
-    const std::string &mac = entry.first;
-    const std::string &ip = entry.second;
-    ss_arp << "\n(" << index << ") " << mac << ": " << ip;
-
-    for (unsigned i = 0; i < static_cast<unsigned>(size); ++i) {
-      if (ranks[i].ip == ip) {
-        if (ranks_checked[i]) {
-          std::cout << "Double entry for " << ip << " in arp table!"
-                    << std::endl;
-          sanity_check = false;
-        } else {
-          ranks_checked[i] = true;
-        }
-      }
-    }
-  }
-
-  if (!sanity_check) {
-    return false;
-  }
-
-  unsigned hosts = 0;
-  for (unsigned i = 0; i < static_cast<unsigned>(size); ++i) {
-    if (ranks_checked[i]) {
-      hosts += 1;
-    }
-  }
-  if (hosts < static_cast<unsigned>(size) - 1) {
-    std::cout << "Found only " << hosts << " hosts out of " << size - 1 << "!"
-              << std::endl;
-    return false;
-  }
-
-  return true;
+  long double time = timer.elapsed() / 1e6L;
+  std::cerr << "Kernel latency time: " << time * 1e3L << " ms" << std::endl;
+  return time;
 }
 
-void configure_vnx(vnx::CMAC &cmac, vnx::Networklayer &network_layer,
-                   std::vector<rank_t> &ranks, options_t &options) {
-  if (ranks.size() > vnx::max_sockets_size) {
-    throw std::runtime_error("Too many ranks. VNX supports up to " +
-                             std::to_string(vnx::max_sockets_size) +
-                             " sockets.");
-  }
+long double benchmark_rtt(ACCL::ACCL &accl, unsigned int run, options_t &options) {
+  const unsigned int smallest_count = 1;
+  std::cerr << "Start round trip time benchmark (" << run << ")..." << std::endl;
+  auto send_buf = accl.create_buffer<uint32_t>(smallest_count, dataType::int32);
+  auto recv_buf = accl.create_buffer<uint32_t>(smallest_count, dataType::int32);
+  Timer timer{};
+  MPI_Barrier(MPI_COMM_WORLD);
 
-  std::cout << "Testing UDP link status: ";
-
-  const auto link_status = cmac.link_status();
-
-  if (link_status.at("rx_status")) {
-    std::cout << "Link successful!" << std::endl;
+  if (rank == 0) {
+    std::cerr << "Starting timer..." << std::endl;
+    timer.start();
+    accl.send(*send_buf, smallest_count, 1, 0);
+    accl.recv(*recv_buf, smallest_count, 1, 1);
+    timer.end();
+    std::cerr << "Timer end." << std::endl;
   } else {
-    std::cout << "No link found." << std::endl;
-  }
-
-  std::ostringstream ss;
-
-  ss << "Link interface 1 : {";
-  for (const auto &elem : link_status) {
-    ss << elem.first << ": " << elem.second << ", ";
-  }
-  ss << "}" << std::endl;
-
-  if (!link_status.at("rx_status")) {
-    // Give time for other ranks to setup link.
-    std::this_thread::sleep_for(std::chrono::seconds(3));
-    exit(1);
+    accl.recv(*recv_buf, smallest_count, 0, 0);
+    accl.send(*recv_buf, smallest_count, 0, 1);
   }
 
   MPI_Barrier(MPI_COMM_WORLD);
-
-  std::cout << "Populating socket table..." << std::endl;
-
-  network_layer.update_ip_address(ranks[rank].ip);
-  for (size_t i = 0; i < ranks.size(); ++i) {
-    if (i == static_cast<size_t>(rank)) {
-      continue;
-    }
-
-    network_layer.configure_socket(i, ranks[i].ip, ranks[i].port,
-                                   ranks[rank].port, true);
-  }
-
-  network_layer.populate_socket_table();
-
-  std::cout << "Starting ARP discovery..." << std::endl;
-  std::this_thread::sleep_for(std::chrono::seconds(4));
-  MPI_Barrier(MPI_COMM_WORLD);
-  network_layer.arp_discovery();
-  std::cout << "Finishing ARP discovery..." << std::endl;
-  std::this_thread::sleep_for(std::chrono::seconds(2));
-  MPI_Barrier(MPI_COMM_WORLD);
-  network_layer.arp_discovery();
-  std::cout << "ARP discovery finished!" << std::endl;
-
-  if (!check_arp(network_layer, ranks, options)) {
-    std::this_thread::sleep_for(std::chrono::seconds(3));
-    exit(1);
-  }
-
-  MPI_Barrier(MPI_COMM_WORLD);
-}
-
-void configure_tcp(BaseBuffer &tx_buf_network, BaseBuffer &rx_buf_network,
-                   xrt::kernel &network_krnl, std::vector<rank_t> &ranks,
-                   options_t &options) {
-  std::cout << "Configure TCP Network Kernel" << std::endl;
-  tx_buf_network.sync_to_device();
-  rx_buf_network.sync_to_device();
-
-  uint local_fpga_ip = ip_encode(ranks[rank].ip);
-  std::cout << "rank: " << rank << " FPGA IP: " << std::hex << local_fpga_ip
-            << std::endl;
-
-  network_krnl(local_fpga_ip, static_cast<uint32_t>(rank), local_fpga_ip,
-               *(tx_buf_network.bo()), *(rx_buf_network.bo()));
-
-  uint32_t ip_reg = network_krnl.read_register(0x010);
-  uint32_t board_reg = network_krnl.read_register(0x018);
-  std::cout << std::hex << "ip_reg: " << ip_reg
-            << " board_reg IP: " << board_reg << std::endl;
-}
-
-void configure_roce(roce::CMAC &cmac, roce::Hivenet &hivenet,
-                    std::vector<rank_t> &ranks, options_t &options) {
-  uint32_t subnet_e = ip_encode(ranks[rank].ip) & 0xFFFFFF00;
-  std::string subnet = ip_decode(subnet_e);
-  uint32_t local_id = hivenet.get_local_id();
-  std::string internal_ip = ip_decode(subnet_e + local_id);
-
-  if (ranks[rank].ip != internal_ip) {
-    throw std::runtime_error(
-      "IP address set (" + ranks[rank].ip + ") mismatches with internal " +
-      "hivenet IP (" + internal_ip + "). The internal ip is determined by " +
-      "adding the rank (" + std::to_string(rank) + ") to the subnet (" +
-      subnet + ").");
-  }
-
-  hivenet.set_ip_subnet(subnet);
-  hivenet.set_mac_subnet(0x347844332211);
-  cmac.set_rs_fec(true);
-
-  MPI_Barrier(MPI_COMM_WORLD);
-  std::cout << "Testing RoCE link status: ";
-
-  const auto link_status = cmac.link_status();
-
-  if (link_status.at("rx_status")) {
-    std::cout << "Link successful!" << std::endl;
+  if (rank == 0) {
+    long double time = timer.elapsed() / 1e6L;
+    std::cerr << "Round trip time: " << time * 1e3L << " ms" << std::endl;
+    return time;
   } else {
-    std::cout << "No link found." << std::endl;
+    return 0.0L;
   }
-
-  MPI_Barrier(MPI_COMM_WORLD);
-  if (!link_status.at("rx_status")) {
-    throw std::runtime_error("No link on ethernet.");
-  }
-  MPI_Barrier(MPI_COMM_WORLD);
 }
 
-std::vector<std::string> get_ips(std::string config_file, bool local) {
-  std::vector<std::string> ips;
-  if (config_file == "") {
-    for (int i = 0; i < size; ++i) {
-      if (local) {
-        ips.emplace_back("127.0.0.1");
-      } else {
-        ips.emplace_back("10.10.10." + std::to_string(i));
-      }
-    }
-  } else {
-    Json::Value config;
-    std::ifstream config_file_stream(config_file);
-    config_file_stream >> config;
-    Json::Value ip_config = config["ips"];
-    for (int i = 0; i < size; ++i) {
-      std::string ip = ip_config[i].asString();
-      if (ip == "") {
-        throw std::runtime_error("No ip for rank " + std::to_string(i) +
-                                 " in config file.");
-      }
-      ips.push_back(ip);
-    }
-  }
-
-  return ips;
-}
-
-void benchmark(ACCL::ACCL &accl, unsigned int count, unsigned int run, options_t &options) {
+long double benchmark_throughput(ACCL::ACCL &accl, unsigned int count, unsigned int run, options_t &options) {
   std::cerr << "Start benchmark with " << count << " items (" << run << ")..." << std::endl;
   auto buf = accl.create_buffer<uint32_t>(count, dataType::int32);
   std::iota(buf->buffer(), buf->buffer() + count, 0U);
@@ -281,8 +117,11 @@ void benchmark(ACCL::ACCL &accl, unsigned int count, unsigned int run, options_t
   long double data_size = (count * 4) / 1e6L;
   long double time = timer.elapsed() / 1e3L;
   long double bandwidth = ((count * 32) / (timer.elapsed() / 1e6L)) / 1e9L;
-  std::cout << "data size: " << data_size << " MB; time: " << time
-            << " ms; bandwidth: " << bandwidth << " Gbps" << std::endl;
+  if (rank == 1) {
+    std::cerr << "data size: " << data_size << " MB; time: " << time
+              << " ms; bandwidth: " << bandwidth << " Gbps" << std::endl;
+  }
+  return time;
 }
 
 int start_test(options_t options) {
@@ -315,13 +154,24 @@ int start_test(options_t options) {
 
   accl->set_timeout(1e6);
 
-  MPI_Barrier(MPI_COMM_WORLD);
-  accl->nop();
-  MPI_Barrier(MPI_COMM_WORLD);
+  std::vector<long double> latencies(options.nruns), rtts(options.nruns);
+  std::map<unsigned int, std::vector<long double>> throughputs;
+
+
+  for (unsigned int run = 0; run < options.nruns; run++) {
+    long double latency = benchmark_latency(*accl, run, options);
+    latencies.emplace_back(latency);
+    long double rtt = benchmark_rtt(*accl, run, options);
+    rtts.emplace_back(rtt);
+  }
+
   for (unsigned int count : options.counts) {
+    std::vector<long double> throughputs_count(options.nruns);
     for (unsigned int run = 0; run < options.nruns; run++) {
-      benchmark(*accl, count, run, options);
+      long double throughput = benchmark_throughput(*accl, count, run, options);
+      throughputs_count.emplace_back(throughput);
     }
+    throughputs.emplace(count, throughputs_count);
   }
 
   return 0;
