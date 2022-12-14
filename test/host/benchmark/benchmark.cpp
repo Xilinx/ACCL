@@ -57,6 +57,7 @@ struct results_t {
   std::vector<long double> latency;
   std::vector<long double> rtt;
   std::map<unsigned, std::vector<long double>> throughput;
+  std::map<unsigned, std::vector<long double>> allreduce;
 };
 
 long double benchmark_latency(ACCL::ACCL &accl, unsigned int run, options_t &options) {
@@ -82,20 +83,24 @@ long double benchmark_rtt(ACCL::ACCL &accl, unsigned int run, options_t &options
   auto send_buf = accl.create_buffer<uint32_t>(smallest_count, dataType::int32);
   auto recv_buf = accl.create_buffer<uint32_t>(smallest_count, dataType::int32);
   Timer timer{};
+  if (rank == 1) {
+    send_buf->sync_to_device();
+  }
   MPI_Barrier(MPI_COMM_WORLD);
 
   if (rank == 0) {
-    accl.recv(*recv_buf, smallest_count, 1, 0);
-    accl.send(*recv_buf, smallest_count, 1, 1);
+    accl.recv(*recv_buf, smallest_count, 1, 0, GLOBAL_COMM, true);
+    accl.send(*recv_buf, smallest_count, 1, 1, GLOBAL_COMM, true);
   } else {
     std::cerr << "Starting timer..." << std::endl;
     timer.start();
-    accl.send(*send_buf, smallest_count, 0, 0);
-    accl.recv(*recv_buf, smallest_count, 0, 1);
+    accl.send(*send_buf, smallest_count, 0, 0, GLOBAL_COMM, true);
+    accl.recv(*recv_buf, smallest_count, 0, 1, GLOBAL_COMM, true);
     timer.end();
     std::cerr << "Timer end." << std::endl;
   }
 
+  recv_buf->sync_from_device();
   MPI_Barrier(MPI_COMM_WORLD);
   if (rank == 1) {
     long double time = timer.elapsed() / 1e6L;
@@ -107,8 +112,11 @@ long double benchmark_rtt(ACCL::ACCL &accl, unsigned int run, options_t &options
 }
 
 long double benchmark_throughput(ACCL::ACCL &accl, unsigned int count, unsigned int run, options_t &options) {
-  std::cerr << "Start benchmark with " << count << " items (" << run << ")..." << std::endl;
+  std::cerr << "Start throughput benchmark with " << count << " items (" << run << ")..." << std::endl;
   auto buf = accl.create_buffer<uint32_t>(count, dataType::int32);
+  if (rank == 0) {
+    buf->sync_to_device();
+  }
   std::iota(buf->buffer(), buf->buffer() + count, 0U);
   Timer timer{};
   MPI_Barrier(MPI_COMM_WORLD);
@@ -116,20 +124,52 @@ long double benchmark_throughput(ACCL::ACCL &accl, unsigned int count, unsigned 
   std::cerr << "Starting timer..." << std::endl;
   timer.start();
   if (rank == 0) {
-    accl.send(*buf, count, 1, 0);
+    accl.send(*buf, count, 1, 0, GLOBAL_COMM, true);
   } else {
-    accl.recv(*buf, count, 0, 0);
+    accl.recv(*buf, count, 0, 0, GLOBAL_COMM, true);
   }
   timer.end();
   std::cerr << "Timer end." << std::endl;
 
-  MPI_Barrier(MPI_COMM_WORLD);
-  long double data_size = (count * 4) / 1e6L;
-  long double time = timer.elapsed() / 1e6L;
-  long double bandwidth = ((count * 32) / time) / 1e9L;
   if (rank == 1) {
-    std::cerr << "data size: " << data_size << " MB; time: " << time * 1e3
-              << " ms; bandwidth: " << bandwidth << " Gbps" << std::endl;
+    buf->sync_from_device();
+  }
+  MPI_Barrier(MPI_COMM_WORLD);
+  long double data_size = count * 4;
+  long double time = timer.elapsed() / 1e6L;
+  long double bandwidth = (data_size * 8 / time) / 1e9L;
+  if (rank == 1) {
+    std::cerr << "data size: " << data_size / 1e6L << " MB; time: "
+              << time * 1e3 << " ms; bandwidth: " << bandwidth << " Gbps"
+              << std::endl;
+  }
+  return time;
+}
+
+long double benchmark_allreduce(ACCL::ACCL &accl, unsigned int count, unsigned int run, options_t &options) {
+  std::cerr << "Start allreduce benchmark with " << count << " items (" << run << ")..." << std::endl;
+  auto sendbuf = accl.create_buffer<uint32_t>(count, dataType::int32);
+  auto recvbuf = accl.create_buffer<uint32_t>(count, dataType::int32);
+  std::iota(sendbuf->buffer(), sendbuf->buffer() + count, 0U);
+  Timer timer{};
+  sendbuf->sync_to_device();
+  MPI_Barrier(MPI_COMM_WORLD);
+
+  std::cerr << "Starting timer..." << std::endl;
+  timer.start();
+  accl.allreduce(*sendbuf, *recvbuf, count, reduceFunction::SUM, GLOBAL_COMM, true, true);
+  timer.end();
+  std::cerr << "Timer end." << std::endl;
+
+  recvbuf->sync_from_device();
+  MPI_Barrier(MPI_COMM_WORLD);
+  long double data_size = count * 4;
+  long double time = timer.elapsed() / 1e6L;
+  long double bandwidth = (data_size * 8 / time) / 1e9L;
+  if (rank == 1) {
+    std::cerr << "data size: " << data_size / 1e6L << " MB; time: "
+              << time * 1e3 << " ms; bandwidth: " << bandwidth << " Gbps"
+              << std::endl;
   }
   return time;
 }
@@ -176,11 +216,15 @@ results_t start_benchmark(options_t options) {
 
   for (unsigned int count : options.counts) {
     std::vector<long double> throughputs(options.nruns);
+    std::vector<long double> allreduces(options.nruns);
     for (unsigned int run = 0; run < options.nruns; run++) {
       long double throughput = benchmark_throughput(*accl, count, run, options);
       throughputs[run] = throughput;
+      long double allreduce = benchmark_allreduce(*accl, count, run, options);
+      allreduces[run] = allreduce;
     }
     results.throughput.emplace(count, throughputs);
+    results.allreduce.emplace(count, allreduces);
   }
 
   return results;
@@ -211,6 +255,17 @@ void write_results_to_file(const results_t &results, fs::path file) {
   }
 
   result["throughput"] = throughputs;
+
+  Json::Value allreduces;
+  for (auto &&item : results.allreduce) {
+    Json::Value allreduce;
+    for (auto &&t : item.second) {
+      allreduce.append(static_cast<double>(t));
+    }
+    allreduces[std::to_string(item.first)] = allreduce;
+  }
+
+  result["allreduce"] = allreduces;
 
   Json::StreamWriterBuilder builder;
   std::unique_ptr<Json::StreamWriter> writer(builder.newStreamWriter());
