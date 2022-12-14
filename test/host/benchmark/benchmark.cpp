@@ -60,9 +60,6 @@ struct results_t {
 };
 
 long double benchmark_latency(ACCL::ACCL &accl, unsigned int run, options_t &options) {
-  if (rank != 0) {
-    return 0.0L;
-  }
   std::cerr << "Start latency benchmark (" << run << ")..." << std::endl;
   Timer timer{};
 
@@ -73,7 +70,9 @@ long double benchmark_latency(ACCL::ACCL &accl, unsigned int run, options_t &opt
   std::cerr << "Timer end." << std::endl;
 
   long double time = timer.elapsed() / 1e6L;
-  std::cerr << "Kernel latency time: " << time * 1e3L << " ms" << std::endl;
+  if (rank == 1) {
+    std::cerr << "Kernel latency time: " << time * 1e3L << " ms" << std::endl;
+  }
   return time;
 }
 
@@ -86,19 +85,19 @@ long double benchmark_rtt(ACCL::ACCL &accl, unsigned int run, options_t &options
   MPI_Barrier(MPI_COMM_WORLD);
 
   if (rank == 0) {
+    accl.recv(*recv_buf, smallest_count, 1, 0);
+    accl.send(*recv_buf, smallest_count, 1, 1);
+  } else {
     std::cerr << "Starting timer..." << std::endl;
     timer.start();
-    accl.send(*send_buf, smallest_count, 1, 0);
-    accl.recv(*recv_buf, smallest_count, 1, 1);
+    accl.send(*send_buf, smallest_count, 0, 0);
+    accl.recv(*recv_buf, smallest_count, 0, 1);
     timer.end();
     std::cerr << "Timer end." << std::endl;
-  } else {
-    accl.recv(*recv_buf, smallest_count, 0, 0);
-    accl.send(*recv_buf, smallest_count, 0, 1);
   }
 
   MPI_Barrier(MPI_COMM_WORLD);
-  if (rank == 0) {
+  if (rank == 1) {
     long double time = timer.elapsed() / 1e6L;
     std::cerr << "Round trip time: " << time * 1e3L << " ms" << std::endl;
     return time;
@@ -126,10 +125,10 @@ long double benchmark_throughput(ACCL::ACCL &accl, unsigned int count, unsigned 
 
   MPI_Barrier(MPI_COMM_WORLD);
   long double data_size = (count * 4) / 1e6L;
-  long double time = timer.elapsed() / 1e3L;
-  long double bandwidth = ((count * 32) / (timer.elapsed() / 1e6L)) / 1e9L;
+  long double time = timer.elapsed() / 1e6L;
+  long double bandwidth = ((count * 32) / time) / 1e9L;
   if (rank == 1) {
-    std::cerr << "data size: " << data_size << " MB; time: " << time
+    std::cerr << "data size: " << data_size << " MB; time: " << time * 1e3
               << " ms; bandwidth: " << bandwidth << " Gbps" << std::endl;
   }
   return time;
@@ -179,7 +178,7 @@ results_t start_benchmark(options_t options) {
     std::vector<long double> throughputs(options.nruns);
     for (unsigned int run = 0; run < options.nruns; run++) {
       long double throughput = benchmark_throughput(*accl, count, run, options);
-      throughputs.emplace_back(throughput);
+      throughputs[run] = throughput;
     }
     results.throughput.emplace(count, throughputs);
   }
