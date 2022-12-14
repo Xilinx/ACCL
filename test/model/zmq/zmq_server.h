@@ -16,13 +16,17 @@
 # *******************************************************************************/
 
 #pragma once
-#include "streamdefines.h"
+#include "accl_hls.h"
 #include "Stream.h"
 #include "ap_int.h"
 #include "ap_axi_sdata.h"
 #include "log.hpp"
 #include <vector>
 #include "zmq_common.h"
+
+#ifndef NUM_CTRL_STREAMS
+#define NUM_CTRL_STREAMS 1
+#endif
 
 /**
  * @brief Create a server-side interface to the CCLO simulator/emulator, via ZMQ
@@ -45,7 +49,7 @@ zmq_intf_context zmq_server_intf(unsigned int starting_port, unsigned int local_
  * @param cmd Command stream going to emulated CCLO
  * @param sts Status stream coming from emulated CCLO
  */
-void serve_zmq(zmq_intf_context *ctx, uint32_t *cfgmem, std::vector<char> &devicemem, hlslib::Stream<ap_axiu<32,0,0,0> > &cmd, hlslib::Stream<ap_axiu<32,0,0,0> > &sts);
+void serve_zmq(zmq_intf_context *ctx, uint32_t *cfgmem, std::vector<char> &devicemem, hlslib::Stream<ap_axiu<32,0,0,0>> cmd[NUM_CTRL_STREAMS], hlslib::Stream<ap_axiu<32,0,0,0>> sts[NUM_CTRL_STREAMS]);
 
 /**
  * @brief Serve an input Ethernet port

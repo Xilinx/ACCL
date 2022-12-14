@@ -41,11 +41,11 @@ The following platforms are supported for Alveo boards:
 | U280  | xilinx_u280_xdma_201920_3              |
 
 ## Run ACCL tests
-### Emulation or simulation tests
+### Emulation or simulation tests of host-launched collectives
 First start up either the emulator or simulator:
 <details>
   <summary>Emulator</summary>
-  
+
   ```sh
   cd "test/model/emulator"
   source <VITIS_INSTALL>/settings64.sh
@@ -76,15 +76,22 @@ make
 XCL_EMULATION_MODE=sw_emu mpirun -np <RANKS> bin/test
 ```
 
-### Hardware tests
-Make sure you have a [3-Rank, single FPGA test design](#build-a-hardware-design-with-accl) of
-ACCL first.
-
-Open a terminal and run the tests:
+### Hardware tests of host-launched collectives
+Make sure you have a 3-Rank, single FPGA ACCL test design by either [building](#build-a-hardware-design-with-accl) or [downloading](https://github.com/Xilinx/ACCL/releases/tag/axis3x) it, then open a terminal and run the tests:
 ```sh
 cd "test/host/xrt"
 /bin/cmake .
 make
-mpirun -np <RANKS> bin/test -f -x <XCLBIN FILE>
+mpirun -np <RANKS> bin/test -a -f -x <XCLBIN FILE>
 ```
 
+### Emulation or simulation tests of PL-launched collectives
+We provide an example of a simple vector add kernel issuing commands and data directly to the ACCL offload kernel (CCLO), with no host intervention.
+
+Launch the emulator or simulator with the `--no-kernel-loopback` option, which will enable PL kernels to exchange data with the CCLO via AXI Streams. Open a new terminal and run the tests:
+```sh
+cd "test/host/hls"
+/bin/cmake .
+make
+mpirun -np <RANKS> bin/test
+```

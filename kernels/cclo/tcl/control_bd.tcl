@@ -18,8 +18,6 @@
 # Hierarchical cell: microblaze_0_local_memory
 proc create_hier_cell_microblaze_0_local_memory { parentCell nameHier } {
 
-  variable script_folder
-
   if { $parentCell eq "" || $nameHier eq "" } {
      catch {common::send_gid_msg -ssname BD::TCL -id 2092 -severity "ERROR" "create_hier_cell_microblaze_0_local_memory() - Empty argument(s)!"}
      return
@@ -106,8 +104,6 @@ proc create_hier_cell_microblaze_0_local_memory { parentCell nameHier } {
 # Hierarchical cell: exchange_mem
 proc create_hier_cell_exchange_mem { parentCell nameHier } {
 
-  variable script_folder
-
   if { $parentCell eq "" || $nameHier eq "" } {
      catch {common::send_gid_msg -ssname BD::TCL -id 2092 -severity "ERROR" "create_hier_cell_exchange_mem() - Empty argument(s)!"}
      return
@@ -147,6 +143,7 @@ proc create_hier_cell_exchange_mem { parentCell nameHier } {
   # Create pins
   create_bd_pin -dir I -type rst ap_rst_n
   create_bd_pin -dir O -from 0 -to 0 encore_aresetn
+  create_bd_pin -dir I -type rst encore_rst_n
   create_bd_pin -dir I -type clk s_axi_aclk
 
   # Create instance: axi_bram_ctrl_0, and set properties
@@ -235,7 +232,8 @@ set axi_bram_ctrl_bypass [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_bram_
   connect_bd_intf_net [get_bd_intf_pins S_AXI_BYP] [get_bd_intf_pins axi_bram_ctrl_bypass/S_AXI]
   connect_bd_intf_net [get_bd_intf_pins axi_bram_ctrl_bypass/BRAM_PORTA] [get_bd_intf_pins axi_bram_ctrl_0_bram/BRAM_PORTB]
   # Create port connections
-  connect_bd_net [get_bd_pins ap_rst_n] [get_bd_pins axi_bram_ctrl_0/s_axi_aresetn] [get_bd_pins axi_register_slice_0/aresetn] [get_bd_pins axi_bram_ctrl_bypass/s_axi_aresetn] [get_bd_pins axi_crossbar_0/aresetn] [get_bd_pins axi_crossbar_1/aresetn] [get_bd_pins axi_gpio_0/s_axi_aresetn]
+  connect_bd_net [get_bd_pins ap_rst_n] [get_bd_pins axi_bram_ctrl_0/s_axi_aresetn] [get_bd_pins axi_register_slice_0/aresetn] [get_bd_pins axi_crossbar_0/aresetn] [get_bd_pins axi_crossbar_1/aresetn] [get_bd_pins axi_gpio_0/s_axi_aresetn]
+  connect_bd_net [get_bd_pins encore_rst_n] [get_bd_pins axi_bram_ctrl_bypass/s_axi_aresetn]
   connect_bd_net -net axi_gpio_0_gpio_io_o [get_bd_pins axi_gpio_0/gpio_io_o] [get_bd_pins xlslice_encore_rstn/Din]
   connect_bd_net -net s_axi_aclk_1 [get_bd_pins s_axi_aclk] [get_bd_pins axi_bram_ctrl_0/s_axi_aclk] [get_bd_pins axi_bram_ctrl_bypass/s_axi_aclk] [get_bd_pins axi_crossbar_0/aclk] [get_bd_pins axi_crossbar_1/aclk] [get_bd_pins axi_gpio_0/s_axi_aclk] [get_bd_pins axi_register_slice_0/aclk]
   connect_bd_net -net xlslice_encore_rstn_Dout [get_bd_pins encore_aresetn] [get_bd_pins xlslice_encore_rstn/Dout]
@@ -276,10 +274,41 @@ proc create_dma_infrastructure { dmaIndex } {
                                       [get_bd_pins fifo_dma${dmaIndex}_s2mm_cmd/s_axis_aclk]
 }
 
+# Command arbiter
+proc create_hier_cell_cmd_arbiter { parentCell nameHier {numCmdStreams 1} } {
+
+  if { $parentCell eq "" || $nameHier eq "" } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2092 -severity "ERROR" "create_hier_cell_cmd_arbiter() - Empty argument(s)!"}
+     return
+  }
+
+  # Get object for parentCell
+  set parentObj [get_bd_cells $parentCell]
+  if { $parentObj == "" } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2090 -severity "ERROR" "Unable to find parent cell <$parentCell>!"}
+     return
+  }
+
+  # Make sure parentObj is hier blk
+  set parentType [get_property TYPE $parentObj]
+  if { $parentType ne "hier" } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2091 -severity "ERROR" "Parent <$parentObj> has TYPE = <$parentType>. Expected to be <hier>."}
+     return
+  }
+
+  # Save current instance; Restore later
+  set oldCurInst [current_bd_instance .]
+
+  # Create cell and set as current instance
+  set hier_obj [create_bd_cell -type hier $nameHier]
+  current_bd_instance $hier_obj
+
+  # Restore current instance
+  current_bd_instance $oldCurInst
+}
+
 # Hierarchical cell: control
 proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} {fanInSupport 0} } {
-
-  variable script_folder
 
   if { $parentCell eq "" || $nameHier eq "" } {
      catch {common::send_gid_msg -ssname BD::TCL -id 2092 -severity "ERROR" "create_hier_cell_control() - Empty argument(s)!"}
@@ -319,6 +348,7 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} {fanInSuppo
   create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 eth_packetizer_sts
   
   create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 eth_opencon_cmd
+  create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 eth_closecon_cmd
   create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 eth_opencon_sts
 
   create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 eth_openport_cmd
@@ -532,6 +562,7 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} {fanInSuppo
 
   connect_bd_intf_net -intf_net eth_openport_cmd [get_bd_intf_pins tcp_session/m_axis_tcp_listen_port] [get_bd_intf_pins eth_openport_cmd]
   connect_bd_intf_net -intf_net eth_opencon_cmd [get_bd_intf_pins tcp_session/m_axis_tcp_open_connection] [get_bd_intf_pins eth_opencon_cmd]
+  connect_bd_intf_net [get_bd_intf_pins tcp_session/m_axis_tcp_close_connection] [get_bd_intf_pins eth_closecon_cmd]
   connect_bd_intf_net -intf_net eth_packetizer_cmd [get_bd_intf_pins fifo_eth_packetizer_cmd/M_AXIS] [get_bd_intf_pins eth_packetizer_cmd]
   connect_bd_intf_net -intf_net eth_openport_sts [get_bd_intf_pins tcp_session/s_axis_tcp_port_status] [get_bd_intf_pins eth_openport_sts]
   connect_bd_intf_net -intf_net eth_opencon_sts [get_bd_intf_pins tcp_session/s_axis_tcp_open_status] [get_bd_intf_pins eth_opencon_sts]
@@ -615,6 +646,7 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} {fanInSuppo
   connect_bd_net [get_bd_pins exchange_mem/encore_aresetn] [get_bd_pins proc_sys_reset_1/ext_reset_in]
   connect_bd_net [get_bd_pins microblaze_0/Reset] [get_bd_pins proc_sys_reset_0/mb_reset]
   connect_bd_net [get_bd_pins proc_sys_reset_1/peripheral_aresetn] [get_bd_pins encore_aresetn] \
+                                                                   [get_bd_pins exchange_mem/encore_rst_n] \
                                                                    [get_bd_pins microblaze_0_axi_periph/M01_ARESETN] \
                                                                    [get_bd_pins microblaze_0_axi_periph/M02_ARESETN] \
                                                                    [get_bd_pins microblaze_0_axi_periph/M03_ARESETN] \

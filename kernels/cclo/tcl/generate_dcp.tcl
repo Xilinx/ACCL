@@ -27,7 +27,7 @@ open_project ./ccl_offload_ex/ccl_offload_ex.xpr
 
 #run kernel packaging
 reset_run synth_1
-set extra_synth_options "-mode out_of_context"
+set extra_synth_options "-mode out_of_context -verilog_define AXILITE_ADR_BITS=13 "
 if { $en_arith == 1 } { set extra_synth_options "$extra_synth_options -verilog_define ARITH_ENABLE " }
 if { $en_compress == 1 } { set extra_synth_options "$extra_synth_options -verilog_define COMPRESSION_ENABLE " }
 if { $en_dma == 1 } { set extra_synth_options "$extra_synth_options -verilog_define DMA_ENABLE " }

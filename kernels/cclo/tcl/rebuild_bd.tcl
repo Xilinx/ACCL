@@ -33,7 +33,7 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
 
   if { ( $enableFanIn == 1 ) && ( $netStackType != "TCP" ) } {
       catch {common::send_gid_msg -severity "ERROR" "Fan-In only supported for TCP"}
-      return   
+      return
   }
 
   # Create interface ports
@@ -73,11 +73,11 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
   set_property -dict [ list CONFIG.FREQ_HZ {250000000} ] $m_axis_eth_tx_data
   set s_axis_eth_rx_data [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 s_axis_eth_rx_data ]
   set_property -dict [ list CONFIG.FREQ_HZ {250000000} CONFIG.HAS_TKEEP {1} CONFIG.HAS_TLAST {1} CONFIG.HAS_TREADY {1} CONFIG.HAS_TSTRB {1} CONFIG.LAYERED_METADATA {undef} CONFIG.TDATA_NUM_BYTES {64} CONFIG.TDEST_WIDTH {8} CONFIG.TID_WIDTH {0} CONFIG.TUSER_WIDTH {0} ] $s_axis_eth_rx_data
-  
-  set call_req [create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 s_axis_call_req]
-  set_property -dict [ list CONFIG.FREQ_HZ {250000000} CONFIG.HAS_TKEEP {1} CONFIG.HAS_TLAST {1} CONFIG.HAS_TREADY {1} CONFIG.HAS_TSTRB {1} CONFIG.LAYERED_METADATA {undef} CONFIG.TDATA_NUM_BYTES {4} CONFIG.TDEST_WIDTH {0} CONFIG.TID_WIDTH {0} CONFIG.TUSER_WIDTH {0} ] $call_req
-  set call_ack [create_bd_intf_port -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_call_ack]
-  set_property -dict [ list CONFIG.FREQ_HZ {250000000} CONFIG.HAS_TKEEP {1} CONFIG.HAS_TLAST {1} CONFIG.HAS_TREADY {1} CONFIG.HAS_TSTRB {1} CONFIG.LAYERED_METADATA {undef} CONFIG.TDATA_NUM_BYTES {4} CONFIG.TDEST_WIDTH {0} CONFIG.TID_WIDTH {0} CONFIG.TUSER_WIDTH {0} ] $call_ack
+
+  set s_axis_call_req [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 s_axis_call_req ]
+  set_property -dict [ list CONFIG.FREQ_HZ {250000000} CONFIG.HAS_TKEEP {1} CONFIG.HAS_TLAST {1} CONFIG.HAS_TREADY {1} CONFIG.HAS_TSTRB {1} CONFIG.LAYERED_METADATA {undef} CONFIG.TDATA_NUM_BYTES {4} CONFIG.TDEST_WIDTH {0} CONFIG.TID_WIDTH {0} CONFIG.TUSER_WIDTH {0} ] $s_axis_call_req
+  set m_axis_call_ack [ create_bd_intf_port -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_call_ack ]
+  set_property -dict [ list CONFIG.FREQ_HZ {250000000} CONFIG.HAS_TKEEP {1} CONFIG.HAS_TLAST {1} CONFIG.HAS_TREADY {1} CONFIG.HAS_TSTRB {1} CONFIG.LAYERED_METADATA {undef} CONFIG.TDATA_NUM_BYTES {4} CONFIG.TDEST_WIDTH {0} CONFIG.TID_WIDTH {0} CONFIG.TUSER_WIDTH {0} ] $m_axis_call_ack
 
   # Create ports
   set ap_clk [ create_bd_port -dir I -type clk -freq_hz 250000000 ap_clk ]
@@ -260,6 +260,9 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
   
     set m_axis_eth_open_connection [ create_bd_intf_port -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_eth_open_connection ]
     set_property -dict [ list CONFIG.FREQ_HZ {250000000} ] $m_axis_eth_open_connection
+
+    set m_axis_eth_close_connection [ create_bd_intf_port -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_eth_close_connection ]
+    set_property -dict [ list CONFIG.FREQ_HZ {250000000} ] $m_axis_eth_open_connection
   
     set m_axis_eth_read_pkg [ create_bd_intf_port -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_eth_read_pkg ]
     set_property -dict [ list CONFIG.FREQ_HZ {250000000} ] $m_axis_eth_read_pkg
@@ -282,7 +285,7 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
     set s_axis_eth_tx_status [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 s_axis_eth_tx_status ]
     set_property -dict [ list CONFIG.FREQ_HZ {250000000} CONFIG.HAS_TKEEP {1} CONFIG.HAS_TLAST {1} CONFIG.HAS_TREADY {1} CONFIG.HAS_TSTRB {1} CONFIG.LAYERED_METADATA {undef} CONFIG.TDATA_NUM_BYTES {8} CONFIG.TDEST_WIDTH {0} CONFIG.TID_WIDTH {0} CONFIG.TUSER_WIDTH {0} ] $s_axis_eth_tx_status
   
-    set interfaces "$interfaces:m_axis_eth_listen_port:m_axis_eth_open_connection:m_axis_eth_read_pkg:m_axis_eth_tx_meta:s_axis_eth_notification:s_axis_eth_open_status:s_axis_eth_port_status:s_axis_eth_rx_meta:s_axis_eth_tx_status"
+    set interfaces "$interfaces:m_axis_eth_listen_port:m_axis_eth_open_connection:m_axis_eth_close_connection:m_axis_eth_read_pkg:m_axis_eth_tx_meta:s_axis_eth_notification:s_axis_eth_open_status:s_axis_eth_port_status:s_axis_eth_rx_meta:s_axis_eth_tx_status"
   
     create_tcp_tx_subsystem [current_bd_instance .] eth_tx_subsystem
     create_tcp_rx_subsystem [current_bd_instance .] eth_rx_subsystem
@@ -305,6 +308,7 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
     connect_bd_intf_net [get_bd_intf_ports m_axis_eth_tx_meta] [get_bd_intf_pins eth_tx_subsystem/m_axis_tx_meta]
     connect_bd_intf_net [get_bd_intf_ports m_axis_eth_tx_data] [get_bd_intf_pins eth_tx_subsystem/m_axis_tx_data]
     connect_bd_intf_net [get_bd_intf_ports m_axis_eth_open_connection] [get_bd_intf_pins control/eth_opencon_cmd]
+    connect_bd_intf_net [get_bd_intf_ports m_axis_eth_close_connection] [get_bd_intf_pins control/eth_closecon_cmd]
     connect_bd_intf_net [get_bd_intf_ports s_axis_eth_open_status] [get_bd_intf_pins control/eth_opencon_sts]
     connect_bd_intf_net [get_bd_intf_ports s_axis_eth_tx_status] [get_bd_intf_pins eth_tx_subsystem/s_axis_tx_status]
 
@@ -483,9 +487,9 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
   if { $enableExtKrnlStream == 1 } {
 
     set s_axis_krnl [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 s_axis_krnl ]
-    set_property -dict [ list CONFIG.FREQ_HZ {250000000} CONFIG.HAS_TKEEP {1} CONFIG.HAS_TLAST {1} CONFIG.HAS_TREADY {1} CONFIG.HAS_TSTRB {0} CONFIG.LAYERED_METADATA {undef} CONFIG.TDATA_NUM_BYTES {64} CONFIG.TDEST_WIDTH {0} CONFIG.TID_WIDTH {0} CONFIG.TUSER_WIDTH {0} ] $s_axis_krnl
+    set_property -dict [ list CONFIG.FREQ_HZ {250000000} CONFIG.HAS_TKEEP {1} CONFIG.HAS_TLAST {1} CONFIG.HAS_TREADY {1} CONFIG.HAS_TSTRB {0} CONFIG.LAYERED_METADATA {undef} CONFIG.TDATA_NUM_BYTES {64} CONFIG.TDEST_WIDTH {8} CONFIG.TID_WIDTH {0} CONFIG.TUSER_WIDTH {0} ] $s_axis_krnl
     set m_axis_krnl [ create_bd_intf_port -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_krnl ]
-    set_property -dict [ list CONFIG.FREQ_HZ {250000000} CONFIG.HAS_TKEEP {1} CONFIG.HAS_TLAST {1} CONFIG.HAS_TREADY {1} CONFIG.HAS_TSTRB {0} CONFIG.LAYERED_METADATA {undef} CONFIG.TDATA_NUM_BYTES {64} CONFIG.TDEST_WIDTH {0} CONFIG.TID_WIDTH {0} CONFIG.TUSER_WIDTH {0} ] $m_axis_krnl
+    set_property -dict [ list CONFIG.FREQ_HZ {250000000} CONFIG.HAS_TKEEP {1} CONFIG.HAS_TLAST {1} CONFIG.HAS_TREADY {1} CONFIG.HAS_TSTRB {0} CONFIG.LAYERED_METADATA {undef} CONFIG.TDATA_NUM_BYTES {64} CONFIG.TDEST_WIDTH {8} CONFIG.TID_WIDTH {0} CONFIG.TUSER_WIDTH {0} ] $m_axis_krnl
 
     set interfaces "$interfaces:s_axis_krnl:m_axis_krnl"
 
@@ -518,11 +522,20 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
                               CONFIG.HAS_TSTRB {0} \
                               CONFIG.M00_AXIS_HIGHTDEST {0x000000ff} \
     ] [get_bd_cells axis_switch_1]
+
+    # create subset converter to adjust TDEST on ingress path to kernels
+    create_bd_cell -type ip -vlnv xilinx.com:ip:axis_subset_converter:1.1 krnl_ssc
+    set_property -dict [list CONFIG.S_TDEST_WIDTH.VALUE_SRC USER CONFIG.M_TDEST_WIDTH.VALUE_SRC USER] [get_bd_cells krnl_ssc]
+    set_property -dict [list CONFIG.S_TDEST_WIDTH {8} CONFIG.M_TDEST_WIDTH {8} CONFIG.TDEST_REMAP {tdest[7:0]-9}] [get_bd_cells krnl_ssc]
+
     connect_bd_intf_net [get_bd_intf_pins sseg_krnl_out/out_r] [get_bd_intf_pins axis_switch_1/S00_AXIS]
-    connect_bd_intf_net [get_bd_intf_pins axis_switch_0/M09_AXIS] [get_bd_intf_pins axis_switch_1/S01_AXIS]
+    connect_bd_intf_net [get_bd_intf_pins axis_switch_0/M09_AXIS] [get_bd_intf_pins krnl_ssc/S_AXIS]
+    connect_bd_intf_net [get_bd_intf_pins krnl_ssc/M_AXIS] [get_bd_intf_pins axis_switch_1/S01_AXIS]
     connect_bd_intf_net [get_bd_intf_pins m_axis_krnl] [get_bd_intf_pins axis_switch_1/M00_AXIS]
     connect_bd_net [get_bd_pins ap_clk] [get_bd_pins axis_switch_1/aclk]
     connect_bd_net [get_bd_pins control/encore_aresetn] [get_bd_pins axis_switch_1/aresetn]
+    connect_bd_net [get_bd_pins ap_clk] [get_bd_pins krnl_ssc/aclk]
+    connect_bd_net [get_bd_pins control/encore_aresetn] [get_bd_pins krnl_ssc/aresetn]
   }
 
   # Create control interface connections
@@ -564,6 +577,7 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
   create_bd_cell -type hier routing_subsystem
   move_bd_cells [get_bd_cells routing_subsystem] [get_bd_cells sseg*] 
   move_bd_cells [get_bd_cells routing_subsystem] [get_bd_cells axis_switch*]
+  move_bd_cells [get_bd_cells routing_subsystem] [get_bd_cells krnl_ssc]
 
   create_bd_cell -type hier cclo
   move_bd_cells [get_bd_cells cclo] [get_bd_cells control] 

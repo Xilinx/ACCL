@@ -15,6 +15,6 @@
 #
 # *******************************************************************************/
 
-#include "streamdefines.h"
+#include "accl_hls.h"
 
 void hp_compression(STREAM<stream_word> & in, STREAM<stream_word> & out);

@@ -18,7 +18,7 @@
 #pragma once
 
 #include "eth_intf.h"
-#include "streamdefines.h"
+#include "accl_hls.h"
 
 void network_krnl(
     STREAM<pkt128>& m_axis_tcp_notification, 
@@ -30,6 +30,7 @@ void network_krnl(
     STREAM<pkt64>& m_axis_tcp_tx_status,
     STREAM<pkt64>& s_axis_tcp_open_connection,
     STREAM<pkt128>& m_axis_tcp_open_status,
+    STREAM<pkt16>& s_axis_tcp_close_connection,
     STREAM<pkt16>& s_axis_tcp_listen_port, 
     STREAM<pkt8>& m_axis_tcp_port_status,
     STREAM<stream_word>& net_rx,

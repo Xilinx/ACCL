@@ -52,8 +52,7 @@ switch $command {
 
 open_project build_loopback
 
-add_files loopback.cpp -cflags "-std=c++14 -I[pwd]/../../cclo/hls -DACCL_SYNTHESIS"
-add_files -tb tb_loopback.cpp -cflags "-std=c++14 -I[pwd]/../../cclo/hls -DACCL_SYNTHESIS"
+add_files loopback.cpp -cflags "-std=c++14 -I[pwd]/../../../driver/hls/ -DACCL_SYNTHESIS"
 
 set_top loopback
 

@@ -16,34 +16,10 @@
 #
 *******************************************************************************/
 
-#include "communicator.hpp"
-#include "constants.hpp"
-#include <arpa/inet.h>
+#include "accl/common.hpp"
+#include "accl/communicator.hpp"
+#include "accl/constants.hpp"
 #include <sstream>
-
-namespace {
-inline void swap_endianness(uint32_t *ip) {
-  uint8_t *ip_bytes = reinterpret_cast<uint8_t *>(ip);
-  *ip = (ip_bytes[3] << 0) | (ip_bytes[2] << 8) | (ip_bytes[1] << 16) |
-        (ip_bytes[0] << 24);
-}
-
-uint32_t ip_encode(std::string ip) {
-  struct sockaddr_in sa;
-  inet_pton(AF_INET, ip.c_str(), &(sa.sin_addr));
-  swap_endianness(&sa.sin_addr.s_addr);
-  return sa.sin_addr.s_addr;
-}
-
-std::string ip_decode(uint32_t ip) {
-  char buffer[INET_ADDRSTRLEN];
-  struct in_addr sa;
-  sa.s_addr = ip;
-  swap_endianness(&sa.s_addr);
-  inet_ntop(AF_INET, &sa, buffer, INET_ADDRSTRLEN);
-  return std::string(buffer, INET_ADDRSTRLEN);
-}
-} // namespace
 
 namespace ACCL {
 Communicator::Communicator(CCLO *cclo, const std::vector<rank_t> &ranks,

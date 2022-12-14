@@ -16,7 +16,7 @@
 #
 *******************************************************************************/
 
-#include "constants.hpp"
+#include "accl/constants.hpp"
 
 namespace ACCL {
 const char *error_code_to_string(errorCode code) {
