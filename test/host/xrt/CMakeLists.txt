@@ -20,6 +20,16 @@ project(xrt_test)
 
 set(CMAKE_CXX_STANDARD 17)
 
+#GTest config
+include(FetchContent)
+FetchContent_Declare(
+  googletest
+  URL https://github.com/google/googletest/archive/03597a01ee50ed33e9dfd640b249b4be3799d395.zip
+)
+# For Windows: Prevent overriding the parent project's compiler/linker settings
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(googletest)
+
 # Set useful compile warnings
 add_compile_options(-Wall -Wextra -Wno-unused-variable
                     -Wno-unused-but-set-variable -Wno-unused-parameter)
@@ -45,4 +55,4 @@ add_executable(test test.cpp)
 target_include_directories(test PUBLIC ${MPI_CXX_INCLUDE_PATH})
 # Explicitely link against vnx because CMake doesn't support nested object libraries
 # https://stackoverflow.com/a/71040950
-target_link_libraries(test PUBLIC MPI::MPI_CXX accl_network_utils vnx)
+target_link_libraries(test PUBLIC MPI::MPI_CXX accl_network_utils vnx GTest::gtest_main)
