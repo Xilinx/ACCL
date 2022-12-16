@@ -26,4 +26,4 @@
 	url = https://github.com/quetric/hlslib.git
 [submodule "test/hardware/HiveNet"]
 	path = test/hardware/HiveNet
-	url = https://github.com/Xilinx/AlveoLink.git
+	url = https://github.com/quetric/AlveoLink.git
