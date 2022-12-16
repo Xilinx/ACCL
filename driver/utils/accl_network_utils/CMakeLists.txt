@@ -27,7 +27,7 @@ if (HAS_PARENT)
 endif (HAS_PARENT)
 
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../../xrt ${CMAKE_CURRENT_BINARY_DIR}/xrt)
-add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../network_roce_v2 ${CMAKE_CURRENT_BINARY_DIR}/network_roce_v2)
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../../../test/hardware/HiveNet/network/roce_v2/xrt_utils ${CMAKE_CURRENT_BINARY_DIR}/network_roce_v2)
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../../../test/hardware/xup_vitis_network_example/xrt_host_api ${CMAKE_CURRENT_BINARY_DIR}/vnx)
 
 add_library(accl_network_utils OBJECT src/accl_network_utils.cpp)
