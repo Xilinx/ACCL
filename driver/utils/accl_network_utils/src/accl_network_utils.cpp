@@ -259,6 +259,10 @@ std::vector<std::string> get_ips(fs::path config_file) {
   config_file_stream >> config;
   Json::Value ip_config = config["ips"];
   int size = ip_config.size();
+  if (size < 1) {
+    throw std::runtime_error("IPs not specified in config file");
+  }
+
   for (int i = 0; i < size; ++i) {
     ips.push_back(ip_config[i].asString());
   }
@@ -280,11 +284,24 @@ std::vector<std::string> get_ips(bool local, int world_size) {
 
 std::vector<rank_t> generate_ranks(fs::path config_file, int local_rank,
                                    std::uint16_t start_port,
-                                   unsigned int rxbuf_size) {
+                                   unsigned int rxbuf_size, bool roce) {
   std::vector<rank_t> ranks{};
   std::vector<std::string> ips = get_ips(config_file);
+
+  uint32_t ip_subnet;
+  if (roce) {
+    ip_subnet = ip_encode(ips.at(0)) & 0xFFFFFF00;
+  }
+
   for (int i = 0; i < static_cast<int>(ips.size()); ++i) {
-    rank_t new_rank = {ips[i], start_port + i, i, rxbuf_size};
+    int session_id;
+    if (roce) {
+      session_id = ip_encode(ips[i]) - ip_subnet;
+    } else {
+      session_id = i;
+    }
+
+    rank_t new_rank = {ips[i], start_port + i, session_id, rxbuf_size};
     ranks.emplace_back(new_rank);
   }
 
@@ -389,7 +406,7 @@ initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
       auto cmac = roce::CMAC(xrt::ip(device, xclbin_uuid, "cmac_0:{cmac_0}"));
       auto hivenet = roce::Hivenet(
           xrt::ip(device, xclbin_uuid, "HiveNet_kernel_0:{networklayer_0}"),
-          local_rank);
+          ranks[local_rank].session_id);
 
       configure_roce(cmac, hivenet, ranks, local_rank, rsfec);
     }

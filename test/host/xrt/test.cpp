@@ -1415,7 +1415,7 @@ int start_test(options_t options) {
                            options.start_port, options.rxbuf_size);
   } else {
     ranks = generate_ranks(options.config_file, rank, options.start_port,
-                           options.rxbuf_size);
+                           options.rxbuf_size, options.roce);
   }
 
   acclDesign design;
