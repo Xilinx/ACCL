@@ -45,7 +45,8 @@ TCP_XO=Vitis_with_100Gbps_TCP-IP/_x.hw.$(XSA)/network_krnl.xo
 TCP_VIVADO_ROOTDIR ?= $$XILINX_VIVADO
 TCP_HLS_ROOTDIR ?= $$XILINX_HLS
 CMAC_TCP_XO=Vitis_with_100Gbps_TCP-IP/_x.hw.$(XSA)/cmac_krnl.xo
-ROCE_XO=HiveNet/build/HiveNet_kernel_0.xo
+ROCE_XO=HiveNet/network/roce_v2/hw/HiveNet/src/build/HiveNet_kernel_$(ETH_IF).xo
+ROCE_HBM_BANK=0
 XCLBIN=$(BUILD_DIR)/ccl_offload.xclbin
 
 HOSTCTRL_XO=../../kernels/plugins/hostctrl/hostctrl.xo
@@ -167,7 +168,7 @@ $(TCP_XO): tcp_stack_ips
 	$(MAKE) -C Vitis_with_100Gbps_TCP-IP/ network_krnl DEVICE=$(PLATFORM) TEMP_DIR=_x.hw.$(XSA)/ XSA=$(XSA)
 
 $(ROCE_XO):
-	$(MAKE) -C HiveNet
+	cd HiveNet/network/roce_v2/hw/HiveNet/src/ && vivado -mode batch -source HiveNet_bd.tcl -tclargs $(ETH_IF) $(ROCE_HBM_BANK)
 
 .PHONY: tcp_stack_ips
 tcp_stack_ips:
