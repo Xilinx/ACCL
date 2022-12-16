@@ -15,7 +15,7 @@
 #
 # *******************************************************************************/
 
-PLATFORM ?= xilinx_u280_xdma_201920_3
+PLATFORM ?= xilinx_u55c_gen3x16_xdma_3_202210_1
 # Supported Alveo platforms are:
 # U55C: xilinx_u55c_gen3x16_xdma_3_202210_1
 # U280: xilinx_u280_xdma_201920_3
@@ -45,6 +45,8 @@ TCP_XO=Vitis_with_100Gbps_TCP-IP/_x.hw.$(XSA)/network_krnl.xo
 TCP_VIVADO_ROOTDIR ?= $$XILINX_VIVADO
 TCP_HLS_ROOTDIR ?= $$XILINX_HLS
 CMAC_TCP_XO=Vitis_with_100Gbps_TCP-IP/_x.hw.$(XSA)/cmac_krnl.xo
+ROCE_XO=HiveNet/network/roce_v2/hw/HiveNet/src/build/HiveNet_kernel_$(ETH_IF).xo
+ROCE_HBM_BANK=0
 XCLBIN=$(BUILD_DIR)/ccl_offload.xclbin
 
 HOSTCTRL_XO=../../kernels/plugins/hostctrl/hostctrl.xo
@@ -106,14 +108,12 @@ ifeq (udp,$(MODE))
 	OTHER_XO = $(LOOPBACK_XO)
 	CONFIG += --user_ip_repo_paths $(HLS_IP_FOLDER)
 	CCLO_STACK_TYPE = UDP
-	CCLO_EN_FANIN = 0
 else ifeq (axis3x,$(MODE))
 	ETH_IF := none
 	NET_XO = $(TCP_DUMMY_XO)
 	OTHER_XO = $(LOOPBACK_XO)
 	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/tcl/post_sys_link_tri.tcl
 	CCLO_STACK_TYPE = TCP
-	CCLO_EN_FANIN = 1
 	CCLO_MB_DEBUG_LEVEL = 2
 else ifeq (axis3x_vadd,$(MODE))
 	ETH_IF := none
@@ -121,7 +121,6 @@ else ifeq (axis3x_vadd,$(MODE))
 	OTHER_XO = $(VADD_XO)
 	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/tcl/post_sys_link_tri.tcl
 	CCLO_STACK_TYPE = TCP
-	CCLO_EN_FANIN = 1
 	CCLO_MB_DEBUG_LEVEL = 2
 else ifeq (tcp, $(MODE))
 	CMAC_TCP_XO=Vitis_with_100Gbps_TCP-IP/_x.hw.$(XSA)/cmac_krnl.xo
@@ -130,7 +129,11 @@ else ifeq (tcp, $(MODE))
 	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/Vitis_with_100Gbps_TCP-IP/scripts/post_sys_link.tcl
 	CONFIG += --user_ip_repo_paths Vitis_with_100Gbps_TCP-IP/build/fpga-network-stack/iprepo
 	CCLO_STACK_TYPE = TCP
-	CCLO_EN_FANIN = 1
+else ifeq (roce, $(MODE))
+	NET_XO = $(ROCE_XO) $(CMAC_UDP_XO)
+	OTHER_XO = $(LOOPBACK_XO)
+	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/$(VNX)/Ethernet/post_sys_link.tcl
+	CCLO_STACK_TYPE = UDP
 else
 	$(error Unsupported MODE)
 endif
@@ -164,6 +167,9 @@ $(TCP_XO): tcp_stack_ips
 	git submodule update --init --recursive Vitis_with_100Gbps_TCP-IP
 	$(MAKE) -C Vitis_with_100Gbps_TCP-IP/ network_krnl DEVICE=$(PLATFORM) TEMP_DIR=_x.hw.$(XSA)/ XSA=$(XSA)
 
+$(ROCE_XO):
+	cd HiveNet/network/roce_v2/hw/HiveNet/src/ && vivado -mode batch -source HiveNet_bd.tcl -tclargs $(ETH_IF) $(ROCE_HBM_BANK)
+
 .PHONY: tcp_stack_ips
 tcp_stack_ips:
 	git submodule update --init --recursive Vitis_with_100Gbps_TCP-IP
@@ -172,7 +178,7 @@ tcp_stack_ips:
 	$(MAKE) -C Vitis_with_100Gbps_TCP-IP/build installip
 
 $(XCLBIN): $(NET_XO) $(CONFIGFILE)
-	$(MAKE) -C ../../kernels/cclo PLATFORM=$(PLATFORM) STACK_TYPE=$(CCLO_STACK_TYPE) EN_FANIN=$(CCLO_EN_FANIN) MB_DEBUG_LEVEL=$(CCLO_MB_DEBUG_LEVEL)
+	$(MAKE) -C ../../kernels/cclo PLATFORM=$(PLATFORM) STACK_TYPE=$(CCLO_STACK_TYPE) MB_DEBUG_LEVEL=$(CCLO_MB_DEBUG_LEVEL)
 	$(MAKE) -C ../../kernels/plugins PLATFORM=$(PLATFORM) DEBUG=$(DEBUG)
 	v++ --link --platform $(PLATFORM) --kernel_frequency $(FREQUENCY) --save-temps --temp_dir $(BUILD_DIR) $(CONFIG) -o $@ $(CCLO_XO) $(HOSTCTRL_XO) $(CLIENT_ARB_XO) $(ARITHMETIC_XO) $(NET_XO) $(OTHER_XO)
 

@@ -27,7 +27,6 @@
 #include "accl_network_utils.hpp"
 
 using namespace ACCL;
-using namespace vnx;
 namespace fs = std::filesystem;
 
 namespace {
@@ -67,8 +66,9 @@ inline void log_debug(std::string debug) {
  * Check if ARP table contains all ranks and doesn't contain duplicates.
  *
  */
-bool check_arp(Networklayer &network_layer, const std::vector<rank_t> &ranks,
-               int local_rank, int world_size) {
+bool check_arp(vnx::Networklayer &network_layer,
+               const std::vector<rank_t> &ranks, int local_rank,
+               int world_size) {
   std::map<unsigned, bool> ranks_checked;
   for (unsigned i = 0; i < static_cast<unsigned>(world_size); ++i) {
     ranks_checked[i] = false;
@@ -125,12 +125,13 @@ bool check_arp(Networklayer &network_layer, const std::vector<rank_t> &ranks,
 } // namespace
 
 namespace accl_network_utils {
-void configure_vnx(CMAC &cmac, Networklayer &network_layer,
+void configure_vnx(vnx::CMAC &cmac, vnx::Networklayer &network_layer,
                    const std::vector<rank_t> &ranks, int local_rank,
                    bool rsfec) {
-  if (ranks.size() > max_sockets_size) {
+  if (ranks.size() > vnx::max_sockets_size) {
     throw std::runtime_error("Too many ranks. VNX supports up to " +
-                             std::to_string(max_sockets_size) + " sockets.");
+                             std::to_string(vnx::max_sockets_size) +
+                             " sockets.");
   }
 
   if (cmac.get_rs_fec() != rsfec) {
@@ -208,6 +209,47 @@ void configure_tcp(BaseBuffer &tx_buf_network, BaseBuffer &rx_buf_network,
   ss << std::hex << "ip_reg: " << ip_reg << " board_reg IP: " << board_reg
      << std::dec << std::endl;
   log_debug(ss.str());
+}
+
+void configure_roce(roce::CMAC &cmac, roce::Hivenet &hivenet,
+                    const std::vector<rank_t> &ranks, int local_rank,
+                    bool rsfec) {
+  uint32_t subnet_e = ip_encode(ranks[local_rank].ip) & 0xFFFFFF00;
+  std::string subnet = ip_decode(subnet_e);
+  uint32_t local_id = hivenet.get_local_id();
+  std::string internal_ip = ip_decode(subnet_e + local_id);
+
+  if (ranks[local_rank].ip != internal_ip) {
+    throw std::runtime_error(
+        "IP address set (" + ranks[local_rank].ip + ") mismatches with " +
+        "internal hivenet IP (" + internal_ip + "). The internal ip is " +
+        "determined by adding the rank (" + std::to_string(local_rank) +
+        ") to the subnet (" + subnet + ").");
+  }
+
+  hivenet.set_ip_subnet(subnet);
+  hivenet.set_mac_subnet(0x347844332211);
+
+  if (cmac.get_rs_fec() != rsfec) {
+    std::cout << "Turning RS-FEC " << (rsfec ? "on" : "off") << "..."
+              << std::endl;
+    cmac.set_rs_fec(rsfec);
+  }
+
+  std::cout << "Testing RoCE link status: ";
+  barrier();
+  const auto link_status = cmac.link_status();
+
+  if (link_status.at("rx_status")) {
+    std::cout << "Link successful!" << std::endl;
+  } else {
+    std::cout << "No link found." << std::endl;
+  }
+
+  if (!link_status.at("rx_status")) {
+    throw network_error("No link on ethernet.");
+  }
+  barrier();
 }
 
 std::vector<std::string> get_ips(fs::path config_file) {
@@ -308,6 +350,10 @@ initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
       devicemem = local_rank * 6;
       rxbufmem = {local_rank * 6 + 1};
       networkmem = local_rank * 6 + 2;
+    } else if (design == acclDesign::ROCE) {
+      devicemem = 3;
+      rxbufmem = {4};
+      networkmem = 6;
     } else {
       devicemem = 0;
       rxbufmem = {1};
@@ -321,8 +367,8 @@ initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
     }
 
     if (design == acclDesign::UDP) {
-      auto cmac = CMAC(xrt::ip(device, xclbin_uuid, "cmac_0:{cmac_0}"));
-      auto network_layer = Networklayer(
+      auto cmac = vnx::CMAC(xrt::ip(device, xclbin_uuid, "cmac_0:{cmac_0}"));
+      auto network_layer = vnx::Networklayer(
           xrt::ip(device, xclbin_uuid, "networklayer:{networklayer_0}"));
 
       configure_vnx(cmac, network_layer, ranks, local_rank, rsfec);
@@ -339,6 +385,13 @@ initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
                       xrt::kernel::cu_access_mode::exclusive);
       configure_tcp(*tx_buf_network, *rx_buf_network, network_krnl, ranks,
                     local_rank);
+    } else if (design == acclDesign::ROCE) {
+      auto cmac = roce::CMAC(xrt::ip(device, xclbin_uuid, "cmac_0:{cmac_0}"));
+      auto hivenet = roce::Hivenet(
+          xrt::ip(device, xclbin_uuid, "HiveNet_kernel_0:{networklayer_0}"),
+          local_rank);
+
+      configure_roce(cmac, hivenet, ranks, local_rank, rsfec);
     }
 
     accl = std::make_unique<ACCL::ACCL>(ranks, local_rank, device, cclo_ip,

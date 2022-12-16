@@ -1,0 +1,14 @@
+__pycache__
+CMakeCache.txt
+CMakeDoxyfile.in
+CMakeDoxygenDefaults.cmake
+CMakeFiles/
+Makefile
+cmake_install.cmake
+doxygen.log
+bin
+docs
+lib
+
+# results
+results*.json

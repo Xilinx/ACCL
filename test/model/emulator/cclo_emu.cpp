@@ -336,23 +336,17 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsign
     HLSLIB_FREERUNNING_FUNCTION(dma_write, devicemem, dma_write_cmd_int[1], dma_write_sts_int[1], switch_m[SWITCH_M_DMA1_WRITE]);
     HLSLIB_FREERUNNING_FUNCTION(dma_read, devicemem, dma_read_cmd_int[1], dma_read_sts_int[1], dma_read_data[1]);
     //RX buffer handling offload
-    if(!use_tcp){
-        HLSLIB_FREERUNNING_FUNCTION(rxbuf_enqueue, dma_write_cmd_int[0], inflight_rxbuf, cfgmem);
-        HLSLIB_FREERUNNING_FUNCTION(rxbuf_dequeue, dma_write_sts_int[0], eth_rx_sts, inflight_rxbuf, eth_rx_notif, cfgmem);
-        HLSLIB_FREERUNNING_FUNCTION(rxbuf_seek, eth_rx_notif, eth_rx_seek_req, eth_rx_seek_ack, rxbuf_release_req, cfgmem);
-    } else{
-        HLSLIB_FREERUNNING_FUNCTION(rxbuf_enqueue, enq2sess_dma_cmd, inflight_rxbuf, cfgmem);
-        HLSLIB_FREERUNNING_FUNCTION(rxbuf_dequeue, sess2deq_dma_sts, eth_rx_sts_sess, inflight_rxbuf_sess, eth_rx_notif, cfgmem);
-        HLSLIB_FREERUNNING_FUNCTION(rxbuf_seek, eth_rx_notif, eth_rx_seek_req, eth_rx_seek_ack, rxbuf_release_req, cfgmem);
-        HLSLIB_FREERUNNING_FUNCTION(
-            rxbuf_session,
-            enq2sess_dma_cmd, sess2deq_dma_sts,
-            inflight_rxbuf, inflight_rxbuf_sess,
-            dma_write_cmd_int[0], dma_write_sts_int[0],
-            eth_notif_out_dpkt,
-            eth_rx_sts, eth_rx_sts_sess
-        );
-    }
+    HLSLIB_FREERUNNING_FUNCTION(rxbuf_enqueue, enq2sess_dma_cmd, inflight_rxbuf, cfgmem);
+    HLSLIB_FREERUNNING_FUNCTION(rxbuf_dequeue, sess2deq_dma_sts, eth_rx_sts_sess, inflight_rxbuf_sess, eth_rx_notif, cfgmem);
+    HLSLIB_FREERUNNING_FUNCTION(rxbuf_seek, eth_rx_notif, eth_rx_seek_req, eth_rx_seek_ack, rxbuf_release_req, cfgmem);
+    HLSLIB_FREERUNNING_FUNCTION(
+        rxbuf_session,
+        enq2sess_dma_cmd, sess2deq_dma_sts,
+        inflight_rxbuf, inflight_rxbuf_sess,
+        dma_write_cmd_int[0], dma_write_sts_int[0],
+        eth_notif_out_dpkt,
+        eth_rx_sts, eth_rx_sts_sess
+    );
     //move offload
     HLSLIB_FREERUNNING_FUNCTION(
         dma_mover, cfgmem, cmd_fifos[CMD_DMA_MOVE], sts_fifos[STS_DMA_MOVE],
@@ -412,7 +406,7 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsign
         );
     } else{
         HLSLIB_FREERUNNING_FUNCTION(udp_packetizer, switch_m[SWITCH_M_ETH_TX], eth_tx_data, eth_tx_cmd, eth_tx_sts, max_words_per_pkt);
-        HLSLIB_FREERUNNING_FUNCTION(udp_depacketizer, eth_rx_data, switch_s[SWITCH_S_ETH_RX], eth_rx_sts);
+        HLSLIB_FREERUNNING_FUNCTION(udp_depacketizer, eth_rx_data, switch_s[SWITCH_S_ETH_RX], eth_rx_sts, eth_notif_out_dpkt);
     }
     //emulated external kernel
     HLSLIB_FREERUNNING_FUNCTION(krnl_endpoint_egress_port, ctx, accl_to_krnl_data);

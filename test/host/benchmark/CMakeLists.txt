@@ -1,5 +1,5 @@
 # /*******************************************************************************
-#  Copyright (C) 2022 Xilinx, Inc
+#  Copyright (C) 2022 Advanced Micro Devices, Inc
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 # *******************************************************************************/
 
 cmake_minimum_required(VERSION 3.9)
-project(hls_test)
+project(accl_benchmark)
 
 set(CMAKE_CXX_STANDARD 17)
 
@@ -32,27 +32,16 @@ if (NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 endif()
 
-set(ACCL_REPO_ROOT ${CMAKE_CURRENT_LIST_DIR}/../../../)
-set(HLSLIB_INCLUDE ${ACCL_REPO_ROOT}/hlslib/include/hlslib/xilinx/)
-set(ACCL_HLSDRV_DIR ${ACCL_REPO_ROOT}/driver/hls/)
-set(CCLO_BFM_DIR ${ACCL_REPO_ROOT}/test/model/bfm/)
-set(VADD_DIR ${ACCL_REPO_ROOT}/kernels/plugins/vadd_put/)
-set(EMU_INCLUDES ${HLSLIB_INCLUDE} $ENV{XILINX_HLS}/include/ ${ACCL_HLSDRV_DIR} ${CCLO_BFM_DIR})
-
-set(CMAKE_BUILD_TYPE Debug)
-
-set(ACCL_DEBUG 1)
+set(CMAKE_BUILD_TYPE Release)
 
 set(ACCL_NETWORK_UTILS_MPI 1)
 set(ACCL_NETWORK_UTILS_DEBUG 1)
+set(ACCL_DEBUG 0)
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../../../driver/utils/accl_network_utils ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/accl_network_utils)
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../model/bfm ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/cclobfm)
 
 find_package(MPI REQUIRED)
-add_executable(test test.cpp ${CCLO_BFM_DIR}/cclo_bfm.cpp ${VADD_DIR}/vadd_put.cpp)
-target_include_directories(test PUBLIC ${MPI_CXX_INCLUDE_PATH} ${ACCL_INCLUDE_PATH} ${EMU_INCLUDES} ${VADD_DIR})
-target_link_libraries(test PUBLIC MPI::MPI_CXX zmq zmqpp pthread cclobfm accl_network_utils)
+add_executable(benchmark benchmark.cpp)
+target_include_directories(benchmark PUBLIC ${MPI_CXX_INCLUDE_PATH})
 # Explicitely link against vnx and network_roce_v2 because CMake doesn't support nested object libraries
 # https://stackoverflow.com/a/71040950
-target_link_libraries(test PUBLIC vnx network_roce_v2)
-target_compile_options(test PRIVATE -w -fdiagnostics-color=always -g)
+target_link_libraries(benchmark PUBLIC MPI::MPI_CXX accl_network_utils vnx network_roce_v2)
