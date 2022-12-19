@@ -56,6 +56,8 @@ public:
 
   void wait() override;
 
+  timeoutStatus wait(std::chrono::milliseconds timeout) override;
+
   addr_t get_base_addr() override {
     // TODO: Find way to retrieve CCLO base address on FPGA
     return 0x0;

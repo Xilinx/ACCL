@@ -56,6 +56,18 @@ void FPGADevice::wait() {
   }
 }
 
+CCLO::timeoutStatus FPGADevice::wait(std::chrono::milliseconds timeout) {
+  if (run) {
+    auto status = run.wait(timeout);
+    if (status == ert_cmd_state::ERT_CMD_STATE_TIMEOUT) {
+      return CCLO::timeout;
+    }
+    run = xrt::run();
+  }
+
+  return CCLO::no_timeout;
+}
+
 void FPGADevice::call(const Options &options) {
   start(options);
   wait();
