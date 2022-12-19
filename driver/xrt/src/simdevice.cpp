@@ -64,6 +64,13 @@ void SimDevice::wait() {
   addr_2_cache->sync_bo_from_device();
 }
 
+CCLO::timeoutStatus SimDevice::wait(std::chrono::milliseconds timeout) {
+  std::cerr << "ACCL::SimDevice does not currently support setting a "
+            << "timeout for wait." << std::endl;
+  this->wait();
+  return CCLO::no_timeout;
+}
+
 void SimDevice::call(const Options &options) {
   this->start(options);
   this->wait();

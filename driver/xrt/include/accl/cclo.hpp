@@ -20,6 +20,7 @@
 #include "arithconfig.hpp"
 #include "buffer.hpp"
 #include "constants.hpp"
+#include <chrono>
 #include <vector>
 
 /** @file cclo.hpp */
@@ -80,6 +81,11 @@ public:
           data_type_io_2(dataType::none), waitfor({}) {}
   };
 
+  enum timeoutStatus {
+    no_timeout,
+    timeout
+  };
+
   /**
    * Construct a new CCLO object.
    *
@@ -124,6 +130,16 @@ public:
    *
    */
   virtual void wait() = 0;
+
+  /**
+   * Wait for CCLO operation to complete. Note that the timeout is currently
+   * ignored when using the simulator.
+   *
+   * @param timeout Time out wait after this many milliseconds have passed.
+   *
+   * @return timeoutStatus Status on whether the wait was timed out or not.
+   */
+  virtual timeoutStatus wait(std::chrono::milliseconds timeout) = 0;
 
   /**
    * Get the base address of the CCLO, this currently returns 0x0 on hardware.
