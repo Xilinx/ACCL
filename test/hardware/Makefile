@@ -168,7 +168,7 @@ $(TCP_XO): tcp_stack_ips
 	$(MAKE) -C Vitis_with_100Gbps_TCP-IP/ network_krnl DEVICE=$(PLATFORM) TEMP_DIR=_x.hw.$(XSA)/ XSA=$(XSA)
 
 $(ROCE_XO):
-	cd HiveNet/network/roce_v2/hw/HiveNet/src/ && vivado -mode batch -source HiveNet_bd.tcl -tclargs $(ETH_IF) $(ROCE_HBM_BANK)
+	cd HiveNet/network/roce_v2/hw/HiveNet/src/ && vivado -mode batch -source HiveNet_bd.tcl -tclargs $(ETH_IF) $(ROCE_HBM_BANK) $(FPGAPART)
 
 .PHONY: tcp_stack_ips
 tcp_stack_ips:
