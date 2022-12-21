@@ -30,6 +30,9 @@ using namespace ACCL;
 namespace fs = std::filesystem;
 
 namespace {
+// RoCE uses /19 subnet (255.255.224.0)
+const uint32_t ROCE_SUBNET = 0xFFFFE000;
+
 /**
  * Insert barrier when using MPI, otherwise sleep for 3 seconds.
  *
@@ -214,7 +217,7 @@ void configure_tcp(BaseBuffer &tx_buf_network, BaseBuffer &rx_buf_network,
 void configure_roce(roce::CMAC &cmac, roce::Hivenet &hivenet,
                     const std::vector<rank_t> &ranks, int local_rank,
                     bool rsfec) {
-  uint32_t subnet_e = ip_encode(ranks[local_rank].ip) & 0xFFFFFF00;
+  uint32_t subnet_e = ip_encode(ranks[local_rank].ip) & ROCE_SUBNET;
   std::string subnet = ip_decode(subnet_e);
   uint32_t local_id = hivenet.get_local_id();
   std::string internal_ip = ip_decode(subnet_e + local_id);
@@ -276,7 +279,7 @@ std::vector<std::string> get_ips(bool local, int world_size) {
     if (local) {
       ips.emplace_back("127.0.0.1");
     } else {
-      ips.emplace_back("10.10.10." + std::to_string(i));
+      ips.emplace_back("10.10.10." + std::to_string(i + 1));
     }
   }
   return ips;
@@ -290,7 +293,7 @@ std::vector<rank_t> generate_ranks(fs::path config_file, int local_rank,
 
   uint32_t ip_subnet;
   if (roce) {
-    ip_subnet = ip_encode(ips.at(0)) & 0xFFFFFF00;
+    ip_subnet = ip_encode(ips.at(0)) & ROCE_SUBNET;
   }
 
   for (int i = 0; i < static_cast<int>(ips.size()); ++i) {
