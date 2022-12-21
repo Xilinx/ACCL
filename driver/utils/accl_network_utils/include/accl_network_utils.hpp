@@ -38,10 +38,14 @@ class network_error : public std::runtime_error {
 };
 
 // Generate ranks based on JSON files with IPs
+// The roce parameter is used to set the session id to be int(ip) - int(subnet),
+// because the roce kernel constructs the IP internally by adding the session
+// id to the IP subnet
 std::vector<ACCL::rank_t> generate_ranks(std::filesystem::path config_file,
                                          int local_rank,
                                          std::uint16_t start_port = 5500,
-                                         unsigned int rxbuf_size = 1024);
+                                         unsigned int rxbuf_size = 1024,
+                                         bool roce = false);
 // Generate ranks with IPs in private IP subnets
 std::vector<ACCL::rank_t> generate_ranks(bool local, int local_rank,
                                          int world_size,
