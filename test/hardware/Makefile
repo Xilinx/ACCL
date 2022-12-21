@@ -45,7 +45,7 @@ TCP_XO=Vitis_with_100Gbps_TCP-IP/_x.hw.$(XSA)/network_krnl.xo
 TCP_VIVADO_ROOTDIR ?= $$XILINX_VIVADO
 TCP_HLS_ROOTDIR ?= $$XILINX_HLS
 CMAC_TCP_XO=Vitis_with_100Gbps_TCP-IP/_x.hw.$(XSA)/cmac_krnl.xo
-ROCE_XO=HiveNet/network/roce_v2/hw/HiveNet/src/build/HiveNet_kernel_$(ETH_IF).xo
+ROCE_XO=HiveNet/network/roce_v2/hw/HiveNet/build/HiveNet_kernel_$(ETH_IF).xo
 ROCE_HBM_BANK=0
 XCLBIN=$(BUILD_DIR)/ccl_offload.xclbin
 
