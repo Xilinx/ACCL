@@ -962,6 +962,46 @@ CCLO *ACCL::reduce_put(dataType src_data_type, dataType dst_data_type,
 }
 
 
+CCLO *ACCL::reduce_send(dataType src_data_type, BaseBuffer &recvbuf,
+                   unsigned int count, unsigned int root,
+                   reduceFunction func, communicatorId comm_id, bool to_fpga,
+                   dataType compress_dtype, bool run_async,
+                   std::vector<CCLO *> waitfor) {
+  CCLO::Options options{};
+
+  const Communicator &communicator = communicators[comm_id];
+
+  if (count == 0) {
+    std::cerr << "ACCL: zero size buffer" << std::endl;
+    return nullptr;
+  }
+
+  options.scenario = operation::reduce_send;
+  options.comm = communicator.communicators_addr();
+  options.data_type_io_0 = src_data_type;
+  options.addr_2 = &recvbuf;
+  options.count = count;
+  options.reduce_function = func;
+  options.root_src_dst = root;
+  options.compress_dtype = compress_dtype;
+  options.waitfor = waitfor;
+  options.stream_flags = streamFlags::OP0_STREAM;
+  CCLO *handle = call_async(options);
+
+  if (run_async) {
+    return handle;
+  } else {
+    handle->wait();
+    if (to_fpga == false) {
+      auto slice = recvbuf.slice(0, count);
+      slice->sync_from_device();
+    }
+    check_return_value("reduce");
+  }
+
+  return nullptr;
+}
+
 CCLO *ACCL::allreduce(BaseBuffer &sendbuf,
                       BaseBuffer &recvbuf, unsigned int count,
                       reduceFunction func, communicatorId comm_id,

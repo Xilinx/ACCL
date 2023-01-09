@@ -926,7 +926,6 @@ int reduce_put( unsigned int count,
             unsigned int func,
             unsigned int root_rank,
             uint64_t src_addr,
-            uint64_t dst_addr,
             unsigned int comm_offset,
             unsigned int arcfg_offset,
             unsigned int compression,
@@ -949,6 +948,38 @@ int reduce_put( unsigned int count,
         return fused_recv_reduce_send(prev_in_ring, next_in_ring, count, func, src_addr, comm_offset, arcfg_offset, TAG_ANY, compression, (stream & OP0_STREAM));
     }
     //no op for root
+    return NO_ERROR;
+}
+
+//every rank receives a buffer it reduces its own buffer and forwards to next rank in the ring
+//the final step to the root is with a send, and the root does not sum its own data
+//(in fact root is completely passive, only receives result)
+int reduce_send( unsigned int count,
+            unsigned int func,
+            unsigned int root_rank,
+            uint64_t src_addr,
+            uint64_t dst_addr,
+            unsigned int comm_offset,
+            unsigned int arcfg_offset,
+            unsigned int compression,
+            unsigned int stream){
+
+    unsigned int next_in_ring = (world.local_rank + 1) % world.size;
+    unsigned int prev_in_ring = (world.local_rank + world.size-1) % world.size;
+
+    if(world.size == 1){
+        //no op when world size is 1
+        return NO_ERROR;
+    }else if( prev_in_ring == root_rank){
+        //non root ranks immediately after the root sends; only OP0_STREAM flag is relevant here
+        return send(next_in_ring, count, src_addr, comm_offset, arcfg_offset, TAG_ANY, compression, (stream & OP0_STREAM));
+    }else if (world.local_rank != root_rank){
+        //non root ranks sends their data + data received from previous rank to the next rank in sequence as a daisy chain; only OP0_STREAM flag is relevant here
+        return fused_recv_reduce_send(prev_in_ring, next_in_ring, count, func, src_addr, comm_offset, arcfg_offset, TAG_ANY, compression, (stream & OP0_STREAM));
+    }else{
+        //on root simply receive
+        return recv(prev_in_ring, count, dst_addr, comm_offset, arcfg_offset, TAG_ANY, compression, (stream & RES_STREAM));
+    }
     return NO_ERROR;
 }
 
@@ -1443,7 +1474,10 @@ void run() {
                 retval = all_to_all();
                 break;
             case ACCL_REDUCE_PUT:
-                retval = reduce_put(count, function, root_src_dst, op0_addr, res_addr, comm, datapath_cfg, compression_flags, stream_flags);
+                retval = reduce_put(count, function, root_src_dst, op0_addr, comm, datapath_cfg, compression_flags, stream_flags);
+                break;
+            case ACCL_REDUCE_SEND:
+                retval = reduce_send(count, function, root_src_dst, op0_addr, res_addr, comm, datapath_cfg, compression_flags, stream_flags);
                 break;
             case ACCL_CONFIG:
                 retval = 0;

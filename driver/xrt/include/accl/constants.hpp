@@ -85,6 +85,8 @@ enum class operation {
   all_to_all = 13,      /**< All-to-all kernel */
   reduce_put = 14,      /**< Reduce exclusive of the root, with final result
                              delivery via put */
+  reduce_send = 15,     /**< Reduce exclusive of the root, with final result
+                             delivery via send */
   nop = 255             /**< NOP operation */
 };
 

@@ -72,6 +72,7 @@ namespace accl_hls {
 #define ACCL_BARRIER        12
 #define ACCL_ALLTOALL       13
 #define ACCL_REDUCE_PUT     14
+#define ACCL_REDUCE_SEND    15
 
 /**
  * @brief Class encapsulating ACCL command streams
@@ -466,6 +467,28 @@ class ACCLCommand{
                 ACCL_REDUCE_PUT, len, comm_adr, root, function, 0, 
                 dpcfg_adr, cflags, 2, 
                 0, 0, 0
+            );
+            finalize_call();
+        }
+
+        /**
+         * @brief Reduce data stream to memory, exclusive of root,
+         *        with final delivery to root via send
+         * 
+         * @param len Number of array elements
+         * @param root Rank ID of root node
+         * @param function Reduction function ID
+         * @param dst_addr Destination array address
+         */
+        void reduce_send(ap_uint<32> len,
+                    ap_uint<32> root,
+                    ap_uint<32> function,
+                    ap_uint<64> dst_addr
+        ){
+            start_call(
+                ACCL_REDUCE_SEND, len, comm_adr, root, function, 0, 
+                dpcfg_adr, cflags, 2,
+                0, 0, dst_addr
             );
             finalize_call();
         }

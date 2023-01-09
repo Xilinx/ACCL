@@ -606,8 +606,6 @@ public:
    * @param root           Rank to reduce the data to.
    * @param func           Reduce function to use.
    * @param comm_id        Index of communicator to use.
-   * @param to_fpga        Set to true if the reduced data will be used on the
-   *                       FPGA only.
    * @param compress_dtype Datatype to compress buffers to over ethernet.
    * @param run_async      Run the ACCL call asynchronously.
    * @param waitfor        ACCL call will wait for these operations before it
@@ -618,6 +616,31 @@ public:
   CCLO *reduce_put(dataType src_data_type, dataType dst_data_type, unsigned int count, 
                 unsigned int root, reduceFunction func, 
                 communicatorId comm_id = GLOBAL_COMM,
+                dataType compress_dtype = dataType::none,
+                bool run_async = false, std::vector<CCLO *> waitfor = {});
+
+  /**
+   * Performs the stream to remote memory reduce operation on the FPGA 
+   *
+   * @param src_data_type  Data type of the input.
+   * @param recvbuf        Buffer to where the data should be reduced. Create a
+   *                       buffer using ACCL::create_buffer.
+   * @param count          Amount of elements to reduce.
+   * @param root           Rank to reduce the data to.
+   * @param func           Reduce function to use.
+   * @param comm_id        Index of communicator to use.
+   * @param to_fpga        Set to true if the reduced data will be used on the
+   *                       FPGA only.
+   * @param compress_dtype Datatype to compress buffers to over ethernet.
+   * @param run_async      Run the ACCL call asynchronously.
+   * @param waitfor        ACCL call will wait for these operations before it
+   *                       will start. Currently not implemented.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
+   */
+  CCLO *reduce_send(dataType src_data_type, BaseBuffer &recvbuf, unsigned int count, 
+                unsigned int root, reduceFunction func, 
+                communicatorId comm_id = GLOBAL_COMM, bool to_fpga = false,
                 dataType compress_dtype = dataType::none,
                 bool run_async = false, std::vector<CCLO *> waitfor = {});
 

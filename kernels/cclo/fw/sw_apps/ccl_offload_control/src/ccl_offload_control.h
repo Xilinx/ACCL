@@ -76,6 +76,7 @@
 #define ACCL_BARRIER        12
 #define ACCL_ALLTOALL       13
 #define ACCL_REDUCE_PUT     14
+#define ACCL_REDUCE_SEND    15
 
 //ACCL_CONFIG SUBFUNCTIONS
 #define HOUSEKEEP_SWRST                0
