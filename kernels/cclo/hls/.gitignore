@@ -15,15 +15,4 @@
 #
 # *******************************************************************************/
 
-[submodule "demo/build/xup_vitis_network_example"]
-	path = test/hardware/xup_vitis_network_example
-	url = https://github.com/Xilinx/xup_vitis_network_example.git
-[submodule "demo/build/Vitis_with_100Gbps_TCP-IP"]
-	path = test/hardware/Vitis_with_100Gbps_TCP-IP
-	url = https://github.com/fpgasystems/Vitis_with_100Gbps_TCP-IP.git
-[submodule "hlslib"]
-	path = hlslib
-	url = https://github.com/quetric/hlslib.git
-[submodule "test/hardware/HiveNet"]
-	path = test/hardware/HiveNet
-	url = https://github.com/quetric/AlveoLink.git
+build_*

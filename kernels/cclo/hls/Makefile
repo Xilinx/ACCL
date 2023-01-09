@@ -22,3 +22,7 @@ all:
 	$(MAKE) -C rxbuf_offload DEVICE=$(DEVICE)
 	$(MAKE) -C dma_mover DEVICE=$(DEVICE)
 	$(MAKE) -C segmenter DEVICE=$(DEVICE)
+
+clean:
+	$(MAKE) -C dma_mover clean
+	rm -rf eth_intf/build_* rxbuf_offload/build_* segmenter/build_stream_segmenter

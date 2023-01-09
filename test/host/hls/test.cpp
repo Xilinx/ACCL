@@ -16,7 +16,8 @@
 #
 *******************************************************************************/
 
-#include "accl.hpp"
+#include <accl.hpp>
+#include <accl_network_utils.hpp>
 #include <cstdlib>
 #include <functional>
 #include <mpi.h>
@@ -24,65 +25,33 @@
 #include <sstream>
 #include <tclap/CmdLine.h>
 #include <vector>
-#include "vadd_put.h"
-#include "cclo_bfm.h"
 #include <xrt/xrt_device.h>
 #include <iostream>
 
+#include "vadd_put.h"
+#include "cclo_bfm.h"
+
 using namespace ACCL;
+using namespace accl_network_utils;
 
 int rank, size;
 
 struct options_t {
     int start_port;
     unsigned int rxbuf_size;
+    unsigned int segment_size;
     unsigned int count;
     unsigned int dest;
     unsigned int nruns;
     unsigned int device_index;
     bool udp;
     bool hardware;
+    bool rsfec;
     std::string xclbin;
+    std::string config_file;
 };
 
-std::unique_ptr<ACCL::ACCL> test_vadd_put(options_t options) {
-    std::vector<rank_t> ranks = {};
-    for (int i = 0; i < size; ++i) {
-        rank_t new_rank = {"127.0.0.1", options.start_port + i, i, options.rxbuf_size};
-        ranks.emplace_back(new_rank);
-    }
-
-    std::unique_ptr<ACCL::ACCL> accl;
-    xrt::device device;
-
-    if (options.hardware) {
-        device = xrt::device(options.device_index);
-        auto xclbin_uuid = device.load_xclbin(options.xclbin);
-        auto cclo_ip = xrt::ip(device, device.get_xclbin_uuid(),
-                            "ccl_offload:{ccl_offload_" + std::to_string(rank) + "}");
-        auto hostctrl_ip =
-            xrt::kernel(device, device.get_xclbin_uuid(), "hostctrl:{hostctrl_" + std::to_string(rank) + "_0}",
-                        xrt::kernel::cu_access_mode::exclusive);
-
-        int devicemem = rank * 6;
-        std::vector<int> rxbufmem = {rank * 6 + 1};
-        int networkmem = rank * 6 + 2;
-
-        accl = std::make_unique<ACCL::ACCL>(
-            ranks, rank, device, cclo_ip, hostctrl_ip, devicemem, rxbufmem,
-            networkProtocol::UDP, 16, options.rxbuf_size);
-    } else {
-        accl = std::make_unique<ACCL::ACCL>(ranks, rank, options.start_port,
-                                                options.udp ? networkProtocol::UDP : networkProtocol::TCP, 16,
-                                                options.rxbuf_size);
-    }
-
-    accl->set_timeout(1e8);
-    std::cout << "Host-side CCLO initialization finished" << std::endl;
-
-    // barrier here to make sure all the devices are configured before testing
-    MPI_Barrier(MPI_COMM_WORLD);
-
+void test_vadd_put(ACCL::ACCL &accl, xrt::device &device, options_t options) {
     //run test here:
 
     //allocate float arrays for the HLS function to use
@@ -100,8 +69,8 @@ std::unique_ptr<ACCL::ACCL> test_vadd_put(options_t options) {
 
         src_bo.write(src);
         src_bo.sync(XCL_BO_SYNC_BO_TO_DEVICE);
-        auto run = vadd_ip(src_bo, dst_bo, options.count, (rank+1)%size, accl->get_communicator_addr(),
-                    accl->get_arithmetic_config_addr({dataType::float32, dataType::float32}));
+        auto run = vadd_ip(src_bo, dst_bo, options.count, (rank+1)%size, accl.get_communicator_addr(),
+                    accl.get_arithmetic_config_addr({dataType::float32, dataType::float32}));
         run.wait(10000);
 
         dst_bo.sync(XCL_BO_SYNC_BO_FROM_DEVICE);
@@ -119,8 +88,8 @@ std::unique_ptr<ACCL::ACCL> test_vadd_put(options_t options) {
         //run the hls function, using the global communicator
         vadd_put(   src, dst, options.count,
                     (rank+1)%size,
-                    accl->get_communicator_addr(),
-                    accl->get_arithmetic_config_addr({dataType::float32, dataType::float32}),
+                    accl.get_communicator_addr(),
+                    accl.get_arithmetic_config_addr({dataType::float32, dataType::float32}),
                     callreq, callack,
                     data_krnl2cclo, data_cclo2krnl);
         //stop the BFM
@@ -139,8 +108,6 @@ std::unique_ptr<ACCL::ACCL> test_vadd_put(options_t options) {
 
     std::cout << "Test finished with " << err_count << " errors" << std::endl;
     MPI_Barrier(MPI_COMM_WORLD);
-
-    return accl;
 }
 
 void test_loopback_local_res(ACCL::ACCL& accl, options_t options) {
@@ -297,10 +264,10 @@ options_t parse_options(int argc, char *argv[]) {
                                             false, 1, "positive integer");
     cmd.add(nruns_arg);
     TCLAP::ValueArg<uint16_t> start_port_arg(
-        "s", "start-port", "Start of range of ports usable for sim", false, 5500,
+        "p", "start-port", "Start of range of ports usable for sim", false, 5500,
         "positive integer");
     cmd.add(start_port_arg);
-    TCLAP::ValueArg<uint32_t> count_arg("c", "count", "How many bytes per buffer",
+    TCLAP::ValueArg<uint32_t> count_arg("s", "count", "How many bytes per buffer",
                                         false, 16, "positive integer");
     cmd.add(count_arg);
     TCLAP::ValueArg<uint32_t> bufsize_arg("b", "rxbuf-size",
@@ -317,6 +284,12 @@ options_t parse_options(int argc, char *argv[]) {
         "i", "device-index", "device index of FPGA if hardware mode is used",
         false, 0, "positive integer");
     cmd.add(device_index_arg);
+    TCLAP::ValueArg<std::string> config_arg(
+        "c", "config", "Config file containing IP mapping",
+        false, "", "JSON file");
+    TCLAP::SwitchArg rsfec_arg("", "rsfec", "Enables RS-FEC in CMAC.", cmd,
+                               false);
+    cmd.add(config_arg);
 
     try {
         cmd.parse(argc, argv);
@@ -338,11 +311,14 @@ options_t parse_options(int argc, char *argv[]) {
     opts.start_port = start_port_arg.getValue();
     opts.count = count_arg.getValue();
     opts.rxbuf_size = bufsize_arg.getValue() * 1024; // convert to bytes
+    opts.segment_size = opts.rxbuf_size;
     opts.nruns = nruns_arg.getValue();
     opts.udp = udp_arg.getValue();
     opts.hardware = hardware_arg.getValue();
     opts.xclbin = xclbin_arg.getValue();
     opts.device_index = device_index_arg.getValue();
+    opts.config_file = config_arg.getValue();
+    opts.rsfec = rsfec_arg.getValue();
     return opts;
 }
 
@@ -358,7 +334,29 @@ int main(int argc, char *argv[]) {
     stream << "rank " << rank << " size " << size << std::endl;
     std::cout << stream.str();
 
-    auto accl = test_vadd_put(options);
+    acclDesign design = acclDesign::AXIS3x;
+    std::vector<rank_t> ranks;
+    if (options.config_file == "") {
+        ranks = generate_ranks(true, rank, size, options.start_port,
+                               options.rxbuf_size);
+    } else {
+        ranks = generate_ranks(options.config_file, rank, options.start_port,
+                               options.rxbuf_size);
+    }
+
+    xrt::device device{};
+    if (options.hardware) {
+        device = xrt::device(options.device_index);
+    }
+
+    std::unique_ptr<ACCL::ACCL> accl = initialize_accl(
+        ranks, rank, !options.hardware, design, device, options.xclbin, 16,
+        options.rxbuf_size, options.segment_size, options.rsfec);
+
+    accl->set_timeout(1e6);
+
+    MPI_Barrier(MPI_COMM_WORLD);
+    test_vadd_put(*accl, device, options);
     MPI_Barrier(MPI_COMM_WORLD);
     if(!options.hardware){
         test_reduce_stream(*accl, options);

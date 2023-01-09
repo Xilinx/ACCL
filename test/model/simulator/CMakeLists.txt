@@ -61,7 +61,8 @@ set(SYMLINKS xsim.dir
              ccl_offload_bd_axi_bram_ctrl_0_bram_0.mem ccl_offload_bd_dlmb_bram_if_cntlr_bram_0.mem
              dma_mover_instruction_decode_arcfg_6_RAM_AUTO_1R1W.dat rxbuf_session_rxbuf_session_command_mem_active_RAM_AUTO_1R1W.dat
              rxbuf_session_rxbuf_session_command_mem_index_RAM_AUTO_1R1W.dat tcp_depacketizer_target_strm_V_RAM_AUTO_1R1W.dat
-             tcp_depacketizer_remaining_RAM_AUTO_1R1W.dat rxbuf_session_rxbuf_session_command_mem_header_dst_V_RAM_AUTO_1R1W.dat
+             tcp_depacketizer_remaining_RAM_AUTO_1R1W.dat udp_depacketizer_remaining_RAM_AUTO_1R1W.dat
+             udp_depacketizer_target_strm_V_RAM_AUTO_1R1W.dat rxbuf_session_rxbuf_session_command_mem_header_dst_V_RAM_AUTO_1R1W.dat
              rxbuf_session_rxbuf_session_command_mem_address_V_RAM_AUTO_1R1W.dat)
 
 foreach(SYMLINK ${SYMLINKS})

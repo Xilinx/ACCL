@@ -22,7 +22,6 @@ EN_DMA ?= 1
 EN_ARITH ?= 1
 EN_COMPRESS ?= 1
 EN_EXT_KRNL ?= 1
-EN_FANIN ?= 0
 MB_DEBUG_LEVEL ?= 0
 SIM_MEMSIZE ?= 256K
 CCLO_ELF=vitis_ws/ccl_offload_control/Debug/ccl_offload_control.elf
@@ -53,7 +52,7 @@ xsa: $(CCLO_XSA)
 
 $(CCLO_XSA): $(GEN_KERNEL_TCL) $(REBUILD_BD_TCL)
 	$(MAKE) -C hls/ DEVICE=$(FPGAPART)
-	vivado -mode batch -source $< -tclargs $(FPGAPART) $(HW_DEBUG) $(CCLO_XSA) $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) $(MB_DEBUG_LEVEL) $(EN_FANIN)
+	vivado -mode batch -source $< -tclargs $(FPGAPART) $(HW_DEBUG) $(CCLO_XSA) $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) $(MB_DEBUG_LEVEL)
 
 OPTIMIZATION=3
 #valid values 0,1,2,3,s,g
@@ -69,7 +68,7 @@ else ifeq ($(OPTIMIZATION),s)
    OPTIMIZATION_STRING = "Optimize for size (-Os)"
 endif
 
-.PHONY: elf simdll xo distclean dcp
+.PHONY: elf simdll xo clean dcp
 
 elf: $(CCLO_ELF)
 
@@ -93,11 +92,12 @@ $(CCLO_DCP): tcl/generate_dcp.tcl $(CCLO_ELF)
 xo: $(CCLO_XO)
 
 ccl_offload.xml:
-	python gen_xml.py $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) 
+	python3 gen_xml.py $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL)
 
 $(CCLO_XO): tcl/generate_xo.tcl ccl_offload.xml $(CCLO_DCP)
 	rm -rf ccl_offload_ex/ccl_offload
 	vivado -mode batch -source $< -tclargs $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) $(MB_DEBUG_LEVEL)
 
-distclean:
-	git clean -xfd
+clean:
+	$(MAKE) -C hls/ clean
+	rm -rf ccl_offload_ex ccl_offload.xml ccl_offload.xo vitis_ws .Xil *.jou *.log

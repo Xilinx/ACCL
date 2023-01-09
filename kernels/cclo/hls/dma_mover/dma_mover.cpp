@@ -450,8 +450,11 @@ void instruction_decode(
     bool dry_run = (insn.count == 0);
     //get arithmetic config unless we have already cached it
     static datapath_arith_config arcfg;
+    #pragma HLS reset variable=arcfg
     static bool arcfg_cached = false;
+    #pragma HLS reset variable=arcfg_cached
     static unsigned int prev_arcfg_offset;
+    #pragma HLS reset variable=prev_arcfg_offset
     if(!arcfg_cached || (insn.arcfg_offset != prev_arcfg_offset && !dry_run)){
         //Do the equivalent of this: 
         //  arcfg = *((datapath_arith_config*)(exchange_mem + insn.arcfg_offset));
@@ -495,6 +498,7 @@ void instruction_decode(
     //issue commands to datamovers, if required
     //DM0 read channel corresponding to OP0
     static datamover_instruction prev_dm0_rd;
+    #pragma HLS reset variable=prev_dm0_rd
     if((insn.op0_opcode != MOVE_NONE) & (insn.op0_opcode != MOVE_STREAM)){
         dm0_rd.total_bytes = insn.op0_is_compressed ? total_bytes_compressed : total_bytes_uncompressed;
         switch(insn.op0_opcode){
@@ -531,6 +535,7 @@ void instruction_decode(
     }
     //DM1 read channel corresponding to OP1
     static datamover_instruction prev_dm1_rd;
+    #pragma HLS reset variable=prev_dm1_rd
     rxbuf_seek_result seek_res;
     unsigned int inbound_seqn, bytes_remaining;
     if(insn.op1_opcode != MOVE_NONE){
@@ -604,6 +609,7 @@ void instruction_decode(
     }
     //DM1 write channel corresponding to RES
     static datamover_instruction prev_dm1_wr;
+    #pragma HLS reset variable=prev_dm1_wr
     if(insn.res_opcode != MOVE_NONE){
         if(insn.res_is_remote){
             if(!dry_run){

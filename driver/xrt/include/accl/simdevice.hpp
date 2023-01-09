@@ -55,6 +55,8 @@ public:
 
   void wait() override;
 
+  timeoutStatus wait(std::chrono::milliseconds timeout) override;
+
   addr_t get_base_addr() override { return 0x0; }
 
   /**
