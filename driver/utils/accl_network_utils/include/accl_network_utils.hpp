@@ -14,6 +14,8 @@
 #  limitations under the License.
 #
 *******************************************************************************/
+#pragma once
+
 #include <accl.hpp>
 #include <cstdint>
 #include <filesystem>
