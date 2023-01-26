@@ -19,6 +19,7 @@ cmake_minimum_required(VERSION 3.9)
 project(accl_simulation)
 
 set(CMAKE_CXX_STANDARD 17)
+set(ACCL_SIM_MEM_SIZE_KB 256 CACHE STRING "Size of ACCL simulator memory, in KB (must correspond to simdll)")
 
 # Consider using cmake_path from CMake 3.20 (2021) for better error messages:
 # https://cmake.org/cmake/help/latest/command/cmake_path.html
@@ -48,7 +49,7 @@ add_executable(cclo_sim ${SIM_SOURCES})
 get_target_property(JSON_INC_PATH jsoncpp_lib INTERFACE_INCLUDE_DIRECTORIES)
 target_include_directories(cclo_sim PUBLIC ${JSON_INC_PATH} ${MPI_CXX_INCLUDE_PATH} ${SIM_INCLUDES})
 target_link_libraries(cclo_sim PUBLIC MPI::MPI_CXX zmq zmqpp pthread jsoncpp_lib dl rt)
-target_compile_definitions(cclo_sim PUBLIC ZMQ_CALL_VERBOSE NUM_CTRL_STREAMS=3)
+target_compile_definitions(cclo_sim PUBLIC ZMQ_CALL_VERBOSE NUM_CTRL_STREAMS=3 ACCL_SIM_MEM_SIZE_KB=${ACCL_SIM_MEM_SIZE_KB})
 target_compile_options(cclo_sim PRIVATE -Wno-attributes -fdiagnostics-color=always -g -fmax-errors=3)
 
 set(XSIM_COMPILE_FOLDER ${ACCL_REPO_ROOT}/kernels/cclo/ccl_offload_ex/ccl_offload_ex.sim/sim_1/behav/xsim/)
