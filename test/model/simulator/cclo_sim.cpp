@@ -33,6 +33,7 @@
 #include <filesystem>
 #include "zmq_server.h"
 #include "log.hpp"
+#include <tclap/CmdLine.h>
 
 #ifndef DEFAULT_LOG_LEVEL
     #define DEFAULT_LOG_LEVEL 3
@@ -461,49 +462,60 @@ int main(int argc, char **argv)
     std::string simengine_libname = "librdi_simulator_kernel.so";
     std::string design_libname;
 
-    int world_size; // number of processes
-    int local_rank; // the rank of the process
+    TCLAP::CmdLine cmd("ACCL Simulator");
+    TCLAP::ValueArg<unsigned int> loglevel("l", "loglevel",
+                                          "Verbosity level of logging",
+                                          false, DEFAULT_LOG_LEVEL, "positive integer");
+    cmd.add(loglevel);
+    TCLAP::ValueArg<unsigned int> worldsize("s", "worldsize",
+                                          "Total number of ranks",
+                                          false, 1, "positive integer");
+    cmd.add(worldsize);
+    TCLAP::ValueArg<unsigned int> localrank("r", "localrank",
+                                          "Index of the local rank",
+                                          false, 0, "positive integer");
+    cmd.add(localrank);
 
-    char *level_env = getenv("LOG_LEVEL");
-    log_level level;
-    if (level_env) {
-        level = static_cast<log_level>(strtoul(level_env, nullptr, 10));
-    } else {
-        level = static_cast<log_level>(DEFAULT_LOG_LEVEL);
-    }
-    logger = Log(level);
+    TCLAP::ValueArg<std::string> designlib("d", "designlib",
+                                           "Name of compiled design library",
+                                           false, "xsim.dir/ccl_offload_behav/xsimk.so", "file");
+    cmd.add(designlib);
+
+    TCLAP::ValueArg<unsigned int> startport("p", "port",
+                                          "Starting ZMQ port",
+                                          false, 5500, "positive integer");
+    cmd.add(startport);
+
+    TCLAP::SwitchArg udp_arg("u", "udp", "Use UDP hardware setup", cmd, false);
+    TCLAP::SwitchArg loopback_arg("b", "loopback", "Enable kernel loopback", cmd, false);
+    TCLAP::SwitchArg wave_en("w", "waveform", "Enable waveform recording", cmd, false);
 
     try {
-        MPI_Init(NULL, NULL);      // initialize MPI environment
-        MPI_Comm_size(MPI_COMM_WORLD, &world_size);
-        MPI_Comm_rank(MPI_COMM_WORLD, &local_rank);
-    } catch (std::exception& e) {
-        logger << log_level::error << "Error during MPI initialization: " << e.what() << std::endl;
-        world_size = 1;
-        local_rank = 0;
+        cmd.parse(argc, argv);
+    } catch (std::exception &e) {
+        std::cout << "Error: " << e.what() << std::endl;
     }
+
+    //set up the logger with the specified log level
+    logger = Log(static_cast<log_level>(loglevel.getValue()));
+
+    //get world size and local rank from environment
+    unsigned int world_size = worldsize.getValue(); // number of processes
+    unsigned int local_rank = localrank.getValue(); // the rank of the process
     logger << log_level::info << "World Size: " << world_size << " Local Rank: " << local_rank << endl;
 
 
-    design_libname = std::string(argv[3]);
+    design_libname = designlib.getValue();
 
     logger << log_level::verbose << "Design DLL     : " << design_libname << std::endl;
     logger << log_level::verbose << "Sim Engine DLL : " << simengine_libname << std::endl;
     logger << log_level::verbose << "Library path: " << std::getenv("LD_LIBRARY_PATH") << std::endl;
     std::string wdb_name = filesystem::current_path().string() + "/waveform_rank" + std::to_string(local_rank) + ".wdb";
     logger << log_level::verbose << "Waveform : " << wdb_name << std::endl;
-    XSI_DUT dut(design_libname, simengine_libname, "ap_rst_n", true, "ap_clk", 4, wdb_name, logger);
+    XSI_DUT dut(design_libname, simengine_libname, "ap_rst_n", true, "ap_clk", 4, wdb_name, logger, wave_en.getValue());
     logger << log_level::info << "DUT initialized" << std::endl;
 
-    string eth_type = argv[1];
-    unsigned int starting_port = atoi(argv[2]);
-
-    bool krnl_loopback = false;
-    if(argc == 5 && string(argv[4]) == "loopback"){
-        krnl_loopback = true;
-    }
-
-    zmq_intf_context ctx = zmq_server_intf(starting_port, local_rank, world_size, krnl_loopback, logger);
+    zmq_intf_context ctx = zmq_server_intf(startport.getValue(), local_rank, world_size, loopback_arg.getValue(), logger);
 
     int status = 0;
 
@@ -554,7 +566,7 @@ int main(int argc, char **argv)
                                     aximm_wr_addr, aximm_wr_data, aximm_wr_strb,
                                     callreq, callack);
         //ZMQ to other nodes process(es)
-        HLSLIB_DATAFLOW_FUNCTION(zmq_eth_egress_server, &ctx, eth_tx_data, local_rank, eth_type == "tcp");
+        HLSLIB_DATAFLOW_FUNCTION(zmq_eth_egress_server, &ctx, eth_tx_data, local_rank, !udp_arg.getValue());
         HLSLIB_DATAFLOW_FUNCTION(zmq_eth_ingress_server, &ctx, eth_rx_data);
         HLSLIB_DATAFLOW_FUNCTION(zmq_krnl_egress_server, &ctx, cclo_to_krnl_data);
         HLSLIB_DATAFLOW_FUNCTION(zmq_krnl_ingress_server, &ctx, krnl_to_cclo_data);
