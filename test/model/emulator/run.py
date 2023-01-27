@@ -44,34 +44,41 @@ def build_executable():
 
 def run_emulator(ranks: int, log_level: int, start_port: int, use_udp: bool, kernel_loopback: bool, debug: bool = False):
     env = os.environ.copy()
-    env['LOG_LEVEL'] = str(log_level)
-    args = ['mpirun', '-np', str(ranks), '--tag-output', str(executable),
-            'udp' if use_udp else 'tcp', str(start_port)]
-    if kernel_loopback:
-        args.append('loopback')
-    print(' '.join(args))
-    with subprocess.Popen(args, cwd=cwd, env=env,
-                          stderr=None if debug else subprocess.DEVNULL) as p:
-        try:
+    processes = []
+    for r in range(ranks):
+        args = [str(executable), '-s', str(ranks), '-r', str(r), '-l', str(log_level), '-p', str(start_port)]
+        if use_udp:
+            args.append('-u')
+        if kernel_loopback:
+            args.append('-b')
+        print(' '.join(args))
+        processes.append(subprocess.Popen(args, cwd=cwd, env=env, stderr=None if debug else subprocess.DEVNULL))
+    # wait on processes
+    try:
+        for p in processes:
             p.wait()
-        except KeyboardInterrupt:
-            try:
-                print("Stopping emulator...")
+    except KeyboardInterrupt:
+        try:
+            print("Stopping simulator processes...")
+            for p in processes:
                 p.send_signal(signal.SIGINT)
                 p.wait()
-            except KeyboardInterrupt:
-                try:
-                    print("Force stopping emulator...")
+        except KeyboardInterrupt:
+            try:
+                print("Force stopping simulator...")
+                for p in processes:
                     p.kill()
                     p.wait()
-                except KeyboardInterrupt:
-                    signal.signal(signal.SIGINT, signal.SIG_IGN)
-                    print("Terminating emulator...")
+            except KeyboardInterrupt:
+                signal.signal(signal.SIGINT, signal.SIG_IGN)
+                print("Terminating simulator...")
+                for p in processes:
                     p.terminate()
                     p.wait()
-        if p.returncode != 0:
-            print(f"Emulator exited with error code {p.returncode}")
-
+    # report any errors
+    for i in range(len(processes)):
+        if processes[i].returncode != 0:
+            print(f"Simulator {i} exited with error code {processes[i].returncode}")
 
 def main(ranks: int, log_level: int, start_port: int,
          use_udp: bool, kernel_loopback: bool, build: bool, debug: bool):
