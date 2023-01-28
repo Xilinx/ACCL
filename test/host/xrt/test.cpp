@@ -43,6 +43,7 @@ using namespace accl_network_utils;
 struct options_t {
   int start_port;
   unsigned int rxbuf_size;
+  unsigned int rxbuf_count;
   unsigned int segment_size;
   unsigned int count;
   unsigned int device_index;
@@ -126,7 +127,7 @@ class TestEnvironment : public ::testing::Environment {
       }
 
       accl = initialize_accl(
-          ranks, rank, !options.hardware, design, dev, options.xclbin, 16,
+          ranks, rank, !options.hardware, design, dev, options.xclbin, options.rxbuf_count,
           options.rxbuf_size, options.segment_size, options.rsfec);
       std::cout << "Setting up TestEnvironment" << std::endl;
       accl->set_timeout(1e6);
@@ -1050,10 +1051,14 @@ options_t parse_options(int argc, char *argv[]) {
   TCLAP::ValueArg<unsigned int> count_arg(
       "s", "count", "How many items per test", false, 16, "positive integer");
   cmd.add(count_arg);
-  TCLAP::ValueArg<unsigned int> bufsize_arg("b", "rxbuf-size",
+  TCLAP::ValueArg<unsigned int> bufsize_arg("", "rxbuf-size",
                                             "How many KB per RX buffer", false,
                                             1, "positive integer");
   cmd.add(bufsize_arg);
+  TCLAP::ValueArg<unsigned int> bufcount_arg("", "rxbuf-count",
+                                            "How RX buffers", false,
+                                            16, "positive integer");
+  cmd.add(bufcount_arg);
   TCLAP::SwitchArg debug_arg("d", "debug", "Enable debug mode", cmd, false);
   TCLAP::SwitchArg hardware_arg("f", "hardware", "enable hardware mode", cmd,
                                 false);
@@ -1096,6 +1101,7 @@ options_t parse_options(int argc, char *argv[]) {
   options_t opts;
   opts.start_port = start_port_arg.getValue();
   opts.count = count_arg.getValue();
+  opts.rxbuf_count = bufcount_arg.getValue();
   opts.rxbuf_size = bufsize_arg.getValue() * 1024; // convert to bytes
   opts.segment_size = opts.rxbuf_size;
   opts.debug = debug_arg.getValue();
