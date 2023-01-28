@@ -43,6 +43,7 @@
 #include <mpi.h>
 #include "zmq_server.h"
 #include "log.hpp"
+#include <tclap/CmdLine.h>
 
 #ifndef DEFAULT_LOG_LEVEL
     #define DEFAULT_LOG_LEVEL 3
@@ -336,23 +337,17 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsign
     HLSLIB_FREERUNNING_FUNCTION(dma_write, devicemem, dma_write_cmd_int[1], dma_write_sts_int[1], switch_m[SWITCH_M_DMA1_WRITE]);
     HLSLIB_FREERUNNING_FUNCTION(dma_read, devicemem, dma_read_cmd_int[1], dma_read_sts_int[1], dma_read_data[1]);
     //RX buffer handling offload
-    if(!use_tcp){
-        HLSLIB_FREERUNNING_FUNCTION(rxbuf_enqueue, dma_write_cmd_int[0], inflight_rxbuf, cfgmem);
-        HLSLIB_FREERUNNING_FUNCTION(rxbuf_dequeue, dma_write_sts_int[0], eth_rx_sts, inflight_rxbuf, eth_rx_notif, cfgmem);
-        HLSLIB_FREERUNNING_FUNCTION(rxbuf_seek, eth_rx_notif, eth_rx_seek_req, eth_rx_seek_ack, rxbuf_release_req, cfgmem);
-    } else{
-        HLSLIB_FREERUNNING_FUNCTION(rxbuf_enqueue, enq2sess_dma_cmd, inflight_rxbuf, cfgmem);
-        HLSLIB_FREERUNNING_FUNCTION(rxbuf_dequeue, sess2deq_dma_sts, eth_rx_sts_sess, inflight_rxbuf_sess, eth_rx_notif, cfgmem);
-        HLSLIB_FREERUNNING_FUNCTION(rxbuf_seek, eth_rx_notif, eth_rx_seek_req, eth_rx_seek_ack, rxbuf_release_req, cfgmem);
-        HLSLIB_FREERUNNING_FUNCTION(
-            rxbuf_session,
-            enq2sess_dma_cmd, sess2deq_dma_sts,
-            inflight_rxbuf, inflight_rxbuf_sess,
-            dma_write_cmd_int[0], dma_write_sts_int[0],
-            eth_notif_out_dpkt,
-            eth_rx_sts, eth_rx_sts_sess
-        );
-    }
+    HLSLIB_FREERUNNING_FUNCTION(rxbuf_enqueue, enq2sess_dma_cmd, inflight_rxbuf, cfgmem);
+    HLSLIB_FREERUNNING_FUNCTION(rxbuf_dequeue, sess2deq_dma_sts, eth_rx_sts_sess, inflight_rxbuf_sess, eth_rx_notif, cfgmem);
+    HLSLIB_FREERUNNING_FUNCTION(rxbuf_seek, eth_rx_notif, eth_rx_seek_req, eth_rx_seek_ack, rxbuf_release_req, cfgmem);
+    HLSLIB_FREERUNNING_FUNCTION(
+        rxbuf_session,
+        enq2sess_dma_cmd, sess2deq_dma_sts,
+        inflight_rxbuf, inflight_rxbuf_sess,
+        dma_write_cmd_int[0], dma_write_sts_int[0],
+        eth_notif_out_dpkt,
+        eth_rx_sts, eth_rx_sts_sess
+    );
     //move offload
     HLSLIB_FREERUNNING_FUNCTION(
         dma_mover, cfgmem, cmd_fifos[CMD_DMA_MOVE], sts_fifos[STS_DMA_MOVE],
@@ -412,7 +407,7 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsign
         );
     } else{
         HLSLIB_FREERUNNING_FUNCTION(udp_packetizer, switch_m[SWITCH_M_ETH_TX], eth_tx_data, eth_tx_cmd, eth_tx_sts, max_words_per_pkt);
-        HLSLIB_FREERUNNING_FUNCTION(udp_depacketizer, eth_rx_data, switch_s[SWITCH_S_ETH_RX], eth_rx_sts);
+        HLSLIB_FREERUNNING_FUNCTION(udp_depacketizer, eth_rx_data, switch_s[SWITCH_S_ETH_RX], eth_rx_sts, eth_notif_out_dpkt);
     }
     //emulated external kernel
     HLSLIB_FREERUNNING_FUNCTION(krnl_endpoint_egress_port, ctx, accl_to_krnl_data);
@@ -439,31 +434,46 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsign
 }
 
 int main(int argc, char** argv){
-    MPI_Init(NULL, NULL);      // initialize MPI environment
 
-    int world_size; // number of processes
-    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+    TCLAP::CmdLine cmd("ACCL Emulator");
+    TCLAP::ValueArg<unsigned int> loglevel("l", "loglevel",
+                                          "Verbosity level of logging",
+                                          false, DEFAULT_LOG_LEVEL, "positive integer");
+    cmd.add(loglevel);
+    TCLAP::ValueArg<unsigned int> worldsize("s", "worldsize",
+                                          "Total number of ranks",
+                                          false, 1, "positive integer");
+    cmd.add(worldsize);
+    TCLAP::ValueArg<unsigned int> localrank("r", "localrank",
+                                          "Index of the local rank",
+                                          false, 0, "positive integer");
+    cmd.add(localrank);
 
-    int local_rank; // the rank of the process
-    MPI_Comm_rank(MPI_COMM_WORLD, &local_rank);
+    TCLAP::ValueArg<std::string> designlib("d", "designlib",
+                                           "Name of compiled design library",
+                                           false, "xsim.dir/ccl_offload_behav/xsimk.so", "file");
+    cmd.add(designlib);
 
-    char *level_env = getenv("LOG_LEVEL");
-    log_level level;
-    if (level_env) {
-        level = static_cast<log_level>(strtoul(level_env, nullptr, 10));
-    } else {
-        level = static_cast<log_level>(DEFAULT_LOG_LEVEL);
+    TCLAP::ValueArg<unsigned int> startport("p", "port",
+                                          "Starting ZMQ port",
+                                          false, 5500, "positive integer");
+    cmd.add(startport);
+
+    TCLAP::SwitchArg udp_arg("u", "udp", "Use UDP hardware setup", cmd, false);
+    TCLAP::SwitchArg loopback_arg("b", "loopback", "Enable kernel loopback", cmd, false);
+    TCLAP::SwitchArg wave_en("w", "waveform", "Enable waveform recording", cmd, false);
+
+    try {
+        cmd.parse(argc, argv);
+    } catch (std::exception &e) {
+        std::cout << "Error: " << e.what() << std::endl;
     }
-    logger = Log(level);
 
-    string eth_type = argv[1];
-    unsigned int starting_port = atoi(argv[2]);
-    
-    bool krnl_loopback = false;
-    if(argc == 4 && string(argv[3]) == "loopback"){
-        krnl_loopback = true;
-    }
+    int world_size = worldsize.getValue(); // number of processes
+    int local_rank = localrank.getValue(); // the rank of the process
 
-    zmq_intf_context ctx = zmq_server_intf(starting_port, local_rank, world_size, krnl_loopback, logger);
-    sim_bd(&ctx, eth_type == "tcp", local_rank, world_size);
+    logger = Log(static_cast<log_level>(loglevel.getValue()));
+
+    zmq_intf_context ctx = zmq_server_intf(startport.getValue(), local_rank, world_size, loopback_arg.getValue(), logger);
+    sim_bd(&ctx, !udp_arg.getValue(), local_rank, world_size);
 }

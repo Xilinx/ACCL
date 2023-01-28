@@ -23,7 +23,6 @@ set en_arith [lindex $::argv 5]
 set en_compress [lindex $::argv 6]
 set en_extkrnl [lindex $::argv 7]
 set mb_debug_level [lindex $::argv 8]
-set en_fanin [lindex $::argv 9]
 
 # create project with correct target
 create_project -force ccl_offload_ex ./ccl_offload_ex -part $fpgapart
@@ -39,7 +38,7 @@ update_ip_catalog
 
 #rebuild bd
 source -notrace tcl/rebuild_bd.tcl
-create_root_design $stacktype $en_dma $en_arith $en_compress $en_extkrnl $mb_debug_level $en_fanin
+create_root_design $stacktype $en_dma $en_arith $en_compress $en_extkrnl $mb_debug_level
 
 #add debug if requested
 if [string equal $hw_debug_level "dma"] {

@@ -76,41 +76,42 @@ void rxbuf_session_command(
         notif = STREAM_READ(session_notification);
         desc = mem[notif.session_id];
         if(desc.active){
-            //descriptor exists, continue
-            //issue command to datamover
-            cmd.length = notif.length;
-            cmd.address = desc.address;
-            STREAM_WRITE(fragment_dma_cmd, cmd);
+            //descriptor exists, so this is not a SOM but rather a SOF or EOF
+            //if SOF issue command to datamover
+            if(notif.type == 1){
+                cmd.address = desc.address;
+                cmd.length = notif.length;
+                cmd.address = desc.address;
+                STREAM_WRITE(fragment_dma_cmd, cmd);
+            } else {
+                //if EOF update address in descriptor
+                desc.address += notif.length;
+                desc.remaining -= notif.length;
+                //command the status parser
+                sts_command.index = notif.session_id;
+                sts_command.last = (desc.remaining == 0);
+                STREAM_WRITE(status_instruction, sts_command);
+                //if remaining is zero, flush
+                if(desc.remaining == 0){
+                    STREAM_WRITE(rxbuf_idx_out, desc.index);
+                    STREAM_WRITE(eth_hdr_out, desc.header);
+                    desc.active = false;
+                }
+            }
             //prime the command to status parser
             sts_command.first = false;
         } else {
-            //descriptor does not exist, initialize
+            //this is a SOM notification so descriptor does not exist, initialize
             cmd = hlslib::axi::Command<64, 23>(STREAM_READ(rxbuf_dma_cmd));//{undex, current write address, bytes remaining, header}
             desc.active = true;
             desc.index = STREAM_READ(rxbuf_idx_in);
             desc.address = cmd.address;
-            //issue a command to the datamover for this fragment
-            //(we can reuse the input command since it's indeterminate BTT and address is the same right now)
-            STREAM_WRITE(fragment_dma_cmd, cmd);
             //store header
 	        desc.header = STREAM_READ(eth_hdr_in);
             desc.remaining = desc.header.count;
             //prime the command to status parser
             sts_command.first = true;
         }
-        //update address
-        desc.address += notif.length;
-        desc.remaining -= notif.length;
-        //if remaining is zero, flush
-        if(desc.remaining == 0){
-            STREAM_WRITE(rxbuf_idx_out, desc.index);
-            STREAM_WRITE(eth_hdr_out, desc.header);
-            desc.active = false;
-        }
-        //command the status parser
-        sts_command.index = notif.session_id;
-        sts_command.last = (desc.remaining == 0);
-        STREAM_WRITE(status_instruction, sts_command);
         //store descriptor
         mem[notif.session_id] = desc;
     }

@@ -32,7 +32,7 @@ namespace {
 
 XSI_DUT::XSI_DUT(const string& design_libname, const string& simkernel_libname,
                     const string& reset_name, bool reset_active_low,
-                    const string& clock_name, float clock_period_ns, const string& wdbName, Log &log) :
+                    const string& clock_name, float clock_period_ns, const string& wdbName, Log &log, bool trace) :
     xsi(design_libname, simkernel_libname)
 {
     logger = &log;
@@ -46,7 +46,10 @@ XSI_DUT::XSI_DUT(const string& design_libname, const string& simkernel_libname,
     info.wdbFileName = const_cast<char*>(wdbName.c_str());
     xsi.open(&info);
     *logger << log_level::verbose << "XSI opened" << std::endl;
-    xsi.trace_all();
+    if(trace){
+        *logger << log_level::verbose << "XSI waveform enabled" << std::endl;
+        xsi.trace_all();
+    }
     //get ports
     for(int i=0; i<xsi.get_num_ports(); i++){
         string port_name(xsi.get_port_name(i));

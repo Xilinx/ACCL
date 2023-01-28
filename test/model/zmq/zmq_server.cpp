@@ -199,6 +199,7 @@ void krnl_endpoint_egress_port(zmq_intf_context *ctx, Stream<stream_word > &in){
     //get the data (bytes valid from tkeep)
     unsigned int idx=0;
     do{
+        if(ctx->stop) return;
         tmp = in.Pop();
         for(int i=0; i<64; i++){
             if(tmp.keep(i,i) == 1){
@@ -216,7 +217,9 @@ void krnl_endpoint_egress_port(zmq_intf_context *ctx, Stream<stream_word > &in){
     message << str;
     *logger << log_level::verbose << "CCLO to user kernel: push " << idx << " bytes to dest = " << dest << endl;
     *logger << log_level::debug << str << endl;
-    ctx->krnl_tx_socket->send(message);
+    if(!ctx->stop){
+        ctx->krnl_tx_socket->send(message);
+    }
 }
 
 
@@ -245,6 +248,7 @@ void krnl_endpoint_ingress_port(zmq_intf_context *ctx, Stream<stream_word > &out
     stream_word tmp;
     int idx = 0;
     while(idx<len){
+        if(ctx->stop) return;
         for(int i=0; i<64; i++){
             if(idx<len){
                 tmp.data(8*(i+1)-1,8*i) = data[idx++].asUInt();
@@ -491,10 +495,10 @@ void serve_zmq(zmq_intf_context *ctx,
             adr = request["addr"].asUInt();
             len = request["len"].asUInt();
             *logger << log_level::info << "Mem read " << adr << " len: " << len << endl;
-            if((adr+len) > 256*1024){
+            if((adr+len) > ACCL_SIM_MEM_SIZE_KB*1024){
                 response["status"] = 1;
                 response["rdata"][0] = 0;
-                *logger << log_level::error << "Mem read outside available range (256K) at addr: " << adr << " len: " << len << endl;
+                *logger << log_level::error << "Mem read outside available range ("<< ACCL_SIM_MEM_SIZE_KB << "KB) at addr: " << adr << " len: " << len << endl;
             } else {
                 for(int i=0; i<len; i+=64){
                     mem_addr = adr+i;
@@ -520,9 +524,9 @@ void serve_zmq(zmq_intf_context *ctx,
             dma_wdata = request["wdata"];
             len = dma_wdata.size();
             *logger << log_level::info << "Mem write " << adr << " len: " << len << endl;
-            if((adr+len) > 256*1024){
+            if((adr+len) > ACCL_SIM_MEM_SIZE_KB*1024){
                 response["status"] = 1;
-                *logger << log_level::error << "Mem write outside available range (256KB) at addr: " << adr << " len: " << len << endl;
+                *logger << log_level::error << "Mem write outside available range ("<< ACCL_SIM_MEM_SIZE_KB << "KB) at addr: " << adr << " len: " << len << endl;
             } else{
                 for(int i=0; i<len; i+=64){
                     mem_strb = 0;
@@ -550,9 +554,9 @@ void serve_zmq(zmq_intf_context *ctx,
             adr = request["addr"].asUInt();
             len = request["len"].asUInt();
             *logger << log_level::info << "Mem allocate " << adr << " len: " << len << endl;
-            if((adr+len) > 256*1024){
+            if((adr+len) > ACCL_SIM_MEM_SIZE_KB*1024){
                 response["status"] = 1;
-                *logger << log_level::error << "Mem allocate outside available range (256KB) at addr: " << adr << " len: " << len << endl;
+                *logger << log_level::error << "Mem allocate outside available range ("<< ACCL_SIM_MEM_SIZE_KB << "KB) at addr: " << adr << " len: " << len << endl;
             }
             break;
         // Call start request  {"type": 5, controller id, arg values}

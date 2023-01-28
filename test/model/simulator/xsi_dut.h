@@ -36,7 +36,7 @@ public:
     XSI_DUT(const std::string& design_libname, const std::string& simkernel_libname,
             const std::string& reset_name, bool reset_active_low,
             const std::string& clock_name, float clock_period_ns,
-            const std::string& wdb_name, Log &log);
+            const std::string& wdb_name, Log &log, bool trace);
     ~XSI_DUT();
     void list_ports();
     int num_ports();

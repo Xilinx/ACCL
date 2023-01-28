@@ -20,6 +20,7 @@
 #include <arpa/inet.h>
 #include <cmath>
 #include <cstdlib>
+#include <cstring>
 #ifdef ACCL_DEBUG
 #include <fstream>
 #endif
@@ -81,7 +82,7 @@ std::string ip_decode(uint32_t ip) {
   sa.s_addr = ip;
   swap_endianness(&sa.s_addr);
   inet_ntop(AF_INET, &sa, buffer, INET_ADDRSTRLEN);
-  return std::string(buffer, INET_ADDRSTRLEN);
+  return std::string(buffer, std::strlen(buffer));
 }
 
 #ifdef ACCL_DEBUG

@@ -20,8 +20,8 @@
 #include <accl_network_utils.hpp>
 #include <cstdlib>
 #include <experimental/xrt_ip.h>
-#include <functional>
 #include <fstream>
+#include <functional>
 #include <json/json.h>
 #include <mpi.h>
 #include <random>
@@ -52,6 +52,8 @@ struct options_t {
   bool axis3;
   bool udp;
   bool tcp;
+  bool roce;
+  bool return_error;
   bool rsfec;
   std::string xclbin;
   std::string config_file;
@@ -115,6 +117,8 @@ class TestEnvironment : public ::testing::Environment {
         design = acclDesign::UDP;
       } else if (options.tcp) {
         design = acclDesign::TCP;
+      } else if (options.roce) {
+        design = acclDesign::ROCE;
       }
 
       if (options.hardware || options.test_xrt_simulator) {
@@ -1043,13 +1047,12 @@ options_t parse_options(int argc, char *argv[]) {
       "p", "start-port", "Start of range of ports usable for sim", false, 5500,
       "positive integer");
   cmd.add(start_port_arg);
-  TCLAP::ValueArg<unsigned int> count_arg("s", "count",
-                                          "How many items per test",
-                                          false, 16, "positive integer");
+  TCLAP::ValueArg<unsigned int> count_arg(
+      "s", "count", "How many items per test", false, 16, "positive integer");
   cmd.add(count_arg);
   TCLAP::ValueArg<unsigned int> bufsize_arg("b", "rxbuf-size",
-                                        "How many KB per RX buffer", false, 1,
-                                        "positive integer");
+                                            "How many KB per RX buffer", false,
+                                            1, "positive integer");
   cmd.add(bufsize_arg);
   TCLAP::SwitchArg debug_arg("d", "debug", "Enable debug mode", cmd, false);
   TCLAP::SwitchArg hardware_arg("f", "hardware", "enable hardware mode", cmd,
@@ -1058,6 +1061,7 @@ options_t parse_options(int argc, char *argv[]) {
                              false);
   TCLAP::SwitchArg udp_arg("u", "udp", "Use UDP hardware setup", cmd, false);
   TCLAP::SwitchArg tcp_arg("t", "tcp", "Use TCP hardware setup", cmd, false);
+  TCLAP::SwitchArg roce_arg("r", "roce", "Use RoCE hardware setup", cmd, false);
   TCLAP::ValueArg<std::string> xclbin_arg(
       "x", "xclbin", "xclbin of accl driver if hardware mode is used", false,
       "accl.xclbin", "file");
@@ -1066,18 +1070,18 @@ options_t parse_options(int argc, char *argv[]) {
       "i", "device-index", "device index of FPGA if hardware mode is used",
       false, 0, "positive integer");
   cmd.add(device_index_arg);
-  TCLAP::ValueArg<std::string> config_arg(
-      "c", "config", "Config file containing IP mapping",
-      false, "", "JSON file");
+  TCLAP::ValueArg<std::string> config_arg("c", "config",
+                                          "Config file containing IP mapping",
+                                          false, "", "JSON file");
   cmd.add(config_arg);
-  TCLAP::SwitchArg rsfec_arg("", "rsfec", "Enables RS-FEC in CMAC.", cmd,
-                             false);
+  TCLAP::SwitchArg rsfec_arg("", "rsfec", "Enables RS-FEC in CMAC.", cmd, false);
   try {
     cmd.parse(argc, argv);
     if (hardware_arg.getValue()) {
-      if (axis3_arg.getValue() + udp_arg.getValue() + tcp_arg.getValue() != 1) {
+      if (axis3_arg.getValue() + udp_arg.getValue() + tcp_arg.getValue() +
+              roce_arg.getValue() != 1) {
         throw std::runtime_error("When using hardware, specify one of axis3, "
-                                 "tcp, or udp mode, but not both.");
+                                 "tcp, udp, or roce mode, but not both.");
       }
     }
   } catch (std::exception &e) {
@@ -1099,6 +1103,7 @@ options_t parse_options(int argc, char *argv[]) {
   opts.axis3 = axis3_arg.getValue();
   opts.udp = udp_arg.getValue();
   opts.tcp = tcp_arg.getValue();
+  opts.roce = roce_arg.getValue();
   opts.device_index = device_index_arg.getValue();
   opts.xclbin = xclbin_arg.getValue();
   opts.test_xrt_simulator = xrt_simulator_ready(opts);
