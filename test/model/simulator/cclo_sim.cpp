@@ -23,7 +23,6 @@
 #include <vector>
 #include <chrono>
 #include <thread>
-#include <mpi.h>
 #include "ccl_offload_control.h"
 #include "xsi_dut.h"
 #include "Stream.h"

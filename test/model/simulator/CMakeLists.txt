@@ -39,7 +39,6 @@ if (NOT EXISTS $ENV{XILINX_HLS})
   message(FATAL_ERROR "Xilinx HLS not loaded!")
 endif (NOT EXISTS $ENV{XILINX_HLS})
 
-find_package(MPI REQUIRED)
 find_package(jsoncpp REQUIRED)
 
 set(SIM_INCLUDES ${HLSLIB_INCLUDE} $ENV{XILINX_HLS}/include/ $ENV{XILINX_VIVADO}/data/xsim/include/ ${MB_FW_DIR} ${ACCL_HLSDRV_DIR} ${CCLO_HLS_ROOT} ${ZMQ_INTF_DIR} ${LOG_DIR})
@@ -48,7 +47,7 @@ set(SIM_SOURCES cclo_sim.cpp xsi_dut.cpp xsi_loader.cpp ${ZMQ_INTF_DIR}/zmq_serv
 add_executable(cclo_sim ${SIM_SOURCES})
 get_target_property(JSON_INC_PATH jsoncpp_lib INTERFACE_INCLUDE_DIRECTORIES)
 target_include_directories(cclo_sim PUBLIC ${JSON_INC_PATH} ${MPI_CXX_INCLUDE_PATH} ${SIM_INCLUDES})
-target_link_libraries(cclo_sim PUBLIC MPI::MPI_CXX zmq zmqpp pthread jsoncpp_lib dl rt)
+target_link_libraries(cclo_sim PUBLIC zmq zmqpp pthread jsoncpp_lib dl rt)
 target_compile_definitions(cclo_sim PUBLIC ZMQ_CALL_VERBOSE NUM_CTRL_STREAMS=3 ACCL_SIM_MEM_SIZE_KB=${ACCL_SIM_MEM_SIZE_KB})
 target_compile_options(cclo_sim PRIVATE -Wno-attributes -fdiagnostics-color=always -g -fmax-errors=3)
 

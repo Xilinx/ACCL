@@ -40,7 +40,6 @@
 #include <string>
 #include <chrono>
 #include <numeric>
-#include <mpi.h>
 #include "zmq_server.h"
 #include "log.hpp"
 #include <tclap/CmdLine.h>

@@ -134,11 +134,9 @@ class TestEnvironment : public ::testing::Environment {
     }
 
     virtual void TearDown(){
-      accl->deinit();
+      accl.reset();
       MPI_Finalize();
     }
-
-    //std::unique_ptr<ACCL::ACCL> accl;
 };
 
 class ACCLTest : public ::testing::Test {
