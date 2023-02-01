@@ -15,13 +15,17 @@
 #
 # *******************************************************************************/
 
-#include "ap_axi_sdata.h"
-#include "hls_stream.h"
 #include "ap_int.h"
 #include <stdint.h>
 #include "reduce_ops.h"
 
-using namespace hls;
+#ifndef ACCL_SYNTHESIS
+#ifdef OSS_HALF_PRECISION
+#include "half.hpp"
+using half_float::half;
+#endif 
+#endif 
+
 using namespace std;
 
 template<unsigned int data_width, unsigned int dest_width, typename T>

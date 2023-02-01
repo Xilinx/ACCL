@@ -18,7 +18,13 @@
 #include "ap_int.h"
 #include "hp_compression.h"
 
-using namespace hls;
+#ifndef ACCL_SYNTHESIS
+#ifdef OSS_HALF_PRECISION
+#include "half.hpp"
+using half_float::half;
+#endif
+#endif
+
 using namespace std;
 
 template<unsigned int data_width>

@@ -1,6 +1,5 @@
 #pragma once
 
-#include "ap_utils.h"
 #include "ccl_offload_control.h"
 #include "eth_intf.h"
 

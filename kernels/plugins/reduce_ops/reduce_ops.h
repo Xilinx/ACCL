@@ -18,8 +18,4 @@
 #include "accl_hls.h"
 #include <stdint.h>
 
-
-// template<unsigned int data_width, unsigned int dest_width, typename T>
-// void stream_add(STREAM<ap_axiu<2*data_width,0,0,dest_width> > & in, STREAM<ap_axiu<data_width,0,0,dest_width> > & out);
-
 void reduce_ops(STREAM<stream_word> & in0, STREAM<stream_word> & in1, STREAM<stream_word> & out);

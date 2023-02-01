@@ -20,7 +20,6 @@
 #include "streamdefines.h"
 #include "accl_hls.h"
 #include "ap_int.h"
-#include "ap_utils.h"
 #include "eth_intf.h"
 #include "stream_segmenter.h"
 #include "rxbuf_offload.h"
