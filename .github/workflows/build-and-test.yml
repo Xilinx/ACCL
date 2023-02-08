@@ -17,7 +17,7 @@ jobs:
           sudo apt-get update
           DEBIAN_FRONTEND=noninteractive sudo apt-get install -y --no-install-recommends build-essential cmake libjsoncpp-dev libzmqpp-dev libtclap-dev wget libopenmpi-dev
           wget --no-check-certificate https://www.xilinx.com/bin/public/openDownload?filename=xrt_202220.2.14.354_20.04-amd64-xrt.deb -O xrt.deb
-          sudo dpkg -i xrt.deb
+          sudo dpkg -i xrt.deb || true
           sudo apt --fix-broken install -y --no-install-recommends 
       - name: Build Emulator
         run: |
