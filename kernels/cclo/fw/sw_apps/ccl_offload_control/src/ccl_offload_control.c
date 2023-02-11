@@ -685,7 +685,7 @@ int gather( unsigned int count,
         curr_pos = world.local_rank;
         for(i=0; i<world.size; i++){
             start_move(
-                (i==0) ? MOVE_IMMEDIATE : MOVE_NONE,
+                (i==0) ? ((stream & OP0_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE) : MOVE_NONE,
                 (i==0) ? MOVE_NONE : MOVE_ON_RECV,
                 MOVE_STRIDE,
                 (i==0) ? copy_compression : recv_compression, RES_LOCAL, NO_STREAM,
@@ -712,7 +712,7 @@ int gather( unsigned int count,
 
         //first send our own data
         start_move(
-            MOVE_IMMEDIATE,
+            (stream & OP0_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE,
             MOVE_NONE,
             MOVE_IMMEDIATE,
             send_compression, RES_REMOTE, NO_STREAM,
