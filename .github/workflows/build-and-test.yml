@@ -21,7 +21,7 @@ jobs:
           key: ${{ runner.os }}-xrt
 
       - name: Download XRT
-        if: steps.cache-xrt.outputs.cache-hit != 'true'
+        if: steps.cache-xrt-restore.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update
           DEBIAN_FRONTEND=noninteractive sudo apt-get install -y --no-install-recommends wget
@@ -29,6 +29,7 @@ jobs:
 
       - name: Save XRT
         id: cache-xrt-save
+        if: steps.cache-xrt-restore.outputs.cache-hit != 'true'
         uses: actions/cache/save@v3
         with:
           path: xrt.deb
