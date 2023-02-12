@@ -57,8 +57,20 @@ if (NOT EXISTS ${HLSLIB_INCLUDE})
   message(FATAL_ERROR "hlslib submodule not loaded! Run git submodule update --init --recursive in ${ACCL_REPO_ROOT}")
 endif (NOT EXISTS ${HLSLIB_INCLUDE})
 
+set(HLS_HEADERS_DIR ${CMAKE_CURRENT_LIST_DIR}/../emulator/hls_sim_headers/include/)
+if ((NOT EXISTS $ENV{XILINX_HLS}) AND (NOT EXISTS ${HLS_HEADERS_DIR}))
+  message(FATAL_ERROR "Xilinx HLS not loaded and no alternative HLS headers present!")
+endif ()
+
 if (NOT EXISTS $ENV{XILINX_HLS})
-  message(FATAL_ERROR "Xilinx HLS not loaded!")
+  message(WARNING "Xilinx HLS not loaded, falling back to open-source HLS headers")
+  set(HLS_INCLUDES ${HLS_HEADERS_DIR} ${HLSLIB_INCLUDE})
+  if (NOT EXISTS ${HLS_HEADERS_DIR})
+    message(FATAL_ERROR "Open-source HLS headers submodule not loaded! Run git submodule update --init --recursive in ${ACCL_REPO_ROOT}")
+  endif (NOT EXISTS ${HLS_HEADERS_DIR})
+else ()
+  message(NOTICE "Using Xilinx HLS headers")
+  set(HLS_INCLUDES $ENV{XILINX_HLS}/include/ ${HLSLIB_INCLUDE})
 endif (NOT EXISTS $ENV{XILINX_HLS})
 
 # XRT
@@ -71,7 +83,7 @@ find_package(jsoncpp REQUIRED)
 get_target_property(JSON_INC_PATH jsoncpp_lib INTERFACE_INCLUDE_DIRECTORIES)
 
 add_library(cclobfm SHARED ${CCLO_BFM_SOURCES})
-target_include_directories(cclobfm PUBLIC ${ACCL_XRTDRV_INCLUDE_PATH} ${ACCL_HLSDRV_INCLUDE_PATH} ${CCLO_BFM_INCLUDE_PATH} ${HLSLIB_INCLUDE} $ENV{XILINX_HLS}/include/ ${JSON_INC_PATH} $ENV{XILINX_XRT}/include)
+target_include_directories(cclobfm PUBLIC ${ACCL_XRTDRV_INCLUDE_PATH} ${ACCL_HLSDRV_INCLUDE_PATH} ${CCLO_BFM_INCLUDE_PATH} ${HLSLIB_INCLUDE} ${HLS_INCLUDES} ${JSON_INC_PATH} $ENV{XILINX_XRT}/include)
 target_link_libraries(cclobfm PUBLIC jsoncpp_lib zmqpp zmq pthread)
 
 set_target_properties(cclobfm PROPERTIES
@@ -79,5 +91,3 @@ set_target_properties(cclobfm PROPERTIES
     SOVERSION 1
     PUBLIC_HEADER include/cclo_bfm.h
 )
-
-
