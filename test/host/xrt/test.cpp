@@ -25,12 +25,20 @@
 #include <json/json.h>
 #include <mpi.h>
 #include <random>
+#include <iostream>
 #include <sstream>
 #include <tclap/CmdLine.h>
 #include <vector>
 #include <xrt/xrt_device.h>
 #include <xrt/xrt_kernel.h>
 #include <gtest/gtest.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <signal.h>
+#include <fcntl.h>
+#include <csignal>
+#include <chrono>
+#include <thread>
 
 using namespace ACCL;
 using namespace accl_network_utils;
@@ -58,12 +66,61 @@ struct options_t {
   bool rsfec;
   std::string xclbin;
   std::string config_file;
+  bool startemu;
 };
 
 int rank, size;
+pid_t emulator_pid;
 options_t options;
 xrt::device dev;
 std::unique_ptr<ACCL::ACCL> accl;
+
+pid_t start_emulator(options_t opts) {
+  // Start emulator subprocess
+  pid_t pid = fork();
+  if (pid == 0) {
+    // we're in a child process, start emulated rank
+    std::stringstream outss, errss;
+    outss << "emu_rank_" << rank << "_stdout.log";
+    errss << "emu_rank_" << rank << "_stderr.log";
+    int outfd = open(outss.str().c_str(), O_WRONLY | O_CREAT, 0666);
+    int errfd = open(errss.str().c_str(), O_WRONLY | O_CREAT, 0666);
+
+    dup2(outfd, STDOUT_FILENO);
+    dup2(errfd, STDERR_FILENO);
+
+    char* emu_argv[] = {(char*)"../../model/emulator/cclo_emu",
+                        (char*)"-s", (char*)(std::to_string(size).c_str()),
+                        (char*)"-r", (char*)(std::to_string(rank).c_str()),
+                        (char*)"-p", (char*)(std::to_string(opts.start_port).c_str()),
+                        (char*)"-b",
+                        opts.udp ? (char*)"-u" : NULL,
+                        NULL};
+    execvp("../../model/emulator/cclo_emu", emu_argv);
+    //guard against failed execution of emulator (child will exit)
+    exit(0);
+  }
+  return pid;
+}
+
+bool emulator_is_running(pid_t pid){
+  return (kill(pid, 0) == 0);
+}
+
+void kill_emulator(pid_t pid){
+  std::cout << "Stopping emulator processes" << std::endl;
+  kill(pid, SIGINT);
+}
+
+void sigint_handler(int signum) {
+    std::cout << "Received SIGINT signal, sending to child processes..." << std::endl;
+
+    // Send SIGINT to all child processes.
+    kill(0, SIGINT);
+
+    // exit main process
+    exit(signum);
+}
 
 void test_debug(std::string message, options_t &options) {
   if (options.debug) {
@@ -135,7 +192,6 @@ class TestEnvironment : public ::testing::Environment {
 
     virtual void TearDown(){
       accl.reset();
-      MPI_Finalize();
     }
 };
 
@@ -1078,6 +1134,7 @@ options_t parse_options(int argc, char *argv[]) {
                                           false, "", "JSON file");
   cmd.add(config_arg);
   TCLAP::SwitchArg rsfec_arg("", "rsfec", "Enables RS-FEC in CMAC.", cmd, false);
+  TCLAP::SwitchArg startemu_arg("", "startemu", "Start emulator processes locally.", cmd, false);
   try {
     cmd.parse(argc, argv);
     if (hardware_arg.getValue()) {
@@ -1113,10 +1170,13 @@ options_t parse_options(int argc, char *argv[]) {
   opts.test_xrt_simulator = xrt_simulator_ready(opts);
   opts.config_file = config_arg.getValue();
   opts.rsfec = rsfec_arg.getValue();
+  opts.startemu = startemu_arg.getValue();
   return opts;
 }
 
 int main(int argc, char *argv[]) {
+
+  signal(SIGINT, sigint_handler);
 
   MPI_Init(&argc, &argv);
 
@@ -1130,11 +1190,27 @@ int main(int argc, char *argv[]) {
   //NOTE: this has to come before the gtest environment is initialized
   options = parse_options(argc, argv);
 
+
+  if(options.startemu){
+    emulator_pid = start_emulator(options);
+    if(!emulator_is_running(emulator_pid)){
+      std::cout << "Could not start emulator" << std::endl;
+      return -1;
+    }
+  }
+
   // gtest takes ownership of the TestEnvironment ptr - we don't delete it.
   ::testing::AddGlobalTestEnvironment(new TestEnvironment);
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(5000));
 
   bool fail = RUN_ALL_TESTS();
   std::cout << (fail ? "Some tests failed" : "All tests successful") << std::endl;
 
+  if(options.startemu){
+    kill_emulator(emulator_pid);
+  }
+
+  MPI_Finalize();
   return 0;
 }

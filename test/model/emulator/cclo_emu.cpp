@@ -448,11 +448,6 @@ int main(int argc, char** argv){
                                           false, 0, "positive integer");
     cmd.add(localrank);
 
-    TCLAP::ValueArg<std::string> designlib("d", "designlib",
-                                           "Name of compiled design library",
-                                           false, "xsim.dir/ccl_offload_behav/xsimk.so", "file");
-    cmd.add(designlib);
-
     TCLAP::ValueArg<unsigned int> startport("p", "port",
                                           "Starting ZMQ port",
                                           false, 5500, "positive integer");
@@ -460,7 +455,6 @@ int main(int argc, char** argv){
 
     TCLAP::SwitchArg udp_arg("u", "udp", "Use UDP hardware setup", cmd, false);
     TCLAP::SwitchArg loopback_arg("b", "loopback", "Enable kernel loopback", cmd, false);
-    TCLAP::SwitchArg wave_en("w", "waveform", "Enable waveform recording", cmd, false);
 
     try {
         cmd.parse(argc, argv);
