@@ -37,8 +37,6 @@
 #include <signal.h>
 #include <fcntl.h>
 #include <csignal>
-#include <chrono>
-#include <thread>
 
 using namespace ACCL;
 using namespace accl_network_utils;
@@ -1201,8 +1199,6 @@ int main(int argc, char *argv[]) {
 
   // gtest takes ownership of the TestEnvironment ptr - we don't delete it.
   ::testing::AddGlobalTestEnvironment(new TestEnvironment);
-
-  std::this_thread::sleep_for(std::chrono::milliseconds(5000));
 
   bool fail = RUN_ALL_TESTS();
   std::cout << (fail ? "Some tests failed" : "All tests successful") << std::endl;
