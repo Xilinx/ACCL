@@ -173,8 +173,9 @@ $(ROCE_XO):
 .PHONY: tcp_stack_ips
 tcp_stack_ips:
 	git submodule update --init --recursive Vitis_with_100Gbps_TCP-IP
-	mkdir -p Vitis_with_100Gbps_TCP-IP/build
-	cmake -S Vitis_with_100Gbps_TCP-IP/ -BVitis_with_100Gbps_TCP-IP/build/ -DFDEV_NAME=$(BOARD) -DVIVADO_HLS_ROOT_DIR=$(TCP_HLS_ROOTDIR) -DVIVADO_ROOT_DIR=$(TCP_VIVADO_ROOTDIR) -DTCP_STACK_EN=1 -DTCP_STACK_RX_DDR_BYPASS_EN=1 -DDTCP_STACK_WINDOW_SCALING_EN=0
+	mkdir -p Vitis_with_100Gbps_TCP-IP/build && \
+	cd Vitis_with_100Gbps_TCP-IP/build && \
+	cmake ../ -DFDEV_NAME=$(BOARD) -DVIVADO_HLS_ROOT_DIR=$(TCP_HLS_ROOTDIR) -DVIVADO_ROOT_DIR=$(TCP_VIVADO_ROOTDIR) -DTCP_STACK_EN=1 -DTCP_STACK_RX_DDR_BYPASS_EN=1 -DDTCP_STACK_WINDOW_SCALING_EN=0
 	$(MAKE) -C Vitis_with_100Gbps_TCP-IP/build installip
 
 $(XCLBIN): $(NET_XO) $(CONFIGFILE)
