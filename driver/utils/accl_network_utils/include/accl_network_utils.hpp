@@ -14,10 +14,14 @@
 #  limitations under the License.
 #
 *******************************************************************************/
+#pragma once
+
 #include <accl.hpp>
 #include <cstdint>
 #include <filesystem>
 #include <memory>
+#include <roce/cmac.hpp>
+#include <roce/hivenet.hpp>
 #include <stdexcept>
 #include <vector>
 #include <vnx/cmac.hpp>
@@ -27,7 +31,7 @@
 // TODO: Properly document functions in this header
 
 namespace accl_network_utils {
-enum class acclDesign { AXIS3x, TCP, UDP };
+enum class acclDesign { AXIS3x, TCP, UDP, ROCE };
 
 // Error used for runtime network problems
 class network_error : public std::runtime_error {
@@ -36,10 +40,14 @@ class network_error : public std::runtime_error {
 };
 
 // Generate ranks based on JSON files with IPs
+// The roce parameter is used to set the session id to be int(ip) - int(subnet),
+// because the roce kernel constructs the IP internally by adding the session
+// id to the IP subnet
 std::vector<ACCL::rank_t> generate_ranks(std::filesystem::path config_file,
                                          int local_rank,
                                          std::uint16_t start_port = 5500,
-                                         unsigned int rxbuf_size = 1024);
+                                         unsigned int rxbuf_size = 1024,
+                                         bool roce = false);
 // Generate ranks with IPs in private IP subnets
 std::vector<ACCL::rank_t> generate_ranks(bool local, int local_rank,
                                          int world_size,
@@ -65,6 +73,11 @@ void configure_vnx(vnx::CMAC &cmac, vnx::Networklayer &network_layer,
 void configure_tcp(ACCL::BaseBuffer &tx_buf_network,
                    ACCL::BaseBuffer &rx_buf_network, xrt::kernel &network_krnl,
                    const std::vector<ACCL::rank_t> &ranks, int local_rank);
+
+// Configure the RoCE kernel, this function is called by initialize_accl
+void configure_roce(roce::CMAC &cmac, roce::Hivenet &hivenet,
+                    const std::vector<ACCL::rank_t> &ranks, int local_rank,
+                    bool rsfec = false);
 
 // Get IPs from config file, this function is called by generate_ranks
 std::vector<std::string> get_ips(std::filesystem::path config_file);

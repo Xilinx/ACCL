@@ -28,6 +28,10 @@
 #define NUM_CTRL_STREAMS 1
 #endif
 
+#ifndef ACCL_SIM_MEM_SIZE_KB
+#define ACCL_SIM_MEM_SIZE_KB 256
+#endif
+
 /**
  * @brief Create a server-side interface to the CCLO simulator/emulator, via ZMQ
  * 

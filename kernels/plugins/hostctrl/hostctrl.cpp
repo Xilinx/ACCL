@@ -17,7 +17,6 @@
 
 #include "hostctrl.h"
 
-using namespace hls;
 using namespace std;
 
 void hostctrl(	ap_uint<32> scenario,

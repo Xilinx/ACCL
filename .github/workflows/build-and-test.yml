@@ -1,0 +1,52 @@
+name: Build and Test
+on:
+  push:
+    branches:
+      - dev
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      - name: Restore Cached XRT
+        id: cache-xrt-restore
+        uses: actions/cache/restore@v3
+        with:
+          path: xrt.deb
+          key: ${{ runner.os }}-xrt
+
+      - name: Download XRT
+        if: steps.cache-xrt-restore.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          DEBIAN_FRONTEND=noninteractive sudo apt-get install -y --no-install-recommends wget
+          wget --no-check-certificate https://www.xilinx.com/bin/public/openDownload?filename=xrt_202220.2.14.354_20.04-amd64-xrt.deb -O xrt.deb
+
+      - name: Save XRT
+        id: cache-xrt-save
+        if: steps.cache-xrt-restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v3
+        with:
+          path: xrt.deb
+          key: ${{ steps.cache-xrt-restore.outputs.cache-primary-key }}
+        
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          DEBIAN_FRONTEND=noninteractive sudo apt-get install -y --no-install-recommends build-essential cmake libjsoncpp-dev libzmqpp-dev libtclap-dev libopenmpi-dev
+          sudo dpkg -i xrt.deb || true
+          sudo apt --fix-broken install -y --no-install-recommends 
+
+      - name: Build Emulator
+        run: |
+          cd ${{ github.workspace }}/test/model/emulator && cmake . && make
+
+      - name: Build Test
+        run: |
+          source /opt/xilinx/xrt/setup.sh
+          cd ${{ github.workspace }}/test/host/xrt && cmake . && make

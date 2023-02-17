@@ -55,23 +55,28 @@ void tcp_depacketizer(
 #pragma HLS PIPELINE II=1 style=flp
 	
 	unsigned constexpr bytes_per_word = DATA_WIDTH/8;
+	unsigned const max_dma_bytes = 8*1024*1024-1;//TODO: convert to argument?
+
 	static unsigned int remaining[1024] = {0};//one RAMB36 for max 1024 sessions
 	static ap_uint<DEST_WIDTH> target_strm[1024] = {0};//one RAMB18 for max 1024 sessions
 
 	static eth_notification notif;
 	static bool continue_notif = false;
+	static bool continue_message = false;
 
 	static unsigned int message_rem = 0;
-	static ap_uint<DEST_WIDTH> strm = 0;
+	static ap_uint<DEST_WIDTH> message_strm = 0;
 	static unsigned int prev_session_id = 0;
+	unsigned int current_bytes = 0;
 
 	stream_word inword;
 	eth_header hdr;
+	eth_notification downstream_notif;
 
 	if(STREAM_IS_EMPTY(notif_in) && STREAM_IS_EMPTY(in)) return;
 
-	//get new notification unless we're continuing an old one
-	if(!continue_notif){
+	//get new notification unless we're continuing an old one or a message
+	if(!continue_notif && !continue_message){
 		notif = STREAM_READ(notif_in);
 	}
 
@@ -92,40 +97,50 @@ void tcp_depacketizer(
 		inword = STREAM_READ(in);
 		hdr = eth_header(inword.data(HEADER_LENGTH-1,0));
 		message_rem = hdr.count;//length of upcoming message (excluding the header itself)
-		strm = hdr.strm;//target of message (0 is targeting memory so managed, everything else is  stream so unmanaged)
-		if(strm == 0){
+		message_strm = hdr.strm;//target of message (0 is targeting memory so managed, everything else is  stream so unmanaged)
+		if(message_strm == 0){
 			//put notification, header in output streams
 			STREAM_WRITE(sts, hdr);
+			downstream_notif.session_id = notif.session_id;
+			downstream_notif.type = 0; //for SOM
+			downstream_notif.length = hdr.count;
+			STREAM_WRITE(notif_out, downstream_notif);
 		}
 		//decrement the length to reflect the fact that we have removed the 64B header
 		//Note: the rxHandler must make sure to not give us fragments less than 64B
 		notif.length -= bytes_per_word;
-		target_strm[notif.session_id] = strm;
+		target_strm[notif.session_id] = message_strm;
 	} else{//if remaining bytes is not zero, then this is a continuation of an old message
-		strm = target_strm[notif.session_id];
+		message_strm = target_strm[notif.session_id];
 	}
-	//write out notification
+	//write out notifications
 	//in case the fragment spans the end of the current message and beginning of another,
 	//only notify for the part up to the end of the current message
-	if(strm == 0){
-		eth_notification downstream_notif;
-		downstream_notif.session_id = notif.session_id;
-		downstream_notif.length = (message_rem < notif.length) ? message_rem : (unsigned int)notif.length;
+	if(message_strm == 0){
+		downstream_notif.type = 1; //for SOF
+		downstream_notif.length = max_dma_bytes;
 		STREAM_WRITE(notif_out, downstream_notif);
 	}
 	//copy data in -> out
 	do{
 		#pragma HLS PIPELINE II=1
 		inword = STREAM_READ(in);
-		inword.dest = strm;
+		inword.dest = message_strm;
 		STREAM_WRITE(out, inword);
 		notif.length = (notif.length < bytes_per_word) ? 0u : (unsigned int)notif.length-bytes_per_word;//floor at zero
+		current_bytes += (message_rem < bytes_per_word) ? message_rem : bytes_per_word;
 		message_rem = (message_rem < bytes_per_word) ? 0u : message_rem-bytes_per_word;//slight problem here if the message doesnt end on a 64B boundary...
-	} while(notif.length > 0 && message_rem > 0);
+	} while(notif.length > 0 && message_rem > 0 && current_bytes < (max_dma_bytes-bytes_per_word));
+	if(message_strm == 0){
+		downstream_notif.type = 2; //for EOF
+		downstream_notif.length = current_bytes;
+		STREAM_WRITE(notif_out, downstream_notif);
+	}
 	//update session info (remaining bytes and target of currently processing message)
 	remaining[notif.session_id] = message_rem;
 	//if we're not finished with this fragment, skip notification read on the next run
 	continue_notif = (notif.length > 0);
+	continue_message = (notif.length > 0) && (message_rem > 0);
 	//update session id for caching
 	prev_session_id = notif.session_id;
 }

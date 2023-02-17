@@ -18,8 +18,13 @@
 #pragma once
 
 #include "ap_int.h"
-#include "ap_utils.h"
 #include "ap_axi_sdata.h"
+
+#ifdef ACCL_SYNTHESIS
+#include "ap_utils.h"
+#else
+#define ap_wait() 
+#endif
 
 #define DATA_WIDTH 512
 #define DEST_WIDTH 8

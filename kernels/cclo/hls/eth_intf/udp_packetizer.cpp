@@ -48,6 +48,10 @@ while(bytes_processed < bytes_to_process){
 #pragma HLS PIPELINE II=1
 	stream_word outword;
 	outword.dest = cmdword.dst;
+	// Always set TKEEP to -1 to prevent problem with RoCE kernel. This will mean
+	// that packets will contain at max bytes_per_word-1 extra bytes of unused
+	// padding.
+	outword.keep = -1;
 	//if this is the first word, put the count in a header
 	if(bytes_processed == 0){
         outword.data(DATA_WIDTH-1, HEADER_LENGTH) = 0;
@@ -58,13 +62,8 @@ while(bytes_processed < bytes_to_process){
 	//signal ragged tail
 	int bytes_left = (bytes_to_process - bytes_processed);
 	if(bytes_left < bytes_per_word){
-		ap_uint<bytes_per_word> keep = 1;
-		keep = keep << bytes_left;
-		keep -= 1;
-		outword.keep = keep;
 		bytes_processed += bytes_left;
 	}else{
-		outword.keep = -1;
 		bytes_processed += bytes_per_word;
 	}
 	pktsize++;
