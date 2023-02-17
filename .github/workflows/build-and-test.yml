@@ -2,7 +2,7 @@ name: Build and Test
 on:
   push:
     branches:
-      - ci_pipe
+      - dev
 
 jobs:
   build:
