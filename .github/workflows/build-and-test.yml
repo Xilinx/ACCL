@@ -55,4 +55,4 @@ jobs:
       - name: Run Test
         run: |
           source /opt/xilinx/xrt/setup.sh
-          cd ${{ github.workspace }}/test/host/xrt && mpirun -np 3 bin/test
+          cd ${{ github.workspace }}/test/host/xrt && mpirun -np 2 bin/test
