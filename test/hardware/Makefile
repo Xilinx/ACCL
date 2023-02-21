@@ -44,6 +44,7 @@ TCP_DUMMY_XO=../../kernels/plugins/dummy_tcp_stack/dummy_tcp_stack.xo
 TCP_XO=Vitis_with_100Gbps_TCP-IP/_x.hw.$(XSA)/network_krnl.xo
 TCP_VIVADO_ROOTDIR ?= $$XILINX_VIVADO
 TCP_HLS_ROOTDIR ?= $$XILINX_HLS
+TCP_RX_BYPASS ?= 0
 CMAC_TCP_XO=Vitis_with_100Gbps_TCP-IP/_x.hw.$(XSA)/cmac_krnl.xo
 ROCE_XO=HiveNet/network/roce_v2/hw/HiveNet/build/HiveNet_kernel_$(ETH_IF).xo
 ROCE_HBM_BANK=0
@@ -175,7 +176,7 @@ tcp_stack_ips:
 	git submodule update --init --recursive Vitis_with_100Gbps_TCP-IP
 	mkdir -p Vitis_with_100Gbps_TCP-IP/build && \
 	cd Vitis_with_100Gbps_TCP-IP/build && \
-	cmake ../ -DFDEV_NAME=$(BOARD) -DVIVADO_HLS_ROOT_DIR=$(TCP_HLS_ROOTDIR) -DVIVADO_ROOT_DIR=$(TCP_VIVADO_ROOTDIR) -DTCP_STACK_EN=1 -DTCP_STACK_RX_DDR_BYPASS_EN=1 -DDTCP_STACK_WINDOW_SCALING_EN=0
+	cmake ../ -DFDEV_NAME=$(BOARD) -DVIVADO_HLS_ROOT_DIR=$(TCP_HLS_ROOTDIR) -DVIVADO_ROOT_DIR=$(TCP_VIVADO_ROOTDIR) -DTCP_STACK_EN=1 -DTCP_STACK_RX_DDR_BYPASS_EN=$(TCP_RX_BYPASS) -DDTCP_STACK_WINDOW_SCALING_EN=0
 	$(MAKE) -C Vitis_with_100Gbps_TCP-IP/build installip
 
 $(XCLBIN): $(NET_XO) $(CONFIGFILE)
