@@ -23,13 +23,17 @@ void call_probe(
 	STREAM<command_word> &ack_upstream,
 	STREAM<command_word> &cmd_downstream,
 	STREAM<command_word> &ack_downstream,
-	ap_uint<32> *mem
+	ap_uint<32> *mem,
+	bool capture,
+	ap_uint<32> count
 ){
 #pragma HLS INTERFACE axis register both port=cmd_upstream
 #pragma HLS INTERFACE axis register both port=ack_upstream
 #pragma HLS INTERFACE axis register both port=cmd_downstream
 #pragma HLS INTERFACE axis register both port=ack_downstream
-#pragma HLS INTERFACE m_axi port=mem depth=16 offset=slave num_write_outstanding=4 bundle=mem
+#pragma HLS INTERFACE m_axi port=mem depth=160 offset=slave num_write_outstanding=4 bundle=mem
+#pragma HLS INTERFACE s_axilite port=capture
+#pragma HLS INTERFACE s_axilite port=count
 #pragma HLS INTERFACE s_axilite port=return
 #pragma HLS PIPELINE II=1
 
@@ -39,26 +43,32 @@ void call_probe(
 	command_word w;
 	ap_uint<32> duration;
 
-	//forward call and copy arguments to our local buffer
-	if(!STREAM_IS_EMPTY(cmd_upstream)){
+	for(unsigned cnt=0; cnt<count; cnt++){
+		//forward call and copy arguments to our local buffer
 		for(int  i = 0; i < 15; i++) {
 			w = STREAM_READ(cmd_upstream);
 			STREAM_WRITE(cmd_downstream, w);
-			STREAM_WRITE(tmpbuf, w.data);
+			if(capture){
+				STREAM_WRITE(tmpbuf, w.data);
+			}
 		}
-		duration = 0;
-	}
-	//increment duration while call is ongoing
-	while(STREAM_IS_EMPTY(ack_upstream)){
-		#pragma HLS PIPELINE II=1
-		duration++;
-	}
-	//forward acknowledgement
-	STREAM_WRITE(ack_downstream, STREAM_READ(ack_upstream));
-	//save duration
-	STREAM_WRITE(tmpbuf, duration);
-	//dump local buffer to memory
-	for(int i=0; i<16; i++) {
-		mem[i] = STREAM_READ(tmpbuf);
+		if(capture){
+			duration = 0;
+			//increment duration while call is ongoing
+			while(STREAM_IS_EMPTY(ack_downstream)){
+				#pragma HLS PIPELINE II=1
+				duration++;
+			}
+		}
+		//forward acknowledgement
+		STREAM_WRITE(ack_upstream, STREAM_READ(ack_downstream));
+		if(capture){
+			//save duration
+			STREAM_WRITE(tmpbuf, duration);
+			//dump local buffer to memory
+			for(int i=0; i<16; i++) {
+				mem[i+16*cnt] = STREAM_READ(tmpbuf);
+			}
+		}
 	}
 }

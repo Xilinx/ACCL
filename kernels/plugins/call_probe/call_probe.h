@@ -24,5 +24,7 @@ void call_probe(
 	STREAM<command_word> &ack_upstream,
 	STREAM<command_word> &cmd_downstream,
 	STREAM<command_word> &ack_downstream,
-	ap_uint<32> *mem
+	ap_uint<32> *mem,
+	bool capture,
+	ap_uint<32> count
 );

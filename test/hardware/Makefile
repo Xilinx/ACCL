@@ -51,6 +51,7 @@ XCLBIN=$(BUILD_DIR)/ccl_offload.xclbin
 
 HOSTCTRL_XO=../../kernels/plugins/hostctrl/hostctrl.xo
 CLIENT_ARB_XO=../../kernels/plugins/client_arbiter/client_arbiter.xo
+PROBE_XO=../../kernels/plugins/call_probe/call_probe.xo
 SUM_XO=../../kernels/plugins/reduce_ops/reduce_ops.xo
 COMPRESSION_XO=../../kernels/plugins/hp_compression/hp_compression.xo
 LOOPBACK_XO=../../kernels/plugins/loopback/loopback.xo
@@ -111,14 +112,14 @@ ifeq (udp,$(MODE))
 else ifeq (axis3x,$(MODE))
 	ETH_IF := none
 	NET_XO = $(TCP_DUMMY_XO)
-	OTHER_XO = $(LOOPBACK_XO)
+	OTHER_XO = $(LOOPBACK_XO) $(PROBE_XO)
 	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/tcl/post_sys_link_tri.tcl
 	CCLO_STACK_TYPE = TCP
 	CCLO_MB_DEBUG_LEVEL = 2
 else ifeq (axis3x_vadd,$(MODE))
 	ETH_IF := none
 	NET_XO = $(TCP_DUMMY_XO)
-	OTHER_XO = $(VADD_XO)
+	OTHER_XO = $(VADD_XO) $(PROBE_XO)
 	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/tcl/post_sys_link_tri.tcl
 	CCLO_STACK_TYPE = TCP
 	CCLO_MB_DEBUG_LEVEL = 2

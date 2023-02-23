@@ -75,7 +75,6 @@ if {$do_syn} {
 }
 
 if {$do_export} {
-    config_export -format ip_catalog
     export_design
 }
 
