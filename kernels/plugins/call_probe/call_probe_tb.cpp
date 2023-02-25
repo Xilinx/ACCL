@@ -28,7 +28,7 @@ int main() {
 
 	// Exec
 	std::cout << "Running probe" << std::endl;
-	call_probe(cmd_client, ack_client, cmd_cclo, ack_cclo, mem, true, count);
+	call_probe(true, count, mem, cmd_client, ack_client, cmd_cclo, ack_cclo);
 
 	for(int i=0; i<count; i++){
 		// flush and check streams

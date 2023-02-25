@@ -62,7 +62,9 @@ set_top call_probe
 
 open_solution sol1
 config_export -format xo -library ACCL -output [pwd]/call_probe.xo
-
+config_interface -s_axilite_mailbox both
+config_interface -s_axilite_auto_restart_counter 1
+config_interface -s_axilite_sw_reset
 
 if {$do_sim} {
     csim_design -clean

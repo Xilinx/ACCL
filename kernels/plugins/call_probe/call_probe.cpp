@@ -19,13 +19,13 @@
 
 
 void call_probe(
+	bool capture,
+	ap_uint<32> count,
+	ap_uint<32> *mem,
 	STREAM<command_word> &cmd_upstream,
 	STREAM<command_word> &ack_upstream,
 	STREAM<command_word> &cmd_downstream,
-	STREAM<command_word> &ack_downstream,
-	ap_uint<32> *mem,
-	bool capture,
-	ap_uint<32> count
+	STREAM<command_word> &ack_downstream
 ){
 #pragma HLS INTERFACE axis register both port=cmd_upstream
 #pragma HLS INTERFACE axis register both port=ack_upstream
