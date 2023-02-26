@@ -19,36 +19,41 @@
 #include <probe.hpp>
 #include <iostream>
 
-namespace ACCL {
-Probe::Probe(xrt::device &device, xrt::ip &probe) : probe(probe), device(device) {
-    auto bankidx = probe.group_id(4); // Memory bank index for kernel argument 4
+ACCLProbe::ACCLProbe(xrt::device &device, xrt::kernel &probe) : device(device), probe(probe) {
+    auto bankidx = probe.group_id(2); // Memory bank index for kernel argument 2
     buffer = xrt::bo(device, 16*4, bankidx);
     run = xrt::run(probe);
 }
 
-void Probe::skip(){
-    run.set_arg(4, buffer);
-    run.set_arg(5, false);
-    run.set_arg(6, 1);
+ACCLProbe::~ACCLProbe(){
+    run.abort();
+}
+
+void ACCLProbe::skip(unsigned niter){
+    run.set_arg(0, false);
+    run.set_arg(1, 1);
+    run.set_arg(2, buffer);
+    run.start(xrt::autostart{niter});
+}
+
+void ACCLProbe::arm(){
+    run.set_arg(0, false);
+    run.set_arg(1, 1);
+    run.set_arg(2, buffer);
     run.start();
 }
 
-void Probe::arm(){
-    run.set_arg(4, buffer);
-    run.set_arg(5, false);
-    run.set_arg(6, 1);
-    run.start();
+void ACCLProbe::disarm(){
+    run.abort();
 }
 
-void Probe::read(){
-    run.wait();
-    buffer.sync_from_device();
-    durations.push_back(buffer[15]);
+void ACCLProbe::read(){
+    run.wait(1000);//wait for 1s
+    buffer.sync(xclBOSyncDirection::XCL_BO_SYNC_BO_FROM_DEVICE);
+    durations.push_back(buffer.map<unsigned*>()[15]);
 }
 
-void Probe::dump(){
+void ACCLProbe::dump(){
     for(unsigned duration : durations) 
         std::cout << "duration is " << duration << std::endl;
 }
-
-} // namespace ACCL

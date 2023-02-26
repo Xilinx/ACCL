@@ -38,10 +38,11 @@ set(ACCL_NETWORK_UTILS_MPI 1)
 set(ACCL_NETWORK_UTILS_DEBUG 1)
 set(ACCL_DEBUG 0)
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../../../driver/utils/accl_network_utils ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/accl_network_utils)
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../../../driver/utils/probe ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/probe)
 
 find_package(MPI REQUIRED)
 add_executable(benchmark benchmark.cpp)
 target_include_directories(benchmark PUBLIC ${MPI_CXX_INCLUDE_PATH})
 # Explicitely link against vnx and network_roce_v2 because CMake doesn't support nested object libraries
 # https://stackoverflow.com/a/71040950
-target_link_libraries(benchmark PUBLIC MPI::MPI_CXX accl_network_utils vnx network_roce_v2)
+target_link_libraries(benchmark PUBLIC MPI::MPI_CXX accl_network_utils probe vnx network_roce_v2)

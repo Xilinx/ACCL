@@ -19,25 +19,23 @@
 #include <xrt/xrt_bo.h>
 #include <xrt/xrt_device.h>
 #include <xrt/xrt_kernel.h>
+#include <vector>
 
-namespace ACCL {
-
-class Probe {
+class ACCLProbe {
 public:
-  Probe(xrt::device &device, xrt::ip &probe);
-
-void Probe::skip();
-void Probe::arm();
-void Probe::read();
-void Probe::dump();
+  ACCLProbe(xrt::device &device, xrt::kernel &ip);
+  ~ACCLProbe();
+  void skip(unsigned niter);
+  void arm();
+  void disarm();
+  void read();
+  void dump();
 
 private:
   xrt::device device;
-  xrt::ip probe;
+  xrt::kernel probe;
   xrt::bo buffer;
   xrt::run run;
-  vector<unsigned> durations;
+  std::vector<unsigned> durations;
 
 };
-
-} // namespace ACCL

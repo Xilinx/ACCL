@@ -28,6 +28,7 @@
 #include <regex>
 #include <tclap/CmdLine.h>
 #include <vector>
+#include <probe.hpp>
 
 using namespace ACCL;
 using namespace accl_network_utils;
@@ -197,12 +198,19 @@ results_t start_benchmark(options_t options) {
   }
 
   xrt::device device = xrt::device(options.device_index);
+  
+  auto xclbin_uuid = device.load_xclbin(options.xclbin);
+  auto probe = xrt::kernel(device, xclbin_uuid, "call_probe:{probe_0}");
+  ACCLProbe probe = ACCLProbe(device, probe);//create a probe object
+  probe.skip(0); //skip an infinite number of calls
 
   std::unique_ptr<ACCL::ACCL> accl = initialize_accl(
       ranks, rank, false, design, device, options.xclbin, 16,
       options.rxbuf_size, options.segment_size, options.rsfec);
 
   accl->set_timeout(1e6);
+
+  probe.disarm(); //stop skipping
 
   results_t results{};
 
