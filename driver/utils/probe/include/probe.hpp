@@ -23,10 +23,10 @@
 
 class ACCLProbe {
 public:
-  ACCLProbe(xrt::device &device, xrt::kernel &ip);
+  ACCLProbe(xrt::device &device, xrt::kernel &ip, unsigned max_iter=100);
   ~ACCLProbe();
-  void skip(unsigned niter);
-  void arm();
+  void skip(unsigned niter=0);
+  void arm(unsigned niter=0);
   void disarm();
   void read();
   void dump();
@@ -37,5 +37,6 @@ private:
   xrt::bo buffer;
   xrt::run run;
   std::vector<unsigned> durations;
-
+  unsigned max_iter;
+  unsigned current_iter;
 };

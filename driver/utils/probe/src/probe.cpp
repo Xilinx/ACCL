@@ -19,28 +19,27 @@
 #include <probe.hpp>
 #include <iostream>
 
-ACCLProbe::ACCLProbe(xrt::device &device, xrt::kernel &probe) : device(device), probe(probe) {
+ACCLProbe::ACCLProbe(xrt::device &device, xrt::kernel &probe, unsigned max_iter) : device(device), probe(probe), max_iter(max_iter), current_iter(0) {
     auto bankidx = probe.group_id(2); // Memory bank index for kernel argument 2
-    buffer = xrt::bo(device, 16*4, bankidx);
+    buffer = xrt::bo(device, 16*4*max_iter, bankidx);
     run = xrt::run(probe);
 }
 
-ACCLProbe::~ACCLProbe(){
-    run.abort();
-}
+ACCLProbe::~ACCLProbe(){}
 
 void ACCLProbe::skip(unsigned niter){
     run.set_arg(0, false);
-    run.set_arg(1, 1);
-    run.set_arg(2, buffer);
-    run.start(xrt::autostart{niter});
 }
 
-void ACCLProbe::arm(){
-    run.set_arg(0, false);
-    run.set_arg(1, 1);
+void ACCLProbe::arm(unsigned niter){
+    run.set_arg(0, true);
+    run.set_arg(1, (niter==0) ? 1 : niter);
     run.set_arg(2, buffer);
-    run.start();
+    current_iter = niter;
+    if(niter == 0)
+        run.start(xrt::autostart{niter});
+    else
+        run.start();
 }
 
 void ACCLProbe::disarm(){
@@ -48,9 +47,10 @@ void ACCLProbe::disarm(){
 }
 
 void ACCLProbe::read(){
-    run.wait(1000);//wait for 1s
+    run.wait(1000);//wait for up to 1s in case the probe is still recording
     buffer.sync(xclBOSyncDirection::XCL_BO_SYNC_BO_FROM_DEVICE);
-    durations.push_back(buffer.map<unsigned*>()[15]);
+    for(unsigned i=0; i<current_iter; i++)
+        durations.push_back(buffer.map<unsigned*>()[16*i+15]);
 }
 
 void ACCLProbe::dump(){
