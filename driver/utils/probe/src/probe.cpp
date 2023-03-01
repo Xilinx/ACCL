@@ -18,42 +18,47 @@
 
 #include <probe.hpp>
 #include <iostream>
+#include <cassert>
 
-ACCLProbe::ACCLProbe(xrt::device &device, xrt::kernel &probe, unsigned max_iter) : device(device), probe(probe), max_iter(max_iter), current_iter(0) {
+
+ACCLProbe::ACCLProbe(xrt::device &device, xrt::kernel &probe, std::string csvfile, unsigned max_iter) : device(device), probe(probe), max_iter(max_iter), current_iter(0) {
     auto bankidx = probe.group_id(2); // Memory bank index for kernel argument 2
     buffer = xrt::bo(device, 16*4*max_iter, bankidx);
     run = xrt::run(probe);
+    if(!csvfile.empty()){
+        // Open CSV file stream
+        csvstream.open(csvfile, std::ios_base::app);
+        // Push the header to it
+        csvstream << "Opcode,Count,Root,Compression,Stream,Cycles" << std::endl;
+    }
 }
 
 ACCLProbe::~ACCLProbe(){}
 
-void ACCLProbe::skip(unsigned niter){
-    run.set_arg(0, false);
-}
-
 void ACCLProbe::arm(unsigned niter){
+    assert(niter > 0 && niter <= max_iter);
     run.set_arg(0, true);
-    run.set_arg(1, (niter==0) ? 1 : niter);
+    run.set_arg(1, niter);
     run.set_arg(2, buffer);
     current_iter = niter;
-    if(niter == 0)
-        run.start(xrt::autostart{niter});
-    else
-        run.start();
+    run.start();
 }
 
-void ACCLProbe::disarm(){
-    run.abort();
-}
-
-void ACCLProbe::read(){
+void ACCLProbe::read(bool append){
     run.wait(1000);//wait for up to 1s in case the probe is still recording
     buffer.sync(xclBOSyncDirection::XCL_BO_SYNC_BO_FROM_DEVICE);
+    unsigned *tmp = buffer.map<unsigned*>();
+    if(!append){
+        durations.clear();
+    }
     for(unsigned i=0; i<current_iter; i++)
-        durations.push_back(buffer.map<unsigned*>()[16*i+15]);
+        durations.push_back(std::make_tuple(tmp[16*i], tmp[16*i+1], tmp[16*i+3], tmp[16*i+7], tmp[16*i+8], tmp[16*i+15]));
 }
 
-void ACCLProbe::dump(){
-    for(unsigned duration : durations) 
-        std::cout << "duration is " << duration << std::endl;
+void ACCLProbe::flush(){
+    for(auto entry : durations){
+        auto [ op , count, root, compression, stream, cycles ] = entry;
+        csvstream << op << "," << count << "," << root << "," << compression << "," << stream << "," << std::endl;
+    }
+    durations.clear();
 }

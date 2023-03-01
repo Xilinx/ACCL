@@ -20,23 +20,24 @@
 #include <xrt/xrt_device.h>
 #include <xrt/xrt_kernel.h>
 #include <vector>
+#include <string>
+#include <fstream>
 
 class ACCLProbe {
 public:
-  ACCLProbe(xrt::device &device, xrt::kernel &ip, unsigned max_iter=100);
+  ACCLProbe(xrt::device &device, xrt::kernel &ip, std::string csvfile, unsigned max_iter=100);
   ~ACCLProbe();
-  void skip(unsigned niter=0);
-  void arm(unsigned niter=0);
-  void disarm();
-  void read();
-  void dump();
+  void arm(unsigned niter=1);
+  void read(bool append=false);
+  void flush();
+  std::vector<std::tuple<unsigned, unsigned, unsigned, unsigned, unsigned, unsigned>> durations;
 
 private:
   xrt::device device;
   xrt::kernel probe;
   xrt::bo buffer;
   xrt::run run;
-  std::vector<unsigned> durations;
   unsigned max_iter;
   unsigned current_iter;
+  std::ofstream csvstream;
 };
