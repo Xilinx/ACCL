@@ -77,8 +77,9 @@ class TestEnvironment : public ::testing::Environment {
       }
 
       // Set up for benchmarking
-      if (options.benchmark && options.hardware) {
+      if (options.benchmark && options.hardware && !(options.axis3 && rank > 0)) {
         // Create a probe object or disable benchmark
+        std::cout << "Initializing call probe on rank " << rank << std::endl;
         auto xclbin_uuid = dev.load_xclbin(options.xclbin);
         try{
           auto probe_krnl = xrt::kernel(dev, xclbin_uuid, "call_probe:{probe_0}");
@@ -97,7 +98,7 @@ class TestEnvironment : public ::testing::Environment {
         if (options.tcp) {
           probe->arm(7);
         } else {
-          probe->arm(6);
+          probe->arm(5);
         }
       }
 
@@ -107,11 +108,17 @@ class TestEnvironment : public ::testing::Environment {
       std::cout << "Setting up TestEnvironment" << std::endl;
       accl->set_timeout(1e6);
 
+      if(options.benchmark){
+        probe->read();
+      }
+
     }
 
     virtual void TearDown(){
-      probe->flush();//flush profiling data to CSV file
-      delete probe;
+      if(options.benchmark){
+        probe->flush();//flush profiling data to CSV file
+        delete probe;
+      }
       accl.reset();
     }
 };
@@ -130,15 +137,15 @@ class ACCLBenchmark : public ::testing::Test {
 protected:
   inline static std::unique_ptr<ACCL::Buffer<float>> buf_0, buf_1, buf_2;
   virtual void SetUp() {
-    probe->arm(1);//arm probe for one ACCL call
-    if(buf_0) buf_0 = accl->create_buffer<float>(options.count, dataType::float32);
-    if(buf_1) buf_1 = accl->create_buffer<float>(options.count, dataType::float32);
-    if(buf_2) buf_2 = accl->create_buffer<float>(options.count, dataType::float32);
+    if(options.benchmark) probe->arm(1);//arm probe for one ACCL call
+    if(!buf_0) buf_0 = accl->create_buffer<float>(options.count, dataType::float32);
+    if(!buf_1) buf_1 = accl->create_buffer<float>(options.count, dataType::float32);
+    if(!buf_2) buf_2 = accl->create_buffer<float>(options.count, dataType::float32);
     MPI_Barrier(MPI_COMM_WORLD);
   }
   virtual void TearDown() {
     MPI_Barrier(MPI_COMM_WORLD);
-    probe->read(true);//readback profiling data and append to existing
+    if(options.benchmark) probe->read(true);//readback profiling data and append to existing
   }
 };
 

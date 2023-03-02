@@ -21,7 +21,6 @@
 #include <iostream>
 #include <tclap/CmdLine.h>
 
-namespace fs = std::filesystem;
 
 TEST_P(ACCLSweepBenchmark, benchmark_sendrecv) {
   if(rank == 0)
@@ -58,8 +57,7 @@ TEST_P(ACCLSweepBenchmark, benchmark_gather) {
   accl->gather(*buf_0, *buf_1, std::pow(2,GetParam()), 0, GLOBAL_COMM, true, true);
 }
 
-INSTANTIATE_TEST_SUITE_P(sweep_benchmarks, ACCLSweepBenchmark, 
-        testing::Range(0, int(std::floor(std::log2(options.count)))));
+INSTANTIATE_TEST_SUITE_P(sweep_benchmarks, ACCLSweepBenchmark, testing::Range(4, 20));
 
 options_t parse_options(int argc, char *argv[]) {
   TCLAP::CmdLine cmd("ACCL benchmark");
@@ -69,12 +67,6 @@ options_t parse_options(int argc, char *argv[]) {
   TCLAP::SwitchArg udp_arg("u", "udp", "Use UDP hardware setup", cmd, false);
   TCLAP::SwitchArg tcp_arg("t", "tcp", "Use TCP hardware setup", cmd, false);
   TCLAP::SwitchArg roce_arg("r", "roce", "Use RoCE hardware setup", cmd, false);
-  TCLAP::ValueArg<std::string> file_arg(
-      "", "results-file",
-      "JSON file to write results to. {rank} will be replaced by the rank. "
-      "Defaults to 'results-{rank}.json'",
-      false, "results-{rank}.json", "string");
-  cmd.add(file_arg);
   TCLAP::ValueArg<std::string> xclbin_arg(
       "x", "xclbin", "xclbin of accl driver if hardware mode is used", false,
       "accl.xclbin", "file");
@@ -89,9 +81,6 @@ options_t parse_options(int argc, char *argv[]) {
   cmd.add(config_arg);
   TCLAP::SwitchArg rsfec_arg("", "rsfec", "Enables RS-FEC in CMAC.", cmd,
                              false);
-  TCLAP::ValueArg<unsigned> count_arg("c", "maxcount", 
-      "How many items per test", false, 2*1024*1024, "Maximum count to benchmark");
-  cmd.add(count_arg);
 
   try {
     cmd.parse(argc, argv);
@@ -99,6 +88,9 @@ options_t parse_options(int argc, char *argv[]) {
         roce_arg.getValue() != 1) {
       throw std::runtime_error("When using hardware, specify one of axis3, "
                                 "tcp, udp, or roce mode, but not both.");
+    }
+    if (axis3_arg.getValue() && (size > 3)) {
+      throw std::runtime_error("When using axis3x, use up to 3 ranks.");
     }
   } catch (std::exception &e) {
     if (rank == 0) {
@@ -109,8 +101,8 @@ options_t parse_options(int argc, char *argv[]) {
     exit(1);
   }
   options_t opts;
-  opts.count = count_arg.getValue();
-  opts.rxbuf_size = 4*opts.count; // 8 MB by default
+  opts.count = 1024*1024; // 1 Melements by default
+  opts.rxbuf_size = 4*opts.count; // 4 MB by default
   opts.rxbuf_count = 16;
   opts.segment_size = opts.rxbuf_size;
   opts.axis3 = axis3_arg.getValue();

@@ -27,7 +27,7 @@ ACCLProbe::ACCLProbe(xrt::device &device, xrt::kernel &probe, std::string csvfil
     run = xrt::run(probe);
     if(!csvfile.empty()){
         // Open CSV file stream
-        csvstream.open(csvfile, std::ios_base::app);
+        csvstream.open(csvfile, std::ios_base::out);
         // Push the header to it
         csvstream << "Opcode,Count,Root,Compression,Stream,Cycles" << std::endl;
     }
@@ -47,7 +47,7 @@ void ACCLProbe::arm(unsigned niter){
 void ACCLProbe::read(bool append){
     run.wait(1000);//wait for up to 1s in case the probe is still recording
     buffer.sync(xclBOSyncDirection::XCL_BO_SYNC_BO_FROM_DEVICE);
-    unsigned *tmp = buffer.map<unsigned*>();
+    auto tmp = buffer.map<unsigned*>();
     if(!append){
         durations.clear();
     }
@@ -58,7 +58,7 @@ void ACCLProbe::read(bool append){
 void ACCLProbe::flush(){
     for(auto entry : durations){
         auto [ op , count, root, compression, stream, cycles ] = entry;
-        csvstream << op << "," << count << "," << root << "," << compression << "," << stream << "," << std::endl;
+        csvstream << op << "," << count << "," << root << "," << compression << "," << stream << "," << cycles << std::endl;
     }
     durations.clear();
 }
