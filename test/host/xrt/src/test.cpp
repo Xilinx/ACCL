@@ -16,196 +16,14 @@
 #
 *******************************************************************************/
 
-#include <accl.hpp>
-#include <accl_network_utils.hpp>
-#include <cstdlib>
-#include <experimental/xrt_ip.h>
-#include <fstream>
-#include <functional>
-#include <json/json.h>
-#include <mpi.h>
-#include <random>
-#include <iostream>
-#include <sstream>
+#include <utility.hpp>
+#include <fixture.hpp>
 #include <tclap/CmdLine.h>
-#include <vector>
-#include <xrt/xrt_device.h>
-#include <xrt/xrt_kernel.h>
-#include <gtest/gtest.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <signal.h>
-#include <fcntl.h>
-#include <csignal>
-
-using namespace ACCL;
-using namespace accl_network_utils;
 
 // Set the tolerance for compressed datatypes high enough, since we do currently
 // not replicate the float32 -> float16 conversion for our reference results
 #define FLOAT16RTOL 0.005
 #define FLOAT16ATOL 0.05
-
-struct options_t {
-  int start_port;
-  unsigned int rxbuf_size;
-  unsigned int rxbuf_count;
-  unsigned int segment_size;
-  unsigned int count;
-  unsigned int device_index;
-  bool test_xrt_simulator;
-  bool debug;
-  bool hardware;
-  bool axis3;
-  bool udp;
-  bool tcp;
-  bool roce;
-  bool return_error;
-  bool rsfec;
-  std::string xclbin;
-  std::string config_file;
-  bool startemu;
-};
-
-int rank, size;
-pid_t emulator_pid;
-options_t options;
-xrt::device dev;
-std::unique_ptr<ACCL::ACCL> accl;
-
-pid_t start_emulator(options_t opts) {
-  // Start emulator subprocess
-  pid_t pid = fork();
-  if (pid == 0) {
-    // we're in a child process, start emulated rank
-    std::stringstream outss, errss;
-    outss << "emu_rank_" << rank << "_stdout.log";
-    errss << "emu_rank_" << rank << "_stderr.log";
-    int outfd = open(outss.str().c_str(), O_WRONLY | O_CREAT, 0666);
-    int errfd = open(errss.str().c_str(), O_WRONLY | O_CREAT, 0666);
-
-    dup2(outfd, STDOUT_FILENO);
-    dup2(errfd, STDERR_FILENO);
-
-    char* emu_argv[] = {(char*)"../../model/emulator/cclo_emu",
-                        (char*)"-s", (char*)(std::to_string(size).c_str()),
-                        (char*)"-r", (char*)(std::to_string(rank).c_str()),
-                        (char*)"-p", (char*)(std::to_string(opts.start_port).c_str()),
-                        (char*)"-b",
-                        opts.udp ? (char*)"-u" : NULL,
-                        NULL};
-    execvp("../../model/emulator/cclo_emu", emu_argv);
-    //guard against failed execution of emulator (child will exit)
-    exit(0);
-  }
-  return pid;
-}
-
-bool emulator_is_running(pid_t pid){
-  return (kill(pid, 0) == 0);
-}
-
-void kill_emulator(pid_t pid){
-  std::cout << "Stopping emulator processes" << std::endl;
-  kill(pid, SIGINT);
-}
-
-void sigint_handler(int signum) {
-    std::cout << "Received SIGINT signal, sending to child processes..." << std::endl;
-
-    // Send SIGINT to all child processes.
-    kill(0, SIGINT);
-
-    // exit main process
-    exit(signum);
-}
-
-void test_debug(std::string message, options_t &options) {
-  if (options.debug) {
-    std::cerr << message << std::endl;
-  }
-}
-
-std::string prepend_process() {
-  return "[process " + std::to_string(rank) + "] ";
-}
-
-template <typename T>
-bool is_close(T a, T b, double rtol = 1e-5, double atol = 1e-8) {
-  // std::cout << abs(a - b) << " <= " << (atol + rtol * abs(b)) << "? " <<
-  // (abs(a - b) <= (atol + rtol * abs(b))) << std::endl;
-  return abs(a - b) <= (atol + rtol * abs(b));
-}
-
-template <typename T> static void random_array(T *data, size_t count) {
-  std::uniform_real_distribution<T> distribution(-1000, 1000);
-  std::mt19937 engine;
-  auto generator = std::bind(distribution, engine);
-  for (size_t i = 0; i < count; ++i) {
-    data[i] = generator();
-  }
-}
-
-template <typename T> std::unique_ptr<T> random_array(size_t count) {
-  std::unique_ptr<T> data(new T[count]);
-  random_array(data.get(), count);
-  return data;
-}
-
-class TestEnvironment : public ::testing::Environment {
-  public:
-    // Initialise the ACCL instance.
-    virtual void SetUp() {
-      std::vector<rank_t> ranks;
-
-      if (options.config_file == "") {
-        ranks = generate_ranks(!options.hardware || options.axis3, rank, size,
-                              options.start_port, options.rxbuf_size);
-      } else {
-        ranks = generate_ranks(options.config_file, rank, options.start_port,
-                              options.rxbuf_size);
-      }
-
-      acclDesign design;
-      if (options.axis3) {
-        design = acclDesign::AXIS3x;
-      } else if (options.udp) {
-        design = acclDesign::UDP;
-      } else if (options.tcp) {
-        design = acclDesign::TCP;
-      } else if (options.roce) {
-        design = acclDesign::ROCE;
-      }
-
-      if (options.hardware || options.test_xrt_simulator) {
-        dev = xrt::device(options.device_index);
-      }
-
-      accl = initialize_accl(
-          ranks, rank, !options.hardware, design, dev, options.xclbin, options.rxbuf_count,
-          options.rxbuf_size, options.segment_size, options.rsfec);
-      std::cout << "Setting up TestEnvironment" << std::endl;
-      accl->set_timeout(1e6);
-    }
-
-    virtual void TearDown(){
-      accl.reset();
-    }
-};
-
-class ACCLTest : public ::testing::Test {
-protected:
-    virtual void SetUp() {
-      MPI_Barrier(MPI_COMM_WORLD);
-    }
-    virtual void TearDown() {
-      MPI_Barrier(MPI_COMM_WORLD);
-    }
-};
-
-class ACCLRootTest : public ACCLTest, public testing::WithParamInterface<int> {};
-class ACCLFuncTest : public ACCLTest, public testing::WithParamInterface<reduceFunction> {};
-class ACCLRootFuncTest : public ACCLTest, public testing::WithParamInterface<std::tuple<int, reduceFunction>> {};
 
 TEST_F(ACCLTest, test_copy){
   unsigned int count = options.count;
@@ -1075,25 +893,6 @@ INSTANTIATE_TEST_SUITE_P(rooted_reduction_tests, ACCLRootFuncTest,
   testing::Combine(testing::Range(0, size), testing::Values(reduceFunction::SUM, reduceFunction::MAX))
 );
 
-bool xrt_simulator_ready(const options_t &opts) {
-  if (opts.hardware) {
-    return true;
-  }
-
-  const char *vitis = std::getenv("XILINX_VITIS");
-
-  if (vitis == nullptr) {
-    return false;
-  }
-
-  const char *emu = std::getenv("XCL_EMULATION_MODE");
-  if (emu == nullptr) {
-    return false;
-  }
-
-  return std::string(emu) == "sw_emu" || std::string(emu) == "hw_emu";
-}
-
 options_t parse_options(int argc, char *argv[]) {
   TCLAP::CmdLine cmd("Test ACCL C++ driver");
   TCLAP::ValueArg<uint16_t> start_port_arg(
@@ -1133,6 +932,10 @@ options_t parse_options(int argc, char *argv[]) {
   cmd.add(config_arg);
   TCLAP::SwitchArg rsfec_arg("", "rsfec", "Enables RS-FEC in CMAC.", cmd, false);
   TCLAP::SwitchArg startemu_arg("", "startemu", "Start emulator processes locally.", cmd, false);
+  TCLAP::SwitchArg bench_arg("", "benchmark", "Enables benchmarking.", cmd, false);
+  TCLAP::ValueArg<std::string> csvfile_arg("", "csvfile",
+                                          "Name of CSV file to be created for benchmark results",
+                                          false, "", "string");
   try {
     cmd.parse(argc, argv);
     if (hardware_arg.getValue()) {
@@ -1169,6 +972,8 @@ options_t parse_options(int argc, char *argv[]) {
   opts.config_file = config_arg.getValue();
   opts.rsfec = rsfec_arg.getValue();
   opts.startemu = startemu_arg.getValue();
+  opts.benchmark = bench_arg.getValue();
+  opts.csvfile = csvfile_arg.getValue();
   return opts;
 }
 
@@ -1190,7 +995,7 @@ int main(int argc, char *argv[]) {
 
 
   if(options.startemu){
-    emulator_pid = start_emulator(options);
+    emulator_pid = start_emulator(options, size, rank);
     if(!emulator_is_running(emulator_pid)){
       std::cout << "Could not start emulator" << std::endl;
       return -1;

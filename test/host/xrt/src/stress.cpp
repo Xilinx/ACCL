@@ -16,112 +16,10 @@
 #
 *******************************************************************************/
 
-#include <accl.hpp>
-#include <accl_network_utils.hpp>
-#include <cstdlib>
-#include <experimental/xrt_ip.h>
-#include <fstream>
-#include <functional>
-#include <json/json.h>
-#include <mpi.h>
-#include <random>
-#include <sstream>
+#include <fixture.hpp>
+#include <utility.hpp>
+#include <iostream>
 #include <tclap/CmdLine.h>
-#include <vector>
-#include <xrt/xrt_device.h>
-#include <xrt/xrt_kernel.h>
-#include <gtest/gtest.h>
-
-using namespace ACCL;
-using namespace accl_network_utils;
-
-struct options_t {
-  int start_port;
-  unsigned int rxbuf_size;
-  unsigned int rxbuf_count;
-  unsigned int segment_size;
-  unsigned int count;
-  unsigned int device_index;
-  bool test_xrt_simulator;
-  bool debug;
-  bool hardware;
-  bool axis3;
-  bool udp;
-  bool tcp;
-  bool roce;
-  bool return_error;
-  bool rsfec;
-  std::string xclbin;
-  std::string config_file;
-};
-
-int rank, size;
-options_t options;
-xrt::device dev;
-std::unique_ptr<ACCL::ACCL> accl;
-
-void test_debug(std::string message, options_t &options) {
-  if (options.debug) {
-    std::cerr << message << std::endl;
-  }
-}
-
-std::string prepend_process() {
-  return "[process " + std::to_string(rank) + "] ";
-}
-
-class TestEnvironment : public ::testing::Environment {
-  public:
-    // Initialise the ACCL instance.
-    virtual void SetUp() {
-      std::vector<rank_t> ranks;
-
-      if (options.config_file == "") {
-        ranks = generate_ranks(!options.hardware || options.axis3, rank, size,
-                              options.start_port, options.rxbuf_size);
-      } else {
-        ranks = generate_ranks(options.config_file, rank, options.start_port,
-                              options.rxbuf_size);
-      }
-
-      acclDesign design;
-      if (options.axis3) {
-        design = acclDesign::AXIS3x;
-      } else if (options.udp) {
-        design = acclDesign::UDP;
-      } else if (options.tcp) {
-        design = acclDesign::TCP;
-      } else if (options.roce) {
-        design = acclDesign::ROCE;
-      }
-
-      if (options.hardware || options.test_xrt_simulator) {
-        dev = xrt::device(options.device_index);
-      }
-
-      accl = initialize_accl(
-          ranks, rank, !options.hardware, design, dev, options.xclbin, options.rxbuf_count,
-          options.rxbuf_size, options.segment_size, options.rsfec);
-      std::cout << "Setting up TestEnvironment" << std::endl;
-      accl->set_timeout(1e6);
-    }
-
-    virtual void TearDown(){
-      accl->deinit();
-      MPI_Finalize();
-    }
-
-};
-
-class ACCLTest : public ::testing::Test {
-protected:
-    virtual void SetUp() {
-      MPI_Barrier(MPI_COMM_WORLD);
-    }
-    virtual void TearDown() {
-      MPI_Barrier(MPI_COMM_WORLD);
-    }
-};
 
 TEST_F(ACCLTest, test_stress_sndrcv) {
   unsigned int count = options.count;
@@ -133,25 +31,6 @@ TEST_F(ACCLTest, test_stress_sndrcv) {
     accl->recv(*buf, count, prev_rank, 0, 0, true);
   }
   EXPECT_TRUE(true);
-}
-
-bool xrt_simulator_ready(const options_t &opts) {
-  if (opts.hardware) {
-    return true;
-  }
-
-  const char *vitis = std::getenv("XILINX_VITIS");
-
-  if (vitis == nullptr) {
-    return false;
-  }
-
-  const char *emu = std::getenv("XCL_EMULATION_MODE");
-  if (emu == nullptr) {
-    return false;
-  }
-
-  return std::string(emu) == "sw_emu" || std::string(emu) == "hw_emu";
 }
 
 options_t parse_options(int argc, char *argv[]) {
