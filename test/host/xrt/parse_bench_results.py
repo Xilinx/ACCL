@@ -53,17 +53,17 @@ def ideal_duration(opcode, world_size, msg_size_bits, fhz, rtt_s, bw_bps):
     elif(opcode == Opcode.BCAST):
         duration = (world_size-1)*(msg_size_bits/bw_bps)
     elif(opcode == Opcode.SCATTER):
-        duration = ((msg_size_bits/world_size)/bw_bps)
+        duration = (world_size-1)*(msg_size_bits/bw_bps)
     elif(opcode == Opcode.GATHER):
         duration = world_size*((rtt_s/2)+msg_size_bits/bw_bps)
     elif(opcode == Opcode.REDUCE):
         duration = world_size*((rtt_s/2)+msg_size_bits/bw_bps)
     elif(opcode == Opcode.ALLGATHER):
-        duration = (world_size-1)*((rtt_s/2)+(msg_size_bits/world_size)/bw_bps)
+        duration = (world_size-1)*((rtt_s/2)+(msg_size_bits)/bw_bps)
     elif(opcode == Opcode.ALLREDUCE):
         duration = 2*(world_size-1)*((rtt_s/2)+(msg_size_bits/world_size)/bw_bps)
     elif(opcode == Opcode.REDUCE_SCATTER):
-        duration = (world_size-1)*((rtt_s/2)+(msg_size_bits/world_size)/bw_bps)
+        duration = (world_size-1)*((rtt_s/2)+(msg_size_bits)/bw_bps)
     else:
         duration = 0
     return duration
