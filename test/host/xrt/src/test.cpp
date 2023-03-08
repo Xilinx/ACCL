@@ -808,7 +808,7 @@ TEST_P(ACCLFuncTest, test_reduce_scatter) {
   float res, ref;
   for (unsigned int i = 0; i < count; ++i) {
     res = (*res_buf)[i];
-    ref = (function == reduceFunction::MAX) ? (*op_buf)[i] : (*op_buf)[i] * size;
+    ref = (function == reduceFunction::MAX) ? (*op_buf)[i+rank*count] : (*op_buf)[i+rank*count] * size;
     EXPECT_EQ(res, ref);
   }
 }
@@ -835,7 +835,7 @@ TEST_P(ACCLFuncTest, test_reduce_scatter_compressed) {
   float res, ref;
   for (unsigned int i = 0; i < count; ++i) {
     res = (*res_buf)[i];
-    ref = (function == reduceFunction::MAX) ? (*op_buf)[i] : (*op_buf)[i] * size;
+    ref = (function == reduceFunction::MAX) ? (*op_buf)[i+rank*count] : (*op_buf)[i+rank*count] * size;
     EXPECT_TRUE(is_close(res, ref, FLOAT16RTOL, FLOAT16ATOL));
   }
 }

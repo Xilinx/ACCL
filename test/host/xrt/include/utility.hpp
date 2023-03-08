@@ -67,7 +67,7 @@ bool is_close(T a, T b, double rtol = 1e-5, double atol = 1e-8) {
 }
 
 template <typename T> static void random_array(T *data, size_t count) {
-  std::uniform_real_distribution<T> distribution(-1000, 1000);
+  std::uniform_real_distribution<T> distribution(-1, 1);
   std::mt19937 engine;
   auto generator = std::bind(distribution, engine);
   for (size_t i = 0; i < count; ++i) {
