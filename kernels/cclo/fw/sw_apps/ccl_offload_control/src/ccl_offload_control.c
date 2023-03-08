@@ -542,6 +542,7 @@ int broadcast(  unsigned int count,
         max_seg_count = max_segment_size / Xil_In32(arcfg_offset);
     }
 
+    int expected_ack_count = 0;
     while(elems_remaining > 0){
         //determine if we're sending or receiving
         if(src_rank == world.local_rank){
@@ -561,9 +562,12 @@ int broadcast(  unsigned int count,
                     buf_addr, 0, 0, 0, 0, 0,
                     0, 0, i, TAG_ANY
                 );
-            }
-            for(int i=0; i < world.size; i++){
-                err |= end_move();
+                expected_ack_count++;
+                //start flushing out ACKs so our pipes don't fill up
+                if(expected_ack_count > 8){
+                    err |= end_move();
+                    expected_ack_count--;
+                }
             }
         } else{
             //on non-root nodes we only care about ETH_COMPRESSED and RES_COMPRESSED
@@ -581,6 +585,10 @@ int broadcast(  unsigned int count,
             );
         }
         elems_remaining -= max_seg_count;
+    }
+    //flush remaining ACKs 
+    for(int i=0; i < expected_ack_count; i++){
+        err |= end_move();
     }
     return err;
 }
@@ -658,8 +666,6 @@ int gather( unsigned int count,
 
     next_in_ring = (world.local_rank + 1) % world.size;
     prev_in_ring = (world.local_rank + world.size - 1) % world.size;
-
-    //TODO: compute compression
 
     if(root_rank == world.local_rank){ //root ranks mainly receives
 

@@ -91,7 +91,7 @@ class ResultsParser:
             for opcode in Opcode:
                 try:
                     tmp_str = '\n\n' + opcode.name + '\n===========================\n\n'
-                    tmp_str += self.op_results[opcode].to_markdown(index=False, floatfmt=(".0f", ".2f", ".2f", ".2f", ".0f"))
+                    tmp_str += self.op_results[opcode].to_markdown(index=False, floatfmt=(".0f", ".2f", ".2f", ".2f", ".1f"))
                     f.write(tmp_str)
                 except:
                     continue
