@@ -956,7 +956,7 @@ int reduce_scatter(
             tmp_compression = compression | ((compression & ETH_COMPRESSED) >> 2);
             start_move(
                 MOVE_STRIDE, MOVE_ON_RECV, MOVE_IMMEDIATE,
-                tmp_compression, RES_LOCAL, 0,
+                tmp_compression, RES_LOCAL, func,
                 count,
                 comm_offset, arcfg_offset,
                 0, 0, dst_buf_addr, rel_stride, 0, 0,
@@ -1077,7 +1077,7 @@ int allreduce(
                 tmp_compression = compression | ((compression & ETH_COMPRESSED) >> 2);
                 start_move(
                     MOVE_STRIDE, MOVE_ON_RECV, MOVE_STRIDE,
-                    tmp_compression, RES_LOCAL, 0,
+                    tmp_compression, RES_LOCAL, func,
                     curr_count,
                     comm_offset, arcfg_offset,
                     0, 0, 0, rel_stride, 0, bulk_count * next_in_ring,
