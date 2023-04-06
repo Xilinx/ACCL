@@ -154,9 +154,7 @@ void StreamScan::set_xclbin(xrt::xclbin &xclbin_handle) {
   map();
 }
 
-xrt::xclbin &StreamScan::get_xclbin() { 
-  return xclbin_handle; 
-}
+xrt::xclbin &StreamScan::get_xclbin() { return xclbin_handle; }
 
 std::vector<StreamScan::ip_map> StreamScan::mapIPs(std::string start,
                                                    std::string end, bool arg,
@@ -221,6 +219,71 @@ std::vector<StreamScan::ip_map> StreamScan::mapIPs(std::string start,
   }
 
   return ip_mapping;
+}
+
+std::vector<std::string> StreamScan::findIPs(std::string desc, bool arg) {
+  std::vector<std::string> ips_found = {};
+
+  if (!arg) {
+    for (auto &ip : ips)
+      if (ip.second.name.find(desc) != std::string::npos)
+        if (ip.second.name.find(":") != std::string::npos)
+          ips_found.push_back(ip.second.name);
+
+  } else {
+    for (auto &arg : args)
+      if (arg.second.name.find(desc) != std::string::npos)
+        ips_found.push_back(ips[arg.second.ip_idx].name);
+  }
+
+  return ips_found;
+}
+
+std::vector<uint32_t> StreamScan::getIPbanks(std::string ip_name,
+                                             std::vector<std::string> args_desc,
+                                             bool inc_stream) {
+  std::vector<uint32_t> banks = {};
+
+  using IPMap = std::unordered_map<uint32_t, ip_type>;
+
+  auto is_ip = [&](IPMap::const_reference ip_entry) {
+    if (ip_entry.second.name.find(ip_name) != std::string::npos)
+      if (ip_entry.second.name.find(":") != std::string::npos)
+        return true;
+    return false;
+  };
+
+  auto result = std::find_if(ips.begin(), ips.end(), is_ip);
+
+  // if found an matching ip
+  if (result != ips.end()) {
+    std::string ip_name = result->second.name;
+    uint32_t ip_idx = result->second.idx;
+
+    // Evaluate all args
+    for (auto &arg : args) {
+      if (args_desc.size() != 0) {
+        bool eval = false;
+        for (auto &arg_desc : args_desc) {
+          if (arg.second.name.find(arg_desc) != std::string::npos) {
+            eval = true;
+          }
+        }
+        if (!eval) // if not present in desired arguments, skip
+          continue;
+      }
+      if (arg.second.ip_idx == ip_idx) {
+        if (!inc_stream && mems.find(arg.second.mem_idx) != mems.end())
+          continue;
+
+        if (std::find(banks.begin(), banks.end(), arg.second.mem_idx) ==
+            banks.end())
+          banks.push_back(arg.second.mem_idx);
+      }
+    }
+  }
+
+  return banks;
 }
 
 void StreamScan::dump_mem_section() {

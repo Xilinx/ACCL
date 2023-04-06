@@ -127,12 +127,38 @@ public:
    * otherwise, represents an IP substring
    * @param end Represents the IP substring of the path end
    * @param arg If set to true, \p start is an argument substring, otherwise, it
-   * is an IP substring
-   * @param max_steps maxing number of IP hoping
+   * is an IP substring, default is false
+   * @param max_steps maxing number of IP hoping, default is -1, which set max
+   * hops to infinity
    * @return std::vector<ip_map> Array with resulting IP to IP connections
    */
   std::vector<ip_map> mapIPs(std::string start, std::string end,
                              bool arg = false, int32_t max_steps = -1);
+
+  /**
+   * @brief Search for IPs that match the given description
+   *
+   * @param desc Substring that describe the IP or Argument description
+   * @param arg If set to true, \p desc is an argument substring, otherwise, it
+   * is an IP substring, default is false
+   * @return std::vector<std::string> Array with resulting IPs
+   */
+  std::vector<std::string> findIPs(std::string desc, bool arg = false);
+
+  /**
+   * @brief Gets the id of banks the IP connects to. This returns the banks in
+   * general, not in IP argument order
+   *
+   * @param ip_name Name of the IP to get connections
+   * @param args_desc If set, the resulting array will only display banks for
+   * the given args, default is empty array
+   * @param inc_stream If set, results will include stream_connect args banks,
+   * otherwise won't, default is false
+   * @return std::vector<uint32_t> List with the banks IP arguments connect to
+   */
+  std::vector<uint32_t> getIPbanks(std::string ip_name,
+                                   std::vector<std::string> args_desc = {},
+                                   bool inc_stream = false);
 
   /**
    * @brief Dumps information about the Memory Section of the xclbin xclf
