@@ -26,7 +26,7 @@ if (HAS_PARENT)
   set(XCLBIN_SCAN_INCLUDE_PATH ${CMAKE_CURRENT_LIST_DIR}/include PARENT_SCOPE)
 endif (HAS_PARENT)
 
-add_library(xclbin_scan SHARED src/xclbin_scan.cpp)
+add_library(xclbin_scan OBJECT src/xclbin_scan.cpp)
 
 target_include_directories(xclbin_scan PUBLIC ${XCLBIN_SCAN_INCLUDE_PATH})
 
@@ -38,7 +38,6 @@ endif ()
 target_link_directories(xclbin_scan PUBLIC $ENV{XILINX_XRT}/lib)
 target_link_libraries(xclbin_scan PUBLIC xrt_coreutil)
 target_include_directories(xclbin_scan PUBLIC $ENV{XILINX_XRT}/include)
-set_target_properties(xclbin_scan PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 if (XCLBIN_SCAN_DEBUG)
   target_compile_definitions(xclbin_scan PRIVATE XCLBIN_SCAN_DEBUG)
