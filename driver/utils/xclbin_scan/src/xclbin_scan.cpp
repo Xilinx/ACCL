@@ -19,7 +19,7 @@
 #include <iostream>
 #include <queue>
 
-#include "stream_scan.hpp"
+#include "xclbin_scan.hpp"
 
 namespace {
 std::string mem2str(int mem_type) {
@@ -55,15 +55,54 @@ std::string mem2str(int mem_type) {
  *
  */
 inline void log_debug(std::string debug) {
-#ifdef STREAM_SCAN_DEBUG
+#ifdef XCLBIN_SCAN_DEBUG
   std::cerr << debug << std::endl;
-#endif // STREAM_SCAN_DEBUG
+#endif // XCLBIN_SCAN_DEBUG
 }
 } // namespace
 
-namespace stream_scan {
+namespace xclbin_scan {
 
-StreamScan::XCLFSections::XCLFSections(xrt::xclbin &xclbin_handle) {
+static std::string transform_ip_name(std::string ip_name) {
+  // if ip name is in form of 'kernel:ip_name', we should return
+  // 'kernel:{ip_name}'
+  auto result = ip_name.find_first_of(':');
+
+  if (result != std::string::npos) {
+    ip_name.insert(ip_name.begin() + result + 1, '{');
+    ip_name.insert(ip_name.end(), '}');
+  }
+  return ip_name;
+}
+
+static std::string clean_substring(std::string substr) {
+  // if a search has to be done, and user passes substrings with '{' or '}', we
+  // should remove as the internal map does not contain those characters, one
+  // example could be searching for 'hostctrl:{hostctrl_0_0}', which is
+  // 'hostctrl:hostctrl_0_0' in the internal mapping
+  
+  // Remove '{'
+  while (true) {
+    auto result = substr.find_first_of('{');
+    if (result != std::string::npos)
+      substr.erase(substr.begin() + result);
+    else 
+      break;
+  }
+
+  // Remove '}'
+  while (true) {
+    auto result = substr.find_first_of('}');
+    if (result != std::string::npos)
+      substr.erase(substr.begin() + result);
+    else 
+      break;
+  }
+
+  return substr;
+}
+
+xclbinScan::xclfSections::xclfSections(xrt::xclbin &xclbin_handle) {
   ips_sec = xclbin_handle.get_axlf_section<const ip_layout *>(
       axlf_section_kind::IP_LAYOUT);
   con_sec = xclbin_handle.get_axlf_section<const connectivity *>(
@@ -74,7 +113,7 @@ StreamScan::XCLFSections::XCLFSections(xrt::xclbin &xclbin_handle) {
   log_debug("Xclbin file sections ready.");
 }
 
-void StreamScan::map() {
+void xclbinScan::map() {
   // Create ips map
   const ip_layout *ip_s = sections->ips_sec;
   for (uint32_t i = 0; i < ip_s->m_count; i++) {
@@ -128,39 +167,44 @@ void StreamScan::map() {
   log_debug("IP streaming connections mapped.");
 }
 
-StreamScan::StreamScan() : sections(nullptr) {}
+xclbinScan::xclbinScan() : sections(nullptr) {}
 
-StreamScan::StreamScan(std::string xclbin_path) {
+xclbinScan::xclbinScan(std::string xclbin_path) {
   xclbin_handle = xrt::xclbin(xclbin_path);
-  sections = new XCLFSections(xclbin_handle);
+  sections = new xclfSections(xclbin_handle);
   map();
 }
 
-StreamScan::StreamScan(xrt::xclbin &xclbin_handle)
+xclbinScan::xclbinScan(xrt::xclbin &xclbin_handle)
     : xclbin_handle(xclbin_handle) {
-  sections = new XCLFSections(xclbin_handle);
+  sections = new xclfSections(xclbin_handle);
   map();
 }
 
-void StreamScan::set_xclbin(std::string xclbin_path) {
+void xclbinScan::set_xclbin(std::string xclbin_path) {
   xclbin_handle = xrt::xclbin(xclbin_path);
-  sections = new XCLFSections(xclbin_handle);
+  sections = new xclfSections(xclbin_handle);
   map();
 }
 
-void StreamScan::set_xclbin(xrt::xclbin &xclbin_handle) {
+void xclbinScan::set_xclbin(xrt::xclbin &xclbin_handle) {
   xclbin_handle = xclbin_handle;
-  sections = new XCLFSections(xclbin_handle);
+  sections = new xclfSections(xclbin_handle);
   map();
 }
 
-xrt::xclbin &StreamScan::get_xclbin() { return xclbin_handle; }
+xrt::xclbin &xclbinScan::get_xclbin() { return xclbin_handle; }
 
-std::vector<StreamScan::ip_map> StreamScan::mapIPs(std::string start,
+std::vector<xclbinScan::ip_map> xclbinScan::mapIPs(std::string start,
                                                    std::string end, bool arg,
                                                    int32_t max_steps) {
+  // search cleaning
+  if (!arg)
+    start = clean_substring(start);
+  end = clean_substring(end);
+
   std::vector<int32_t> helper;
-  std::vector<StreamScan::ip_map> ip_mapping;
+  std::vector<xclbinScan::ip_map> ip_mapping;
 
   if (sections == nullptr) {
     log_debug("Sections were not initialized");
@@ -171,7 +215,7 @@ std::vector<StreamScan::ip_map> StreamScan::mapIPs(std::string start,
     for (auto &ip : ips) {
       if (ip.second.name.find(start) != std::string::npos) {
         if (ip.second.name.find(":") != std::string::npos) {
-          ip_mapping.push_back({.from = ip.second.name});
+          ip_mapping.push_back({.from = transform_ip_name(ip.second.name)});
           helper.push_back(ip.first);
         }
       }
@@ -179,7 +223,8 @@ std::vector<StreamScan::ip_map> StreamScan::mapIPs(std::string start,
   } else {
     for (auto &arg : args) {
       if (arg.second.name.find(start) != std::string::npos) {
-        ip_mapping.push_back({.from = ips[arg.second.ip_idx].name});
+        ip_mapping.push_back(
+            {.from = transform_ip_name(ips[arg.second.ip_idx].name)});
         helper.push_back(arg.second.ip_idx);
       }
     }
@@ -210,7 +255,7 @@ std::vector<StreamScan::ip_map> StreamScan::mapIPs(std::string start,
           ip_step.push(step + 1);
           if (entry.second->name.find(end) != std::string::npos) {
             if (entry.second->name.find(":") != std::string::npos) {
-              ip_mapping[i].to.push_back(entry.second->name);
+              ip_mapping[i].to.push_back(transform_ip_name(entry.second->name));
             }
           }
         }
@@ -221,27 +266,45 @@ std::vector<StreamScan::ip_map> StreamScan::mapIPs(std::string start,
   return ip_mapping;
 }
 
-std::vector<std::string> StreamScan::findIPs(std::string desc, bool arg) {
+std::vector<std::string> xclbinScan::findIPs(std::string desc, bool arg) {
+  // search cleaning
+  if (!arg)
+    desc = clean_substring(desc);
+
   std::vector<std::string> ips_found = {};
+  std::vector<bool> visited(ips.size(), false);
 
   if (!arg) {
-    for (auto &ip : ips)
-      if (ip.second.name.find(desc) != std::string::npos)
-        if (ip.second.name.find(":") != std::string::npos)
-          ips_found.push_back(ip.second.name);
-
+    for (auto &ip : ips) {
+      if (ip.second.name.find(desc) != std::string::npos) {
+        if (ip.second.name.find(":") != std::string::npos) {
+          if (!visited[ip.first]) {
+            ips_found.push_back(transform_ip_name(ip.second.name));
+            visited[ip.first] = true;
+          }
+        }
+      }
+    }
   } else {
-    for (auto &arg : args)
-      if (arg.second.name.find(desc) != std::string::npos)
-        ips_found.push_back(ips[arg.second.ip_idx].name);
+    for (auto &arg : args) {
+      if (arg.second.name.find(desc) != std::string::npos) {
+        if (!visited[arg.second.ip_idx]) {
+          ips_found.push_back(transform_ip_name(ips[arg.second.ip_idx].name));
+          visited[arg.second.ip_idx] = true;
+        }
+      }
+    }
   }
 
   return ips_found;
 }
 
-std::vector<uint32_t> StreamScan::getIPbanks(std::string ip_name,
+std::vector<uint32_t> xclbinScan::getIPbanks(std::string ip_name,
                                              std::vector<std::string> args_desc,
                                              bool inc_stream) {
+  // search cleaning
+  ip_name = clean_substring(ip_name);
+
   std::vector<uint32_t> banks = {};
 
   using IPMap = std::unordered_map<uint32_t, ip_type>;
@@ -286,7 +349,7 @@ std::vector<uint32_t> StreamScan::getIPbanks(std::string ip_name,
   return banks;
 }
 
-void StreamScan::dump_mem_section() {
+void xclbinScan::dump_mem_section() {
   if (sections == nullptr) {
     log_debug("Memory Topology section not read");
     return;
@@ -302,7 +365,7 @@ void StreamScan::dump_mem_section() {
   }
 }
 
-void StreamScan::dump_ips_section() {
+void xclbinScan::dump_ips_section() {
   if (sections == nullptr) {
     log_debug("IP Layout section not read");
     return;
@@ -318,7 +381,7 @@ void StreamScan::dump_ips_section() {
   }
 }
 
-void StreamScan::dump_con_section() {
+void xclbinScan::dump_con_section() {
   if (sections == nullptr) {
     log_debug("Connectivity section not read");
     return;
@@ -334,4 +397,4 @@ void StreamScan::dump_con_section() {
               << std::endl;
   }
 }
-} // namespace stream_scan
+} // namespace xclbin_scan

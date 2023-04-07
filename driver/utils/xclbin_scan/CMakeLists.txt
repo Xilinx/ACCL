@@ -21,27 +21,25 @@ cmake_minimum_required(VERSION 3.13)
 # (https://cmake.org/cmake/help/latest/variable/PROJECT_IS_TOP_LEVEL.html)
 get_directory_property(HAS_PARENT PARENT_DIRECTORY)
 
-project(STREAM_SCAN)
-
-set(STREAM_SCAN_INCLUDE_PATH ${CMAKE_CURRENT_LIST_DIR}/include)
+set(XCLBIN_SCAN_INCLUDE_PATH ${CMAKE_CURRENT_LIST_DIR}/include)
 if (HAS_PARENT)
-  set(STREAM_SCAN_INCLUDE_PATH ${CMAKE_CURRENT_LIST_DIR}/include PARENT_SCOPE)
+  set(XCLBIN_SCAN_INCLUDE_PATH ${CMAKE_CURRENT_LIST_DIR}/include PARENT_SCOPE)
 endif (HAS_PARENT)
 
-add_library(stream_scan SHARED src/stream_scan.cpp)
+add_library(xclbin_scan SHARED src/xclbin_scan.cpp)
 
-target_include_directories(stream_scan PUBLIC ${STREAM_SCAN_INCLUDE_PATH})
+target_include_directories(xclbin_scan PUBLIC ${XCLBIN_SCAN_INCLUDE_PATH})
 
 # XRT
 if (NOT EXISTS $ENV{XILINX_XRT})
   message(FATAL_ERROR "Xilinx XRT not found, make sure to source setup.sh")
 endif ()
 
-target_link_directories(stream_scan PUBLIC $ENV{XILINX_XRT}/lib)
-target_link_libraries(stream_scan PUBLIC xrt_coreutil)
-target_include_directories(stream_scan PUBLIC $ENV{XILINX_XRT}/include)
-set_target_properties(stream_scan PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_link_directories(xclbin_scan PUBLIC $ENV{XILINX_XRT}/lib)
+target_link_libraries(xclbin_scan PUBLIC xrt_coreutil)
+target_include_directories(xclbin_scan PUBLIC $ENV{XILINX_XRT}/include)
+set_target_properties(xclbin_scan PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-if (STREAM_SCAN_DEBUG)
-  target_compile_definitions(stream_scan PRIVATE STREAM_SCAN_DEBUG)
+if (XCLBIN_SCAN_DEBUG)
+  target_compile_definitions(xclbin_scan PRIVATE XCLBIN_SCAN_DEBUG)
 endif ()

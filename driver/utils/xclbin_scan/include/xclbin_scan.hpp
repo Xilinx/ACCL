@@ -21,20 +21,20 @@
 #include <unordered_map>
 #include <vector>
 
-namespace stream_scan {
+namespace xclbin_scan {
 
 /**
- * @brief Streaming Connectivity Scanning Class
+ * @brief XCLBIN inspection class
  *
  */
-class StreamScan {
+class xclbinScan {
 private:
-  struct XCLFSections {
+  struct xclfSections {
     const ip_layout *ips_sec;
     const connectivity *con_sec;
     const mem_topology *mem_sec;
 
-    XCLFSections(xrt::xclbin &xclbin_handle);
+    xclfSections(xrt::xclbin &xclbin_handle);
   };
 
   struct arg_type {
@@ -58,7 +58,7 @@ private:
 
 private:
   xrt::xclbin xclbin_handle;
-  XCLFSections *sections;
+  xclfSections *sections;
   std::unordered_map<uint32_t, ip_type> ips;
   std::unordered_map<uint32_t, mem_type> mems;
   std::unordered_map<uint32_t, arg_type> args;
@@ -77,25 +77,25 @@ public:
   };
 
   /**
-   * @brief Empty constructor for StreamScan class
+   * @brief Empty constructor for xclbinScan class
    *
    */
-  StreamScan();
+  xclbinScan();
 
   /**
-   * @brief Constructs StreamScan class from xclbin file path
+   * @brief Constructs xclbinScan class from xclbin file path
    *
    * @param xclbin_path Path to the xclbin file to be set as current xclbin file
    * handle
    */
-  StreamScan(std::string xclbin_path);
+  xclbinScan(std::string xclbin_path);
 
   /**
-   * @brief Constructs StreamScan class from an xclbin handle
+   * @brief Constructs xclbinScan class from an xclbin handle
    *
    * @param xclbin_handle Handle to become the current xclbin file handle
    */
-  StreamScan(xrt::xclbin &xclbin_handle);
+  xclbinScan(xrt::xclbin &xclbin_handle);
 
   /**
    * @brief Set the current xclbin file handle from xclbin file path
@@ -181,4 +181,4 @@ public:
    */
   void dump_con_section();
 };
-} // namespace stream_scan
+} // namespace xclbin_scan
