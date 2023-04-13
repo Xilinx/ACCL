@@ -53,6 +53,38 @@ inline int max(int x, int y){
     return x - ((x - y) & ((x - y) >> 31));
 }
 
+/*Function to determine rank relative to root*/
+inline unsigned int effective_rank(unsigned int rank, unsigned int size, unsigned int root){
+    return (rank + (size - root)) % size;
+}
+
+/*Function to determine absolute rank from effective rank*/
+inline unsigned int absolute_rank(unsigned int eff_rank, unsigned int size, unsigned int root){
+    return (eff_rank + root) % size;
+}
+
+/*Functions to determine neighbours in a ring*/
+inline unsigned int next_in_ring(unsigned int rank, unsigned int size){
+    return (rank + 1) % size;
+}
+
+inline unsigned int prev_in_ring(unsigned int rank, unsigned int size){
+    return (rank + size - 1) % size;
+}
+
+/*Functions to determine neighbours (leaves, roots) in a tree*/
+
+/*Can return larger than world.size if no leaf at this level*/
+inline unsigned int get_proximal_leaf_rank(unsigned int rank, unsigned int level){
+    return (rank + (1<<(level-1)));
+}
+
+/*Can return negative if there is no root at this level*/
+inline int get_proximal_root_rank(unsigned int rank, unsigned int level){
+    return (rank >> (level+1)) << (level+1);
+}
+
+
 //retrieves all the communicator
 static inline communicator find_comm(unsigned int adr){
 	communicator ret;
@@ -887,6 +919,83 @@ int reduce( unsigned int count,
     }
 }
 
+//performs a tree reduce into dst_addr
+//note that dst_addr is used on all ranks (not just root)
+//upon completion it contains full reduction result on the root
+//and partial reduction results elsewhere
+int reduce_tree( unsigned int count,
+            unsigned int func,
+            unsigned int root_rank,
+            uint64_t src_addr,
+            uint64_t dst_addr,
+            unsigned int comm_offset,
+            unsigned int arcfg_offset,
+            unsigned int compression,
+            unsigned int stream){
+
+    if(world.size == 1){
+        //corner-case copy for when running a single-node reduction
+        return copy(count, src_addr, dst_addr, arcfg_offset, compression, stream);
+    }
+
+    unsigned int nremaining = world.size;
+    unsigned int level = 0;
+    //rotate rank IDs such that root is zero, makes things easier
+    unsigned int eff_rank = effective_rank(world.local_rank, world.size, root_rank);
+    unsigned int proximal_root_eff_rank, proximal_leaf_eff_rank, proximal_root_abs_rank, proximal_leaf_abs_rank;
+    bool proximal_leaf_exists, proximal_root_exists;
+    bool is_leaf, is_transient_root, is_root, first_accumulation = true;
+
+    unsigned int err = NO_ERROR;
+
+    while(nremaining > 0){
+        //we maintain flags which tell us whether we're a root or a leaf in the tree.
+        //leaves send (S) and roots receive-reduce (RR)
+        //however, we can perform fused operations such as receive-reduce-send (RRS)
+        //to take advantage of this, we structure flags such that we can be 
+        //a root and a leaf simultaneously, i.e. a transient root, in which case we perform RRS 
+        is_leaf = (level == 0) && ((eff_rank % 2) != 0);// 1, 3, 5 etc
+        is_transient_root = (level > 0) && ((eff_rank % (1<<(level+1))) != 0);//at level 1 it's 2, 6, 10, etc, at level 2 it's 4, 12 etc
+        is_root = (level > 0) && !is_transient_root;//at level 1 it's 0, 4, 8, 12 etc, at level 2 it's 0, 8 etc
+        //rank identification (we need to know who's our leaf and who's our root at each level)
+        proximal_root_eff_rank = get_proximal_root_rank(eff_rank, level);
+        proximal_leaf_eff_rank = get_proximal_leaf_rank(eff_rank, level);
+        proximal_root_exists = (proximal_root_eff_rank >= 0) && (proximal_root_eff_rank < world.size);
+        proximal_leaf_exists = (proximal_leaf_eff_rank >= 0) && (proximal_leaf_eff_rank < world.size);
+        proximal_root_abs_rank = absolute_rank(proximal_root_eff_rank, world.size, root_rank);
+        proximal_leaf_abs_rank = absolute_rank(proximal_leaf_eff_rank, world.size, root_rank);
+        
+        if(is_leaf){
+            //send from src_addr (or stream) and we're done
+            return send(proximal_root_abs_rank, count, src_addr, comm_offset, arcfg_offset, TAG_ANY, compression, (stream & OP0_STREAM));
+        } else if(is_root){
+            if(proximal_leaf_exists){
+                //reduce into dst_addr
+                err |= fused_recv_reduce(proximal_leaf_abs_rank, count, func, first_accumulation ? src_addr : dst_addr, dst_addr, comm_offset, arcfg_offset, TAG_ANY, compression, first_accumulation ? (stream & OP0_STREAM) : ((nremaining == 1) ? (stream & RES_STREAM) : NO_STREAM));
+                first_accumulation = false;
+            }
+        } else if(is_transient_root){
+            if(proximal_leaf_exists){
+                //do RRS with leaf and spare buffer
+                err |= fused_recv_reduce_send(proximal_leaf_abs_rank, proximal_root_abs_rank, count, func, src_addr, comm_offset, arcfg_offset, TAG_ANY, compression, (stream & OP0_STREAM));
+            } else {
+                //just do a send from the spare buffer
+                err |= send(proximal_root_abs_rank, count, src_addr, comm_offset, arcfg_offset, TAG_ANY, compression, (stream & OP0_STREAM));
+            }
+            return err;
+        }
+        //nremaining = ceil(nremaining/2) but also go from 1 to 0
+        if(nremaining == 1){
+            nremaining = 0;
+        } else {
+            nremaining -= (nremaining >> 1);
+        }
+        //increment level
+        level++;
+    }
+    return err;
+}
+
 //reduce_scatter: (a,b,c), (1,2,3), (X,Y,Z) -> (a+1+X,,) (,b+2+Y,) (,,c+3+Z)
 //count == size of chunks
 int reduce_scatter(
@@ -1360,7 +1469,7 @@ void run() {
                 retval = gather(count, root_src_dst, op0_addr, res_addr, comm, datapath_cfg, compression_flags, stream_flags);
                 break;
             case ACCL_REDUCE:
-                retval = reduce(count, function, root_src_dst, op0_addr, res_addr, comm, datapath_cfg, compression_flags, stream_flags);
+                retval = reduce_tree(count, function, root_src_dst, op0_addr, res_addr, comm, datapath_cfg, compression_flags, stream_flags);
                 break;
             case ACCL_ALLGATHER:
                 retval = allgather(count, op0_addr, res_addr, comm, datapath_cfg, compression_flags, stream_flags);

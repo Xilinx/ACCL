@@ -45,6 +45,7 @@ def build_executable():
 def run_emulator(ranks: int, log_level: int, start_port: int, use_udp: bool, kernel_loopback: bool, debug: bool = False):
     env = os.environ.copy()
     processes = []
+    logfiles = []
     for r in range(ranks):
         args = [str(executable), '-s', str(ranks), '-r', str(r), '-l', str(log_level), '-p', str(start_port)]
         if use_udp:
@@ -52,7 +53,8 @@ def run_emulator(ranks: int, log_level: int, start_port: int, use_udp: bool, ker
         if kernel_loopback:
             args.append('-b')
         print(' '.join(args))
-        processes.append(subprocess.Popen(args, cwd=cwd, env=env, stderr=None if debug else subprocess.DEVNULL))
+        logfiles.append(open("stdout_rank_"+str(r)+".log", "w"))
+        processes.append(subprocess.Popen(args, cwd=cwd, env=env, stdout=logfiles[r], stderr=None if debug else subprocess.DEVNULL))
     # wait on processes
     try:
         for p in processes:
