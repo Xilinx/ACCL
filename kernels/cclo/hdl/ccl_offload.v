@@ -100,6 +100,71 @@ module ccl_offload
   input m_axi_1_wready,
   output [63:0] m_axi_1_wstrb,
   output m_axi_1_wvalid,
+`elsif DMA_EXTERNAL
+  output [511:0] m_axis_dma0_s2mm_tdata,
+  output [63:0] m_axis_dma0_s2mm_tkeep,
+  output m_axis_dma0_s2mm_tlast,
+  input m_axis_dma0_s2mm_tready,
+  output m_axis_dma0_s2mm_tvalid,
+
+  input [511:0] s_axis_dma0_mm2s_tdata,
+  input [63:0] s_axis_dma0_mm2s_tkeep,
+  input s_axis_dma0_mm2s_tlast,
+  output s_axis_dma0_mm2s_tready,
+  input s_axis_dma0_mm2s_tvalid,
+
+  output [511:0] m_axis_dma1_s2mm_tdata,
+  output [63:0] m_axis_dma1_s2mm_tkeep,
+  output m_axis_dma1_s2mm_tlast,
+  input m_axis_dma1_s2mm_tready,
+  output m_axis_dma1_s2mm_tvalid,
+
+  input [511:0] s_axis_dma1_mm2s_tdata,
+  input [63:0] s_axis_dma1_mm2s_tkeep,
+  input s_axis_dma1_mm2s_tlast,
+  output s_axis_dma1_mm2s_tready,
+  input s_axis_dma1_mm2s_tvalid,
+
+  output [103:0] m_axis_dma0_mm2s_cmd_tdata,
+  input m_axis_dma0_mm2s_cmd_tready,
+  output m_axis_dma0_mm2s_cmd_tvalid,
+
+  input [31:0] s_axis_dma0_mm2s_sts_tdata,
+  output s_axis_dma0_mm2s_sts_tready,
+  input s_axis_dma0_mm2s_sts_tvalid,
+  input [3:0] s_axis_dma0_mm2s_sts_tkeep,
+  input s_axis_dma0_mm2s_sts_tlast,
+
+  output [103:0] m_axis_dma0_s2mm_cmd_tdata,
+  input m_axis_dma0_s2mm_cmd_tready,
+  output m_axis_dma0_s2mm_cmd_tvalid,
+
+  input [31:0] s_axis_dma0_s2mm_sts_tdata,
+  output s_axis_dma0_s2mm_sts_tready,
+  input s_axis_dma0_s2mm_sts_tvalid,
+  input [3:0] s_axis_dma0_s2mm_sts_tkeep,
+  input s_axis_dma0_s2mm_sts_tlast,
+
+  output [103:0] m_axis_dma1_mm2s_cmd_tdata,
+  input m_axis_dma1_mm2s_cmd_tready,
+  output m_axis_dma1_mm2s_cmd_tvalid,
+
+  input [31:0] s_axis_dma1_mm2s_sts_tdata,
+  output s_axis_dma1_mm2s_sts_tready,
+  input s_axis_dma1_mm2s_sts_tvalid,
+  input [3:0] s_axis_dma1_mm2s_sts_tkeep,
+  input s_axis_dma1_mm2s_sts_tlast,
+
+  output [103:0] m_axis_dma1_s2mm_cmd_tdata,
+  input m_axis_dma1_s2mm_cmd_tready,
+  output m_axis_dma1_s2mm_cmd_tvalid,
+
+  input [31:0] s_axis_dma1_s2mm_sts_tdata,
+  output s_axis_dma1_s2mm_sts_tready,
+  input s_axis_dma1_s2mm_sts_tvalid,
+  input [3:0] s_axis_dma1_s2mm_sts_tkeep,
+  input s_axis_dma1_s2mm_sts_tlast,
+
 `endif
 
 `ifdef ARITH_ENABLE

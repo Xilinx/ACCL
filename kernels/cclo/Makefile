@@ -19,6 +19,7 @@ PLATFORM ?= xilinx_u280_xdma_201920_3
 HW_DEBUG ?= none
 STACK_TYPE ?= UDP
 EN_DMA ?= 1
+EN_EXT_DMA ?= 0
 EN_ARITH ?= 1
 EN_COMPRESS ?= 1
 EN_EXT_KRNL ?= 1
@@ -52,7 +53,7 @@ xsa: $(CCLO_XSA)
 
 $(CCLO_XSA): $(GEN_KERNEL_TCL) $(REBUILD_BD_TCL)
 	$(MAKE) -C hls/ DEVICE=$(FPGAPART)
-	vivado -mode batch -source $< -tclargs $(FPGAPART) $(HW_DEBUG) $(CCLO_XSA) $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) $(MB_DEBUG_LEVEL)
+	vivado -mode batch -source $< -tclargs $(FPGAPART) $(HW_DEBUG) $(CCLO_XSA) $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) $(MB_DEBUG_LEVEL) $(EN_EXT_DMA)
 
 OPTIMIZATION=3
 #valid values 0,1,2,3,s,g
@@ -87,16 +88,16 @@ $(CCLO_SIMDLL): tcl/generate_sim.tcl elf
 dcp: $(CCLO_DCP)
 
 $(CCLO_DCP): tcl/generate_dcp.tcl $(CCLO_ELF)
-	vivado -mode batch -source $< -tclargs $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) $(MB_DEBUG_LEVEL)
+	vivado -mode batch -source $< -tclargs $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) $(MB_DEBUG_LEVEL) $(EN_EXT_DMA)
 
 xo: $(CCLO_XO)
 
 ccl_offload.xml:
-	python3 gen_xml.py $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL)
+	python3 gen_xml.py $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) $(EN_EXT_DMA)
 
 $(CCLO_XO): tcl/generate_xo.tcl ccl_offload.xml $(CCLO_DCP)
 	rm -rf ccl_offload_ex/ccl_offload
-	vivado -mode batch -source $< -tclargs $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) $(MB_DEBUG_LEVEL)
+	vivado -mode batch -source $< -tclargs $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) $(MB_DEBUG_LEVEL) $(EN_EXT_DMA)
 
 clean:
 	$(MAKE) -C hls/ clean
