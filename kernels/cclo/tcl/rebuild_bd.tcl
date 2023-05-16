@@ -27,7 +27,7 @@
 # debugLevel - 0/1/2 - enables DEBUG/TRACE support for the control microblaze
 proc create_root_design { netStackType enableDMA enableArithmetic enableCompression enableExtKrnlStream debugLevel externalDMA } {
 
-  if { ( $enableDMA == 0 ) && ( $enableExtKrnlStream == 0) } {
+  if { ( $enableDMA == 0 ) && ( $externalDMA == 0) && ( $enableExtKrnlStream == 0) } {
       catch {common::send_gid_msg -severity "ERROR" "No data sources and sinks enabled, please enable either DMAs or Streams"}
       return
   }

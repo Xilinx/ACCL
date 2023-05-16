@@ -18,7 +18,7 @@
 PLATFORM ?= xilinx_u55c_gen3x16_xdma_3_202210_1
 # Supported Alveo platforms are:
 # U55C: xilinx_u55c_gen3x16_xdma_3_202210_1
-# U280: xilinx_u280_xdma_201920_3
+# U280: xilinx_u280_gen3x16_xdma_1_202211_1
 # U250: xilinx_u250_gen3x16_xdma_3_1_202020_1
 
 XSA := $(strip $(patsubst %.xpfm, % , $(shell basename $(PLATFORM))))
@@ -49,6 +49,7 @@ CMAC_TCP_XO=Vitis_with_100Gbps_TCP-IP/_x.hw.$(XSA)/cmac_krnl.xo
 ROCE_XO=HiveNet/network/roce_v2/hw/HiveNet/build/HiveNet_kernel_$(ETH_IF).xo
 ROCE_HBM_BANK=0
 XCLBIN=$(BUILD_DIR)/ccl_offload.xclbin
+CYT_BIT=Coyote/hw/build/bitstreams/cyt_top.bit
 
 HOSTCTRL_XO=../../kernels/plugins/hostctrl/hostctrl.xo
 CLIENT_ARB_XO=../../kernels/plugins/client_arbiter/client_arbiter.xo
@@ -87,6 +88,7 @@ else
 	$(error Unsupported PLATFORM)
 endif
 
+OUTPUT_PRODUCT := $(XCLBIN)
 CONFIGFILE := config/link_config_$(BOARD)_$(MODE).ini
 CONFIG := --config $(CONFIGFILE)
 ifeq (udp,$(MODE))
@@ -136,13 +138,18 @@ else ifeq (roce, $(MODE))
 	OTHER_XO = $(LOOPBACK_XO)
 	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/$(VNX)/Ethernet/post_sys_link.tcl
 	CCLO_STACK_TYPE = UDP
+else ifeq (coyote_tcp, $(MODE))
+	OTHER_XO = coyote_shell
+	CONFIG = -DFDEV_NAME=$(BOARD) -DEN_MEM=1 -DEN_STRM=1 -DEN_BPSS=1 -DEN_TCP_0=1
+	CCLO_STACK_TYPE = TCP
+	OUTPUT_PRODUCT = $(CYT_BIT)
 else
 	$(error Unsupported MODE)
 endif
 
 BUILD_DIR := link_$(MODE)_eth_$(ETH_IF)_debug_$(DEBUG)_$(XSA)
 
-all: $(XCLBIN)
+all: $(OUTPUT_PRODUCT)
 
 .PHONY: vnx
 vnx: $(CMAC_UDP_XO) $(UDP_XO)
@@ -161,6 +168,20 @@ $(CMAC_TCP_XO):
 
 $(TCP_DUMMY_XO):
 	$(MAKE) -C ../../kernels/plugins/dummy_tcp_stack DEVICE=$(FPGAPART) all
+
+.PHONY: coyote_shell
+coyote_shell: Coyote/hw/build/lynx/lynx.xpr
+
+Coyote/hw/build/lynx/lynx.xpr:
+	cd Coyote/hw && mkdir build && cd build && cmake .. $(CONFIG)
+	$(MAKE) -C Coyote/hw/build/ shell
+
+$(CYT_BIT): coyote_shell
+	$(MAKE) -C ../../kernels/cclo PLATFORM=$(PLATFORM) STACK_TYPE=$(CCLO_STACK_TYPE) MB_DEBUG_LEVEL=$(CCLO_MB_DEBUG_LEVEL) EN_DMA=0 EN_EXT_DMA=1
+	$(MAKE) -C ../../kernels/plugins PLATFORM=$(PLATFORM) DEBUG=$(DEBUG)
+	vivado -mode tcl -source tcl/coyote_tcp.tcl
+	cp hdl/coyote_tcp_top.sv Coyote/hw/build/lynx/hdl/config_0/user_logic_c0_0.sv
+	$(MAKE) -C Coyote/hw/build/ compile
 
 .PHONY: tcp_stack
 tcp_stack: $(TCP_XO)
