@@ -15,24 +15,30 @@
 #
 # *******************************************************************************/
 
-#pragma once
+#include "stream_segmenter.h"
 
-#include "accl_hls.h"
-
-typedef struct{
-	ap_uint<32> nwords;
-	ap_uint<16> dest;
-	bool emit_ack;
-	bool indeterminate_btt;
-} segmenter_cmd;
-
-void stream_segmenter(STREAM<stream_word > & in,
-			STREAM<stream_word > & out,
-			STREAM<segmenter_cmd > & cmd,
-			STREAM<ap_uint<32> > & sts);
+using namespace std;
 
 void dma2seg_cmd(STREAM<ap_uint<104> > & dma_cmd_in,
 			STREAM<ap_uint<104> > & dma_cmd_out,
-			STREAM<stream_word > & out,
-			STREAM<segmenter_cmd > & cmd,
-			STREAM<ap_uint<32> > & sts);
+			STREAM<segmenter_cmd > & seg_cmd){
+#pragma HLS INTERFACE axis register both port=dma_cmd_in
+#pragma HLS INTERFACE axis register both port=dma_cmd_out
+#pragma HLS INTERFACE axis register both port=seg_cmd
+#pragma HLS INTERFACE ap_ctrl_none port=return
+#pragma HLS PIPELINE II=1
+	segmenter_cmd cmd;
+	// get DMA command from upstream
+	ap_uint<104> dma_cmd = STREAM_READ(dma_cmd_in);
+	// forward the DMA command downstream
+	STREAM_WRITE(dma_cmd_out, dma_cmd);
+	// read the host bit
+	bool host = dma_cmd(103,103);
+	// get the count and convert to words
+	ap_uint<23> count_bytes = dma_cmd(22,0);
+	cmd.nwords = count_bytes(22,6) + (count_bytes(5,0) != 0);
+	cmd.dest = host;
+	cmd.emit_ack = false;
+	cmd.indeterminate_btt = true;
+	STREAM_WRITE(seg_cmd, cmd);
+}

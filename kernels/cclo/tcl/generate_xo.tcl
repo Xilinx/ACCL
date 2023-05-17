@@ -106,9 +106,9 @@ proc edit_core {core} {
         config_axi_if $core "m_axi_0" "ap_clk" 64 32 32
         config_axi_if $core "m_axi_1" "ap_clk" 64 32 32
     } elseif { $ext_dma == 1} {
-        config_axis_if $core "m_axis_dma0_s2mm" "ap_clk" 64 0 0 0 1 0 1 1
+        config_axis_if $core "m_axis_dma0_s2mm" "ap_clk" 64 0 0 8 1 0 1 1
         config_axis_if $core "s_axis_dma0_mm2s" "ap_clk" 64 0 0 0 1 0 1 1
-        config_axis_if $core "m_axis_dma1_s2mm" "ap_clk" 64 0 0 0 1 0 1 1
+        config_axis_if $core "m_axis_dma1_s2mm" "ap_clk" 64 0 0 8 1 0 1 1
         config_axis_if $core "s_axis_dma1_mm2s" "ap_clk" 64 0 0 0 1 0 1 1
         config_axis_if $core "m_axis_dma0_mm2s_cmd" "ap_clk" 13 0 0 0 1 0 0 0
         config_axis_if $core "s_axis_dma0_mm2s_sts" "ap_clk" 4 0 0 0 1 0 1 1

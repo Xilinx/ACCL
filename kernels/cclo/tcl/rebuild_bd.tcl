@@ -254,14 +254,35 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
     set interfaces "$interfaces:m_axis_dma0_s2mm_cmd:s_axis_dma0_s2mm_sts:m_axis_dma0_mm2s_cmd:s_axis_dma0_mm2s_sts"
     set interfaces "$interfaces:m_axis_dma1_s2mm_cmd:s_axis_dma1_s2mm_sts:m_axis_dma1_mm2s_cmd:s_axis_dma1_mm2s_sts"
   
-      # DMA connections
+    # Segmenters and FIFOs and segmenter command generators for outgoing DMA data
+    create_bd_cell -type ip -vlnv xilinx.com:hls:dma2seg_cmd:1.0 dma2segcmd_dmawr_0
+    create_bd_cell -type ip -vlnv xilinx.com:hls:stream_segmenter:1.0 stream_segmenter_dmawr_0
+    create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 segcmd_fifo_dmawr_0
+    set_property -dict [list CONFIG.FIFO_DEPTH {64} CONFIG.FIFO_MEMORY_TYPE {distributed}] [get_bd_cells segcmd_fifo_dmawr_0]
+    create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 data_fifo_dmawr_0
+    set_property -dict [list CONFIG.FIFO_DEPTH {64} CONFIG.FIFO_MEMORY_TYPE {distributed}] [get_bd_cells data_fifo_dmawr_0]
+
+    create_bd_cell -type ip -vlnv xilinx.com:hls:dma2seg_cmd:1.0 dma2segcmd_dmawr_1
+    create_bd_cell -type ip -vlnv xilinx.com:hls:stream_segmenter:1.0 stream_segmenter_dmawr_1
+    create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 segcmd_fifo_dmawr_1
+    set_property -dict [list CONFIG.FIFO_DEPTH {64} CONFIG.FIFO_MEMORY_TYPE {distributed}] [get_bd_cells segcmd_fifo_dmawr_1]
+    create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 data_fifo_dmawr_1
+    set_property -dict [list CONFIG.FIFO_DEPTH {64} CONFIG.FIFO_MEMORY_TYPE {distributed}] [get_bd_cells data_fifo_dmawr_1]
+
+    # DMA connections
     for {set i 0} {$i < 2} {incr i} {
       connect_bd_intf_net -intf_net dma${i}_rx_cmd [get_bd_intf_pins control/dma${i}_mm2s_cmd] [get_bd_intf_pins m_axis_dma${i}_mm2s_cmd]
       connect_bd_intf_net -intf_net dma${i}_rx_sts [get_bd_intf_pins control/dma${i}_mm2s_sts] [get_bd_intf_pins s_axis_dma${i}_mm2s_sts]
-      connect_bd_intf_net -intf_net dma${i}_tx_cmd [get_bd_intf_pins control/dma${i}_s2mm_cmd] [get_bd_intf_pins m_axis_dma${i}_s2mm_cmd]
+      connect_bd_intf_net -intf_net dma${i}_tx_cmd [get_bd_intf_pins control/dma${i}_s2mm_cmd] [get_bd_intf_pins dma2segcmd_dmawr_${i}/dma_cmd_in]
       connect_bd_intf_net -intf_net dma${i}_tx_sts [get_bd_intf_pins control/dma${i}_s2mm_sts] [get_bd_intf_pins s_axis_dma${i}_s2mm_sts]
+      connect_bd_intf_net [get_bd_intf_pins dma2segcmd_dmawr_${i}/dma_cmd_out] [get_bd_intf_pins m_axis_dma${i}_s2mm_cmd]
+      connect_bd_intf_net [get_bd_intf_pins dma2segcmd_dmawr_${i}/seg_cmd] [get_bd_intf_pins segcmd_fifo_dmawr_${i}/S_AXIS]
+      connect_bd_intf_net [get_bd_intf_pins segcmd_fifo_dmawr_${i}/M_AXIS] [get_bd_intf_pins stream_segmenter_dmawr_${i}/cmd]
+      connect_bd_intf_net [get_bd_intf_pins axis_switch_0/M0${i}_AXIS] [get_bd_intf_pins data_fifo_dmawr_${i}/S_AXIS]
+      connect_bd_intf_net [get_bd_intf_pins data_fifo_dmawr_${i}/M_AXIS] [get_bd_intf_pins stream_segmenter_dmawr_${i}/in_r]
+      connect_bd_intf_net [get_bd_intf_pins stream_segmenter_dmawr_${i}/out_r] [get_bd_intf_pins m_axis_dma${i}_s2mm]
     }
-  
+
     # Segmenters for DMA to Switch
     create_bd_cell -type ip -vlnv xilinx.com:hls:stream_segmenter:1.0 sseg_dma0_rd
     create_bd_cell -type ip -vlnv xilinx.com:hls:stream_segmenter:1.0 sseg_dma1_rd
@@ -272,13 +293,27 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
     connect_bd_intf_net [get_bd_intf_pins sseg_dma1_rd/out_r] [get_bd_intf_pins axis_switch_0/S01_AXIS]
     connect_bd_intf_net [get_bd_intf_pins sseg_dma0_rd/cmd] [get_bd_intf_pins control/dma0_rd_seg_cmd]
     connect_bd_intf_net [get_bd_intf_pins sseg_dma1_rd/cmd] [get_bd_intf_pins control/dma1_rd_seg_cmd]
-    connect_bd_intf_net [get_bd_intf_pins m_axis_dma1_s2mm] [get_bd_intf_pins axis_switch_0/M01_AXIS]
-    connect_bd_intf_net [get_bd_intf_pins m_axis_dma0_s2mm] [get_bd_intf_pins axis_switch_0/M00_AXIS]
   
     connect_bd_net [get_bd_ports ap_clk] \
+                   [get_bd_pins dma2segcmd_dmawr_0/ap_clk] \
+                   [get_bd_pins dma2segcmd_dmawr_1/ap_clk] \
+                   [get_bd_pins stream_segmenter_dmawr_0/ap_clk] \
+                   [get_bd_pins stream_segmenter_dmawr_1/ap_clk] \
+                   [get_bd_pins segcmd_fifo_dmawr_0/s_axis_aclk] \
+                   [get_bd_pins segcmd_fifo_dmawr_1/s_axis_aclk] \
+                   [get_bd_pins data_fifo_dmawr_0/s_axis_aclk] \
+                   [get_bd_pins data_fifo_dmawr_1/s_axis_aclk] \
                    [get_bd_pins sseg_dma0_rd/ap_clk] \
                    [get_bd_pins sseg_dma1_rd/ap_clk]
     connect_bd_net [get_bd_pins control/encore_aresetn] \
+                   [get_bd_pins dma2segcmd_dmawr_0/ap_rst_n] \
+                   [get_bd_pins dma2segcmd_dmawr_1/ap_rst_n] \
+                   [get_bd_pins stream_segmenter_dmawr_0/ap_rst_n] \
+                   [get_bd_pins stream_segmenter_dmawr_1/ap_rst_n] \
+                   [get_bd_pins segcmd_fifo_dmawr_0/s_axis_aresetn] \
+                   [get_bd_pins segcmd_fifo_dmawr_1/s_axis_aresetn] \
+                   [get_bd_pins data_fifo_dmawr_0/s_axis_aresetn] \
+                   [get_bd_pins data_fifo_dmawr_1/s_axis_aresetn] \
                    [get_bd_pins sseg_dma0_rd/ap_rst_n] \
                    [get_bd_pins sseg_dma1_rd/ap_rst_n]
   }
@@ -643,6 +678,7 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
   catch { move_bd_cells [get_bd_cells cclo] [get_bd_cells dma_1] }
   catch { move_bd_cells [get_bd_cells cclo] [get_bd_cells eth_tx_subsystem] }
   catch { move_bd_cells [get_bd_cells cclo] [get_bd_cells eth_rx_subsystem] }
+  catch { move_bd_cells [get_bd_cells cclo] [get_bd_cells *_dmawr_*] }
 
   validate_bd_design
   save_bd_design

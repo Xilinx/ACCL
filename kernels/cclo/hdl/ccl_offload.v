@@ -103,6 +103,7 @@ module ccl_offload
 `elsif DMA_EXTERNAL
   output [511:0] m_axis_dma0_s2mm_tdata,
   output [63:0] m_axis_dma0_s2mm_tkeep,
+  output [7:0] m_axis_dma0_s2mm_tdest,
   output m_axis_dma0_s2mm_tlast,
   input m_axis_dma0_s2mm_tready,
   output m_axis_dma0_s2mm_tvalid,
@@ -115,6 +116,7 @@ module ccl_offload
 
   output [511:0] m_axis_dma1_s2mm_tdata,
   output [63:0] m_axis_dma1_s2mm_tkeep,
+  output [7:0] m_axis_dma1_s2mm_tdest,
   output m_axis_dma1_s2mm_tlast,
   input m_axis_dma1_s2mm_tready,
   output m_axis_dma1_s2mm_tvalid,
