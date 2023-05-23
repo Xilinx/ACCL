@@ -203,13 +203,14 @@ void router_ack_execute(
 // break up a large transfer into DMA_MAX_BTT chunks
 void dma_cmd_execute(
     STREAM<datamover_instruction> &instruction,
-    STREAM<ap_uint<104> > &dma_cmd_channel,
+    STREAM<ap_axiu<104,0,0,DEST_WIDTH> > &dma_cmd_channel,
     STREAM<datamover_ack_instruction> &ack_instruction
 ) {
 #pragma HLS PIPELINE II=1 style=flp
     ap_uint<4> tag;
     ap_uint<32> ncommands;
     unsigned int btt;
+    ap_axiu<104,0,0,DEST_WIDTH> dma_cmd_word;
     axi::Command<64, 23> dma_cmd;
     datamover_instruction instr;
     datamover_ack_instruction ack_instr;
@@ -225,7 +226,10 @@ void dma_cmd_execute(
                 dma_cmd.length = btt;
                 dma_cmd.address = instr.addr;
                 dma_cmd.tag = tag;
-                STREAM_WRITE(dma_cmd_channel, dma_cmd);
+                dma_cmd_word.data = dma_cmd;
+                dma_cmd_word.last = 1;//always last
+                dma_cmd_word.dest = 0;//unused for now
+                STREAM_WRITE(dma_cmd_channel, dma_cmd_word);
                 //update state
                 instr.total_bytes -= btt;
                 tag++;
@@ -726,9 +730,9 @@ void dma_mover(
     STREAM<rxbuf_seek_result> &rxbuf_ack,
     STREAM<ap_uint<32> > &rxbuf_release_req,
     //interfaces to data movement engines
-    STREAM<ap_uint<104> > &dma0_read_cmd,
-    STREAM<ap_uint<104> > &dma1_read_cmd,
-    STREAM<ap_uint<104> > &dma1_write_cmd,
+    STREAM<ap_axiu<104,0,0,DEST_WIDTH> > &dma0_read_cmd,
+    STREAM<ap_axiu<104,0,0,DEST_WIDTH> > &dma1_read_cmd,
+    STREAM<ap_axiu<104,0,0,DEST_WIDTH> > &dma1_write_cmd,
     STREAM<ap_uint<32>> &dma0_read_sts,
     STREAM<ap_uint<32>> &dma1_read_sts,
     STREAM<ap_uint<32>> &dma1_write_sts,

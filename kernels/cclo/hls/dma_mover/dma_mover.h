@@ -123,9 +123,9 @@ void dma_mover(
     STREAM<rxbuf_seek_result> &rxbuf_ack,
     STREAM<ap_uint<32> > &rxbuf_release_req,
     //interfaces to data movement engines
-    STREAM<ap_uint<104> > &dma0_read_cmd,
-    STREAM<ap_uint<104> > &dma1_read_cmd,
-    STREAM<ap_uint<104> > &dma1_write_cmd,
+    STREAM<ap_axiu<104,0,0,DEST_WIDTH> > &dma0_read_cmd,
+    STREAM<ap_axiu<104,0,0,DEST_WIDTH> > &dma1_read_cmd,
+    STREAM<ap_axiu<104,0,0,DEST_WIDTH> > &dma1_write_cmd,
     STREAM<ap_uint<32> > &dma0_read_sts,
     STREAM<ap_uint<32> > &dma1_read_sts,
     STREAM<ap_uint<32> > &dma1_write_sts,

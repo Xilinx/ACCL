@@ -251,13 +251,15 @@ proc create_dma_infrastructure { dmaIndex } {
   create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 dma${dmaIndex}_s2mm_sts
 
   create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 fifo_dma${dmaIndex}_mm2s_cmd
-  set_property -dict [ list CONFIG.HAS_TLAST {0} CONFIG.TDATA_NUM_BYTES {13} CONFIG.FIFO_DEPTH {32} CONFIG.FIFO_MEMORY_TYPE {distributed}] [get_bd_cells fifo_dma${dmaIndex}_mm2s_cmd]
+  set_property -dict [list CONFIG.TDEST_WIDTH.VALUE_SRC USER] [get_bd_cells fifo_dma${dmaIndex}_mm2s_cmd]
+  set_property -dict [ list CONFIG.HAS_TLAST {1} CONFIG.TDEST_WIDTH {8} CONFIG.TDATA_NUM_BYTES {13} CONFIG.FIFO_DEPTH {32} CONFIG.FIFO_MEMORY_TYPE {distributed}] [get_bd_cells fifo_dma${dmaIndex}_mm2s_cmd]
   create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 fifo_dma${dmaIndex}_mm2s_sts
   set_property -dict [ list CONFIG.HAS_TLAST {1} CONFIG.TDATA_NUM_BYTES {4} CONFIG.FIFO_DEPTH {32} CONFIG.FIFO_MEMORY_TYPE {distributed}] [get_bd_cells fifo_dma${dmaIndex}_mm2s_sts]
   create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 fifo_dma${dmaIndex}_s2mm_cmd
-  set_property -dict [ list CONFIG.HAS_TLAST {1} CONFIG.TDATA_NUM_BYTES {13} CONFIG.FIFO_DEPTH {32} CONFIG.FIFO_MEMORY_TYPE {distributed}] [get_bd_cells fifo_dma${dmaIndex}_s2mm_cmd]
+  set_property -dict [list CONFIG.TDEST_WIDTH.VALUE_SRC USER] [get_bd_cells fifo_dma${dmaIndex}_s2mm_cmd]
+  set_property -dict [ list CONFIG.HAS_TLAST {1} CONFIG.TDEST_WIDTH {8} CONFIG.TDATA_NUM_BYTES {13} CONFIG.FIFO_DEPTH {32} CONFIG.FIFO_MEMORY_TYPE {distributed}] [get_bd_cells fifo_dma${dmaIndex}_s2mm_cmd]
   create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 fifo_dma${dmaIndex}_s2mm_sts
-  set_property -dict [ list CONFIG.HAS_TLAST {0} CONFIG.TDATA_NUM_BYTES {4} CONFIG.FIFO_DEPTH {32} CONFIG.FIFO_MEMORY_TYPE {distributed}] [get_bd_cells fifo_dma${dmaIndex}_s2mm_sts]
+  set_property -dict [ list CONFIG.HAS_TLAST {1} CONFIG.TDATA_NUM_BYTES {4} CONFIG.FIFO_DEPTH {32} CONFIG.FIFO_MEMORY_TYPE {distributed}] [get_bd_cells fifo_dma${dmaIndex}_s2mm_sts]
 
   connect_bd_intf_net [get_bd_intf_pins dma${dmaIndex}_mm2s_cmd] [get_bd_intf_pins fifo_dma${dmaIndex}_mm2s_cmd/M_AXIS]
   connect_bd_intf_net [get_bd_intf_pins dma${dmaIndex}_mm2s_sts] [get_bd_intf_pins fifo_dma${dmaIndex}_mm2s_sts/S_AXIS]

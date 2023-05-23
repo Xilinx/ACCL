@@ -31,8 +31,6 @@ void stream_segmenter(STREAM<stream_word > & in,
 			STREAM<segmenter_cmd > & cmd,
 			STREAM<ap_uint<32> > & sts);
 
-void dma2seg_cmd(STREAM<ap_uint<104> > & dma_cmd_in,
-			STREAM<ap_uint<104> > & dma_cmd_out,
-			STREAM<stream_word > & out,
-			STREAM<segmenter_cmd > & cmd,
-			STREAM<ap_uint<32> > & sts);
+void dma2seg_cmd(STREAM<ap_axiu<104,0,0,DEST_WIDTH>  > & dma_cmd_in,
+			STREAM<ap_axiu<104,0,0,DEST_WIDTH>  > & dma_cmd_out,
+			STREAM<segmenter_cmd > & cmd);

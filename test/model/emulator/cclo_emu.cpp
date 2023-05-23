@@ -55,8 +55,8 @@ namespace {
     Log logger;
 }
 
-void dma_read(vector<char> &mem, Stream<ap_uint<104> > &cmd, Stream<ap_uint<32> > &sts, Stream<stream_word > &rdata){
-    axi::Command<64, 23> command = axi::Command<64, 23>(cmd.Pop());
+void dma_read(vector<char> &mem, Stream<ap_axiu<104,0,0,DEST_WIDTH> > &cmd, Stream<ap_uint<32> > &sts, Stream<stream_word > &rdata){
+    axi::Command<64, 23> command = axi::Command<64, 23>(cmd.Pop().data);
     axi::Status status;
     stream_word tmp;
     logger << log_level::verbose << "DMA Read: Command popped. length: " << command.length << " offset: " << command.address << endl;
@@ -77,8 +77,8 @@ void dma_read(vector<char> &mem, Stream<ap_uint<104> > &cmd, Stream<ap_uint<32> 
     logger("DMA Read: Status pushed\n", log_level::verbose);
 }
 
-void dma_write(vector<char> &mem, Stream<ap_uint<104> > &cmd, Stream<ap_uint<32> > &sts, Stream<stream_word > &wdata){
-    axi::Command<64, 23> command = axi::Command<64, 23>(cmd.Pop());
+void dma_write(vector<char> &mem, Stream<ap_axiu<104,0,0,DEST_WIDTH> > &cmd, Stream<ap_uint<32> > &sts, Stream<stream_word > &wdata){
+    axi::Command<64, 23> command = axi::Command<64, 23>(cmd.Pop().data);
     axi::Status status;
     stream_word tmp;
     logger << log_level::verbose << "DMA Write: Command popped. length: " << command.length << " offset: " << command.address << endl;
@@ -269,8 +269,8 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsign
     Stream<stream_word > clane2_op("clane2_op");
     Stream<stream_word > clane2_res("clane2_res");
 
-    Stream<ap_uint<104>, 32> dma_write_cmd_int[2];
-    Stream<ap_uint<104>, 32> dma_read_cmd_int[2];
+    Stream<ap_axiu<104,0,0,DEST_WIDTH>, 32> dma_write_cmd_int[2];
+    Stream<ap_axiu<104,0,0,DEST_WIDTH>, 32> dma_read_cmd_int[2];
     Stream<ap_uint<32>, 32> dma_write_sts_int[2];
     Stream<ap_uint<32>, 32> dma_read_sts_int[2];
     Stream<stream_word > dma_read_data[2];
@@ -290,7 +290,7 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsign
     Stream<ap_uint<32>, 32> inflight_rxbuf;
     Stream<ap_uint<32>, 32> inflight_rxbuf_sess;
 
-    Stream<ap_uint<104>, 32> enq2sess_dma_cmd;
+    Stream<ap_axiu<104,0,0,DEST_WIDTH>, 32> enq2sess_dma_cmd;
     Stream<ap_uint<32>, 32> sess2deq_dma_sts;
 
     Stream<rxbuf_notification> eth_rx_notif;

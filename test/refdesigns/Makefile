@@ -17,6 +17,8 @@
 
 PLATFORM ?= xilinx_u55c_gen3x16_xdma_3_202210_1
 # Supported Alveo platforms are:
+# U50: xilinx_u50_gen3x16_xdma_5_202210_1
+# U200: xilinx_u200_gen3x16_xdma_2_202110_1
 # U55C: xilinx_u55c_gen3x16_xdma_3_202210_1
 # U280: xilinx_u280_gen3x16_xdma_1_202211_1
 # U250: xilinx_u250_gen3x16_xdma_3_1_202020_1
@@ -25,6 +27,8 @@ XSA := $(strip $(patsubst %.xpfm, % , $(shell basename $(PLATFORM))))
 DEBUG ?= none
 PROFILE ?= none
 MODE ?= tcp
+VPP_TARGET ?= hw
+USER_KERNEL ?= none
 FREQUENCY = 250
 CCLO_XO = ../../kernels/cclo/ccl_offload.xo
 CCLO_MB_DEBUG_LEVEL ?= 0
@@ -48,7 +52,6 @@ TCP_RX_BYPASS ?= 0
 CMAC_TCP_XO=Vitis_with_100Gbps_TCP-IP/_x.hw.$(XSA)/cmac_krnl.xo
 ROCE_XO=HiveNet/network/roce_v2/hw/HiveNet/build/HiveNet_kernel_$(ETH_IF).xo
 ROCE_HBM_BANK=0
-XCLBIN=$(BUILD_DIR)/ccl_offload.xclbin
 CYT_BIT=Coyote/hw/build/bitstreams/cyt_top.bit
 
 HOSTCTRL_XO=../../kernels/plugins/hostctrl/hostctrl.xo
@@ -84,13 +87,45 @@ else ifeq (u280,$(findstring u280, $(PLATFORM)))
 else ifeq (u55c,$(findstring u55c, $(PLATFORM)))
 	FPGAPART=xcu55c-fsvh2892-2L-e
 	BOARD=u55c
+else ifeq (u200,$(findstring u200, $(PLATFORM)))
+	FPGAPART=xcu200-fsgd2104-2-e
+	BOARD=u200
+else ifeq (u50,$(findstring u200, $(PLATFORM)))
+	FPGAPART=xcu50-fsvh2104-2-e
+	BOARD=u50
 else
 	$(error Unsupported PLATFORM)
 endif
 
+BUILD_DIR := link_$(MODE)_eth_$(ETH_IF)_debug_$(DEBUG)_$(XSA)
+XCLBIN=$(BUILD_DIR)/ccl_offload.xclbin
 OUTPUT_PRODUCT := $(XCLBIN)
-CONFIGFILE := config/link_config_$(BOARD)_$(MODE).ini
-CONFIG := --config $(CONFIGFILE)
+
+CONFIGFILE := link_config.ini
+VPP_CONFIG := -t $(VPP_TARGET) --config $(CONFIGFILE)
+
+ADV_CMD :=
+IPREPO_CMD :=
+OTHER_XO := $(CCLO_XO) $(HOSTCTRL_XO) $(CLIENT_ARB_XO) $(SUM_XO) $(COMPRESSION_XO) 
+
+GEN_CONFIG_FLAGS := 
+ifeq (vadd, $(USER_KERNEL))
+	GEN_CONFIG_FLAGS += --vadd
+	OTHER_XO += $(VADD_XO)
+else
+	OTHER_XO += $(LOOPBACK_XO)
+endif
+
+ifeq (hw_emu, $(VPP_TARGET))
+	VPP_CONFIG += -g
+	GEN_CONFIG_FLAGS += --hwemu
+endif
+
+ifeq (probe, $(DEBUG))
+	GEN_CONFIG_FLAGS += --probe
+	OTHER_XO += $(PROBE_XO)
+endif
+
 ifeq (udp,$(MODE))
 	ifeq (u50,$(findstring u50, $(PLATFORM)))
 		HLS_IP_FOLDER  = $(shell readlink -f ./$(NETLAYERHLS)/synthesis_results_HBM)
@@ -107,47 +142,40 @@ ifeq (udp,$(MODE))
 	ifeq (u280,$(findstring u280, $(PLATFORM)))
 		HLS_IP_FOLDER  = $(shell readlink -f ./$(NETLAYERHLS)/synthesis_results_HBM)
 	endif
-	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/$(VNX)/Ethernet/post_sys_link.tcl
-	NET_XO = $(CMAC_UDP_XO) $(UDP_XO)
-	OTHER_XO = $(LOOPBACK_XO)
-	CONFIG += --user_ip_repo_paths $(HLS_IP_FOLDER)
+	NET_XO = $(UDP_XO) $(CMAC_UDP_XO)
+	ADV_CMD += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/$(VNX)/Ethernet/post_sys_link.tcl
+	IPREPO_CMD += --user_ip_repo_paths $(HLS_IP_FOLDER)
 	CCLO_STACK_TYPE = UDP
 else ifeq (axis3x,$(MODE))
 	ETH_IF := none
 	NET_XO = $(TCP_DUMMY_XO)
-	OTHER_XO = $(LOOPBACK_XO) $(PROBE_XO)
-	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/tcl/post_sys_link_tri.tcl
-	CCLO_STACK_TYPE = TCP
-	CCLO_MB_DEBUG_LEVEL = 2
-else ifeq (axis3x_vadd,$(MODE))
-	ETH_IF := none
-	NET_XO = $(TCP_DUMMY_XO)
-	OTHER_XO = $(VADD_XO) $(PROBE_XO)
-	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/tcl/post_sys_link_tri.tcl
+	ADV_CMD += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/tcl/post_sys_link_tri.tcl
 	CCLO_STACK_TYPE = TCP
 	CCLO_MB_DEBUG_LEVEL = 2
 else ifeq (tcp, $(MODE))
 	CMAC_TCP_XO=Vitis_with_100Gbps_TCP-IP/_x.hw.$(XSA)/cmac_krnl.xo
-	NET_XO = $(TCP_XO) $(CMAC_TCP_XO)
-	OTHER_XO = $(LOOPBACK_XO)
-	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/Vitis_with_100Gbps_TCP-IP/scripts/post_sys_link.tcl
-	CONFIG += --user_ip_repo_paths Vitis_with_100Gbps_TCP-IP/build/fpga-network-stack/iprepo
+	NET_XO = $(TCP_XO)
+	NET_XO += $(CMAC_TCP_XO)
+	ADV_CMD += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/Vitis_with_100Gbps_TCP-IP/scripts/post_sys_link.tcl
+	OTHER_XO += $(LOOPBACK_XO)
+	IPREPO_CMD += --user_ip_repo_paths Vitis_with_100Gbps_TCP-IP/build/fpga-network-stack/iprepo
 	CCLO_STACK_TYPE = TCP
 else ifeq (roce, $(MODE))
 	NET_XO = $(ROCE_XO) $(CMAC_UDP_XO)
-	OTHER_XO = $(LOOPBACK_XO)
-	CONFIG += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/$(VNX)/Ethernet/post_sys_link.tcl
+	ADV_CMD += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/$(VNX)/Ethernet/post_sys_link.tcl
 	CCLO_STACK_TYPE = UDP
 else ifeq (coyote_tcp, $(MODE))
 	OTHER_XO = coyote_shell
-	CONFIG = -DFDEV_NAME=$(BOARD) -DEN_MEM=1 -DEN_STRM=1 -DEN_BPSS=1 -DEN_TCP_0=1
+	COYOTE_CONFIG = -DFDEV_NAME=$(BOARD) -DEN_MEM=1 -DEN_STRM=1 -DEN_BPSS=1 -DEN_TCP_0=1
 	CCLO_STACK_TYPE = TCP
 	OUTPUT_PRODUCT = $(CYT_BIT)
 else
 	$(error Unsupported MODE)
 endif
 
-BUILD_DIR := link_$(MODE)_eth_$(ETH_IF)_debug_$(DEBUG)_$(XSA)
+ifneq (none, $(ETH_IF))
+	GEN_CONFIG_FLAGS += --ethif $(ETH_IF)
+endif
 
 all: $(OUTPUT_PRODUCT)
 
@@ -173,7 +201,7 @@ $(TCP_DUMMY_XO):
 coyote_shell: Coyote/hw/build/lynx/lynx.xpr
 
 Coyote/hw/build/lynx/lynx.xpr:
-	cd Coyote/hw && mkdir build && cd build && cmake .. $(CONFIG)
+	cd Coyote/hw && mkdir build && cd build && cmake .. $(COYOTE_CONFIG)
 	$(MAKE) -C Coyote/hw/build/ shell
 
 $(CYT_BIT): coyote_shell
@@ -186,25 +214,22 @@ $(CYT_BIT): coyote_shell
 .PHONY: tcp_stack
 tcp_stack: $(TCP_XO)
 
-$(TCP_XO): tcp_stack_ips
-	git submodule update --init --recursive Vitis_with_100Gbps_TCP-IP
-	$(MAKE) -C Vitis_with_100Gbps_TCP-IP/ network_krnl DEVICE=$(PLATFORM) TEMP_DIR=_x.hw.$(XSA)/ XSA=$(XSA)
-
-$(ROCE_XO):
-	cd HiveNet/network/roce_v2/hw/HiveNet/src/ && vivado -mode batch -source HiveNet_bd.tcl -tclargs $(ETH_IF) $(ROCE_HBM_BANK) $(FPGAPART)
-
-.PHONY: tcp_stack_ips
-tcp_stack_ips:
+$(TCP_XO):
 	git submodule update --init --recursive Vitis_with_100Gbps_TCP-IP
 	mkdir -p Vitis_with_100Gbps_TCP-IP/build && \
 	cd Vitis_with_100Gbps_TCP-IP/build && \
 	cmake ../ -DFDEV_NAME=$(BOARD) -DVIVADO_HLS_ROOT_DIR=$(TCP_HLS_ROOTDIR) -DVIVADO_ROOT_DIR=$(TCP_VIVADO_ROOTDIR) -DTCP_STACK_EN=1 -DTCP_STACK_RX_DDR_BYPASS_EN=$(TCP_RX_BYPASS) -DDTCP_STACK_WINDOW_SCALING_EN=0
 	$(MAKE) -C Vitis_with_100Gbps_TCP-IP/build installip
+	$(MAKE) -C Vitis_with_100Gbps_TCP-IP/ network_krnl DEVICE=$(PLATFORM) TEMP_DIR=_x.hw.$(XSA)/ XSA=$(XSA)
 
-$(XCLBIN): $(NET_XO) $(CONFIGFILE)
+$(ROCE_XO):
+	cd HiveNet/network/roce_v2/hw/HiveNet/src/ && vivado -mode batch -source HiveNet_bd.tcl -tclargs $(ETH_IF) $(ROCE_HBM_BANK) $(FPGAPART)
+
+$(XCLBIN): $(NET_XO)
+	python3 gen_config.py --board $(BOARD) --poe $(MODE) $(GEN_CONFIG_FLAGS) -o $(CONFIGFILE)
 	$(MAKE) -C ../../kernels/cclo PLATFORM=$(PLATFORM) STACK_TYPE=$(CCLO_STACK_TYPE) MB_DEBUG_LEVEL=$(CCLO_MB_DEBUG_LEVEL)
 	$(MAKE) -C ../../kernels/plugins PLATFORM=$(PLATFORM) DEBUG=$(DEBUG)
-	v++ --link --platform $(PLATFORM) --kernel_frequency $(FREQUENCY) --save-temps --temp_dir $(BUILD_DIR) $(CONFIG) -o $@ $(CCLO_XO) $(HOSTCTRL_XO) $(CLIENT_ARB_XO) $(ARITHMETIC_XO) $(NET_XO) $(OTHER_XO)
+	v++ --link --platform $(PLATFORM) --kernel_frequency $(FREQUENCY) --save-temps --temp_dir $(BUILD_DIR) $(VPP_CONFIG) $(ADV_CMD) $(IPREPO_CMD) -o $@ $(NET_XO) $(OTHER_XO)
 
 .PHONY: distclean
 distclean:
