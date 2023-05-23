@@ -53,7 +53,7 @@ switch $command {
 
 open_project build_cyt_dma_adapter
 
-add_files cyt_dma_adapter.cpp -cflags "-std=c++14"
+add_files cyt_dma_adapter.cpp -cflags "-std=c++14 -I. -I../../../driver/hls/ -DACCL_SYNTHESIS"
 
 set_top cyt_dma_adapter
 

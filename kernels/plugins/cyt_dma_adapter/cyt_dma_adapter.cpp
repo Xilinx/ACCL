@@ -15,19 +15,12 @@
 #
 # *******************************************************************************/
 
-#include "ap_int.h"
-#include "hls_stream.h"
-#include "ap_axi_sdata.h"
+#include "cyt_dma_adapter.h"
 
 using namespace std;
 
-#define VADDR_BITS 48
-#define LEN_BITS 28
-#define DEST_BITS 4
-#define PID_BITS 6
-
 template <int DMA_CHANNEL>
-void dm_byp_cmd_converter(hls::stream<ap_uint<104>>& dm_cmd,
+void dm_byp_cmd_converter(hls::stream<ap_axiu<104,0,0,DEST_WIDTH>>& dm_cmd,
 							hls::stream<ap_uint<96>>& byp_cmd
 							)
 {
@@ -37,21 +30,22 @@ void dm_byp_cmd_converter(hls::stream<ap_uint<104>>& dm_cmd,
 	if (!dm_cmd.empty())
 	{
 		ap_uint<96> byp_cmd_word;
-		ap_uint<104> dm_cmd_word = dm_cmd.read();
+		ap_axiu<104,0,0,DEST_WIDTH> dm_cmd_with_dest = dm_cmd.read();
+		ap_uint<104> dm_cmd_word = dm_cmd_with_dest.data;
 
 		ap_uint<23> btt = dm_cmd_word(22,0);
 		ap_uint<64> saddr = dm_cmd_word(95,32);
-		ap_uint<3> tag = dm_cmd_word(99,96); // assuming tag field encodes the host stream/fpga stream information
+		ap_uint<3> tag = dm_cmd_with_dest.dest(2,0); // dest field encodes the host stream/fpga stream information
 
-		byp_cmd_word.range(VADDR_BITS-1,0) = saddr; //vaddr
-		byp_cmd_word.range(VADDR_BITS+LEN_BITS-1,VADDR_BITS) = btt; //len
-		byp_cmd_word.range(VADDR_BITS+LEN_BITS,VADDR_BITS+LEN_BITS) = tag; //strm
-		byp_cmd_word.range(VADDR_BITS+LEN_BITS+1,VADDR_BITS+LEN_BITS+1) = 0; //sync
-		byp_cmd_word.range(VADDR_BITS+LEN_BITS+2,VADDR_BITS+LEN_BITS+2) = 1; //ctl
-		byp_cmd_word.range(VADDR_BITS+LEN_BITS+3,VADDR_BITS+LEN_BITS+3) = 1; //host
-		byp_cmd_word.range(VADDR_BITS+LEN_BITS+4+DEST_BITS-1,VADDR_BITS+LEN_BITS+4) = DMA_CHANNEL; //dest
-		byp_cmd_word.range(VADDR_BITS+LEN_BITS+4+DEST_BITS+PID_BITS-1,VADDR_BITS+LEN_BITS+4+DEST_BITS) = 0; //pid
-		byp_cmd_word.range(95,VADDR_BITS+LEN_BITS+4+DEST_BITS+PID_BITS) = 0; //vfid+rsvd, disregard
+		byp_cmd_word.range(CYT_VADDR_BITS-1,0) = saddr; //vaddr
+		byp_cmd_word.range(CYT_VADDR_BITS+CYT_LEN_BITS-1,CYT_VADDR_BITS) = btt; //len
+		byp_cmd_word.range(CYT_VADDR_BITS+CYT_LEN_BITS,CYT_VADDR_BITS+CYT_LEN_BITS) = tag; //strm
+		byp_cmd_word.range(CYT_VADDR_BITS+CYT_LEN_BITS+1,CYT_VADDR_BITS+CYT_LEN_BITS+1) = 0; //sync
+		byp_cmd_word.range(CYT_VADDR_BITS+CYT_LEN_BITS+2,CYT_VADDR_BITS+CYT_LEN_BITS+2) = 1; //ctl
+		byp_cmd_word.range(CYT_VADDR_BITS+CYT_LEN_BITS+3,CYT_VADDR_BITS+CYT_LEN_BITS+3) = 1; //host
+		byp_cmd_word.range(CYT_VADDR_BITS+CYT_LEN_BITS+4+CYT_DEST_BITS-1,CYT_VADDR_BITS+CYT_LEN_BITS+4) = DMA_CHANNEL; //dest
+		byp_cmd_word.range(CYT_VADDR_BITS+CYT_LEN_BITS+4+CYT_DEST_BITS+CYT_PID_BITS-1,CYT_VADDR_BITS+CYT_LEN_BITS+4+CYT_DEST_BITS) = 0; //pid
+		byp_cmd_word.range(95,CYT_VADDR_BITS+CYT_LEN_BITS+4+CYT_DEST_BITS+CYT_PID_BITS) = 0; //vfid+rsvd, disregard
 		byp_cmd.write(byp_cmd_word);
 	}
 }
@@ -90,9 +84,9 @@ void byp_dm_sts_converter(hls::stream<ap_uint<16>> & byp_sts,
 	if (!byp_sts.empty())
 	{
 		ap_uint<16> byp_sts_word = byp_sts.read();
-		ap_uint<PID_BITS> pid = byp_sts_word(PID_BITS-1,0);
-		ap_uint<1> strm = byp_sts_word(PID_BITS,PID_BITS);
-		ap_uint<DEST_BITS> dest = byp_sts_word(DEST_BITS+PID_BITS,PID_BITS+1);
+		ap_uint<CYT_PID_BITS> pid = byp_sts_word(CYT_PID_BITS-1,0);
+		ap_uint<1> strm = byp_sts_word(CYT_PID_BITS,CYT_PID_BITS);
+		ap_uint<CYT_DEST_BITS> dest = byp_sts_word(CYT_DEST_BITS+CYT_PID_BITS,CYT_PID_BITS+1);
 
 		
 		ap_axiu<32,0,0,0> dm_sts_word;
@@ -120,10 +114,10 @@ void byp_dm_sts_converter(hls::stream<ap_uint<16>> & byp_sts,
 
 void cyt_dma_adapter(
 	//DM command streams
-	hls::stream<ap_uint<104>> &dma0_s2mm_cmd,
-	hls::stream<ap_uint<104>> &dma1_s2mm_cmd,
-	hls::stream<ap_uint<104>> &dma0_mm2s_cmd,
-	hls::stream<ap_uint<104>> &dma1_mm2s_cmd,
+	hls::stream<ap_axiu<104,0,0,DEST_WIDTH>> &dma0_s2mm_cmd,
+	hls::stream<ap_axiu<104,0,0,DEST_WIDTH>> &dma1_s2mm_cmd,
+	hls::stream<ap_axiu<104,0,0,DEST_WIDTH>> &dma0_mm2s_cmd,
+	hls::stream<ap_axiu<104,0,0,DEST_WIDTH>> &dma1_mm2s_cmd,
 	//DM status streams
 	hls::stream<ap_axiu<32,0,0,0>> &dma0_s2mm_sts,
 	hls::stream<ap_axiu<32,0,0,0>> &dma1_s2mm_sts,
