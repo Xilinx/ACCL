@@ -186,6 +186,12 @@
 #define OP0_STREAM 1
 #define RES_STREAM 2
 
+//flags as sent by the host indicating host-side operands
+#define NO_HOST  0
+#define OP0_HOST (1<<0)
+#define OP1_HOST (1<<1)
+#define RES_HOST (1<<2)
+
 typedef struct{
     uint64_t ptr; //actual byte pointer to the data
     unsigned int elem_ratio; //scaling factor

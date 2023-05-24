@@ -34,6 +34,11 @@ typedef struct {
     bool op0_is_compressed;
     bool op1_is_compressed;
     bool res_is_compressed;
+
+    bool op0_is_host;
+    bool op1_is_host;
+    bool res_is_host;
+
     ap_uint<4> func_id;//up to 16 functions
 
     //count
@@ -72,6 +77,7 @@ typedef struct{
 typedef struct{
     unsigned int total_bytes;
     ap_uint<64> addr;
+    ap_uint<DEST_WIDTH> mem_id;
     bool last = true;
 } datamover_instruction;
 

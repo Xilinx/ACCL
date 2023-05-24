@@ -181,6 +181,12 @@ static inline unsigned int segment(unsigned int number_of_bytes,unsigned int seg
     return  (number_of_bytes + segment_size - 1) / segment_size;
 }
 
+static inline uint32_t pack_flags(uint32_t compression_flags, uint32_t remote_flags, uint32_t host_flags){
+    uint32_t ret;
+    ret = ((host_flags & 0xff) << 16) | ((remote_flags & 0xff) << 8) | (compression_flags & 0xff);
+    return ret;
+}
+
 //configure datapath before calling this method
 //instructs the data plane to move data
 //use MOVE_IMMEDIATE
@@ -188,8 +194,7 @@ void start_move(
     uint32_t op0_opcode,
     uint32_t op1_opcode,
     uint32_t res_opcode,
-    uint32_t compression_flags,
-    uint32_t remote_flags,
+    uint32_t flags,
     uint32_t func_id,
     uint32_t count,
     uint32_t comm_offset,
@@ -210,6 +215,11 @@ void start_move(
     opcode |= op0_opcode;
     opcode |= op1_opcode << 3;
     opcode |= res_opcode << 6;
+    
+    uint32_t compression_flags = flags & 0xff;
+    uint32_t remote_flags = (flags>>8) & 0xff;
+    uint32_t host_flags = (flags>>16) & 0xff;
+
     opcode |= remote_flags << 9;
     bool res_is_remote = (remote_flags == RES_REMOTE);
     opcode |= (compression_flags & 0x7) << 10;//mask is to prevent ETH_COMPRESSED flag leaking into func_id
@@ -264,8 +274,7 @@ int move(
     uint32_t op0_opcode,
     uint32_t op1_opcode,
     uint32_t res_opcode,
-    uint32_t compression_flags,
-    uint32_t remote_flags,
+    uint32_t flags,
     uint32_t func_id,
     uint32_t count,
     uint32_t comm_offset,
@@ -283,7 +292,7 @@ int move(
 ){
     start_move(
         op0_opcode, op1_opcode, res_opcode,
-        compression_flags, remote_flags,
+        flags,
         func_id, count,
         comm_offset, arcfg_offset,
         op0_addr, op1_addr, res_addr,
@@ -301,12 +310,14 @@ static inline int copy(	unsigned int count,
                         uint64_t dst_addr,
                         unsigned int arcfg_offset,
                         unsigned int compression,
-                        unsigned int stream) {
+                        unsigned int buftype) {
+    unsigned int stream = buftype & 0xff;
+    unsigned int host = (buftype >> 8) & 0xff;
     return move(
         (stream & OP0_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE,
         MOVE_NONE,
         (stream & RES_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE,
-        compression, RES_LOCAL, 0,
+        pack_flags(compression, RES_LOCAL, host), 0,
         count, 0, arcfg_offset, src_addr, 0, dst_addr, 0, 0, 0,
         0, 0, 0, 0
     );
@@ -321,12 +332,14 @@ int combine(unsigned int count,
             uint64_t res_addr,
             unsigned int arcfg_offset,
             unsigned int compression,
-            unsigned int stream) {
+            unsigned int buftype) {
+    unsigned int stream = buftype & 0xff;
+    unsigned int host = (buftype >> 8) & 0xff;
     return move(
         (stream & OP0_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE,
         MOVE_IMMEDIATE,
         (stream & RES_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE,
-        compression, RES_LOCAL, function,
+        pack_flags(compression, RES_LOCAL, host), function,
         count, 0, arcfg_offset, op0_addr, op1_addr, res_addr, 0, 0, 0,
         0, 0, 0, 0
     );
@@ -342,8 +355,10 @@ int send(
     unsigned int arcfg_offset,
     unsigned int dst_tag,
     unsigned int compression,
-    unsigned int stream
+    unsigned int buftype
 ) {
+    unsigned int stream = buftype & 0xff;
+    unsigned int host = (buftype >> 8) & 0xff;
     //if ETH_COMPRESSED is set, also set RES_COMPRESSED
     compression |= (compression & ETH_COMPRESSED) >> 1;
     //TODO: when doing a one-sided send to a remote stream, check:
@@ -354,8 +369,8 @@ int send(
         (stream & OP0_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE,
         MOVE_NONE,
         (stream & RES_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE,
-        compression, (dst_rank == world.local_rank) ? RES_LOCAL : RES_REMOTE, 0,
-        count, comm_offset, arcfg_offset, src_addr, 0, 0, 0, 0, 0,
+        pack_flags(compression, (dst_rank == world.local_rank) ? RES_LOCAL : RES_REMOTE, host),
+        0, count, comm_offset, arcfg_offset, src_addr, 0, 0, 0, 0, 0,
         0, 0, dst_rank, dst_tag
     );
 }
@@ -370,16 +385,18 @@ int recv(
     unsigned int arcfg_offset,
     unsigned int src_tag,
     unsigned int compression,
-    unsigned int stream
+    unsigned int buftype
 ) {
+    unsigned int stream = buftype & 0xff;
+    unsigned int host = (buftype >> 8) & 0xff;
     //if ETH_COMPRESSED is set, also set OP1_COMPRESSED
     compression |= (compression & ETH_COMPRESSED) >> 2;
     return move(
         MOVE_NONE,
         MOVE_ON_RECV,
         (stream & RES_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE,
-        compression, RES_LOCAL, 0,
-        count, comm_offset, arcfg_offset, 0, 0, dst_addr, 0, 0, 0,
+        pack_flags(compression, RES_LOCAL, host),
+        0, count, comm_offset, arcfg_offset, 0, 0, dst_addr, 0, 0, 0,
         src_rank, src_tag, 0, (stream & RES_STREAM) ? src_tag : 0
     );
 }
@@ -452,8 +469,10 @@ int fused_recv_reduce(
         unsigned int arcfg_offset,
         unsigned int src_tag,
         unsigned int compression,
-        unsigned int stream)
-    {
+        unsigned int buftype
+){
+    unsigned int stream = buftype & 0xff;
+    unsigned int host = (buftype >> 8) & 0xff;
     unsigned int err = NO_ERROR;
 
     //figure out compression
@@ -465,8 +484,8 @@ int fused_recv_reduce(
         (stream & OP0_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE,
         MOVE_ON_RECV,
         (stream & RES_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE,
-        compression, RES_LOCAL, func,
-        count,
+        pack_flags(compression, RES_LOCAL, host),
+        func, count,
         comm_offset, arcfg_offset,
         op0_addr, 0, dst_addr, 0, 0, 0,
         src_rank, src_tag, 0, 0
@@ -489,9 +508,10 @@ int fused_recv_reduce_send(
         unsigned int arcfg_offset,
         unsigned int mpi_tag,
         unsigned int compression,
-        unsigned int stream)
-    {
-
+        unsigned int buftype
+){
+    unsigned int stream = buftype & 0xff;
+    unsigned int host = (buftype >> 8) & 0xff;
     unsigned int err = NO_ERROR;
 
     //figure out compression
@@ -504,8 +524,8 @@ int fused_recv_reduce_send(
         (stream & OP0_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE,
         MOVE_ON_RECV,
         MOVE_IMMEDIATE,
-        compression, RES_REMOTE, func,
-        count,
+        pack_flags(compression, RES_REMOTE, host),
+        func, count,
         comm_offset, arcfg_offset,
         op0_addr, 0, 0, 0, 0, 0,
         src_rank, mpi_tag, dst_rank, mpi_tag
@@ -525,8 +545,9 @@ int broadcast(  unsigned int count,
                 unsigned int comm_offset,
                 unsigned int arcfg_offset,
                 unsigned int compression,
-                unsigned int stream){
-
+                unsigned int buftype){
+    unsigned int stream = buftype & 0xff;
+    unsigned int host = (buftype >> 8) & 0xff;
     int err = NO_ERROR;
     unsigned int max_seg_count;
     int elems_remaining = count;
@@ -556,7 +577,8 @@ int broadcast(  unsigned int count,
                     (i==0) ? ((elems_remaining == count) ? MOVE_IMMEDIATE : MOVE_INCREMENT) : MOVE_REPEAT,
                     MOVE_NONE,
                     MOVE_IMMEDIATE,
-                    compression, RES_REMOTE, 0,
+                    pack_flags(compression, RES_REMOTE, host & OP0_HOST),
+                    0, 
                     (i == src_rank) ? 0 : min(max_seg_count, elems_remaining),
                     comm_offset, arcfg_offset,
                     buf_addr, 0, 0, 0, 0, 0,
@@ -577,7 +599,8 @@ int broadcast(  unsigned int count,
                 MOVE_NONE,
                 MOVE_ON_RECV,
                 (elems_remaining == count) ? MOVE_IMMEDIATE : MOVE_INCREMENT,
-                compression, RES_LOCAL, 0,
+                pack_flags(compression, RES_LOCAL, host & RES_HOST),
+                0,
                 min(max_seg_count, elems_remaining),
                 comm_offset, arcfg_offset,
                 0, 0, buf_addr, 0, 0, 0,
@@ -602,8 +625,10 @@ int scatter(unsigned int count,
             unsigned int comm_offset,
             unsigned int arcfg_offset,
             unsigned int compression,
-            unsigned int stream){
+            unsigned int buftype){
 
+    unsigned int stream = buftype & 0xff;
+    unsigned int host = (buftype >> 8) & 0xff;
     //TODO: implement segmentation
     //TODO: scattering from/to stream
 
@@ -620,7 +645,8 @@ int scatter(unsigned int count,
                 (i==0) ? MOVE_IMMEDIATE : MOVE_INCREMENT,
                 MOVE_NONE,
                 MOVE_IMMEDIATE,
-                compression, (i==src_rank) ? RES_LOCAL : RES_REMOTE, 0,
+                pack_flags(compression, (i==src_rank) ? RES_LOCAL : RES_REMOTE, host & OP0_HOST),
+                0,
                 count,
                 comm_offset, arcfg_offset,
                 src_buf_addr, 0, dst_buf_addr, 0, 0, 0,
@@ -638,7 +664,8 @@ int scatter(unsigned int count,
             MOVE_NONE,
             MOVE_ON_RECV,
             MOVE_IMMEDIATE,
-            compression, RES_LOCAL, 0,
+            pack_flags(compression, RES_LOCAL, host & RES_HOST),
+            0,
             count,
             comm_offset, arcfg_offset,
             0, 0, dst_buf_addr, 0, 0, 0,
@@ -659,7 +686,9 @@ int gather( unsigned int count,
             unsigned int comm_offset,
             unsigned int arcfg_offset,
             unsigned int compression,
-            unsigned int stream){
+            unsigned int buftype){
+    unsigned int stream = buftype & 0xff;
+    unsigned int host = (buftype >> 8) & 0xff;
     uint64_t tmp_buf_addr;
     unsigned int i, curr_pos, next_in_ring, prev_in_ring, number_of_shift;
     int err = NO_ERROR;
@@ -680,7 +709,8 @@ int gather( unsigned int count,
             MOVE_NONE,
             MOVE_NONE,
             MOVE_IMMEDIATE,
-            NO_COMPRESSION, RES_LOCAL, NO_STREAM,
+            pack_flags(NO_COMPRESSION, RES_LOCAL, NO_HOST),
+            0,
             0,
             comm_offset, arcfg_offset,
             0, 0, dst_buf_addr, 0, 0, 0,
@@ -694,7 +724,8 @@ int gather( unsigned int count,
                 (i==0) ? MOVE_IMMEDIATE : MOVE_NONE,
                 (i==0) ? MOVE_NONE : MOVE_ON_RECV,
                 MOVE_STRIDE,
-                (i==0) ? copy_compression : recv_compression, RES_LOCAL, NO_STREAM,
+                pack_flags((i==0) ? copy_compression : recv_compression, RES_LOCAL, host),
+                0,
                 count,
                 comm_offset, arcfg_offset,
                 src_buf_addr, 0, 0, 0, 0, count*((i==0) ? curr_pos : ((curr_pos==(world.size-1)) ? (world.size-1) : -1)),
@@ -721,7 +752,8 @@ int gather( unsigned int count,
             MOVE_IMMEDIATE,
             MOVE_NONE,
             MOVE_IMMEDIATE,
-            send_compression, RES_REMOTE, NO_STREAM,
+            pack_flags(send_compression, RES_REMOTE, host),
+            0,
             count,
             comm_offset, arcfg_offset,
             src_buf_addr, 0, 0, 0, 0, 0,
@@ -734,7 +766,8 @@ int gather( unsigned int count,
                 MOVE_NONE,
                 MOVE_ON_RECV,
                 MOVE_IMMEDIATE,
-                relay_compression, RES_REMOTE, NO_STREAM,
+                pack_flags(relay_compression, RES_REMOTE, NO_HOST),
+                0,
                 count,
                 comm_offset, arcfg_offset,
                 0, 0, 0, 0, 0, 0,
@@ -756,8 +789,10 @@ int allgather(
     unsigned int comm_offset,
     unsigned int arcfg_offset,
     unsigned int compression,
-    unsigned int stream
+    unsigned int buftype
 ){
+    unsigned int stream = buftype & 0xff;
+    unsigned int host = (buftype >> 8) & 0xff;
     int i, curr_pos, rel_stride, abs_stride, next_in_ring, prev_in_ring;
     int err = NO_ERROR;
 
@@ -773,7 +808,8 @@ int allgather(
     //prime the address slot for the destination, so we can subsequently stride against it
     start_move(
         MOVE_NONE, MOVE_NONE, MOVE_IMMEDIATE,
-        NO_COMPRESSION, RES_LOCAL, 0,
+        pack_flags(NO_COMPRESSION, RES_LOCAL, NO_HOST),
+        0,
         0,
         0, arcfg_offset,
         src_buf_addr, 0, dst_buf_addr, 0, 0, 0,
@@ -783,7 +819,8 @@ int allgather(
     //copy our local data into the appropriate destination slot
     start_move(
         MOVE_IMMEDIATE, MOVE_NONE, MOVE_STRIDE,
-        compression, RES_LOCAL, 0,
+        pack_flags(compression, RES_LOCAL, host),
+        0,
         count,
         0, arcfg_offset,
         src_buf_addr, 0, 0, 0, 0, count*world.local_rank,
@@ -794,7 +831,8 @@ int allgather(
     //ETH_COMPRESSED flag overwrites RES_COMPRESSED
     start_move(
         MOVE_IMMEDIATE, MOVE_NONE, MOVE_IMMEDIATE,
-        compression | ((compression & ETH_COMPRESSED) >> 1), RES_REMOTE, 0,
+        pack_flags(compression | ((compression & ETH_COMPRESSED) >> 1), RES_REMOTE, host),
+        0,
         count,
         comm_offset, arcfg_offset,
         src_buf_addr, 0, 0, 0, 0, 0,
@@ -818,7 +856,8 @@ int allgather(
         // on compression: ETH_COMPRESSED flag overwrites OP1_COMPRESSED
         err |= move(
             MOVE_NONE, MOVE_ON_RECV, MOVE_STRIDE,
-            compression | ((compression & ETH_COMPRESSED) >> 2), RES_LOCAL, 0,
+            pack_flags(compression | ((compression & ETH_COMPRESSED) >> 2), RES_LOCAL, host & RES_HOST),
+            0,
             count,
             comm_offset, arcfg_offset,
             0, 0, 0, 0, 0, rel_stride,
@@ -829,7 +868,8 @@ int allgather(
             //first prime the address
             start_move(
                 MOVE_NONE, MOVE_IMMEDIATE, MOVE_NONE,
-                NO_COMPRESSION, RES_REMOTE, 0,
+                pack_flags(NO_COMPRESSION, RES_REMOTE, NO_HOST),
+                0,
                 0,
                 comm_offset, arcfg_offset,
                 0, dst_buf_addr, 0, 0, 0, 0,
@@ -841,7 +881,8 @@ int allgather(
             //ETH_COMPRESSED flag overwrites RES_COMPRESSED
             start_move(
                 MOVE_NONE, MOVE_STRIDE, MOVE_IMMEDIATE,
-                ((compression & RES_COMPRESSED) >> 2) | ((compression & ETH_COMPRESSED) >> 1), RES_REMOTE, 0,
+                pack_flags(((compression & RES_COMPRESSED) >> 2) | ((compression & ETH_COMPRESSED) >> 1), RES_REMOTE, host),
+                0,
                 count,
                 comm_offset, arcfg_offset,
                 0, 0, 0, 0, abs_stride, 0,
@@ -867,23 +908,24 @@ int reduce( unsigned int count,
             unsigned int comm_offset,
             unsigned int arcfg_offset,
             unsigned int compression,
-            unsigned int stream){
-
+            unsigned int buftype){
+    unsigned int stream = buftype & 0xff;
+    unsigned int host = (buftype >> 8) & 0xff;
     unsigned int next_in_ring = (world.local_rank + 1) % world.size;
     unsigned int prev_in_ring = (world.local_rank + world.size-1) % world.size;
 
     if(world.size == 1){
         //corner-case copy for when running a single-node reduction
-        return copy(count, src_addr, dst_addr, arcfg_offset, compression, stream);
+        return copy(count, src_addr, dst_addr, arcfg_offset, compression, buftype);
     }else if( prev_in_ring == root_rank){
-        //non root ranks immediately after the root sends; only OP0_STREAM flag is relevant here
-        return send(next_in_ring, count, src_addr, comm_offset, arcfg_offset, TAG_ANY, compression, (stream & OP0_STREAM));
+        //non root ranks immediately after the root sends; only OP0_STREAM and OP0_HOST flags are relevant here
+        return send(next_in_ring, count, src_addr, comm_offset, arcfg_offset, TAG_ANY, compression, ((host & OP0_HOST) << 8) | (stream & OP0_STREAM));
     }else if (world.local_rank != root_rank){
         //non root ranks sends their data + data received from previous rank to the next rank in sequence as a daisy chain; only OP0_STREAM flag is relevant here
-        return fused_recv_reduce_send(prev_in_ring, next_in_ring, count, func, src_addr, comm_offset, arcfg_offset, TAG_ANY, compression, (stream & OP0_STREAM));
+        return fused_recv_reduce_send(prev_in_ring, next_in_ring, count, func, src_addr, comm_offset, arcfg_offset, TAG_ANY, compression, ((host & OP0_HOST) << 8) | (stream & OP0_STREAM));
     }else{
         //root only receive from previous node in the ring, add its local buffer and save in destination buffer
-        return fused_recv_reduce(prev_in_ring, count, func, src_addr, dst_addr, comm_offset, arcfg_offset, TAG_ANY, compression, stream);
+        return fused_recv_reduce(prev_in_ring, count, func, src_addr, dst_addr, comm_offset, arcfg_offset, TAG_ANY, compression, buftype);
     }
 }
 
@@ -897,15 +939,17 @@ int reduce_scatter(
     unsigned int comm_offset,
     unsigned int arcfg_offset,
     unsigned int compression,
-    unsigned int stream
+    unsigned int buftype
 ){
+    unsigned int stream = buftype & 0xff;
+    unsigned int host = (buftype >> 8) & 0xff;
     int i, curr_pos, rel_stride, abs_stride, next_in_ring, prev_in_ring;
     int err = NO_ERROR;
     unsigned int tmp_compression = NO_COMPRESSION;
 
     if(world.size == 1){
         //corner-case copy for when running a single-node reduction
-        return copy(count, src_buf_addr, dst_buf_addr, arcfg_offset, compression, stream);
+        return copy(count, src_buf_addr, dst_buf_addr, arcfg_offset, compression, buftype);
     }
 
     next_in_ring = (world.local_rank + 1) % world.size;
@@ -915,7 +959,8 @@ int reduce_scatter(
     //prime the address slot for the source, so we can subsequently stride against it
     start_move(
         MOVE_IMMEDIATE, MOVE_NONE, MOVE_NONE,
-        NO_COMPRESSION, RES_LOCAL, 0,
+        pack_flags(NO_COMPRESSION, RES_LOCAL, NO_HOST),
+        0,
         0,
         0, arcfg_offset,
         src_buf_addr, 0, 0, 0, 0, 0,
@@ -929,7 +974,8 @@ int reduce_scatter(
     tmp_compression = (compression & OP0_COMPRESSED) | ((compression & ETH_COMPRESSED) >> 1);
     start_move(
         MOVE_STRIDE, MOVE_NONE, MOVE_IMMEDIATE,
-        tmp_compression, RES_REMOTE, 0,
+        pack_flags(tmp_compression, RES_REMOTE, host & OP0_HOST),
+        0,
         count,
         comm_offset, arcfg_offset,
         0, 0, 0, count*curr_pos, 0, 0,
@@ -946,7 +992,8 @@ int reduce_scatter(
             tmp_compression = (compression & OP0_COMPRESSED) | ((compression & ETH_COMPRESSED) >> 2) | ((compression & ETH_COMPRESSED) >> 1);
             start_move(
                 MOVE_STRIDE, MOVE_ON_RECV, MOVE_IMMEDIATE,
-                tmp_compression, RES_REMOTE, func,
+                pack_flags(tmp_compression, RES_REMOTE, host & OP0_HOST),
+                func,
                 count,
                 comm_offset, arcfg_offset,
                 0, 0, 0, rel_stride, 0, 0,
@@ -956,7 +1003,8 @@ int reduce_scatter(
             tmp_compression = compression | ((compression & ETH_COMPRESSED) >> 2);
             start_move(
                 MOVE_STRIDE, MOVE_ON_RECV, MOVE_IMMEDIATE,
-                tmp_compression, RES_LOCAL, func,
+                pack_flags(tmp_compression, RES_LOCAL, host),
+                func,
                 count,
                 comm_offset, arcfg_offset,
                 0, 0, dst_buf_addr, rel_stride, 0, 0,
@@ -984,8 +1032,10 @@ int allreduce(
     unsigned int comm_offset,
     unsigned int arcfg_offset,
     unsigned int compression,
-    unsigned int stream
+    unsigned int buftype
 ){
+    unsigned int stream = buftype & 0xff;
+    unsigned int host = (buftype >> 8) & 0xff;
     int i, curr_pos, curr_count, rel_stride, abs_stride, next_in_ring, prev_in_ring;
     unsigned int max_seg_count, elems_remaining, elems, bulk_count, tail_count, moved_bytes;
     int err = NO_ERROR;
@@ -1028,7 +1078,8 @@ int allreduce(
         //so we can subsequently stride against them
         start_move(
             MOVE_IMMEDIATE, MOVE_NONE, MOVE_IMMEDIATE,
-            NO_COMPRESSION, RES_LOCAL, 0,
+            pack_flags(NO_COMPRESSION, RES_LOCAL, NO_HOST),
+            0,
             0,
             0, arcfg_offset,
             seg_src_buf_addr, 0, seg_dst_buf_addr, 0, 0, 0,
@@ -1040,7 +1091,8 @@ int allreduce(
         tmp_compression = (compression & OP0_COMPRESSED) | ((compression & ETH_COMPRESSED) >> 1);
         start_move(
             MOVE_STRIDE, MOVE_NONE, MOVE_IMMEDIATE,
-            tmp_compression, RES_REMOTE, 0,
+            pack_flags(tmp_compression, RES_REMOTE, host & OP0_HOST),
+            0,
             (world.local_rank == world.size - 1) ? tail_count: bulk_count,
             comm_offset, arcfg_offset,
             0, 0, 0, bulk_count * world.local_rank, 0, 0,
@@ -1065,7 +1117,8 @@ int allreduce(
                 tmp_compression = (compression & OP0_COMPRESSED) | ((compression & ETH_COMPRESSED) >> 2) | ((compression & ETH_COMPRESSED) >> 1);
                 start_move(
                     MOVE_STRIDE, MOVE_ON_RECV, MOVE_IMMEDIATE,
-                    tmp_compression, RES_REMOTE, func,
+                    pack_flags(tmp_compression, RES_REMOTE, host & OP0_HOST),
+                    func,
                     curr_count,
                     comm_offset, arcfg_offset,
                     0, 0, 0, rel_stride, 0, 0,
@@ -1077,7 +1130,8 @@ int allreduce(
                 tmp_compression = compression | ((compression & ETH_COMPRESSED) >> 2);
                 start_move(
                     MOVE_STRIDE, MOVE_ON_RECV, MOVE_STRIDE,
-                    tmp_compression, RES_LOCAL, func,
+                    pack_flags(tmp_compression, RES_LOCAL, host),
+                    func,
                     curr_count,
                     comm_offset, arcfg_offset,
                     0, 0, 0, rel_stride, 0, bulk_count * next_in_ring,
@@ -1098,7 +1152,8 @@ int allreduce(
         //send to next in ring, from seg_dst_buf_addr where we stored the scattered reduction result
         start_move(
             MOVE_IMMEDIATE, MOVE_NONE, MOVE_NONE,
-            NO_COMPRESSION, RES_LOCAL, 0,
+            pack_flags(NO_COMPRESSION, RES_LOCAL, NO_HOST),
+            0,
             0,
             0, arcfg_offset,
             seg_dst_buf_addr, 0, 0, 0, 0, 0,
@@ -1108,7 +1163,8 @@ int allreduce(
         tmp_compression = (compression & ~RES_COMPRESSED) | ((compression & ETH_COMPRESSED) >> 1);
         start_move(
             MOVE_STRIDE, MOVE_NONE, MOVE_IMMEDIATE,
-            tmp_compression, RES_REMOTE, 0,
+            pack_flags(tmp_compression, RES_REMOTE, host & OP0_HOST),
+            0,
             (next_in_ring == world.size - 1) ? tail_count : bulk_count,
             comm_offset, arcfg_offset,
             0, 0, 0, bulk_count * next_in_ring, 0, 0,
@@ -1131,7 +1187,8 @@ int allreduce(
             tmp_compression = (compression & RES_COMPRESSED) | ((compression & ETH_COMPRESSED) >> 2);
             err |= move(
                 MOVE_NONE, MOVE_ON_RECV, MOVE_STRIDE,
-                tmp_compression, RES_LOCAL, 0,
+                pack_flags(tmp_compression, RES_LOCAL, host & RES_HOST),
+                0,
                 curr_count,
                 comm_offset, arcfg_offset,
                 0, 0, 0, 0, 0, rel_stride,
@@ -1143,7 +1200,8 @@ int allreduce(
                 //first prime the address
                 start_move(
                     MOVE_NONE, MOVE_IMMEDIATE, MOVE_NONE,
-                    NO_COMPRESSION, RES_REMOTE, 0,
+                    pack_flags(NO_COMPRESSION, RES_REMOTE, NO_HOST),
+                    0,
                     0,
                     0, arcfg_offset,
                     0, seg_dst_buf_addr, 0, 0, 0, 0,
@@ -1155,7 +1213,8 @@ int allreduce(
                 tmp_compression = ((compression & RES_COMPRESSED) >> 1) | ((compression & ETH_COMPRESSED) >> 1);
                 start_move(
                     MOVE_NONE, MOVE_STRIDE, MOVE_IMMEDIATE,
-                    tmp_compression, RES_REMOTE, 0,
+                    pack_flags(tmp_compression, RES_REMOTE, ((host & RES_COMPRESSED) >> 1)),
+                    0,
                     curr_count,
                     comm_offset, arcfg_offset,
                     0, 0, 0, 0, bulk_count * curr_pos, 0,
@@ -1200,7 +1259,8 @@ int barrier(
     //send local chunk to next in ring
     start_move(
         MOVE_IMMEDIATE, MOVE_NONE, MOVE_IMMEDIATE,
-        NO_COMPRESSION, RES_REMOTE, 0,
+        pack_flags(NO_COMPRESSION, RES_REMOTE, NO_HOST),
+        0,
         count,
         comm_offset, arcfg_offset,
         src_buf_addr, 0, 0, 0, 0, 0,
@@ -1214,7 +1274,8 @@ int barrier(
         if(i < world.size-2){
             start_move(
                 MOVE_NONE, MOVE_ON_RECV, MOVE_IMMEDIATE,
-                NO_COMPRESSION, RES_REMOTE, 0,
+                pack_flags(NO_COMPRESSION, RES_REMOTE, NO_HOST),
+                0,
                 count,
                 comm_offset, arcfg_offset,
                 0, 0, 0, 0, 0, 0,
@@ -1223,7 +1284,8 @@ int barrier(
         } else {
             start_move(
                 MOVE_NONE, MOVE_ON_RECV, MOVE_IMMEDIATE,
-                NO_COMPRESSION, RES_LOCAL, 0,
+                pack_flags(NO_COMPRESSION, RES_LOCAL, NO_HOST),
+                0,
                 count,
                 comm_offset, arcfg_offset,
                 0, 0, src_buf_addr, 0, 0, 0,
@@ -1297,7 +1359,7 @@ void finalize_call(unsigned int retval) {
 void run() {
     unsigned int retval;
     unsigned int scenario, count, comm, root_src_dst, function, msg_tag;
-    unsigned int datapath_cfg, compression_flags, stream_flags;
+    unsigned int datapath_cfg, compression_flags, buftype_flags;
     unsigned int op0_addrl, op0_addrh, op1_addrl, op1_addrh, res_addrl, res_addrh;
     uint64_t op0_addr, op1_addr, res_addr;
 
@@ -1315,7 +1377,7 @@ void run() {
         msg_tag             = getd(CMD_CALL);
         datapath_cfg        = getd(CMD_CALL);
         compression_flags   = getd(CMD_CALL);
-        stream_flags        = getd(CMD_CALL);
+        buftype_flags       = getd(CMD_CALL);
         op0_addrl           = getd(CMD_CALL);
         op0_addrh           = getd(CMD_CALL);
         op1_addrl           = getd(CMD_CALL);
@@ -1339,37 +1401,37 @@ void run() {
         switch (scenario)
         {
             case ACCL_COPY:
-                retval = copy(count, op0_addr, res_addr, datapath_cfg, compression_flags, stream_flags);
+                retval = copy(count, op0_addr, res_addr, datapath_cfg, compression_flags, buftype_flags);
                 break;
             case ACCL_COMBINE:
-                retval = combine(count, function, op0_addr, op1_addr, res_addr, datapath_cfg, compression_flags, stream_flags);
+                retval = combine(count, function, op0_addr, op1_addr, res_addr, datapath_cfg, compression_flags, buftype_flags);
                 break;
             case ACCL_SEND:
-                retval = send(root_src_dst, count, op0_addr, comm, datapath_cfg, msg_tag, compression_flags, stream_flags);
+                retval = send(root_src_dst, count, op0_addr, comm, datapath_cfg, msg_tag, compression_flags, buftype_flags);
                 break;
             case ACCL_RECV:
-                retval = recv(root_src_dst, count, res_addr, comm, datapath_cfg, msg_tag, compression_flags, stream_flags);
+                retval = recv(root_src_dst, count, res_addr, comm, datapath_cfg, msg_tag, compression_flags, buftype_flags);
                 break;
             case ACCL_BCAST:
-                retval = broadcast(count, root_src_dst, op0_addr, comm, datapath_cfg, compression_flags, stream_flags);
+                retval = broadcast(count, root_src_dst, op0_addr, comm, datapath_cfg, compression_flags, buftype_flags);
                 break;
             case ACCL_SCATTER:
-                retval = scatter(count, root_src_dst, op0_addr, res_addr, comm, datapath_cfg, compression_flags, stream_flags);
+                retval = scatter(count, root_src_dst, op0_addr, res_addr, comm, datapath_cfg, compression_flags, buftype_flags);
                 break;
             case ACCL_GATHER:
-                retval = gather(count, root_src_dst, op0_addr, res_addr, comm, datapath_cfg, compression_flags, stream_flags);
+                retval = gather(count, root_src_dst, op0_addr, res_addr, comm, datapath_cfg, compression_flags, buftype_flags);
                 break;
             case ACCL_REDUCE:
-                retval = reduce(count, function, root_src_dst, op0_addr, res_addr, comm, datapath_cfg, compression_flags, stream_flags);
+                retval = reduce(count, function, root_src_dst, op0_addr, res_addr, comm, datapath_cfg, compression_flags, buftype_flags);
                 break;
             case ACCL_ALLGATHER:
-                retval = allgather(count, op0_addr, res_addr, comm, datapath_cfg, compression_flags, stream_flags);
+                retval = allgather(count, op0_addr, res_addr, comm, datapath_cfg, compression_flags, buftype_flags);
                 break;
             case ACCL_REDUCE_SCATTER:
-                retval = reduce_scatter(count, function, op0_addr, res_addr, comm, datapath_cfg, compression_flags, stream_flags);
+                retval = reduce_scatter(count, function, op0_addr, res_addr, comm, datapath_cfg, compression_flags, buftype_flags);
                 break;
             case ACCL_ALLREDUCE:
-                retval = allreduce(count, function, op0_addr, res_addr, comm, datapath_cfg, compression_flags, stream_flags);
+                retval = allreduce(count, function, op0_addr, res_addr, comm, datapath_cfg, compression_flags, buftype_flags);
                 break;
             case ACCL_BARRIER:
                 retval = barrier(op0_addr, comm, datapath_cfg);

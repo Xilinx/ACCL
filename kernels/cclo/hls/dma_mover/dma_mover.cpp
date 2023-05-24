@@ -228,7 +228,7 @@ void dma_cmd_execute(
                 dma_cmd.tag = tag;
                 dma_cmd_word.data = dma_cmd;
                 dma_cmd_word.last = 1;//always last
-                dma_cmd_word.dest = 0;//unused for now
+                dma_cmd_word.dest = instr.mem_id;
                 STREAM_WRITE(dma_cmd_channel, dma_cmd_word);
                 //update state
                 instr.total_bytes -= btt;
@@ -364,6 +364,9 @@ void instruction_fetch(
         ret.op1_is_compressed = (compression_flags & OP1_COMPRESSED) != 0;
         ret.res_is_compressed = (compression_flags & RES_COMPRESSED) != 0;
         ret.func_id = tmp(16,13);
+        ret.op0_is_host = tmp(17,17);
+        ret.op1_is_host = tmp(18,18);
+        ret.res_is_host = tmp(19,19);
         
         ret.count = (STREAM_READ(cmd)).data;
 
@@ -505,6 +508,7 @@ void instruction_decode(
     #pragma HLS reset variable=prev_dm0_rd
     if((insn.op0_opcode != MOVE_NONE) & (insn.op0_opcode != MOVE_STREAM)){
         dm0_rd.total_bytes = insn.op0_is_compressed ? total_bytes_compressed : total_bytes_uncompressed;
+        dm0_rd.mem_id = insn.op0_is_host ? 0 : 1;
         switch(insn.op0_opcode){
             //add options here - reuse, increment, etc
             case MOVE_IMMEDIATE:
@@ -544,6 +548,7 @@ void instruction_decode(
     unsigned int inbound_seqn, bytes_remaining;
     if(insn.op1_opcode != MOVE_NONE){
         dm1_rd.total_bytes = insn.op1_is_compressed ? total_bytes_compressed : total_bytes_uncompressed;
+        dm1_rd.mem_id = insn.op1_is_host ? 0 : 1;
         dm1_rd.last = true;
         switch(insn.op1_opcode){
             //add options here - reuse, increment, etc
@@ -643,6 +648,7 @@ void instruction_decode(
             }
         } else if(!(insn.res_opcode == MOVE_STREAM)){
             dm1_wr.total_bytes = insn.res_is_compressed ? total_bytes_compressed : total_bytes_uncompressed;
+            dm1_wr.mem_id = insn.res_is_host ? 0 : 1;
             switch(insn.res_opcode){
                 case MOVE_IMMEDIATE:
                     dm1_wr.addr = insn.res_addr;
