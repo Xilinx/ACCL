@@ -201,6 +201,12 @@ public:
   bool is_simulated() const override { return true; }
 
   /**
+   * Check if the buffer is host-only, always false in sim.
+   *
+   */
+  bool is_host_only() const override { return false; }
+
+  /**
    * Sync the user BO buffer to the simulated buffer.
    *
    */

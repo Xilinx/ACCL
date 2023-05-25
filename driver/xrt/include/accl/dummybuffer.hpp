@@ -48,6 +48,7 @@ public:
 
   xrt::bo *bo() override { return nullptr; }
   bool is_simulated() const override { return false; }
+  bool is_host_only() const override { return false; }
   void sync_from_device() override {}
   void sync_to_device() override {}
   void free_buffer() override {}

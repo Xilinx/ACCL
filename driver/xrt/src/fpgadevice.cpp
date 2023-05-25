@@ -43,7 +43,7 @@ void FPGADevice::start(const Options &options) {
                  static_cast<uint32_t>(options.tag),
                  static_cast<uint32_t>(options.arithcfg_addr),
                  static_cast<uint32_t>(options.compression_flags),
-                 static_cast<uint32_t>(options.stream_flags),
+                 static_cast<uint32_t>(options.host_flags) << 16 | static_cast<uint32_t>(options.stream_flags),
                  static_cast<uint64_t>(options.addr_0->physical_address()),
                  static_cast<uint64_t>(options.addr_1->physical_address()),
                  static_cast<uint64_t>(options.addr_2->physical_address()));

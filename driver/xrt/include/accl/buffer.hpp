@@ -84,6 +84,14 @@ public:
   virtual bool is_simulated() const = 0;
 
   /**
+   * Check if buffer is host-only.
+   *
+   * @return true   The buffer is host-only.
+   * @return false  The buffer is not host-only.
+   */
+  virtual bool is_host_only() const = 0;
+
+  /**
    * Sync bo to device if necessary for simulated buffers.
    *
    */

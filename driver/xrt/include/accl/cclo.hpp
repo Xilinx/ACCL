@@ -56,6 +56,7 @@ public:
                                              datatype. */
     compressionFlags compression_flags; /**< Compression configuration. */
     streamFlags stream_flags;           /**< Stream configuration. */
+    hostFlags host_flags;               /**< Indicate which buffers are host-only. */
     BaseBuffer *addr_0;                 /**< ACCL buffer of operand 0. */
     BaseBuffer *addr_1;                 /**< ACCL buffer of operand 1. */
     BaseBuffer *addr_2;                 /**< ACCL buffer of result. */
@@ -75,8 +76,8 @@ public:
           reduce_function(reduceFunction::SUM), tag(TAG_ANY),
           arithcfg_addr(0x0), compress_dtype(dataType::none),
           compression_flags(compressionFlags::NO_COMPRESSION),
-          stream_flags(streamFlags::NO_STREAM), addr_0(nullptr),
-          addr_1(nullptr), addr_2(nullptr),
+          stream_flags(streamFlags::NO_STREAM), host_flags(hostFlags::NO_HOST),
+          addr_0(nullptr), addr_1(nullptr), addr_2(nullptr),
           data_type_io_0(dataType::none), data_type_io_1(dataType::none),
           data_type_io_2(dataType::none), waitfor({}) {}
   };

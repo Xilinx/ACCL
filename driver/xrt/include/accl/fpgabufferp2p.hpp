@@ -99,6 +99,12 @@ public:
   bool is_simulated() const override { return false; }
 
   /**
+   * Check if the buffer is host-only, always false
+   *
+   */
+  bool is_host_only() const override { return false; }
+
+  /**
    * Sync the data from the device back to the host, which is not required with
    * a P2P buffer, so this function does nothing.
    *

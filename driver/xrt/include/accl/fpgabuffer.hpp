@@ -133,6 +133,15 @@ public:
   bool is_simulated() const override { return false; }
 
   /**
+   * Check if the buffer is host-only.
+   *
+   */
+  bool is_host_only() const override { 
+    auto flags = _bo.get_flags();
+    return flags == xrt::bo::flags::host_only;
+  }
+
+  /**
    * Sync the data from the device back to the host. Will copy the data from
    * the aligned buffer to the unaligned buffer if an unaligned buffer was used
    * during construction of the FPGABuffer.

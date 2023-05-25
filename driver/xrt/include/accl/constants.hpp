@@ -141,6 +141,27 @@ inline streamFlags &operator|=(streamFlags &lhs, streamFlags rhs) {
 }
 
 /**
+ * ACCL host flags to specify host-only buffers.
+ *
+ */
+enum class hostFlags {
+  NO_HOST = 0,  /**< No buffers are host-only */
+  OP0_HOST = 1, /**< The first operand is host-only */
+  OP1_HOST = 2, /**< The second operand is host-only */
+  RES_HOST = 4  /**< The result is host-only */
+};
+
+inline hostFlags operator|(hostFlags lhs, hostFlags rhs) {
+  return static_cast<hostFlags>(static_cast<int>(lhs) |
+                                  static_cast<int>(rhs));
+}
+
+inline hostFlags &operator|=(hostFlags &lhs, hostFlags rhs) {
+  lhs = lhs | rhs;
+  return lhs;
+}
+
+/**
  * ACCL compression flags to specify compression configuration.
  *
  */

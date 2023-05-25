@@ -1306,6 +1306,7 @@ void ACCL::prepare_call(CCLO::Options &options, bool check_tcp) {
   }
 
   std::set<dataType> dtypes;
+  hostFlags host_flags = hostFlags::NO_HOST;
 
   if (options.addr_0 == nullptr) {
     options.addr_0 = &dummy_buffer;
@@ -1313,6 +1314,7 @@ void ACCL::prepare_call(CCLO::Options &options, bool check_tcp) {
   }
   else {
     dtypes.insert(options.addr_0->type());
+    if(options.addr_0->is_host_only()) options.host_flags |= hostFlags::OP0_HOST;
   }
 
   if (options.addr_1 == nullptr) {
@@ -1321,6 +1323,7 @@ void ACCL::prepare_call(CCLO::Options &options, bool check_tcp) {
   }
   else {
     dtypes.insert(options.addr_1->type());
+    if(options.addr_1->is_host_only()) options.host_flags |= hostFlags::OP1_HOST;
   }
 
   if (options.addr_2 == nullptr) {
@@ -1329,12 +1332,16 @@ void ACCL::prepare_call(CCLO::Options &options, bool check_tcp) {
   }
   else {
     dtypes.insert(options.addr_2->type());
+    if(options.addr_2->is_host_only()) options.host_flags |= hostFlags::RES_HOST;
   }
 
   dtypes.erase(dataType::none);
 
   // if no compressed data type specified, set same as uncompressed
   options.compression_flags = compressionFlags::NO_COMPRESSION;
+
+  // set flags for host-only buffers
+  options.host_flags = hostFlags::NO_HOST;
 
   if (dtypes.empty()) {
     options.arithcfg_addr = 0x0;
