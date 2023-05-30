@@ -124,7 +124,7 @@ public:
    *
    * @return xrt::bo* The underlying BO buffer.
    */
-  xrt::bo *bo() override { return &_bo; }
+  xrt::bo *bo() { return &_bo; }
 
   /**
    * Check if the buffer is simulated, always false.

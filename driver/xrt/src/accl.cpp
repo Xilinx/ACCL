@@ -1239,9 +1239,9 @@ void ACCL::setup_rx_buffers(size_t nbufs, addr_t bufsize,
     address += 4;
     cclo->write(address, 0);
     address += 4;
-    cclo->write(address, buf->physical_address() & 0xffffffff);
+    cclo->write(address, buf->address() & 0xffffffff);
     address += 4;
-    cclo->write(address, (buf->physical_address() >> 32) & 0xffffffff);
+    cclo->write(address, (buf->address() >> 32) & 0xffffffff);
     address += 4;
     cclo->write(address, bufsize);
 
