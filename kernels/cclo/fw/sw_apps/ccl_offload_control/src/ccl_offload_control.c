@@ -224,6 +224,7 @@ void start_move(
     bool res_is_remote = (remote_flags == RES_REMOTE);
     opcode |= (compression_flags & 0x7) << 10;//mask is to prevent ETH_COMPRESSED flag leaking into func_id
     opcode |= func_id << 13;
+    opcode |= host_flags << 17;
     putd(CMD_DMA_MOVE, opcode);
     putd(CMD_DMA_MOVE, count);
 
