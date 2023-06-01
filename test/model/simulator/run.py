@@ -44,7 +44,7 @@ def build_executable():
 
 def run_simulator(ranks: int, log_level: int, start_port: int, use_udp: bool, kernel_loopback: bool, waveform: bool):
     env = os.environ.copy()
-    env['LD_LIBRARY_PATH'] += f":{os.environ['XILINX_VIVADO']}/lib/lnx64.o"
+    env['LD_LIBRARY_PATH'] = env.get('LD_LIBRARY_PATH', "") + f":{os.environ['XILINX_VIVADO']}/lib/lnx64.o"
     # create processes into a list
     processes = []
     for r in range(ranks):
