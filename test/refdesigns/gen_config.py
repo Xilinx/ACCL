@@ -23,6 +23,7 @@ parser.add_argument('-p', '--poe', type=str, choices=['udp', 'tcp', 'roce', 'axi
 parser.add_argument('-o', '--outfile', type=str, default="link_config.ini", help="Name of generated config file")
 parser.add_argument('--ethif', type=int, default=0, choices=[0, 1], help="Which Ethernet port to use, on cards which have two")
 parser.add_argument('--vadd', action='store_true', help="Connect a Vadd kernel to the CCLO(s)")
+parser.add_argument('--host', action='store_true', help="Connect to host memory - this implies use of CCLO configured for external DMA")
 parser.add_argument('--probe', action='store_true', help="Connect a Probe kernel to the CCLO for benchmarking")
 parser.add_argument('--hwemu', action='store_true', help="Replace CMAC with IPC AXIS Master/Slave for emulation")
 parser.add_argument('--chipscope', action='store_true', help="Add Chipscope debug to CCLO streams")
@@ -33,6 +34,12 @@ if args.board == "u50" and args.ethif != 0:
 
 if args.board != "u55c" and args.poe == "roce":
     raise "ROCE only supported on U55C"
+
+if args.host:
+    if args.board == "u280" or args.board == "u50":
+        raise "Host memory only supported on U55C/U200/U250"
+    else:
+        args.external_dma = True
 
 if args.poe == "axis3x":
     args.axis3x = True
@@ -70,6 +77,11 @@ hc_instantiation = "nk=hostctrl:{num_inst}:".format(num_inst=2*num_cclo)
 reduce_instantiation = "nk=reduce_ops:{num_inst}:".format(num_inst=num_cclo)
 cast_instantiation = "nk=hp_compression:{num_inst}:".format(num_inst=3*num_cclo)
 
+if args.external_dma:
+    extdma_instantiation = "nk=external_dma:{num_inst}:".format(num_inst=2*num_cclo)
+else:
+    extdma_instantiation = ""
+
 for i in range(num_cclo):
     endch = "" if i == num_cclo-1 else "."
     cclo_instantiation += "ccl_offload_{inst_nr}".format(inst_nr=i) + endch
@@ -77,6 +89,8 @@ for i in range(num_cclo):
     hc_instantiation += "hostctrl_{inst_nr}_0.hostctrl_{inst_nr}_1".format(inst_nr=i) + endch
     reduce_instantiation += "arith_{inst_nr}".format(inst_nr=i) + endch
     cast_instantiation += "compression_{inst_nr}_0.compression_{inst_nr}_1.compression_{inst_nr}_2".format(inst_nr=i) + endch
+    if args.external_dma:
+        extdma_instantiation += "extdma_{num_inst}_0.extdma_{num_inst}_1".format(num_inst=i) + endch
 
 probe_instantiation = "nk=call_probe:1:probe_0" if args.probe else ""
 
@@ -129,6 +143,9 @@ for i in range(num_cclo):
         slr_constraints += "slr=lb_user_krnl_{inst_nr}:SLR{slr_nr}\n".format(inst_nr=i, slr_nr=target_slr)
     else:
         slr_constraints += "slr=vadd_{inst_nr}_0:SLR{slr_nr}\n".format(inst_nr=i, slr_nr=target_slr)
+    if args.external_dma:
+        for j in range(2):
+            slr_constraints += "slr=extdma_{inst_nr}_{dp_nr}:SLR{slr_nr}\n".format(inst_nr=i, dp_nr=j, slr_nr=target_slr)
 
 if args.poe == "tcp":
     slr_constraints += "slr=lb_udp_txrx:SLR{slr_nr}\nslr=lb_udp_meta:SLR{slr_nr}\n".format(slr_nr=gt_slr)
@@ -144,11 +161,23 @@ bank_ctr = 0
 for i in range(num_cclo):
     if mem_type == "DDR":
         target_bank = i if args.axis3x else gt_slr-1
-        mem_constraints += "sp=ccl_offload_{inst_nr}.m_axi_0:DDR[{start_bank}]\n".format(inst_nr=i, start_bank=target_bank)
-        mem_constraints += "sp=ccl_offload_{inst_nr}.m_axi_1:DDR[{start_bank}]\n".format(inst_nr=i, start_bank=target_bank)
+        if args.external_dma:
+            mem_constraints += "sp=extdma_{inst_nr}_0.m_axi_0:DDR[{start_bank}]\n".format(inst_nr=i, start_bank=target_bank)
+            mem_constraints += "sp=extdma_{inst_nr}_0.m_axi_1:HOST[0]\n".format(inst_nr=i)
+            mem_constraints += "sp=extdma_{inst_nr}_1.m_axi_0:DDR[{start_bank}]\n".format(inst_nr=i, start_bank=target_bank)
+            mem_constraints += "sp=extdma_{inst_nr}_1.m_axi_1:HOST[0]\n".format(inst_nr=i)
+        else:
+            mem_constraints += "sp=ccl_offload_{inst_nr}.m_axi_0:DDR[{start_bank}]\n".format(inst_nr=i, start_bank=target_bank)
+            mem_constraints += "sp=ccl_offload_{inst_nr}.m_axi_1:DDR[{start_bank}]\n".format(inst_nr=i, start_bank=target_bank)
     else:
-        mem_constraints += "sp=ccl_offload_{inst_nr}.m_axi_0:HBM[{start_bank}:{end_bank}]\n".format(inst_nr=i, start_bank=bank_ctr, end_bank=bank_ctr+5)
-        mem_constraints += "sp=ccl_offload_{inst_nr}.m_axi_1:HBM[{start_bank}:{end_bank}]\n".format(inst_nr=i, start_bank=bank_ctr, end_bank=bank_ctr+5)
+        if args.external_dma:
+            mem_constraints += "sp=extdma_{inst_nr}_0.m_axi_0:HBM[{start_bank}:{end_bank}]\n".format(inst_nr=i, start_bank=bank_ctr, end_bank=bank_ctr+5)
+            mem_constraints += "sp=extdma_{inst_nr}_0.m_axi_1:HOST[0]\n".format(inst_nr=i)
+            mem_constraints += "sp=extdma_{inst_nr}_1.m_axi_0:HBM[{start_bank}:{end_bank}]\n".format(inst_nr=i, start_bank=bank_ctr, end_bank=bank_ctr+5)
+            mem_constraints += "sp=extdma_{inst_nr}_1.m_axi_1:HOST[0]\n".format(inst_nr=i)
+        else:
+            mem_constraints += "sp=ccl_offload_{inst_nr}.m_axi_0:HBM[{start_bank}:{end_bank}]\n".format(inst_nr=i, start_bank=bank_ctr, end_bank=bank_ctr+5)
+            mem_constraints += "sp=ccl_offload_{inst_nr}.m_axi_1:HBM[{start_bank}:{end_bank}]\n".format(inst_nr=i, start_bank=bank_ctr, end_bank=bank_ctr+5)
         bank_ctr += 6
     if args.poe == "tcp":
         poe_bank = bank_ctr if mem_type == "HBM" else 3 if args.board == "u200" else gt_slr
@@ -220,6 +249,20 @@ for i in range(num_cclo):
     else:
         stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_krnl:lb_user_krnl_{inst_nr}.in\n".format(inst_nr=i)
         stream_connections += "stream_connect=lb_user_krnl_{inst_nr}.out:ccl_offload_{inst_nr}.s_axis_krnl\n".format(inst_nr=i)
+    # External DMA interface
+    if args.external_dma:
+        stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_dma0_s2mm:extdma_{inst_nr}_0.s_axis_s2mm\n".format(inst_nr=i)
+        stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_dma0_mm2s_cmd:extdma_{inst_nr}_0.s_axis_mm2s_cmd\n".format(inst_nr=i)
+        stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_dma0_s2mm_cmd:extdma_{inst_nr}_0.s_axis_s2mm_cmd\n".format(inst_nr=i)
+        stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_dma1_s2mm:extdma_{inst_nr}_1.s_axis_s2mm\n".format(inst_nr=i)
+        stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_dma1_mm2s_cmd:extdma_{inst_nr}_1.s_axis_mm2s_cmd\n".format(inst_nr=i)
+        stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_dma1_s2mm_cmd:extdma_{inst_nr}_1.s_axis_s2mm_cmd\n".format(inst_nr=i)
+        stream_connections += "stream_connect=extdma_{inst_nr}_0.m_axis_mm2s:ccl_offload_{inst_nr}.s_axis_dma0_mm2s\n".format(inst_nr=i)
+        stream_connections += "stream_connect=extdma_{inst_nr}_0.m_axis_mm2s_sts:ccl_offload_{inst_nr}.s_axis_dma0_mm2s_sts\n".format(inst_nr=i)
+        stream_connections += "stream_connect=extdma_{inst_nr}_0.m_axis_s2mm_sts:ccl_offload_{inst_nr}.s_axis_dma0_s2mm_sts\n".format(inst_nr=i)
+        stream_connections += "stream_connect=extdma_{inst_nr}_1.m_axis_mm2s:ccl_offload_{inst_nr}.s_axis_dma1_mm2s\n".format(inst_nr=i)
+        stream_connections += "stream_connect=extdma_{inst_nr}_1.m_axis_mm2s_sts:ccl_offload_{inst_nr}.s_axis_dma1_mm2s_sts\n".format(inst_nr=i)
+        stream_connections += "stream_connect=extdma_{inst_nr}_1.m_axis_s2mm_sts:ccl_offload_{inst_nr}.s_axis_dma1_s2mm_sts\n".format(inst_nr=i)
 
 # Connect CCLOs to POEs
 if args.poe == "tcp" or args.poe == "tcp_dummy":
@@ -252,6 +295,7 @@ freqHz=100000000:poe_0.ref_clock
 with open(args.outfile, "w") as f:
     f.write("[connectivity]\n")
     f.write(cclo_instantiation+"\n")
+    f.write(extdma_instantiation+"\n")
     f.write(arb_instantiation+"\n")
     f.write(hc_instantiation+"\n")
     f.write(reduce_instantiation+"\n")

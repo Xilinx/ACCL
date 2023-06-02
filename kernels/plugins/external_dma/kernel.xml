@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<root versionMajor="1" versionMinor="9">
+<kernel name="external_dma" language="ip" vlnv="Xilinx:ACCL:external_dma:1.0" attributes="" preferredWorkGroupSizeMultiple="0" workGroupSize="1" interrupt="false" hwControlProtocol="user_managed">
+<ports>
+<port name="s_axi_control" mode="slave" range="0x2000" dataWidth="32" portType="addressable" base="0x0"/>
+<port name="m_axi_0" mode="master" range="0xFFFFFFFFFFFFFFFF" dataWidth="512" portType="addressable" base="0x0"/>
+<port name="m_axi_1" mode="master" range="0xFFFFFFFFFFFFFFFF" dataWidth="512" portType="addressable" base="0x0"/>
+<port name="s_axis_s2mm" mode="read_only" dataWidth="512" portType="stream"/>
+<port name="m_axis_mm2s" mode="write_only" dataWidth="512" portType="stream"/>
+<port name="s_axis_s2mm_cmd" mode="read_only" dataWidth="104" portType="stream"/>
+<port name="s_axis_mm2s_cmd" mode="read_only" dataWidth="104" portType="stream"/>
+<port name="m_axis_s2mm_sts" mode="write_only" dataWidth="32" portType="stream"/>
+<port name="m_axis_mm2s_sts" mode="write_only" dataWidth="8" portType="stream"/>
+</ports>
+<args>
+<arg name="m_axi_0" addressQualifier="1" id="0" port="m_axi_0" size="0x8" offset="0x10" hostOffset="0x0" hostSize="0x8" type="int*" />
+<arg name="m_axi_1" addressQualifier="1" id="1" port="m_axi_1" size="0x8" offset="0x20" hostOffset="0x0" hostSize="0x8" type="int*" />
+<arg name="s_axis_s2mm" addressQualifier="4" id="2" port="s_axis_s2mm" size="0x4" offset="0x0" hostOffset="0x0" hostSize="0x4" type="void*" />
+<arg name="m_axis_mm2s" addressQualifier="4" id="3" port="m_axis_mm2s" size="0x4" offset="0x0" hostOffset="0x0" hostSize="0x4" type="void*" />
+<arg name="s_axis_s2mm_cmd" addressQualifier="4" id="4" port="s_axis_s2mm_cmd" size="0x4" offset="0x0" hostOffset="0x0" hostSize="0x4" type="void*" />
+<arg name="s_axis_mm2s_cmd" addressQualifier="4" id="5" port="s_axis_mm2s_cmd" size="0x4" offset="0x0" hostOffset="0x0" hostSize="0x4" type="void*" />
+<arg name="m_axis_s2mm_sts" addressQualifier="4" id="6" port="m_axis_s2mm_sts" size="0x4" offset="0x0" hostOffset="0x0" hostSize="0x4" type="void*" />
+<arg name="m_axis_mm2s_sts" addressQualifier="4" id="7" port="m_axis_mm2s_sts" size="0x4" offset="0x0" hostOffset="0x0" hostSize="0x4" type="void*" />
+</args>
+</kernel></root>

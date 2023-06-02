@@ -128,16 +128,18 @@ module ccl_offload
   input s_axis_dma1_mm2s_tvalid,
 
   output [103:0] m_axis_dma0_mm2s_cmd_tdata,
+  output [7:0] m_axis_dma0_mm2s_cmd_tdest,
   input m_axis_dma0_mm2s_cmd_tready,
   output m_axis_dma0_mm2s_cmd_tvalid,
 
-  input [31:0] s_axis_dma0_mm2s_sts_tdata,
+  input [7:0] s_axis_dma0_mm2s_sts_tdata,
   output s_axis_dma0_mm2s_sts_tready,
   input s_axis_dma0_mm2s_sts_tvalid,
-  input [3:0] s_axis_dma0_mm2s_sts_tkeep,
+  input [0:0] s_axis_dma0_mm2s_sts_tkeep,
   input s_axis_dma0_mm2s_sts_tlast,
 
   output [103:0] m_axis_dma0_s2mm_cmd_tdata,
+  output [7:0] m_axis_dma0_s2mm_cmd_tdest,
   input m_axis_dma0_s2mm_cmd_tready,
   output m_axis_dma0_s2mm_cmd_tvalid,
 
@@ -148,16 +150,18 @@ module ccl_offload
   input s_axis_dma0_s2mm_sts_tlast,
 
   output [103:0] m_axis_dma1_mm2s_cmd_tdata,
+  output [7:0] m_axis_dma1_mm2s_cmd_tdest,
   input m_axis_dma1_mm2s_cmd_tready,
   output m_axis_dma1_mm2s_cmd_tvalid,
 
-  input [31:0] s_axis_dma1_mm2s_sts_tdata,
+  input [7:0] s_axis_dma1_mm2s_sts_tdata,
   output s_axis_dma1_mm2s_sts_tready,
   input s_axis_dma1_mm2s_sts_tvalid,
-  input [3:0] s_axis_dma1_mm2s_sts_tkeep,
+  input [0:0] s_axis_dma1_mm2s_sts_tkeep,
   input s_axis_dma1_mm2s_sts_tlast,
 
   output [103:0] m_axis_dma1_s2mm_cmd_tdata,
+  output [7:0] m_axis_dma1_s2mm_cmd_tdest,
   input m_axis_dma1_s2mm_cmd_tready,
   output m_axis_dma1_s2mm_cmd_tvalid,
 
@@ -457,6 +461,7 @@ module ccl_offload
         .m_axi_0_wready(m_axi_0_wready),
         .m_axi_0_wstrb(m_axi_0_wstrb),
         .m_axi_0_wvalid(m_axi_0_wvalid),
+        
         .m_axi_1_araddr(m_axi_1_araddr),
         .m_axi_1_arburst(m_axi_1_arburst),
         .m_axi_1_arcache(m_axi_1_arcache),
@@ -488,6 +493,76 @@ module ccl_offload
         .m_axi_1_wready(m_axi_1_wready),
         .m_axi_1_wstrb(m_axi_1_wstrb),
         .m_axi_1_wvalid(m_axi_1_wvalid),
+`elsif DMA_EXTERNAL
+        .m_axis_dma0_s2mm_tdata(m_axis_dma0_s2mm_tdata),
+        .m_axis_dma0_s2mm_tkeep(m_axis_dma0_s2mm_tkeep),
+        .m_axis_dma0_s2mm_tdest(m_axis_dma0_s2mm_tdest),
+        .m_axis_dma0_s2mm_tlast(m_axis_dma0_s2mm_tlast),
+        .m_axis_dma0_s2mm_tready(m_axis_dma0_s2mm_tready),
+        .m_axis_dma0_s2mm_tvalid(m_axis_dma0_s2mm_tvalid),
+        
+        .s_axis_dma0_mm2s_tdata(s_axis_dma0_mm2s_tdata),
+        .s_axis_dma0_mm2s_tkeep(s_axis_dma0_mm2s_tkeep),
+        .s_axis_dma0_mm2s_tlast(s_axis_dma0_mm2s_tlast),
+        .s_axis_dma0_mm2s_tready(s_axis_dma0_mm2s_tready),
+        .s_axis_dma0_mm2s_tvalid(s_axis_dma0_mm2s_tvalid),
+        
+        .m_axis_dma0_mm2s_cmd_tdata(m_axis_dma0_mm2s_cmd_tdata),
+        .m_axis_dma0_mm2s_cmd_tdest(m_axis_dma0_mm2s_cmd_tdest),
+        .m_axis_dma0_mm2s_cmd_tready(m_axis_dma0_mm2s_cmd_tready),
+        .m_axis_dma0_mm2s_cmd_tvalid(m_axis_dma0_mm2s_cmd_tvalid),
+        
+        .s_axis_dma0_mm2s_sts_tdata(s_axis_dma0_mm2s_sts_tdata),
+        .s_axis_dma0_mm2s_sts_tready(s_axis_dma0_mm2s_sts_tready),
+        .s_axis_dma0_mm2s_sts_tvalid(s_axis_dma0_mm2s_sts_tvalid),
+        .s_axis_dma0_mm2s_sts_tkeep(s_axis_dma0_mm2s_sts_tkeep),
+        .s_axis_dma0_mm2s_sts_tlast(s_axis_dma0_mm2s_sts_tlast),
+        
+        .m_axis_dma0_s2mm_cmd_tdata(m_axis_dma0_s2mm_cmd_tdata),
+        .m_axis_dma0_s2mm_cmd_tdest(m_axis_dma0_s2mm_cmd_tdest),
+        .m_axis_dma0_s2mm_cmd_tready(m_axis_dma0_s2mm_cmd_tready),
+        .m_axis_dma0_s2mm_cmd_tvalid(m_axis_dma0_s2mm_cmd_tvalid),
+        
+        .s_axis_dma0_s2mm_sts_tdata(s_axis_dma0_s2mm_sts_tdata),
+        .s_axis_dma0_s2mm_sts_tready(s_axis_dma0_s2mm_sts_tready),
+        .s_axis_dma0_s2mm_sts_tvalid(s_axis_dma0_s2mm_sts_tvalid),
+        .s_axis_dma0_s2mm_sts_tkeep(s_axis_dma0_s2mm_sts_tkeep),
+        .s_axis_dma0_s2mm_sts_tlast(s_axis_dma0_s2mm_sts_tlast),
+
+        .m_axis_dma1_s2mm_tdata(m_axis_dma1_s2mm_tdata),
+        .m_axis_dma1_s2mm_tkeep(m_axis_dma1_s2mm_tkeep),
+        .m_axis_dma1_s2mm_tdest(m_axis_dma1_s2mm_tdest),
+        .m_axis_dma1_s2mm_tlast(m_axis_dma1_s2mm_tlast),
+        .m_axis_dma1_s2mm_tready(m_axis_dma1_s2mm_tready),
+        .m_axis_dma1_s2mm_tvalid(m_axis_dma1_s2mm_tvalid),
+        
+        .s_axis_dma1_mm2s_tdata(s_axis_dma1_mm2s_tdata),
+        .s_axis_dma1_mm2s_tkeep(s_axis_dma1_mm2s_tkeep),
+        .s_axis_dma1_mm2s_tlast(s_axis_dma1_mm2s_tlast),
+        .s_axis_dma1_mm2s_tready(s_axis_dma1_mm2s_tready),
+        .s_axis_dma1_mm2s_tvalid(s_axis_dma1_mm2s_tvalid),
+        
+        .m_axis_dma1_mm2s_cmd_tdata(m_axis_dma1_mm2s_cmd_tdata),
+        .m_axis_dma1_mm2s_cmd_tdest(m_axis_dma1_mm2s_cmd_tdest),
+        .m_axis_dma1_mm2s_cmd_tready(m_axis_dma1_mm2s_cmd_tready),
+        .m_axis_dma1_mm2s_cmd_tvalid(m_axis_dma1_mm2s_cmd_tvalid),
+        
+        .s_axis_dma1_mm2s_sts_tdata(s_axis_dma1_mm2s_sts_tdata),
+        .s_axis_dma1_mm2s_sts_tready(s_axis_dma1_mm2s_sts_tready),
+        .s_axis_dma1_mm2s_sts_tvalid(s_axis_dma1_mm2s_sts_tvalid),
+        .s_axis_dma1_mm2s_sts_tkeep(s_axis_dma1_mm2s_sts_tkeep),
+        .s_axis_dma1_mm2s_sts_tlast(s_axis_dma1_mm2s_sts_tlast),
+        
+        .m_axis_dma1_s2mm_cmd_tdata(m_axis_dma1_s2mm_cmd_tdata),
+        .m_axis_dma1_s2mm_cmd_tdest(m_axis_dma1_s2mm_cmd_tdest),
+        .m_axis_dma1_s2mm_cmd_tready(m_axis_dma1_s2mm_cmd_tready),
+        .m_axis_dma1_s2mm_cmd_tvalid(m_axis_dma1_s2mm_cmd_tvalid),
+        
+        .s_axis_dma1_s2mm_sts_tdata(s_axis_dma1_s2mm_sts_tdata),
+        .s_axis_dma1_s2mm_sts_tready(s_axis_dma1_s2mm_sts_tready),
+        .s_axis_dma1_s2mm_sts_tvalid(s_axis_dma1_s2mm_sts_tvalid),
+        .s_axis_dma1_s2mm_sts_tkeep(s_axis_dma1_s2mm_sts_tkeep),
+        .s_axis_dma1_s2mm_sts_tlast(s_axis_dma1_s2mm_sts_tlast),
 `endif
 
 `ifdef ARITH_ENABLE
