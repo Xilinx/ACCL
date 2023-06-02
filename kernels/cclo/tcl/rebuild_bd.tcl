@@ -237,7 +237,7 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
     set m_axis_dma0_mm2s_cmd [ create_bd_intf_port -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_dma0_mm2s_cmd ]
     set_property -dict [ list CONFIG.FREQ_HZ {250000000} ] $m_axis_dma0_mm2s_cmd
     set s_axis_dma0_mm2s_sts [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 s_axis_dma0_mm2s_sts ]
-    set_property -dict [ list CONFIG.FREQ_HZ {250000000} CONFIG.HAS_TKEEP {1} CONFIG.HAS_TLAST {1} CONFIG.HAS_TREADY {1} CONFIG.HAS_TSTRB {0} CONFIG.LAYERED_METADATA {undef} CONFIG.TDATA_NUM_BYTES {4} CONFIG.TDEST_WIDTH {0} CONFIG.TID_WIDTH {0} CONFIG.TUSER_WIDTH {0} ] $s_axis_dma0_mm2s_sts
+    set_property -dict [ list CONFIG.FREQ_HZ {250000000} CONFIG.HAS_TKEEP {1} CONFIG.HAS_TLAST {1} CONFIG.HAS_TREADY {1} CONFIG.HAS_TSTRB {0} CONFIG.LAYERED_METADATA {undef} CONFIG.TDATA_NUM_BYTES {1} CONFIG.TDEST_WIDTH {0} CONFIG.TID_WIDTH {0} CONFIG.TUSER_WIDTH {0} ] $s_axis_dma0_mm2s_sts
     set m_axis_dma0_s2mm_cmd [ create_bd_intf_port -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_dma0_s2mm_cmd ]
     set_property -dict [ list CONFIG.FREQ_HZ {250000000} ] $m_axis_dma0_s2mm_cmd
     set s_axis_dma0_s2mm_sts [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 s_axis_dma0_s2mm_sts ]
@@ -245,7 +245,7 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
     set m_axis_dma1_mm2s_cmd [ create_bd_intf_port -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_dma1_mm2s_cmd ]
     set_property -dict [ list CONFIG.FREQ_HZ {250000000} ] $m_axis_dma1_mm2s_cmd
     set s_axis_dma1_mm2s_sts [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 s_axis_dma1_mm2s_sts ]
-    set_property -dict [ list CONFIG.FREQ_HZ {250000000} CONFIG.HAS_TKEEP {1} CONFIG.HAS_TLAST {1} CONFIG.HAS_TREADY {1} CONFIG.HAS_TSTRB {0} CONFIG.LAYERED_METADATA {undef} CONFIG.TDATA_NUM_BYTES {4} CONFIG.TDEST_WIDTH {0} CONFIG.TID_WIDTH {0} CONFIG.TUSER_WIDTH {0} ] $s_axis_dma1_mm2s_sts
+    set_property -dict [ list CONFIG.FREQ_HZ {250000000} CONFIG.HAS_TKEEP {1} CONFIG.HAS_TLAST {1} CONFIG.HAS_TREADY {1} CONFIG.HAS_TSTRB {0} CONFIG.LAYERED_METADATA {undef} CONFIG.TDATA_NUM_BYTES {1} CONFIG.TDEST_WIDTH {0} CONFIG.TID_WIDTH {0} CONFIG.TUSER_WIDTH {0} ] $s_axis_dma1_mm2s_sts
     set m_axis_dma1_s2mm_cmd [ create_bd_intf_port -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_dma1_s2mm_cmd ]
     set_property -dict [ list CONFIG.FREQ_HZ {250000000} ] $m_axis_dma1_s2mm_cmd
     set s_axis_dma1_s2mm_sts [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 s_axis_dma1_s2mm_sts ]
