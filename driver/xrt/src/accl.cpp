@@ -59,6 +59,18 @@ ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
   initialize_accl(ranks, local_rank, nbufs, bufsize, segsize);
 }
 
+// constructor for coyote fpga device
+ACCL::ACCL(CoyoteDevice *dev, const std::vector<rank_t> &ranks, int local_rank,
+        networkProtocol protocol, int nbufs, addr_t bufsize, addr_t segsize,
+        const arithConfigMap &arith_config)
+  : arith_config(arith_config), protocol(protocol), sim_mode(false),
+    _devicemem(0), rxbufmem(0)
+{
+  cclo = dev;
+  initialize_accl(ranks, local_rank, nbufs, bufsize, segsize);
+  std::cout << "Coyote ACCL initialized!" << std::endl;
+}
+
 ACCL::~ACCL() {
   deinit();
   delete cclo;

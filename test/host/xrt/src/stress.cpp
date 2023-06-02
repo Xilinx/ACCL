@@ -24,8 +24,8 @@
 TEST_F(ACCLTest, test_stress_sndrcv) {
   unsigned int count = options.count;
   auto buf = accl->create_buffer<float>(count, dataType::float32);
-  int next_rank = (rank + 1) % size;
-  int prev_rank = (rank + size - 1) % size;
+  int next_rank = (::rank + 1) % ::size;
+  int prev_rank = (::rank + ::size - 1) % ::size;
   for(unsigned int i=0; i<2000; i++) {
     accl->send(*buf, count, next_rank, 0, 0, true);
     accl->recv(*buf, count, prev_rank, 0, 0, true);
@@ -81,7 +81,7 @@ options_t parse_options(int argc, char *argv[]) {
       }
     }
   } catch (std::exception &e) {
-    if (rank == 0) {
+    if (::rank == 0) {
       std::cout << "Error: " << e.what() << std::endl;
     }
 
@@ -113,8 +113,8 @@ int main(int argc, char *argv[]) {
 
   MPI_Init(&argc, &argv);
 
-  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-  MPI_Comm_size(MPI_COMM_WORLD, &size);
+  MPI_Comm_rank(MPI_COMM_WORLD, &::rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &::size);
 
   //init google test with any arguments specific to it
   ::testing::InitGoogleTest(&argc, argv);
