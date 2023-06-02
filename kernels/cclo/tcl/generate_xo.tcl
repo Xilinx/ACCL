@@ -111,11 +111,11 @@ proc edit_core {core} {
         config_axis_if $core "m_axis_dma1_s2mm" "ap_clk" 64 0 0 8 1 0 1 1
         config_axis_if $core "s_axis_dma1_mm2s" "ap_clk" 64 0 0 0 1 0 1 1
         config_axis_if $core "m_axis_dma0_mm2s_cmd" "ap_clk" 13 0 0 0 1 0 0 0
-        config_axis_if $core "s_axis_dma0_mm2s_sts" "ap_clk" 4 0 0 0 1 0 1 1
+        config_axis_if $core "s_axis_dma0_mm2s_sts" "ap_clk" 1 0 0 0 1 0 1 1
         config_axis_if $core "m_axis_dma0_s2mm_cmd" "ap_clk" 13 0 0 0 1 0 0 0
         config_axis_if $core "s_axis_dma0_s2mm_sts" "ap_clk" 4 0 0 0 1 0 1 1
         config_axis_if $core "m_axis_dma1_mm2s_cmd" "ap_clk" 13 0 0 0 1 0 0 0
-        config_axis_if $core "s_axis_dma1_mm2s_sts" "ap_clk" 4 0 0 0 1 0 1 1
+        config_axis_if $core "s_axis_dma1_mm2s_sts" "ap_clk" 1 0 0 0 1 0 1 1
         config_axis_if $core "m_axis_dma1_s2mm_cmd" "ap_clk" 13 0 0 0 1 0 0 0
         config_axis_if $core "s_axis_dma1_s2mm_sts" "ap_clk" 4 0 0 0 1 0 1 1
     }

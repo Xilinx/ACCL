@@ -21,12 +21,13 @@ PLATFORM ?= xilinx_u55c_gen3x16_xdma_3_202210_1
 # U200: xilinx_u200_gen3x16_xdma_2_202110_1
 # U55C: xilinx_u55c_gen3x16_xdma_3_202210_1
 # U280: xilinx_u280_gen3x16_xdma_1_202211_1
-# U250: xilinx_u250_gen3x16_xdma_3_1_202020_1
+# U250: xilinx_u250_gen3x16_xdma_4_1_202210_1
 
 XSA := $(strip $(patsubst %.xpfm, % , $(shell basename $(PLATFORM))))
 DEBUG ?= none
 PROFILE ?= none
 MODE ?= tcp
+USE_HOSTMEM ?= 0
 VPP_TARGET ?= hw
 USER_KERNEL ?= none
 FREQUENCY = 250
@@ -50,6 +51,7 @@ TCP_VIVADO_ROOTDIR ?= $$XILINX_VIVADO
 TCP_HLS_ROOTDIR ?= $$XILINX_HLS
 TCP_RX_BYPASS ?= 0
 CMAC_TCP_XO=Vitis_with_100Gbps_TCP-IP/_x.hw.$(XSA)/cmac_krnl.xo
+EXTERNAL_DMA_XO=../../kernels/plugins/external_dma/external_dma.xo
 ROCE_XO=HiveNet/network/roce_v2/hw/HiveNet/build/HiveNet_kernel_$(ETH_IF).xo
 ROCE_HBM_BANK=0
 CYT_BIT=Coyote/hw/build/bitstreams/cyt_top.bit
@@ -90,7 +92,7 @@ else ifeq (u55c,$(findstring u55c, $(PLATFORM)))
 else ifeq (u200,$(findstring u200, $(PLATFORM)))
 	FPGAPART=xcu200-fsgd2104-2-e
 	BOARD=u200
-else ifeq (u50,$(findstring u200, $(PLATFORM)))
+else ifeq (u50,$(findstring u50, $(PLATFORM)))
 	FPGAPART=xcu50-fsvh2104-2-e
 	BOARD=u50
 else
@@ -124,6 +126,15 @@ endif
 ifeq (probe, $(DEBUG))
 	GEN_CONFIG_FLAGS += --probe
 	OTHER_XO += $(PROBE_XO)
+endif
+
+CCLO_EN_DMA = 1
+CCLO_EN_EXT_DMA = 0
+ifeq (1, $(USE_HOSTMEM))
+	GEN_CONFIG_FLAGS += --host
+	OTHER_XO += $(EXTERNAL_DMA_XO)
+	CCLO_EN_DMA = 0
+	CCLO_EN_EXT_DMA = 1
 endif
 
 ifeq (udp,$(MODE))
@@ -225,9 +236,11 @@ $(TCP_XO):
 $(ROCE_XO):
 	cd HiveNet/network/roce_v2/hw/HiveNet/src/ && vivado -mode batch -source HiveNet_bd.tcl -tclargs $(ETH_IF) $(ROCE_HBM_BANK) $(FPGAPART)
 
-$(XCLBIN): $(NET_XO)
+$(CCLO_XO):
+	$(MAKE) -C ../../kernels/cclo PLATFORM=$(PLATFORM) STACK_TYPE=$(CCLO_STACK_TYPE) MB_DEBUG_LEVEL=$(CCLO_MB_DEBUG_LEVEL) EN_EXT_DMA=$(CCLO_EN_EXT_DMA) EN_DMA=$(CCLO_EN_DMA)
+
+$(XCLBIN): $(NET_XO) $(CCLO_XO)
 	python3 gen_config.py --board $(BOARD) --poe $(MODE) $(GEN_CONFIG_FLAGS) -o $(CONFIGFILE)
-	$(MAKE) -C ../../kernels/cclo PLATFORM=$(PLATFORM) STACK_TYPE=$(CCLO_STACK_TYPE) MB_DEBUG_LEVEL=$(CCLO_MB_DEBUG_LEVEL)
 	$(MAKE) -C ../../kernels/plugins PLATFORM=$(PLATFORM) DEBUG=$(DEBUG)
 	v++ --link --platform $(PLATFORM) --kernel_frequency $(FREQUENCY) --save-temps --temp_dir $(BUILD_DIR) $(VPP_CONFIG) $(ADV_CMD) $(IPREPO_CMD) -o $@ $(NET_XO) $(OTHER_XO)
 
