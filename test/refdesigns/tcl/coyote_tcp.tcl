@@ -2,7 +2,7 @@ open_project Coyote/hw/build/lynx/lynx.xpr
 update_compile_order -fileset sources_1
 create_bd_design "accl_bd"
 update_compile_order -fileset sources_1
-set_property  ip_repo_paths  {./iprepo ../../kernels} [current_project]
+set_property  ip_repo_paths  {./Coyote/hw/build ../../kernels} [current_project]
 update_ip_catalog
 
 create_bd_cell -type ip -vlnv Xilinx:ACCL:ccl_offload:1.0 ccl_offload_0
