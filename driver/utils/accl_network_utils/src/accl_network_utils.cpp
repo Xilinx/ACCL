@@ -193,7 +193,7 @@ void configure_vnx(vnx::CMAC &cmac, vnx::Networklayer &network_layer,
   }
 }
 
-void configure_tcp(BaseBuffer &tx_buf_network, BaseBuffer &rx_buf_network,
+void configure_tcp(FPGABuffer<int8_t> &tx_buf_network, FPGABuffer<int8_t> &rx_buf_network,
                    xrt::kernel &network_krnl, const std::vector<rank_t> &ranks,
                    int local_rank) {
   tx_buf_network.sync_to_device();

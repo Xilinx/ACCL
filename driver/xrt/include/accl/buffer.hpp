@@ -19,7 +19,7 @@
 #pragma once
 #include "constants.hpp"
 #include <memory>
-#include <xrt/xrt_bo.h>
+// #include <xrt/xrt_bo.h>
 
 /** @file buffer.hpp */
 
@@ -37,12 +37,12 @@ public:
    * @param byte_array        Pointer to the host buffer.
    * @param size              Size of the host and device buffer in bytes.
    * @param type              Datatype of the device buffer.
-   * @param physical_address  The location of the device buffer.
+   * @param address           The location of the device buffer.
    */
   BaseBuffer(void *byte_array, size_t size, dataType type,
-             addr_t physical_address)
+             addr_t address)
       : _byte_array(byte_array), _size(size), _type(type),
-        _physical_address(physical_address) {}
+        _address(address) {}
 
   /**
    * Destroy the Base Buffer object.
@@ -68,12 +68,12 @@ public:
    */
   virtual void free_buffer() = 0;
 
-  /**
-   * Get internal bo buffer, or nullptr if it does not exists.
-   *
-   * @return xrt::bo*  The internal bo buffer, or nullptr if it does not exists.
-   */
-  virtual xrt::bo *bo() = 0;
+  // /**
+  //  * Get internal bo buffer, or nullptr if it does not exists.
+  //  *
+  //  * @return xrt::bo*  The internal bo buffer, or nullptr if it does not exists.
+  //  */
+  // virtual xrt::bo *bo() = 0;
 
   /**
    * Check if buffer is an actual fpga buffer, or a simulated buffer.
@@ -129,7 +129,7 @@ public:
    *
    * @return addr_t  The location of the device buffer.
    */
-  addr_t physical_address() const { return _physical_address; }
+  addr_t address() const { return _address; }
 
   /**
    * Get a slice of the buffer from start to end.
@@ -144,7 +144,7 @@ protected:
   void *_byte_array;
   const size_t _size;
   const dataType _type;
-  addr_t _physical_address;
+  addr_t _address;
 };
 
 /**
@@ -160,11 +160,11 @@ public:
    * @param buffer            The host buffer.
    * @param length            The length of the host buffer.
    * @param type              The datatype of the device buffer.
-   * @param physical_address  The location of the device buffer.
+   * @param address  The location of the device buffer.
    */
-  Buffer(dtype *buffer, size_t length, dataType type, addr_t physical_address)
+  Buffer(dtype *buffer, size_t length, dataType type, addr_t address)
       : BaseBuffer(static_cast<void *>(buffer), length * sizeof(dtype), type,
-                   physical_address),
+                   address),
         _buffer(buffer), _length(length){};
 
   /**
@@ -195,10 +195,10 @@ protected:
   dtype *_buffer;
   const size_t _length;
 
-  void update_buffer(dtype *buffer, addr_t physical_address) {
+  void update_buffer(dtype *buffer, addr_t address) {
     _buffer = buffer;
     _byte_array = static_cast<void *>(buffer);
-    _physical_address = physical_address;
+    _address = address;
   }
 };
 } // namespace ACCL

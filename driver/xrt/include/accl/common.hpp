@@ -86,6 +86,20 @@ inline void reset_log() {
  * @param message Message to write to log file.
  */
 #ifdef ACCL_DEBUG
+void accl_log(int rank, const std::string &message);
+#else
+inline void accl_log(int rank, const std::string &message) {
+  // NOP
+}
+#endif
+
+/**
+ * Append message to log file.
+ *
+ * @param label   Label of message.
+ * @param message Message to write to log file.
+ */
+#ifdef ACCL_DEBUG
 void accl_send_log(const std::string &label, const std::string &message);
 #else
 inline void accl_send_log(const std::string &label,

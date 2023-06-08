@@ -28,6 +28,8 @@
 #include "accl/fpgadevice.hpp"
 #include "accl/simbuffer.hpp"
 #include "accl/simdevice.hpp"
+#include "accl/coyotebuffer.hpp"
+#include "accl/coyotedevice.hpp"
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -102,6 +104,11 @@ public:
        addr_t bufsize = 1024, addr_t segsize = 1024,
        const arithConfigMap &arith_config = DEFAULT_ARITH_CONFIG);
 
+  // constructor for coyote fpga device
+  ACCL(CoyoteDevice *dev, const std::vector<rank_t> &ranks, int local_rank,
+          networkProtocol protocol = networkProtocol::TCP, int nbufs = 16, addr_t bufsize = 1024, addr_t segsize = 1024,
+       const arithConfigMap &arith_config = DEFAULT_ARITH_CONFIG);
+  
   /**
    * Destroy the ACCL object. Automatically deinitializes the CCLO.
    *
@@ -894,6 +901,28 @@ public:
     } else {
       return std::unique_ptr<Buffer<dtype>>(
           new FPGABufferP2P<dtype>(bo, length, type));
+    }
+  }
+
+  /**
+   * Construct a new coyote buffer object without an existing host buffer 
+   *
+   * Coyote buffer object doesn't have a notion of memory banks
+   *
+   *
+   * @tparam dtype              Datatype of the buffer.
+   * @param length              Amount of elements to allocate for.
+   * @param type                ACCL datatype of the buffer.
+   * @param mem_grp             Memory bank to allocate buffer on.
+   * @return std::unique_ptr<Buffer<dtype>> The allocated buffer.
+   */
+  template <typename dtype>
+  std::unique_ptr<Buffer<dtype>> create_coyotebuffer(size_t length, dataType type) {
+    if (sim_mode) {
+      debug("create_coyotebuffer sim_mode unsupported!!!");
+      exit(3);
+    } else {
+      return std::unique_ptr<Buffer<dtype>>(new CoyoteBuffer<dtype>(length, type, cclo));
     }
   }
 

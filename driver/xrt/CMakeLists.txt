@@ -37,6 +37,8 @@ set(ACCL_HEADER_PATH ${CMAKE_CURRENT_LIST_DIR}/include)
 set(ACCL_DOCS_PATH ${CMAKE_CURRENT_LIST_DIR}/docs)
 set(ACCL_REPO_ROOT ${CMAKE_CURRENT_LIST_DIR}/../../)
 set(ZMQ_INTF_DIR ${ACCL_REPO_ROOT}/test/model/zmq)
+set(COYOTE_SOURCE_PATH ${CMAKE_CURRENT_LIST_DIR}/../../test/refdesigns/Coyote/sw/src)
+set(COYOTE_HEADER_PATH ${CMAKE_CURRENT_LIST_DIR}/../../test/refdesigns/Coyote/sw/include)
 
 set(ACCL_HEADERS
     ${ACCL_HEADER_PATH}/accl.hpp
@@ -69,11 +71,40 @@ set(ACCL_DOCS_RST
     ${ACCL_DOCS_PATH}/Cpp_reference/communicator.rst
     ${ACCL_DOCS_PATH}/Cpp_reference/misc.rst
 )
+        
+set(EN_COYOTE ON)
+if(EN_COYOTE)
+    message("Enable Coyote")
+    set(ACCL_HEADERS 
+        ${ACCL_HEADERS} 
+        ${ACCL_HEADER_PATH}/coyotebuffer.hpp
+        ${ACCL_HEADER_PATH}/coyotedevice.hpp
+    )
+    set(ACCL_SOURCES 
+        ${ACCL_SOURCES} 
+        ${ACCL_SOURCE_PATH}/coyotedevice.cpp
+    )
+    file(GLOB COYOTE_SOURCE "${COYOTE_SOURCE_PATH}/*.cpp")
+    
+    if(EN_AVX)
+        set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -mavx -march=native -O3")
+    else()
+        set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -march=native -O1")
+    endif()
+endif(EN_COYOTE)
+
 
 set(ACCL_INCLUDE_PATH ${CMAKE_CURRENT_LIST_DIR}/include ${ZMQ_INTF_DIR})
 if (HAS_PARENT)
   set(ACCL_INCLUDE_PATH ${CMAKE_CURRENT_LIST_DIR}/include ${ZMQ_INTF_DIR} PARENT_SCOPE)
 endif (HAS_PARENT)
+
+
+if(EN_COYOTE)
+    set(ACCL_SOURCES ${ACCL_SOURCES} ${COYOTE_SOURCE})
+    set(ACCL_INCLUDE_PATH ${ACCL_INCLUDE_PATH} ${COYOTE_HEADER_PATH})
+endif(EN_COYOTE)
+
 
 add_library(accl SHARED ${ACCL_SOURCES})
 target_include_directories(accl PUBLIC ${ACCL_INCLUDE_PATH})

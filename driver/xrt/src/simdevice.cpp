@@ -53,8 +53,8 @@ void SimDevice::start(const Options &options) {
       options.count, options.comm, options.root_src_dst, function,
       options.arithcfg_addr, static_cast<int>(options.compression_flags),
       static_cast<int>(options.stream_flags),
-      options.addr_0->physical_address(), options.addr_1->physical_address(),
-      options.addr_2->physical_address());
+      options.addr_0->address(), options.addr_1->address(),
+      options.addr_2->address());
 };
 
 void SimDevice::wait() {
