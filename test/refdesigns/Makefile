@@ -180,6 +180,11 @@ else ifeq (coyote_tcp, $(MODE))
 	COYOTE_CONFIG = -DFDEV_NAME=$(BOARD) -DEN_MEM=1 -DEN_STRM=1 -DEN_BPSS=1 -DEN_TCP_0=1 -DN_STRM_AXI=2 -DN_CARD_AXI=2 -DEN_HLS=0 -DACLK_F=250
 	CCLO_STACK_TYPE = TCP
 	OUTPUT_PRODUCT = $(CYT_BIT)
+else ifeq (coyote_rdma, $(MODE))
+	OTHER_XO = coyote_shell
+	COYOTE_CONFIG = -DFDEV_NAME=$(BOARD) -DEN_MEM=1 -DEN_STRM=1 -DEN_BPSS=1 -DEN_RDMA_0=1 -DEN_RPC=1 -DN_STRM_AXI=2 -DN_CARD_AXI=2 -DEN_HLS=0 -DACLK_F=250
+	CCLO_STACK_TYPE = RDMA
+	OUTPUT_PRODUCT = $(CYT_BIT)
 else
 	$(error Unsupported MODE)
 endif
@@ -218,7 +223,7 @@ Coyote/hw/build/lynx/lynx.xpr:
 $(CYT_BIT): coyote_shell
 	$(MAKE) -C ../../kernels/cclo PLATFORM=$(PLATFORM) STACK_TYPE=$(CCLO_STACK_TYPE) MB_DEBUG_LEVEL=$(CCLO_MB_DEBUG_LEVEL) EN_DMA=0 EN_EXT_DMA=1
 	$(MAKE) -C ../../kernels/plugins PLATFORM=$(PLATFORM) DEBUG=$(DEBUG)
-	vivado -mode tcl -source tcl/coyote_tcp.tcl
+	vivado -mode tcl -source tcl/coyote.tcl -tclargs $(CCLO_STACK_TYPE)
 	cp hdl/coyote_tcp_top.sv Coyote/hw/build/lynx/hdl/config_0/user_logic_c0_0.sv
 	$(MAKE) -C Coyote/hw/build/ compile
 
