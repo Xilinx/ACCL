@@ -28,6 +28,14 @@ SimDevice::SimDevice(unsigned int zmqport, unsigned int local_rank) {
   debug("SimDevice connected");
 };
 
+SimDevice::SimDevice(unsigned int zmqport, unsigned int local_rank, xrt::device &dev) {
+  debug("SimDevice connecting to ZMQ on port " + std::to_string(zmqport) +
+        " for rank " + std::to_string(local_rank));
+  zmq_ctx = zmq_client_intf(zmqport, local_rank);
+  debug("SimDevice connected");
+  device = dev;
+};
+
 void SimDevice::start(const Options &options) {
   int function;
 
@@ -86,5 +94,11 @@ val_t SimDevice::read(addr_t offset) {
 // MMIO write response {"status": OK|ERR}
 void SimDevice::write(addr_t offset, val_t val) {
   zmq_client_cfgwrite(&(this->zmq_ctx), offset, val);
+}
+
+CCLO::deviceType SimDevice::get_device_type()
+{
+  std::cout<<"get_device_type: sim_device"<<std::endl;
+  return CCLO::sim_device;
 }
 } // namespace ACCL

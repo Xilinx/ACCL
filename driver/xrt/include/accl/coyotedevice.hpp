@@ -31,8 +31,8 @@ namespace ACCL {
 /**
  * Address offsets
  */
-const size_t OFFSET_HOSTCTRL = 0x0000; //0x810000 >> 2;
-const size_t OFFSET_CCLO     = 0x8000; //0x800000 >> 2;
+const size_t OFFSET_HOSTCTRL = 0x2000; 
+const size_t OFFSET_CCLO     = 0x0000; 
 
 namespace HOSTCTRL_ADDR {
 // address maps for the hostcontrol kernel
@@ -162,7 +162,15 @@ public:
     return 0x0;
   }
 
+  deviceType get_device_type() override;
+
+  fpga::cProcess* get_device(){
+    return &coyote_proc;
+  }
+  
   fpga::cProcess coyote_proc;
+
 private:
+  
 };
 } // namespace ACCL

@@ -28,6 +28,7 @@ using namespace std;
 #define CYT_LEN_BITS 28
 #define CYT_DEST_BITS 4
 #define CYT_PID_BITS 6
+#define CYT_N_REGIONS_BITS 1
 
 void cyt_dma_adapter(
 	//DM command streams

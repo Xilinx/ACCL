@@ -33,8 +33,8 @@ ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
            networkProtocol protocol, int nbufs, addr_t bufsize, addr_t segsize,
            const arithConfigMap &arith_config)
     : arith_config(arith_config), protocol(protocol), sim_mode(false),
-      _devicemem(devicemem), rxbufmem(rxbufmem), device(device) {
-  cclo = new FPGADevice(cclo_ip, hostctrl_ip);
+      _devicemem(devicemem), rxbufmem(rxbufmem) {
+  cclo = new FPGADevice(cclo_ip, hostctrl_ip, device);
   initialize_accl(ranks, local_rank, nbufs, bufsize, segsize);
 }
 
@@ -54,8 +54,8 @@ ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
            networkProtocol protocol, int nbufs, addr_t bufsize, addr_t segsize,
            const arithConfigMap &arith_config)
     : arith_config(arith_config), protocol(protocol), sim_mode(true),
-      _devicemem(0), rxbufmem({}), device(device) {
-  cclo = new SimDevice(sim_start_port, local_rank);
+      _devicemem(0), rxbufmem({}) {
+  cclo = new SimDevice(sim_start_port, local_rank, device);
   initialize_accl(ranks, local_rank, nbufs, bufsize, segsize);
 }
 
@@ -116,6 +116,8 @@ CCLO *ACCL::set_timeout(unsigned int value, bool run_async,
 }
 
 CCLO *ACCL::nop(bool run_async, std::vector<CCLO *> waitfor) {
+  double durationUs = 0.0;
+	auto start = std::chrono::high_resolution_clock::now();
   CCLO::Options options{};
   options.scenario = operation::nop;
   options.waitfor = waitfor;
@@ -126,6 +128,9 @@ CCLO *ACCL::nop(bool run_async, std::vector<CCLO *> waitfor) {
     handle->wait();
     check_return_value("nop");
   }
+  auto end = std::chrono::high_resolution_clock::now();
+  durationUs = (std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() / 1000.0);
+  std::cout<<"NOP latency[us]:"<<durationUs<<std::endl;
 
   return nullptr;
 }
@@ -1166,7 +1171,7 @@ std::string ACCL::dump_rx_buffers(size_t nbufs, bool dump_data) {
 
 void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
                            int nbufs, addr_t bufsize , addr_t segsize) {
-  reset_log();
+  // reset_log();
   debug("CCLO HWID: " + std::to_string(get_hwid()) + " at 0x" +
         debug_hex(cclo->get_base_addr()));
 
@@ -1240,9 +1245,10 @@ void ACCL::setup_rx_buffers(size_t nbufs, addr_t bufsize,
     if (sim_mode) {
       buf = new SimBuffer(new int8_t[bufsize](), bufsize, dataType::int8,
                           static_cast<SimDevice *>(cclo)->get_context());
-    } else {
-      buf = new FPGABuffer<int8_t>(bufsize, dataType::int8, device,
-                                   devicemem[i % devicemem.size()]);
+    } else if(cclo->get_device_type() == CCLO::xrt_device ){
+      buf = new FPGABuffer<int8_t>(bufsize, dataType::int8, *(static_cast<FPGADevice *>(cclo)->get_device()), devicemem[i % devicemem.size()]);
+    } else if(cclo->get_device_type() == CCLO::coyote_device){
+      buf = new CoyoteBuffer<int8_t>(bufsize, dataType::int8, static_cast<CoyoteDevice *>(cclo));
     }
 
     buf->sync_to_device();
@@ -1272,11 +1278,15 @@ void ACCL::setup_rx_buffers(size_t nbufs, addr_t bufsize,
     utility_spare =
         new SimBuffer(new int8_t[bufsize](), bufsize, dataType::int8,
                       static_cast<SimDevice *>(cclo)->get_context());
-  } else {
+  } else if(cclo->get_device_type() == CCLO::xrt_device ){
     utility_spare =
-        new FPGABuffer<int8_t>(bufsize, dataType::int8, device, devicemem[0]);
+        new FPGABuffer<int8_t>(bufsize, dataType::int8, *(static_cast<FPGADevice *>(cclo)->get_device()), devicemem[0]);
+  } else if(cclo->get_device_type() == CCLO::coyote_device){
+    utility_spare =
+        new CoyoteBuffer<int8_t>(bufsize, dataType::int8, static_cast<CoyoteDevice *>(cclo));
   }
 }
+
 
 void ACCL::check_return_value(const std::string function_name) {
   val_t retcode = get_retcode();
@@ -1318,7 +1328,8 @@ void ACCL::prepare_call(CCLO::Options &options, bool check_tcp) {
   }
 
   std::set<dataType> dtypes;
-  hostFlags host_flags = hostFlags::NO_HOST;
+  // set flags for host-only buffers
+  options.host_flags = hostFlags::NO_HOST;
 
   if (options.addr_0 == nullptr) {
     options.addr_0 = &dummy_buffer;
@@ -1352,8 +1363,6 @@ void ACCL::prepare_call(CCLO::Options &options, bool check_tcp) {
   // if no compressed data type specified, set same as uncompressed
   options.compression_flags = compressionFlags::NO_COMPRESSION;
 
-  // set flags for host-only buffers
-  options.host_flags = hostFlags::NO_HOST;
 
   if (dtypes.empty()) {
     options.arithcfg_addr = 0x0;

@@ -32,7 +32,7 @@ namespace ACCL {
   /**
    * A coyote buffer that is allocated and mapped to FPGA TLB
    *
-   * The host pointer will be aligned to 4096 bytes. 
+   * The host pointer will be aligned to 2M bytes. 
    *
    * @tparam dtype Datatype of the buffer.
    */
@@ -53,18 +53,19 @@ template <typename dtype> class CoyoteBuffer : public Buffer<dtype> {
     {
       CoyoteDevice *dev = dynamic_cast<CoyoteDevice *>(device);
       this->device = dev;
-      // 4K pages
-      size_t page_size = 1ULL << 12;
+      // 2M pages
+      size_t page_size = 1ULL << 21;
       size_t buffer_size = length * sizeof(dtype);
       uint32_t n_pages = (buffer_size + page_size - 1) / page_size;
-      std::cerr << "CoyoteBuffer contructor called!" << std::endl;
+      std::cerr << "CoyoteBuffer contructor called! page_size:"<<page_size<<", buffer_size:"<<buffer_size<<",n_pages:"<<n_pages<< std::endl;
 
-      dtype *ptr = (dtype *)this->device->coyote_proc.getMem({fpga::CoyoteAlloc::REG_4K, n_pages});
+      this->aligned_buffer = (dtype *)this->device->coyote_proc.getMem({fpga::CoyoteAlloc::HUGE_2M, n_pages});
 
-      std::cerr << "Allocation successful" << std::endl;
-      this->update_buffer(this->aligned_buffer, (addr_t)ptr); 
+      this->update_buffer(this->aligned_buffer, (addr_t)this->aligned_buffer); 
 
-      std::cerr << "Allocated buffer: " << (uint64_t)this->aligned_buffer << ", Size: " << this->_size << std::endl;
+      std::cerr << "Allocation successful! Allocated buffer: "<<std::setbase(16)<<(uint64_t)this->aligned_buffer << std::setbase(10) <<", Size: " << this->_size << std::endl;
+
+      host_flag = true;
     }
 
     /**
@@ -74,7 +75,7 @@ template <typename dtype> class CoyoteBuffer : public Buffer<dtype> {
     virtual ~CoyoteBuffer()
     {
 
-      this->device->coyote_proc.freeMem(aligned_buffer);
+      this->device->coyote_proc.freeMem(this->aligned_buffer);
     }
 
     /**
@@ -94,7 +95,8 @@ template <typename dtype> class CoyoteBuffer : public Buffer<dtype> {
     */
     bool is_host_only() const override
     {
-      return false;
+      std::cerr << "check is_host_only: " << std::setbase(16) << (uint64_t)this->aligned_buffer << ", host_flag: " << std::setbase(10) << this->host_flag << std::endl;
+      return this->host_flag;
     }
 
     /**
@@ -103,9 +105,11 @@ template <typename dtype> class CoyoteBuffer : public Buffer<dtype> {
      */
     void sync_from_device() override
     {
-      std::cerr << "calling sync: " << std::setbase(16) << (uint64_t)aligned_buffer << ", size: " << std::setbase(10) << this->size() << std::endl;
+      std::cerr << "calling sync: " << std::setbase(16) << (uint64_t)this->aligned_buffer << ", size: " << std::setbase(10) << this->size() << std::endl;
 
-      this->device->coyote_proc.invoke({fpga::CoyoteOper::SYNC, aligned_buffer, (uint32_t)this->_size, false, false, 0, true});
+      this->device->coyote_proc.invoke({fpga::CoyoteOper::SYNC, this->aligned_buffer, (uint32_t)this->_size, false, false, 0, true});
+    
+      this->host_flag = true;
     }
 
     /**
@@ -114,15 +118,17 @@ template <typename dtype> class CoyoteBuffer : public Buffer<dtype> {
      */
     void sync_to_device() override
     {
-      std::cerr << "calling offload: " << std::setbase(16) << (uint64_t)aligned_buffer << ", size: " << std::setbase(10) << this->size() << std::endl;
+      std::cerr << "calling offload: " << std::setbase(16) << (uint64_t)this->aligned_buffer << ", size: " << std::setbase(10) << this->size() << std::endl;
 
-      this->device->coyote_proc.invoke({fpga::CoyoteOper::OFFLOAD, aligned_buffer, (uint32_t)this->_size, false, false, 0, false});
+      this->device->coyote_proc.invoke({fpga::CoyoteOper::OFFLOAD, this->aligned_buffer, (uint32_t)this->_size, false, false, 0, false});
+    
+      this->host_flag = false;
     }
 
 
     void free_buffer() override
     {
-      this->device->coyote_proc.freeMem(aligned_buffer);
+      this->device->coyote_proc.freeMem(this->aligned_buffer);
       return;
     }
 
@@ -142,5 +148,6 @@ template <typename dtype> class CoyoteBuffer : public Buffer<dtype> {
   private:
     dtype *aligned_buffer;
     CoyoteDevice *device;
+    bool host_flag; 
   };
 } // namespace ACCL

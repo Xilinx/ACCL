@@ -21,8 +21,8 @@
 
 
 namespace ACCL {
-FPGADevice::FPGADevice(xrt::ip &cclo_ip, xrt::kernel &hostctrl_ip)
-    : cclo(cclo_ip), hostctrl(hostctrl_ip) {}
+FPGADevice::FPGADevice(xrt::ip &cclo_ip, xrt::kernel &hostctrl_ip, xrt::device &device)
+    : cclo(cclo_ip), hostctrl(hostctrl_ip), device(device) {}
 
 void FPGADevice::start(const Options &options) {
   if (run) {
@@ -43,7 +43,7 @@ void FPGADevice::start(const Options &options) {
                  static_cast<uint32_t>(options.tag),
                  static_cast<uint32_t>(options.arithcfg_addr),
                  static_cast<uint32_t>(options.compression_flags),
-                 static_cast<uint32_t>(options.host_flags) << 16 | static_cast<uint32_t>(options.stream_flags),
+                 static_cast<uint32_t>(options.host_flags) << 8 | static_cast<uint32_t>(options.stream_flags),
                  static_cast<uint64_t>(options.addr_0->address()),
                  static_cast<uint64_t>(options.addr_1->address()),
                  static_cast<uint64_t>(options.addr_2->address()));
@@ -66,6 +66,12 @@ CCLO::timeoutStatus FPGADevice::wait(std::chrono::milliseconds timeout) {
   }
 
   return CCLO::no_timeout;
+}
+
+CCLO::deviceType FPGADevice::get_device_type()
+{
+  std::cout<<"get_device_type: xrt_device"<<std::endl;
+  return CCLO::xrt_device;
 }
 
 void FPGADevice::call(const Options &options) {

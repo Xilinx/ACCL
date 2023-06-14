@@ -87,6 +87,12 @@ public:
     timeout
   };
 
+  enum deviceType{
+    sim_device,
+    xrt_device,
+    coyote_device
+  };
+
   /**
    * Construct a new CCLO object.
    *
@@ -148,5 +154,12 @@ public:
    * @return addr_t The base address of the CCLO.
    */
   virtual addr_t get_base_addr() = 0;
+
+  /**
+   * Get the device type.
+   *
+   * @return deviceType Whether this is a sim device, xrt device or coyote device.
+   */
+  virtual deviceType get_device_type() = 0;
 };
 } // namespace ACCL

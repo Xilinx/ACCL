@@ -21,6 +21,8 @@
 #include "constants.hpp"
 #include <string>
 #include "zmq_client.h"
+#include <experimental/xrt_ip.h>
+#include <xrt/xrt_kernel.h>
 
 /** @file simdevice.hpp */
 
@@ -38,6 +40,14 @@ public:
    * @param local_rank The local rank of this process.
    */
   SimDevice(unsigned int zmqport, unsigned int local_rank);
+
+  /**
+   * Construct a new Simulated Device object.
+   *
+   * @param zmqport    Port of simulator or emulator to connect to.
+   * @param local_rank The local rank of this process.
+   */
+  SimDevice(unsigned int zmqport, unsigned int local_rank, xrt::device &device);
 
   /**
    * Destroy the Simulated Device object
@@ -66,7 +76,14 @@ public:
    */
   zmq_intf_context *get_context() { return &zmq_ctx; }
 
+  deviceType get_device_type() override;
+
+  xrt::device* get_device() {
+    return &device;
+  }
+
 private:
+  xrt::device device;
   zmq_intf_context zmq_ctx;
   BaseBuffer *addr_0_cache;
   BaseBuffer *addr_1_cache;

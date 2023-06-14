@@ -72,8 +72,14 @@ connect_bd_net [get_bd_ports ap_rst_n_0] [get_bd_pins smartconnect_0/aresetn]
 connect_bd_intf_net [get_bd_intf_pins hostctrl_0/s_axi_control] [get_bd_intf_pins smartconnect_0/M00_AXI]
 connect_bd_intf_net [get_bd_intf_pins ccl_offload_0/s_axi_control] [get_bd_intf_pins smartconnect_0/M01_AXI]
 make_bd_intf_pins_external  [get_bd_intf_pins smartconnect_0/S00_AXI]
-assign_bd_address
+set_property -dict [list CONFIG.ADDR_WIDTH {16}] [get_bd_intf_ports S00_AXI_0]
 
+# Create address segments
+assign_bd_address -offset 0x00000000 -range 0x00002000 -target_address_space [get_bd_addr_spaces S00_AXI_0] [get_bd_addr_segs ccl_offload_0/s_axi_control/reg0] -force
+assign_bd_address -offset 0x00002000 -range 0x00002000 -target_address_space [get_bd_addr_spaces S00_AXI_0] [get_bd_addr_segs hostctrl_0/s_axi_control/Reg] -force
+
+set_property CONFIG.PROTOCOL AXI4LITE [get_bd_intf_ports /S00_AXI_0]
+set_property -dict [list CONFIG.HAS_BURST {0} CONFIG.HAS_CACHE {0} CONFIG.HAS_LOCK {0} CONFIG.HAS_QOS {0} CONFIG.HAS_REGION {0}] [get_bd_intf_ports S00_AXI_0]
 validate_bd_design
 save_bd_design
 

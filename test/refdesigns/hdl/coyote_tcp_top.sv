@@ -64,6 +64,10 @@ module design_user_logic_c0_0 (
 
 /* -- USER LOGIC -------------------------------------------------------- */
 
+// Constants
+localparam integer COYOTE_AXIL_ADDR_LSB = $clog2(AXIL_DATA_BITS/8);
+localparam integer COYOTE_AXIL_ADDR_MSB = 16;
+
 // Master Data Stream
 AXI4SR m_axis_dma0_s2mm ();
 AXI4SR m_axis_dma1_s2mm ();
@@ -71,8 +75,8 @@ AXI4SR m_axis_dma0_s2mm_s ();
 AXI4SR m_axis_dma1_s2mm_s ();
 
 // register slices
-axisr_reg_array #(.N_STAGES(2)) (.aclk(aclk), .aresetn(aresetn), .s_axis(m_axis_dma0_s2mm),  .m_axis(m_axis_dma0_s2mm_s));
-axisr_reg_array #(.N_STAGES(2)) (.aclk(aclk), .aresetn(aresetn), .s_axis(m_axis_dma1_s2mm),  .m_axis(m_axis_dma1_s2mm_s));
+axisr_reg_array #(.N_STAGES(4)) (.aclk(aclk), .aresetn(aresetn), .s_axis(m_axis_dma0_s2mm),  .m_axis(m_axis_dma0_s2mm_s));
+axisr_reg_array #(.N_STAGES(4)) (.aclk(aclk), .aresetn(aresetn), .s_axis(m_axis_dma1_s2mm),  .m_axis(m_axis_dma1_s2mm_s));
 
 // m_axis_dma0_s2mm_s multiplex to host_0_src and card_0_src according to the strm flag encoded in m_axis_dma0_s2mm_s.tid 
 assign axis_host_0_src.tdata = m_axis_dma0_s2mm_s.tdata;
@@ -179,8 +183,8 @@ axis_interconnect_512_2to1 s_axis_dma1_mm2s_s_merger (
 );
 
 // slices
-axis_reg_array #(.N_STAGES(2)) (.aclk(aclk), .aresetn(aresetn), .s_axis(s_axis_dma0_mm2s_s),  .m_axis(s_axis_dma0_mm2s));
-axis_reg_array #(.N_STAGES(2)) (.aclk(aclk), .aresetn(aresetn), .s_axis(s_axis_dma1_mm2s_s),  .m_axis(s_axis_dma1_mm2s));
+axis_reg_array #(.N_STAGES(4)) (.aclk(aclk), .aresetn(aresetn), .s_axis(s_axis_dma0_mm2s_s),  .m_axis(s_axis_dma0_mm2s));
+axis_reg_array #(.N_STAGES(4)) (.aclk(aclk), .aresetn(aresetn), .s_axis(s_axis_dma1_mm2s_s),  .m_axis(s_axis_dma1_mm2s));
 
 
 // ACCL Block Design
@@ -188,36 +192,22 @@ accl_bd_wrapper accl_system(
     .ap_clk_0(aclk),
     .ap_rst_n_0(aresetn),
 
-    .S00_AXI_0_araddr(axi_ctrl.araddr),
-    .S00_AXI_0_arburst(),
-    .S00_AXI_0_arcache(),
-    .S00_AXI_0_arlen(),
-    .S00_AXI_0_arlock(),
+    .S00_AXI_0_araddr(axi_ctrl.araddr[COYOTE_AXIL_ADDR_MSB-1:1]),
     .S00_AXI_0_arprot(axi_ctrl.arprot),
-    .S00_AXI_0_arqos(axi_ctrl.arqos),
     .S00_AXI_0_arready(axi_ctrl.arready),
-    .S00_AXI_0_arsize(),
     .S00_AXI_0_arvalid(axi_ctrl.arvalid),
-    .S00_AXI_0_awaddr(axi_ctrl.awaddr),
-    .S00_AXI_0_awburst(),
-    .S00_AXI_0_awcache(),
-    .S00_AXI_0_awlen(),
-    .S00_AXI_0_awlock(),
+    .S00_AXI_0_awaddr(axi_ctrl.awaddr[COYOTE_AXIL_ADDR_MSB-1:1]),
     .S00_AXI_0_awprot(axi_ctrl.awprot),
-    .S00_AXI_0_awqos(axi_ctrl.awqos),
     .S00_AXI_0_awready(axi_ctrl.awready),
-    .S00_AXI_0_awsize(),
     .S00_AXI_0_awvalid(axi_ctrl.awvalid),
     .S00_AXI_0_bready(axi_ctrl.bready),
     .S00_AXI_0_bresp(axi_ctrl.bresp),
     .S00_AXI_0_bvalid(axi_ctrl.bvalid),
     .S00_AXI_0_rdata(axi_ctrl.rdata),
-    .S00_AXI_0_rlast(),
     .S00_AXI_0_rready(axi_ctrl.rready),
     .S00_AXI_0_rresp(axi_ctrl.rresp),
     .S00_AXI_0_rvalid(axi_ctrl.rvalid),
     .S00_AXI_0_wdata(axi_ctrl.wdata),
-    .S00_AXI_0_wlast(),
     .S00_AXI_0_wready(axi_ctrl.wready),
     .S00_AXI_0_wstrb(axi_ctrl.wstrb),
     .S00_AXI_0_wvalid(axi_ctrl.wvalid),

@@ -725,9 +725,9 @@ public:
     if (sim_mode) {
       return std::unique_ptr<Buffer<dtype>>(new SimBuffer<dtype>(
           length, type, static_cast<SimDevice *>(cclo)->get_context()));
-    } else {
+    } else if (cclo->get_device_type() == CCLO::xrt_device) {
       return std::unique_ptr<Buffer<dtype>>(new FPGABuffer<dtype>(
-          length, type, device, (xrt::memory_group)mem_grp));
+          length, type, *(static_cast<FPGADevice *>(cclo)->get_device()), (xrt::memory_group)mem_grp));
     }
   }
 
@@ -788,9 +788,9 @@ public:
       return std::unique_ptr<Buffer<dtype>>(
           new SimBuffer<dtype>(host_buffer, length, type,
                                static_cast<SimDevice *>(cclo)->get_context()));
-    } else {
+    } else if(cclo->get_device_type() == CCLO::xrt_device ){
       return std::unique_ptr<Buffer<dtype>>(new FPGABuffer<dtype>(
-          host_buffer, length, type, device, (xrt::memory_group)mem_grp));
+          host_buffer, length, type, *(static_cast<FPGADevice *>(cclo)->get_device()), (xrt::memory_group)mem_grp));
     }
     return std::unique_ptr<Buffer<dtype>>(nullptr);
   }
@@ -818,7 +818,7 @@ public:
                                                dataType type) {
     if (sim_mode) {
       return std::unique_ptr<Buffer<dtype>>(
-          new SimBuffer<dtype>(bo, device, length, type,
+          new SimBuffer<dtype>(bo, *(static_cast<SimDevice *>(cclo)->get_device()), length, type,
                                static_cast<SimDevice *>(cclo)->get_context()));
     } else {
       return std::unique_ptr<Buffer<dtype>>(
@@ -870,9 +870,9 @@ public:
     if (sim_mode) {
       return std::unique_ptr<Buffer<dtype>>(new SimBuffer<dtype>(
           length, type, static_cast<SimDevice *>(cclo)->get_context()));
-    } else {
+    } else if(cclo->get_device_type() == CCLO::xrt_device ){
       return std::unique_ptr<Buffer<dtype>>(new FPGABufferP2P<dtype>(
-          length, type, device, (xrt::memory_group)mem_grp));
+          length, type, *(static_cast<FPGADevice *>(cclo)->get_device()), (xrt::memory_group)mem_grp));
     }
   }
 
@@ -896,7 +896,7 @@ public:
                                                    dataType type) {
     if (sim_mode) {
       return std::unique_ptr<Buffer<dtype>>(
-          new SimBuffer<dtype>(bo, device, length, type,
+          new SimBuffer<dtype>(bo, *(static_cast<SimDevice *>(cclo)->get_device()), length, type,
                                static_cast<SimDevice *>(cclo)->get_context()));
     } else {
       return std::unique_ptr<Buffer<dtype>>(
@@ -922,7 +922,7 @@ public:
       debug("create_coyotebuffer sim_mode unsupported!!!");
       exit(3);
     } else {
-      return std::unique_ptr<Buffer<dtype>>(new CoyoteBuffer<dtype>(length, type, cclo));
+      return std::unique_ptr<Buffer<dtype>>(new CoyoteBuffer<dtype>(length, type, static_cast<CoyoteDevice *>(cclo)));
     }
   }
 
@@ -1034,7 +1034,7 @@ private:
   // memory banks for hardware
   const int _devicemem;
   const std::vector<int> rxbufmem;
-  xrt::device device;
+  // xrt::device device;
 
 
   // TCP safety flags

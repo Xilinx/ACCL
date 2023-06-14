@@ -508,7 +508,7 @@ void instruction_decode(
     #pragma HLS reset variable=prev_dm0_rd
     if((insn.op0_opcode != MOVE_NONE) & (insn.op0_opcode != MOVE_STREAM)){
         dm0_rd.total_bytes = insn.op0_is_compressed ? total_bytes_compressed : total_bytes_uncompressed;
-        dm0_rd.mem_id = insn.op0_is_host ? 0 : 1;
+        dm0_rd.mem_id = insn.op0_is_host ? 1 : 0;
         switch(insn.op0_opcode){
             //add options here - reuse, increment, etc
             case MOVE_IMMEDIATE:
@@ -548,7 +548,7 @@ void instruction_decode(
     unsigned int inbound_seqn, bytes_remaining;
     if(insn.op1_opcode != MOVE_NONE){
         dm1_rd.total_bytes = insn.op1_is_compressed ? total_bytes_compressed : total_bytes_uncompressed;
-        dm1_rd.mem_id = insn.op1_is_host ? 0 : 1;
+        dm1_rd.mem_id = insn.op1_is_host ? 1 : 0; 
         dm1_rd.last = true;
         switch(insn.op1_opcode){
             //add options here - reuse, increment, etc
@@ -648,7 +648,7 @@ void instruction_decode(
             }
         } else if(!(insn.res_opcode == MOVE_STREAM)){
             dm1_wr.total_bytes = insn.res_is_compressed ? total_bytes_compressed : total_bytes_uncompressed;
-            dm1_wr.mem_id = insn.res_is_host ? 0 : 1;
+            dm1_wr.mem_id = insn.res_is_host ? 1 : 0;
             switch(insn.res_opcode){
                 case MOVE_IMMEDIATE:
                     dm1_wr.addr = insn.res_addr;
