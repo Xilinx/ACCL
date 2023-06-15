@@ -98,6 +98,30 @@ enum class reduceFunction {
 };
 
 /**
+ * Status of ACCL operations
+ *
+ */
+enum class operationStatus {
+  QUEUED = 0,    /**< Operation waiting in hardware queue */
+  EXECUTING = 1, /**< Operation currently executing */
+  COMPLETED = 2  /**< Operation completed */
+};
+
+/**
+ * Status of the FPGA queue
+ * 
+ */
+enum class queueStatus {
+  IDLE = 0,
+  BUSY = 1
+};
+
+enum timeoutStatus {
+  no_timeout,
+  timeout
+};
+
+/**
  * ACCL supported data types
  *
  */

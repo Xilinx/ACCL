@@ -26,6 +26,40 @@
 
 namespace ACCL {
 /**
+ * Implementation of the derived request class associated with Sim Devices
+ * 
+ */
+class SimRequest : public ACCLRequest {
+public:
+  /**
+   * Constructs a new request for Sim Devices
+   * 
+   * @param cclo      Opaque reference to the main CCLO object
+   * @param options   Constant reference to the associated options
+   */
+  SimRequest(void *cclo, const CCLO::Options &options)
+      : ACCLRequest(cclo), options(options) {}
+
+  /**
+   * Return the operation associated options 
+   * 
+   * @return const CCLO::Options& Constant reference to the associated options
+   */
+  const CCLO::Options &get_options() {
+    return options;
+  }
+
+  /**
+   * Effectively starts the call
+   * 
+   */
+  void start();
+
+private:
+  const CCLO::Options &options;
+};
+
+/**
  * Implementation of CCLO that uses an external CCLO simulator or emulator.
  *
  */
@@ -45,17 +79,22 @@ public:
    */
   virtual ~SimDevice() {}
 
-  void call(const Options &options) override;
+  ACCLRequest *call(const Options &options) override;
 
-  void start(const Options &options) override;
+  ACCLRequest *start(const Options &options) override;
 
   val_t read(addr_t offset) override;
 
   void write(addr_t offset, val_t val) override;
 
-  void wait() override;
+  void wait(ACCLRequest *request) override;
 
-  timeoutStatus wait(std::chrono::milliseconds timeout) override;
+  timeoutStatus wait(ACCLRequest *request,
+                     std::chrono::milliseconds timeout) override;
+  
+  bool test(ACCLRequest *request) override;
+  
+  void free_request(ACCLRequest *request) override;
 
   addr_t get_base_addr() override { return 0x0; }
 
@@ -66,10 +105,24 @@ public:
    */
   zmq_intf_context *get_context() { return &zmq_ctx; }
 
+  /**
+   * Internally completes the request.
+   *
+   * @param request Associated request to be completed
+   */
+  void complete_request(SimRequest *request);
+
 private:
   zmq_intf_context zmq_ctx;
-  BaseBuffer *addr_0_cache;
-  BaseBuffer *addr_1_cache;
-  BaseBuffer *addr_2_cache;
+  
+  FPGAQueue<SimRequest *> queue;
+
+  /**
+   * Starts the execution of the first request in the queue. To keep queue
+   * going, this function is called every time a operation is issue and
+   * everytime an ongoing operation finishes
+   *
+   */
+  void launch_request();
 };
 } // namespace ACCL

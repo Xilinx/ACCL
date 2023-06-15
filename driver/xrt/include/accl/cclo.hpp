@@ -17,6 +17,7 @@
 *******************************************************************************/
 
 #pragma once
+#include "acclrequest.hpp"
 #include "arithconfig.hpp"
 #include "buffer.hpp"
 #include "constants.hpp"
@@ -26,7 +27,7 @@
 /** @file cclo.hpp */
 
 namespace ACCL {
-
+class ACCLRequest;
 /**
  * Abstract class that defines operations to be performed on the CCLO on the
  * FPGA.
@@ -62,7 +63,7 @@ public:
     dataType data_type_io_0;            /**< Data type of ACCL input or output from stream. */
     dataType data_type_io_1;            /**< Data type of ACCL input or output from stream. */
     dataType data_type_io_2;            /**< Data type of ACCL input or output from stream. */
-    std::vector<CCLO *> waitfor;        /**< Wait for these operations to
+    std::vector<ACCLRequest *> waitfor; /**< Wait for these operations to
                                              complete; currently unsupported. */
 
     /**
@@ -81,11 +82,6 @@ public:
           data_type_io_2(dataType::none), waitfor({}) {}
   };
 
-  enum timeoutStatus {
-    no_timeout,
-    timeout
-  };
-
   /**
    * Construct a new CCLO object.
    *
@@ -97,17 +93,20 @@ public:
   /**
    * Call a CCLO operation based on the options.
    *
-   * @param options  Specifies CCLO operation and configuration.
+   * @param options       Specifies CCLO operation and configuration.
+   * @return ACCLRequest* Request associated to the call. Internal use only on
+   *                      sync calls;
    */
-  virtual void call(const Options &options) = 0;
+  virtual ACCLRequest *call(const Options &options) = 0;
 
   /**
    * Call a CCLO operation based on the options, and wait for operation to
    * complete.
    *
-   * @param options  Specifies CCLO operation and configuration.
+   * @param options       Specifies CCLO operation and configuration.
+   * @return ACCLRequest* Request associated to the call.
    */
-  virtual void start(const Options &options) = 0;
+  virtual ACCLRequest *start(const Options &options) = 0;
 
   /**
    * Read data from FPGA at specified address.
@@ -126,20 +125,39 @@ public:
   virtual void write(addr_t offset, val_t val) = 0;
 
   /**
-   * Wait for CCLO operation to complete.
+   * Wait for CCLO operation associated with the request to complete.
    *
+   * @param request Request to wait for
    */
-  virtual void wait() = 0;
+  virtual void wait(ACCLRequest *request) = 0;
 
   /**
-   * Wait for CCLO operation to complete. Note that the timeout is currently
-   * ignored when using the simulator.
+   * Wait for CCLO operation associated to the given request to complete. 
+   * Note that the timeout is currently ignored when using the simulator.
    *
-   * @param timeout Time out wait after this many milliseconds have passed.
+   * @param request   Request to wait for
+   * @param timeout   Time out wait after this many milliseconds have passed.
    *
    * @return timeoutStatus Status on whether the wait was timed out or not.
    */
-  virtual timeoutStatus wait(std::chrono::milliseconds timeout) = 0;
+  virtual timeoutStatus wait(ACCLRequest *request, 
+                             std::chrono::milliseconds timeout) = 0;
+
+  /**
+   * Tests if the given request completed
+   * 
+   * @param request   Request to wait for
+   * @return true     If the request was completed
+   * @return false    If the request did not complete
+   */
+  virtual bool test(ACCLRequest *request) = 0;
+
+  /**
+   * Free given request
+   * 
+   * @param request Request to be freed
+   */
+  virtual void free_request(ACCLRequest *request) = 0;
 
   /**
    * Get the base address of the CCLO, this currently returns 0x0 on hardware.
