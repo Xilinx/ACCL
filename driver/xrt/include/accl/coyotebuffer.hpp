@@ -107,7 +107,7 @@ template <typename dtype> class CoyoteBuffer : public Buffer<dtype> {
     {
       std::cerr << "calling sync: " << std::setbase(16) << (uint64_t)this->aligned_buffer << ", size: " << std::setbase(10) << this->size() << std::endl;
 
-      this->device->coyote_proc.invoke({fpga::CoyoteOper::SYNC, this->aligned_buffer, (uint32_t)this->_size, false, false, 0, true});
+      this->device->coyote_proc.invoke({fpga::CoyoteOper::SYNC, this->aligned_buffer, (uint32_t)this->_size, true, true, 0, false});
     
       this->host_flag = true;
     }
@@ -120,7 +120,7 @@ template <typename dtype> class CoyoteBuffer : public Buffer<dtype> {
     {
       std::cerr << "calling offload: " << std::setbase(16) << (uint64_t)this->aligned_buffer << ", size: " << std::setbase(10) << this->size() << std::endl;
 
-      this->device->coyote_proc.invoke({fpga::CoyoteOper::OFFLOAD, this->aligned_buffer, (uint32_t)this->_size, false, false, 0, false});
+      this->device->coyote_proc.invoke({fpga::CoyoteOper::OFFLOAD, this->aligned_buffer, (uint32_t)this->_size, true, true, 0, false});
     
       this->host_flag = false;
     }

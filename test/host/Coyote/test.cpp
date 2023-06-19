@@ -55,7 +55,6 @@ struct options_t
 	unsigned int device_index;
 	unsigned int num_rxbufmem;
 	unsigned int test_mode;
-	bool test_xrt_simulator;
 	bool debug;
 	bool hardware;
 	bool axis3;
@@ -128,181 +127,6 @@ std::string format_log(std::string collective, options_t options, double time, d
 {
 	std::string log_str = collective + "," + std::to_string(mpi_size) + "," + std::to_string(mpi_rank) + "," + std::to_string(options.num_rxbufmem) + "," + std::to_string(options.count * sizeof(float)) + "," + std::to_string(options.rxbuf_size) + "," + std::to_string(options.rxbuf_size) + "," + std::to_string(MAX_PKT_SIZE) + "," + std::to_string(time) + "," + std::to_string(tput);
 	return log_str;
-}
-
-timestamp_t readTimeStamp(uint64_t *host_ptr_hw_bench_cmd, uint64_t *host_ptr_hw_bench_sts, unsigned int &cmd_mem_offset, unsigned int &sts_mem_offset)
-{
-	timestamp_t timestamp;
-
-	timestamp.cmdSeq = (uint64_t)host_ptr_hw_bench_cmd[cmd_mem_offset];
-	cmd_mem_offset++;
-	timestamp.scenario = (uint64_t)host_ptr_hw_bench_cmd[cmd_mem_offset];
-	cmd_mem_offset++;
-	timestamp.len = (uint64_t)host_ptr_hw_bench_cmd[cmd_mem_offset];
-	cmd_mem_offset++;
-	timestamp.comm = (uint64_t)host_ptr_hw_bench_cmd[cmd_mem_offset];
-	cmd_mem_offset++;
-	timestamp.root_src_dst = (uint64_t)host_ptr_hw_bench_cmd[cmd_mem_offset];
-	cmd_mem_offset++;
-	timestamp.function = (uint64_t)host_ptr_hw_bench_cmd[cmd_mem_offset];
-	cmd_mem_offset++;
-	timestamp.msg_tag = (uint64_t)host_ptr_hw_bench_cmd[cmd_mem_offset];
-	cmd_mem_offset++;
-	timestamp.datapath_cfg = (uint64_t)host_ptr_hw_bench_cmd[cmd_mem_offset];
-	cmd_mem_offset++;
-	timestamp.compression_flags = (uint64_t)host_ptr_hw_bench_cmd[cmd_mem_offset];
-	cmd_mem_offset++;
-	timestamp.stream_flags = (uint64_t)host_ptr_hw_bench_cmd[cmd_mem_offset];
-	cmd_mem_offset++;
-	timestamp.addra_l = (uint64_t)host_ptr_hw_bench_cmd[cmd_mem_offset];
-	cmd_mem_offset++;
-	timestamp.addra_h = (uint64_t)host_ptr_hw_bench_cmd[cmd_mem_offset];
-	cmd_mem_offset++;
-	timestamp.addrb_l = (uint64_t)host_ptr_hw_bench_cmd[cmd_mem_offset];
-	cmd_mem_offset++;
-	timestamp.addrb_h = (uint64_t)host_ptr_hw_bench_cmd[cmd_mem_offset];
-	cmd_mem_offset++;
-	timestamp.addrc_l = (uint64_t)host_ptr_hw_bench_cmd[cmd_mem_offset];
-	cmd_mem_offset++;
-	timestamp.addrc_h = (uint64_t)host_ptr_hw_bench_cmd[cmd_mem_offset];
-	cmd_mem_offset++;
-	timestamp.cmdTimestamp = (uint64_t)host_ptr_hw_bench_cmd[cmd_mem_offset];
-	cmd_mem_offset++;
-	timestamp.cmdEnd = (uint64_t)host_ptr_hw_bench_cmd[cmd_mem_offset];
-	cmd_mem_offset++;
-
-	timestamp.stsSeq = (uint64_t)host_ptr_hw_bench_sts[sts_mem_offset];
-	sts_mem_offset++;
-	timestamp.sts = (uint64_t)host_ptr_hw_bench_sts[sts_mem_offset];
-	sts_mem_offset++;
-	timestamp.stsTimestamp = (uint64_t)host_ptr_hw_bench_sts[sts_mem_offset];
-	sts_mem_offset++;
-	timestamp.stsEnd = (uint64_t)host_ptr_hw_bench_sts[sts_mem_offset];
-	sts_mem_offset++;
-
-	return timestamp;
-}
-
-void printTimeStamp(timestamp_t timestamp, options_t &options)
-{
-	std::string exp;
-	bool writeToLog = false;
-	std::cout << "cmdSeq: " << timestamp.cmdSeq << " ";
-	switch (timestamp.scenario)
-	{
-	case ACCL_COPY:
-		std::cout << "ACCL_COPY";
-		break;
-	case ACCL_COMBINE:
-		std::cout << "ACCL_COMBINE";
-		break;
-	case ACCL_SEND:
-		std::cout << "ACCL_SEND";
-		exp = "sendrecv_K2K";
-		writeToLog = true;
-		break;
-	case ACCL_RECV:
-		std::cout << "ACCL_RECV";
-		exp = "sendrecv_K2K";
-		writeToLog = true;
-		break;
-	case ACCL_BCAST:
-		std::cout << "ACCL_BCAST";
-		exp = "bcast_K2K";
-		writeToLog = true;
-		break;
-	case ACCL_SCATTER:
-		std::cout << "ACCL_SCATTER";
-		exp = "scatter_K2K";
-		writeToLog = true;
-		break;
-	case ACCL_GATHER:
-		std::cout << "ACCL_GATHER";
-		exp = "gather_K2K";
-		writeToLog = true;
-		break;
-	case ACCL_REDUCE:
-		std::cout << "ACCL_REDUCE";
-		exp = "reduce_K2K";
-		writeToLog = true;
-		break;
-	case ACCL_ALLGATHER:
-		std::cout << "ACCL_ALLGATHER";
-		exp = "allgather_K2K";
-		writeToLog = true;
-		break;
-	case ACCL_REDUCE_SCATTER:
-		std::cout << "ACCL_REDUCE_SCATTER";
-		break;
-	case ACCL_ALLREDUCE:
-		std::cout << "ACCL_ALLREDUCE";
-		exp = "allreduce_K2K";
-		writeToLog = true;
-		break;
-	case ACCL_BARRIER:
-		std::cout << "ACCL_COPY";
-		break;
-	case ACCL_ALLTOALL:
-		std::cout << "ACCL_ALLTOALL";
-		break;
-	case ACCL_CONFIG:
-		std::cout << "ACCL_CONFIG";
-		switch (timestamp.function)
-		{
-		case HOUSEKEEP_SWRST:
-			std::cout << " HOUSEKEEP_SWRST";
-			break;
-		case HOUSEKEEP_PKTEN:
-			std::cout << " HOUSEKEEP_PKTEN";
-			break;
-		case HOUSEKEEP_TIMEOUT:
-			std::cout << " HOUSEKEEP_TIMEOUT";
-			break;
-		case HOUSEKEEP_OPEN_PORT:
-			std::cout << " HOUSEKEEP_OPEN_PORT";
-			break;
-		case HOUSEKEEP_OPEN_CON:
-			std::cout << " HOUSEKEEP_OPEN_CON";
-			break;
-		case HOUSEKEEP_CLOSE_CON:
-			std::cout << " HOUSEKEEP_CLOSE_CON";
-			break;
-		case HOUSEKEEP_SET_STACK_TYPE:
-			std::cout << " HOUSEKEEP_SET_STACK_TYPE";
-			break;
-		case HOUSEKEEP_SET_MAX_SEGMENT_SIZE:
-			std::cout << " HOUSEKEEP_SET_MAX_SEGMENT_SIZE";
-			break;
-		default:
-			std::cout << " Not Recognized Function:" << timestamp.function;
-			break;
-		}
-		break;
-	default:
-		std::cout << "Not Recognized Scenario:" << timestamp.scenario;
-		writeToLog = false;
-		break;
-	}
-	std::cout << " len: " << timestamp.len << " ";
-	std::cout << " cmdTimestamp: " << timestamp.cmdTimestamp << " ";
-	std::cout << " cmdEnd: " << timestamp.cmdEnd << " ";
-	std::cout << " sts: " << timestamp.sts << " ";
-	std::cout << " stsTimestamp: " << timestamp.stsTimestamp << " ";
-	std::cout << " stsEnd: " << timestamp.stsEnd << " ";
-	std::cout << std::endl;
-
-	if ((timestamp.cmdEnd != 0xFFFFFFFFFFFFFFFF) || (timestamp.stsEnd != 0xFFFFFFFFFFFFFFFF))
-	{
-		writeToLog = false;
-	}
-	if (writeToLog)
-	{
-		uint64_t start_cycle = timestamp.cmdTimestamp;
-		uint64_t end_cycle = timestamp.stsTimestamp;
-		double durationUs = (end_cycle - start_cycle) / (double)FREQ;
-		double tput = (options.count * sizeof(float) * 8.0) / (durationUs * 1000.0); // only useful for send/recv
-		accl_log(mpi_rank, format_log(exp, options, durationUs, tput));
-	}
 }
 
 inline void swap_endianness(uint32_t *ip)
@@ -487,7 +311,6 @@ options_t parse_options(int argc, char *argv[])
 		opts.device_index = device_index_arg.getValue();
 		opts.xclbin = xclbin_arg.getValue();
 		opts.fpgaIP = fpgaIP_arg.getValue();
-		// opts.test_xrt_simulator = xrt_simulator_ready(opts); // commented out because xrt is unavailable in coyote
 
 		std::cout << "count:" << opts.count << " rxbuf_size:" << opts.rxbuf_size << " seg_size:" << opts.seg_size << " num_rxbufmem:" << opts.num_rxbufmem << std::endl;
 		return opts;
@@ -508,7 +331,7 @@ void test_sendrcv(ACCL::ACCL &accl, options_t &options) {
   	std::cout << "Start send recv test..." << std::endl;
 	// do the send recv test here
 	int bufsize = options.count;
-	auto op_buf = accl.create_coyotebuffer<float>(bufsize, dataType::float32);
+	auto op_buf = accl.create_coyotebuffer<float>(bufsize, dataType::int32);
 	
 	// rank 0 initializes the buffer with numbers, rank1 with -1
 	for (int i = 0; i < bufsize; i++) op_buf.get()->buffer()[i] = (mpi_rank == 0) ? i : -1;
@@ -531,9 +354,9 @@ void test_sendrcv(ACCL::ACCL &accl, options_t &options) {
 	
 	auto end = std::chrono::high_resolution_clock::now();
   	durationUs = (std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() / 1000.0);
-	tput = (options.count*sizeof(float)*8.0)/(durationUs*1000.0);
+	tput = (options.count*sizeof(dataType::int32)*8.0)/(durationUs*1000.0);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	// MPI_Barrier(MPI_COMM_WORLD);
 
 	op_buf->sync_from_device();
 	std::cerr << "Rank " << mpi_rank << " passed barrier after send recv test!" << std::endl;
@@ -546,12 +369,12 @@ void test_sendrcv(ACCL::ACCL &accl, options_t &options) {
 	if (mpi_rank == 1)
 	{
 		for (int i = 0; i < bufsize; i++) {
-			float res = op_buf.get()->buffer()[i];
-			float ref = i;
+			unsigned int res = op_buf.get()->buffer()[i];
+			unsigned int ref = i;
 			if (res != ref) {
-			// std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
-			// 				std::to_string(res) + " != " + std::to_string(ref) + ")"
-			// 			<< std::endl;
+			std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
+							std::to_string(res) + " != " + std::to_string(ref) + ")"
+						<< std::endl;
 			errors += 1;
 			}
 		}
@@ -785,6 +608,101 @@ void test_allgather(ACCL::ACCL &accl, options_t &options) {
 
 }
 
+void test_reduce(ACCL::ACCL &accl, options_t &options, int root,
+                 reduceFunction function) {
+  std::cout << "Start reduce test with root " + std::to_string(root) +
+                   " and reduce function " +
+                   std::to_string(static_cast<int>(function)) + "..."
+            << std::endl;
+  unsigned int count = options.count;
+  auto op_buf = accl.create_coyotebuffer<float>(count, dataType::float32);
+  auto res_buf = accl.create_coyotebuffer<float>(count, dataType::float32);
+  for (int i = 0; i < count; i++) op_buf.get()->buffer()[i] = i;
+
+  op_buf->sync_to_device();
+
+  test_debug("Reduce data to " + std::to_string(root) + "...", options);
+
+  MPI_Barrier(MPI_COMM_WORLD);
+  double durationUs = 0.0;
+  auto start = std::chrono::high_resolution_clock::now();
+  accl.reduce(*op_buf, *res_buf, count, root, function, GLOBAL_COMM, true, true);
+
+  auto end = std::chrono::high_resolution_clock::now();
+  durationUs = (std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() / 1000.0);
+
+  accl_log(mpi_rank, format_log("reduce", options, durationUs, 0));
+
+  if (mpi_rank == root) {
+    int errors = 0;
+
+    for (unsigned int i = 0; i < count; ++i) {
+      float res = (*res_buf)[i];
+      float ref = (*op_buf)[i] * mpi_size;
+
+      if (res != ref) {
+        // std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
+        //                  std::to_string(res) + " != " + std::to_string(ref) +
+        //                  ")"
+        //           << std::endl;
+        errors += 1;
+      }
+    }
+
+    if (errors > 0) {
+      std::cout << std::to_string(errors) + " errors!" << std::endl;
+      failed_tests++;
+    } else {
+      std::cout << "Test is successful!" << std::endl;
+    }
+  }
+}
+
+void test_allreduce(ACCL::ACCL &accl, options_t &options,
+                    reduceFunction function) {
+  std::cout << "Start allreduce test and reduce function " +
+                   std::to_string(static_cast<int>(function)) + "..."
+            << std::endl;
+  unsigned int count = options.count;
+  auto op_buf = accl.create_coyotebuffer<float>(count, dataType::float32);
+  auto res_buf = accl.create_coyotebuffer<float>(count, dataType::float32);
+  for (int i = 0; i < count; i++) op_buf.get()->buffer()[i] = i;
+
+  test_debug("Reducing data...", options);
+
+  MPI_Barrier(MPI_COMM_WORLD);
+  double durationUs = 0.0;
+  auto start = std::chrono::high_resolution_clock::now();
+  accl.allreduce(*op_buf, *res_buf, count, function, GLOBAL_COMM, true, true);
+
+  auto end = std::chrono::high_resolution_clock::now();
+  durationUs = (std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() / 1000.0);
+
+  accl_log(mpi_rank, format_log("allreduce", options, durationUs, 0));
+
+  int errors = 0;
+
+  for (unsigned int i = 0; i < count; ++i) {
+    float res = (*res_buf)[i];
+    float ref = (*op_buf)[i] * mpi_size;
+
+    if (res != ref) {
+      // std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
+      //                  std::to_string(res) + " != " + std::to_string(ref) + ")"
+      //           << std::endl;
+      errors += 1;
+    }
+  }
+
+  if (errors > 0) {
+    std::cout << std::to_string(errors) + " errors!" << std::endl;
+    failed_tests++;
+  } else {
+    std::cout << "Test is successful!" << std::endl;
+  }
+
+}
+
 void test_accl_base(options_t options)
 {
 	std::cout << "Testing ACCL base functionality..." << std::endl;
@@ -846,7 +764,7 @@ void test_accl_base(options_t options)
 		accl = std::make_unique<ACCL::ACCL>(device,
 			ranks, mpi_rank,
 			options.udp ? networkProtocol::UDP : networkProtocol::TCP,
-			4, options.rxbuf_size, options.seg_size);
+			1, options.rxbuf_size, options.seg_size);
 
 		if (options.tcp)
 		{
