@@ -258,7 +258,7 @@ void dma_ack_execute(
             while(instr.ncommands > 0){
                 status = axi::Status(STREAM_READ(dma_sts_channel));
                 if(status.tag != tag) {
-                    ret = ret | DMA_TAG_MISMATCH_ERROR;
+                    // ret = ret | DMA_TAG_MISMATCH_ERROR; // TODO: Coyote Sts Tag contains the dest, not always 0
                 }
                 if(status.internalError) {
                     ret = ret | DMA_INTERNAL_ERROR;
