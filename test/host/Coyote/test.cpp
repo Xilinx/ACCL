@@ -35,9 +35,8 @@ using namespace ACCL;
 #define FLOAT16RTOL 0.005
 #define FLOAT16ATOL 0.05
 
-#define MAX_HW_BENCH_RECORD 10
 #define FREQ 250
-#define MAX_PKT_SIZE 1536
+#define MAX_PKT_SIZE 4096
 
 int mpi_rank, mpi_size;
 unsigned failed_tests;
@@ -60,8 +59,7 @@ struct options_t
 	bool axis3;
 	bool udp;
 	bool tcp;
-	bool hw_bench;
-	bool enableUserKernel;
+	unsigned int host;
 	std::string xclbin;
 	std::string fpgaIP;
 };
@@ -125,7 +123,7 @@ struct timestamp_t
 
 std::string format_log(std::string collective, options_t options, double time, double tput)
 {
-	std::string log_str = collective + "," + std::to_string(mpi_size) + "," + std::to_string(mpi_rank) + "," + std::to_string(options.num_rxbufmem) + "," + std::to_string(options.count * sizeof(float)) + "," + std::to_string(options.rxbuf_size) + "," + std::to_string(options.rxbuf_size) + "," + std::to_string(MAX_PKT_SIZE) + "," + std::to_string(time) + "," + std::to_string(tput);
+	std::string log_str = collective + "," + std::to_string(mpi_size) + "," + std::to_string(mpi_rank) + "," + std::to_string(options.num_rxbufmem) + "," + std::to_string(options.count * sizeof(float)) + "," + std::to_string(options.rxbuf_size) + "," + std::to_string(options.rxbuf_size) + "," + std::to_string(MAX_PKT_SIZE) + "," + std::to_string(time) + "," + std::to_string(tput) + "," + std::to_string(options.host);
 	return log_str;
 }
 
@@ -230,14 +228,15 @@ options_t parse_options(int argc, char *argv[])
 												"Test mode, by default run all the collective tests", false, 0,
 												"integer");
 		cmd.add(test_mode_arg);
+		TCLAP::ValueArg<uint16_t> host_arg("z", "host_buffer",
+												"Enable host buffer mode with 1", false, 0,
+												"integer");
+		cmd.add(host_arg);
 		TCLAP::SwitchArg debug_arg("d", "debug", "Enable debug mode", cmd, false);
-		TCLAP::SwitchArg hardware_arg("f", "hardware", "enable hardware mode", cmd,
-									  false);
-		TCLAP::SwitchArg axis3_arg("a", "axis3", "Use axis3 hardware setup", cmd,
-								   false);
+		TCLAP::SwitchArg hardware_arg("f", "hardware", "enable hardware mode", cmd, false);
+		TCLAP::SwitchArg axis3_arg("a", "axis3", "Use axis3 hardware setup", cmd, false);
 		TCLAP::SwitchArg udp_arg("u", "udp", "Use UDP hardware setup", cmd, false);
 		TCLAP::SwitchArg tcp_arg("t", "tcp", "Use TCP hardware setup", cmd, false);
-		TCLAP::SwitchArg hwbench_arg("z", "hwbench", "Enable hwbench, the maximum CCLO commands (~20) is limited by the FIFO depth to the bench kernel", cmd, false);
 		TCLAP::SwitchArg userkernel_arg("k", "userkernel", "Enable user kernel(by default vadd kernel)", cmd, false);
 		TCLAP::ValueArg<std::string> xclbin_arg(
 			"x", "xclbin", "xclbin of accl driver if hardware mode is used", false,
@@ -283,14 +282,6 @@ options_t parse_options(int argc, char *argv[])
 				throw std::runtime_error("When using hardware, specify either axis3 or tcp or"
 										 "udp mode.");
 			}
-			if (hwbench_arg.getValue() && hardware_arg.getValue() == false)
-			{
-				throw std::runtime_error("Hardware bench mode should be set with hardware mode.");
-			}
-			if (hwbench_arg.getValue() && (test_mode_arg.getValue() == 0))
-			{
-				throw std::runtime_error("Hardware bench mode can not run will test mode ALL, run single collective bench.");
-			}
 		}
 
 		options_t opts;
@@ -301,13 +292,12 @@ options_t parse_options(int argc, char *argv[])
 		opts.num_rxbufmem = num_rxbufmem_arg.getValue();
 		opts.nruns = nruns_arg.getValue();
 		opts.debug = debug_arg.getValue();
+		opts.host = host_arg.getValue();
 		opts.hardware = hardware_arg.getValue();
 		opts.axis3 = axis3_arg.getValue();
 		opts.udp = udp_arg.getValue();
 		opts.tcp = tcp_arg.getValue();
 		opts.test_mode = test_mode_arg.getValue();
-		opts.hw_bench = hwbench_arg.getValue();
-		opts.enableUserKernel = userkernel_arg.getValue();
 		opts.device_index = device_index_arg.getValue();
 		opts.xclbin = xclbin_arg.getValue();
 		opts.fpgaIP = fpgaIP_arg.getValue();
@@ -331,13 +321,13 @@ void test_sendrcv(ACCL::ACCL &accl, options_t &options) {
   	std::cout << "Start send recv test..." << std::endl;
 	// do the send recv test here
 	int bufsize = options.count;
-	auto op_buf = accl.create_coyotebuffer<float>(bufsize, dataType::int32);
+	auto op_buf = accl.create_coyotebuffer<int>(bufsize, dataType::int32);
 	
 	// rank 0 initializes the buffer with numbers, rank1 with -1
 	for (int i = 0; i < bufsize; i++) op_buf.get()->buffer()[i] = (mpi_rank == 0) ? i : -1;
 	
-	op_buf->sync_to_device();
-	
+	if (options.host == 0){ op_buf->sync_to_device(); }
+
 	MPI_Barrier(MPI_COMM_WORLD);
 	
 	double durationUs = 0.0;
@@ -356,9 +346,9 @@ void test_sendrcv(ACCL::ACCL &accl, options_t &options) {
   	durationUs = (std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() / 1000.0);
 	tput = (options.count*sizeof(dataType::int32)*8.0)/(durationUs*1000.0);
 
-	// MPI_Barrier(MPI_COMM_WORLD);
+	MPI_Barrier(MPI_COMM_WORLD);
 
-	op_buf->sync_from_device();
+	if (options.host == 0){ op_buf->sync_from_device(); }
 	std::cerr << "Rank " << mpi_rank << " passed barrier after send recv test!" << std::endl;
 	
 	if (mpi_rank == 0 || mpi_rank == 1){
@@ -393,12 +383,12 @@ void test_bcast(ACCL::ACCL &accl, options_t &options, int root) {
 	std::cout << "Start bcast test with root " + std::to_string(root) + " ..."
 				<< std::endl;
 	unsigned int count = options.count;
-	auto op_buf = accl.create_coyotebuffer<float>(count, dataType::float32);
+	auto op_buf = accl.create_coyotebuffer<int>(count, dataType::int32);
 	
 	// rank root initializes the buffer with numbers, other ranks with -1
 	for (int i = 0; i < count; i++) op_buf.get()->buffer()[i] = (mpi_rank == root) ? i : -1;
 
-	op_buf->sync_to_device();
+	if (options.host == 0){ op_buf->sync_to_device(); }
 
 	if (mpi_rank == root) {
 		test_debug("Broadcasting data from " + std::to_string(mpi_rank) + "...",
@@ -416,15 +406,15 @@ void test_bcast(ACCL::ACCL &accl, options_t &options, int root) {
 	auto end = std::chrono::high_resolution_clock::now();
 	durationUs = (std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() / 1000.0);
 
-	op_buf->sync_from_device();
+	if (options.host == 0){ op_buf->sync_from_device(); }
 
 	accl_log(mpi_rank, format_log("bcast", options, durationUs, 0));
 
 	if (mpi_rank != root) {
 		int errors = 0;
 		for (int i = 0; i < count; i++) {
-			float res = op_buf.get()->buffer()[i];
-			float ref = i;
+			unsigned int res = op_buf.get()->buffer()[i];
+			unsigned int ref = i;
 			if (res != ref) {
 				// std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
 				// 				std::to_string(res) + " != " + std::to_string(ref) +
@@ -448,14 +438,14 @@ void test_scatter(ACCL::ACCL &accl, options_t &options, int root) {
 	std::cout << "Start scatter test with root " + std::to_string(root) + " ..."
 				<< std::endl;
 	unsigned int count = options.count;
-	auto op_buf = accl.create_coyotebuffer<float>(count * mpi_size, dataType::float32);
-	auto res_buf = accl.create_coyotebuffer<float>(count, dataType::float32);
+	auto op_buf = accl.create_coyotebuffer<int>(count * mpi_size, dataType::int32);
+	auto res_buf = accl.create_coyotebuffer<int>(count, dataType::int32);
 
 	// rank root initializes the buffer with numbers, other ranks with -1
 	for (int i = 0; i < count * mpi_size; i++) op_buf.get()->buffer()[i] = (mpi_rank == root) ? i : -1;
 
-	op_buf->sync_to_device();
-	res_buf->sync_to_device();
+	if (options.host == 0){ op_buf->sync_to_device(); }
+	if (options.host == 0){ res_buf->sync_to_device(); }
 
 	test_debug("Scatter data from " + std::to_string(mpi_rank) + "...", options);
 	
@@ -467,14 +457,14 @@ void test_scatter(ACCL::ACCL &accl, options_t &options, int root) {
 	auto end = std::chrono::high_resolution_clock::now();
 	durationUs = (std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() / 1000.0);
 
-	res_buf->sync_from_device();
+	if (options.host == 0){ res_buf->sync_from_device(); }
 
 	accl_log(mpi_rank, format_log("scatter", options, durationUs, 0));
 
 	int errors = 0;
 	for (unsigned int i = 0; i < count; ++i) {
-		float res = (*res_buf)[i];
-		float ref = (*op_buf)[i + mpi_rank * count];
+		unsigned int res = res_buf.get()->buffer()[i]; 
+		unsigned int ref = op_buf.get()->buffer()[i + mpi_rank * count];
 		if (res != ref) {
 		// std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
 		//                  std::to_string(res) + " != " + std::to_string(ref) + ")"
@@ -500,12 +490,12 @@ void test_gather(ACCL::ACCL &accl, options_t &options, int root) {
 
 	auto op_buf = accl.create_coyotebuffer<float>(count, dataType::float32);
 	for (int i = 0; i < count; i++) op_buf.get()->buffer()[i] = mpi_rank*count + i;
-	op_buf->sync_to_device();
+	if (options.host == 0){ op_buf->sync_to_device(); }
 
 	std::unique_ptr<ACCL::Buffer<float>> res_buf;
 	if (mpi_rank == root) {
 		res_buf = accl.create_coyotebuffer<float>(count * mpi_size, dataType::float32);
-		res_buf->sync_to_device();
+		if (options.host == 0){ res_buf->sync_to_device(); }
 	} else {
 		res_buf = std::unique_ptr<ACCL::Buffer<float>>(nullptr);
 	}
@@ -522,7 +512,7 @@ void test_gather(ACCL::ACCL &accl, options_t &options, int root) {
 	durationUs = (std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() / 1000.0);
 
 	if (mpi_rank == root){
-		res_buf->sync_from_device();
+		if (options.host == 0){ res_buf->sync_from_device(); }
 	}
 	
 	accl_log(mpi_rank, format_log("gather", options, durationUs, 0));
@@ -532,7 +522,7 @@ void test_gather(ACCL::ACCL &accl, options_t &options, int root) {
 		for (unsigned int j = 0; j < mpi_size; ++j) {
 			for (size_t i = 0; i < count; i++)
 			{
-				float res = (*res_buf)[j*count+i];
+				float res = res_buf.get()->buffer()[j*count+i];
 				float ref = j*count+i;
 				if (res != ref) {
 					// std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
@@ -561,11 +551,11 @@ void test_allgather(ACCL::ACCL &accl, options_t &options) {
 
 	auto op_buf = accl.create_coyotebuffer<float>(count, dataType::float32);
 	for (int i = 0; i < count; i++) op_buf.get()->buffer()[i] = mpi_rank*count + i;
-	op_buf->sync_to_device();
+	if (options.host == 0){ op_buf->sync_to_device(); }
 
 	std::unique_ptr<ACCL::Buffer<float>> res_buf;
 	res_buf = accl.create_coyotebuffer<float>(count * mpi_size, dataType::float32);
-	res_buf->sync_to_device();
+	if (options.host == 0){ res_buf->sync_to_device(); }
 
 
 	test_debug("Gathering data...", options);
@@ -579,7 +569,7 @@ void test_allgather(ACCL::ACCL &accl, options_t &options) {
 	auto end = std::chrono::high_resolution_clock::now();
 	durationUs = (std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() / 1000.0);
 
-	res_buf->sync_from_device();
+	if (options.host == 0){ res_buf->sync_from_device(); }
 
 	accl_log(mpi_rank, format_log("allgather", options, durationUs, 0));
 
@@ -587,7 +577,7 @@ void test_allgather(ACCL::ACCL &accl, options_t &options) {
 	for (unsigned int j = 0; j < mpi_size; ++j) {
 		for (size_t i = 0; i < count; i++)
 		{
-			float res = (*res_buf)[j*count+i];
+			float res = res_buf.get()->buffer()[j*count+i];
 			float ref = j*count+i;
 			if (res != ref) {
 				// std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
@@ -619,7 +609,7 @@ void test_reduce(ACCL::ACCL &accl, options_t &options, int root,
   auto res_buf = accl.create_coyotebuffer<float>(count, dataType::float32);
   for (int i = 0; i < count; i++) op_buf.get()->buffer()[i] = i;
 
-  op_buf->sync_to_device();
+  if (options.host == 0){ op_buf->sync_to_device(); }
 
   test_debug("Reduce data to " + std::to_string(root) + "...", options);
 
@@ -637,8 +627,8 @@ void test_reduce(ACCL::ACCL &accl, options_t &options, int root,
     int errors = 0;
 
     for (unsigned int i = 0; i < count; ++i) {
-      float res = (*res_buf)[i];
-      float ref = (*op_buf)[i] * mpi_size;
+      float res = res_buf.get()->buffer()[i];
+      float ref = op_buf.get()->buffer()[i] * mpi_size;
 
       if (res != ref) {
         // std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
@@ -683,8 +673,8 @@ void test_allreduce(ACCL::ACCL &accl, options_t &options,
   int errors = 0;
 
   for (unsigned int i = 0; i < count; ++i) {
-    float res = (*res_buf)[i];
-    float ref = (*op_buf)[i] * mpi_size;
+    float res = res_buf.get()->buffer()[i];
+    float ref = op_buf.get()->buffer()[i] * mpi_size;
 
     if (res != ref) {
       // std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
@@ -764,7 +754,7 @@ void test_accl_base(options_t options)
 		accl = std::make_unique<ACCL::ACCL>(device,
 			ranks, mpi_rank,
 			options.udp ? networkProtocol::UDP : networkProtocol::TCP,
-			1, options.rxbuf_size, options.seg_size);
+			16, options.rxbuf_size, options.seg_size);
 
 		if (options.tcp)
 		{
@@ -777,11 +767,6 @@ void test_accl_base(options_t options)
 			debug(accl->dump_communicator());
 		}
 
-		if (options.enableUserKernel)
-		{
-			MPI_Barrier(MPI_COMM_WORLD);
-			debug("test_user_kernel not supported!");
-		}
 	} else {
 		debug("unsupported situation!!!");
 		exit(1);
@@ -798,22 +783,43 @@ void test_accl_base(options_t options)
 	MPI_Barrier(MPI_COMM_WORLD);
 	std::cerr << "Rank " << mpi_rank << " passed last barrier before test!" << std::endl;
 	
-	test_sendrcv(*accl, options);
-	MPI_Barrier(MPI_COMM_WORLD);
-	// test_bcast(*accl, options, 0);
-	// MPI_Barrier(MPI_COMM_WORLD);
-	// test_scatter(*accl, options, 0);
-	// MPI_Barrier(MPI_COMM_WORLD);
-	// test_gather(*accl, options, 0);
-	// MPI_Barrier(MPI_COMM_WORLD);
-	// test_allgather(*accl, options);
-	// MPI_Barrier(MPI_COMM_WORLD);
+	if(options.test_mode == ACCL_SEND || options.test_mode == 0){
+		test_sendrcv(*accl, options);
+		MPI_Barrier(MPI_COMM_WORLD);
+	}
+	if(options.test_mode == ACCL_BCAST || options.test_mode == 0){
+		test_bcast(*accl, options, 0);
+		MPI_Barrier(MPI_COMM_WORLD);
+	}
+	if(options.test_mode == ACCL_SCATTER || options.test_mode == 0){
+		test_scatter(*accl, options, 0);
+		MPI_Barrier(MPI_COMM_WORLD);
+	}
+	if(options.test_mode == ACCL_GATHER || options.test_mode == 0){
+		test_gather(*accl, options, 0);
+		MPI_Barrier(MPI_COMM_WORLD);
+	}
+	if(options.test_mode == ACCL_ALLGATHER || options.test_mode == 0){
+		test_allgather(*accl, options);
+		MPI_Barrier(MPI_COMM_WORLD);
+	}
+	if(options.test_mode == ACCL_REDUCE || options.test_mode == 0){
+		int root = 0;
+		test_reduce(*accl, options, root, reduceFunction::SUM);
+		MPI_Barrier(MPI_COMM_WORLD);
+	}
+	if(options.test_mode == ACCL_ALLREDUCE || options.test_mode == 0){
+		int root = 0;
+		test_allreduce(*accl, options, reduceFunction::SUM);
+		MPI_Barrier(MPI_COMM_WORLD);
+	}
+
 	if (failed_tests == 0){
-		std::cout << "ACCL base functionality test completed successfully!" << std::endl;
+		std::cout << "\nACCL base functionality test completed successfully!\n" << std::endl;
 		return;
 	}
 	else {
-		std::cout << "ACCL base functionality test failed!" << std::endl;
+		std::cout << "\nACCL base functionality test failed!\n" << std::endl;
 		return;
 	}
 	

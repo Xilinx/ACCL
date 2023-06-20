@@ -45,7 +45,7 @@ void CoyoteDevice::start(const Options &options) {
 
   uint32_t flags = static_cast<uint32_t>(options.host_flags) << 8 | static_cast<uint32_t>(options.stream_flags);
 
-  std::cerr << "start: COMPRESSION_FLAGS:" << std::setbase(16) << static_cast<uint32_t>(options.compression_flags) << ", STREAM_FLAGS:"<<flags<<std::setbase(10) << std::endl;
+  std::cerr << "start: COMPRESSION_FLAGS:" << std::setbase(16) << static_cast<uint32_t>(options.compression_flags) << ", HOST_STREAM_FLAGS:"<<flags<<std::setbase(10) << std::endl;
 
   coyote_proc.setCSR(static_cast<uint32_t>(options.scenario), (OFFSET_HOSTCTRL + HOSTCTRL_ADDR::SCEN)>>2);
   coyote_proc.setCSR(static_cast<uint32_t>(options.count), (OFFSET_HOSTCTRL + HOSTCTRL_ADDR::LEN)>>2);

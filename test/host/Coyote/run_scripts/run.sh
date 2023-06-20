@@ -26,19 +26,30 @@ for ID in ${SERVID[@]}; do
 	HOST_LIST+="alveo-u55c-$(printf "%02d" $ID) "
 done
 
-ARG=" -d -f -t " # debug, hardware and tcp flags
+# Test Mode
+#define ALL                 0
+#define ACCL_SEND           3 
+#define ACCL_BCAST          5
+#define ACCL_SCATTER        6
+#define ACCL_GATHER         7
+#define ACCL_REDUCE         8
+#define ACCL_ALLGATHER      9
+#define ACCL_ALLREDUCE      10
 
-echo "Run command: $EXEC $ARG -y 3 -c 1024 -l $FPGA_FILE"
+ARG=" -d -f -t" # debug, hardware, and tcp flags
+TEST_MODE=(5) 
+N_ELEMENTS_KB=(16)
+HOST=(1)
 
-TEST_MODE=(3) # for now only 3 is supported
-N_ELEMENTS_KB=(1)
+echo "Run command: $EXEC $ARG -y $TEST_MODE -c 1024 -l $FPGA_FILE"
+
 for NP in `seq $NUM_PROCESS $NUM_PROCESS`; do
 	for MODE in ${TEST_MODE[@]}; do
 		for N_ELE in ${N_ELEMENTS_KB}; do
 			N=$((N_ELE*1024))
-			echo "mpirun -n $NP -f $HOST_FILE --iface ens4f0 $EXEC $ARG -y $MODE -c $N -l $FPGA_FILE &"
-			mpirun -prepend-rank -n $NP -f $HOST_FILE --iface ens4f0 $EXEC $ARG -y $MODE -c $N -l $FPGA_FILE &
-			SLEEPTIME=$(((NP-2)*2 + 30))
+			echo "mpirun -n $NP -f $HOST_FILE --iface ens4 $EXEC $ARG -z $HOST -y $MODE -c $N -l $FPGA_FILE &"
+			mpirun -prepend-rank -n $NP -f $HOST_FILE --iface ens4 $EXEC $ARG -z $HOST -y $MODE -c $N -l $FPGA_FILE &
+			SLEEPTIME=$(((NP-2)*2 + 10))
 			sleep $SLEEPTIME
 			parallel-ssh -H "$HOST_LIST" "kill -9 \$(ps -aux | grep accl_on_coyote | awk '{print \$2}')"
 		done
