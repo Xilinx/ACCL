@@ -513,6 +513,7 @@ CCLO *ACCL::bcast(BaseBuffer &buf, unsigned int count,
   options.scenario = operation::bcast;
   options.comm = communicator.communicators_addr();
   options.addr_0 = &buf;
+  options.addr_2 = &buf;
   options.count = count;
   options.root_src_dst = root;
   options.compress_dtype = compress_dtype;

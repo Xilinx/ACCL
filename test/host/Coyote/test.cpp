@@ -318,7 +318,7 @@ options_t parse_options(int argc, char *argv[])
 }
 
 void test_sendrcv(ACCL::ACCL &accl, options_t &options) {
-  	std::cout << "Start send recv test..." << std::endl;
+  	std::cout << "Start send recv test..." << std::endl<<std::flush;
 	// do the send recv test here
 	int bufsize = options.count;
 	auto op_buf = accl.create_coyotebuffer<int>(bufsize, dataType::int32);
@@ -381,7 +381,8 @@ void test_sendrcv(ACCL::ACCL &accl, options_t &options) {
 
 void test_bcast(ACCL::ACCL &accl, options_t &options, int root) {
 	std::cout << "Start bcast test with root " + std::to_string(root) + " ..."
-				<< std::endl;
+				<< std::endl<<std::flush;
+	MPI_Barrier(MPI_COMM_WORLD);
 	unsigned int count = options.count;
 	auto op_buf = accl.create_coyotebuffer<int>(count, dataType::int32);
 	
@@ -441,8 +442,9 @@ void test_scatter(ACCL::ACCL &accl, options_t &options, int root) {
 	auto op_buf = accl.create_coyotebuffer<int>(count * mpi_size, dataType::int32);
 	auto res_buf = accl.create_coyotebuffer<int>(count, dataType::int32);
 
-	// rank root initializes the buffer with numbers, other ranks with -1
-	for (int i = 0; i < count * mpi_size; i++) op_buf.get()->buffer()[i] = (mpi_rank == root) ? i : -1;
+	// op buf initialized with i and res buf initialized with -1
+	for (int i = 0; i < count * mpi_size; i++) op_buf.get()->buffer()[i] = i;
+	for (int i = 0; i < count; i++) res_buf.get()->buffer()[i] = -1;
 
 	if (options.host == 0){ op_buf->sync_to_device(); }
 	if (options.host == 0){ res_buf->sync_to_device(); }
@@ -466,9 +468,9 @@ void test_scatter(ACCL::ACCL &accl, options_t &options, int root) {
 		unsigned int res = res_buf.get()->buffer()[i]; 
 		unsigned int ref = op_buf.get()->buffer()[i + mpi_rank * count];
 		if (res != ref) {
-		// std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
-		//                  std::to_string(res) + " != " + std::to_string(ref) + ")"
-		//           << std::endl;
+		std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
+		                 std::to_string(res) + " != " + std::to_string(ref) + ")"
+		          << std::endl;
 		errors += 1;
 		}
 	}
@@ -754,7 +756,7 @@ void test_accl_base(options_t options)
 		accl = std::make_unique<ACCL::ACCL>(device,
 			ranks, mpi_rank,
 			options.udp ? networkProtocol::UDP : networkProtocol::TCP,
-			16, options.rxbuf_size, options.seg_size);
+			mpi_size, options.rxbuf_size, options.seg_size);
 
 		if (options.tcp)
 		{
@@ -767,21 +769,25 @@ void test_accl_base(options_t options)
 			debug(accl->dump_communicator());
 		}
 
+		MPI_Barrier(MPI_COMM_WORLD);
+
 	} else {
 		debug("unsupported situation!!!");
 		exit(1);
 	}
 	
-	accl->set_timeout(1e6); // the same as in the original
-	std::cout << "set_timeout done." << std::endl;
+	// accl->set_timeout(1e6); // the same as in the original
+	// std::cout << "set_timeout done." << std::endl;
 	
+	// MPI_Barrier(MPI_COMM_WORLD);
+	
+	// accl->nop();
+	// std::cout << "nop done." << std::endl;
+	
+	
+	std::cerr << "Rank " << mpi_rank << " passed last barrier before test!" << std::endl << std::flush;
+
 	MPI_Barrier(MPI_COMM_WORLD);
-	
-	accl->nop();
-	std::cout << "nop done." << std::endl;
-	
-	MPI_Barrier(MPI_COMM_WORLD);
-	std::cerr << "Rank " << mpi_rank << " passed last barrier before test!" << std::endl;
 	
 	if(options.test_mode == ACCL_SEND || options.test_mode == 0){
 		test_sendrcv(*accl, options);
@@ -819,7 +825,7 @@ void test_accl_base(options_t options)
 		return;
 	}
 	else {
-		std::cout << "\nACCL base functionality test failed!\n" << std::endl;
+		std::cout << "\nERROR: ACCL base functionality test failed!\n" << std::endl;
 		return;
 	}
 	
@@ -867,7 +873,11 @@ int main(int argc, char *argv[])
 		   << std::endl;
 	std::cout << stream.str();
 
+	MPI_Barrier(MPI_COMM_WORLD);
+
 	test_accl_base(options);
+
+	MPI_Barrier(MPI_COMM_WORLD);
 	
 	std::cout << "Finalizing MPI..." << std::endl;
 	MPI_Finalize();
