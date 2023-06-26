@@ -1,3 +1,4 @@
+set nettype [lindex $::argv 0]
 open_project Coyote/hw/build/lynx/lynx.xpr
 update_compile_order -fileset sources_1
 create_bd_design "accl_bd"
@@ -44,19 +45,31 @@ connect_bd_intf_net [get_bd_intf_pins ccl_offload_0/m_axis_compression0] [get_bd
 connect_bd_intf_net [get_bd_intf_pins ccl_offload_0/m_axis_compression1] [get_bd_intf_pins ccl_offload_0/s_axis_compression1]
 connect_bd_intf_net [get_bd_intf_pins ccl_offload_0/m_axis_compression2] [get_bd_intf_pins ccl_offload_0/s_axis_compression2]
 
-# externalize TCP streams
-make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/s_axis_eth_rx_data]
-make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/m_axis_eth_listen_port]
-make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/m_axis_eth_tx_data]
-make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/s_axis_eth_port_status]
-make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/s_axis_eth_tx_status]
-make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/m_axis_eth_close_connection]
-make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/s_axis_eth_open_status]
-make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/m_axis_eth_read_pkg]
-make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/s_axis_eth_rx_meta]
-make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/m_axis_eth_open_connection]
-make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/s_axis_eth_notification]
-make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/m_axis_eth_tx_meta]
+switch $nettype {
+    "TCP" {
+        # externalize TCP streams
+        make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/s_axis_eth_rx_data]
+        make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/m_axis_eth_listen_port]
+        make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/m_axis_eth_tx_data]
+        make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/s_axis_eth_port_status]
+        make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/s_axis_eth_tx_status]
+        make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/m_axis_eth_close_connection]
+        make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/s_axis_eth_open_status]
+        make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/m_axis_eth_read_pkg]
+        make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/s_axis_eth_rx_meta]
+        make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/m_axis_eth_open_connection]
+        make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/s_axis_eth_notification]
+        make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/m_axis_eth_tx_meta]
+    }
+    "RDMA" {
+        # externalize RDMA streams
+        # TODO
+    }
+    default {
+        puts "Unrecognized network backend"
+        exit
+    }
+}
 
 # externalize DMA data streams
 make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/m_axis_dma0_s2mm]
