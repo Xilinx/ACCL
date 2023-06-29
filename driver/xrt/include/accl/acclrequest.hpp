@@ -57,6 +57,9 @@ public:
   bool wait(std::chrono::milliseconds timeout = 0ms) {
     std::unique_lock<std::mutex> lk(cv_mtx);
     bool ret = true;
+    // Avoid waiting if operation already completed
+    if (status.load() == operationStatus::COMPLETED)
+      return ret;
     // Wait for a given timeout
     if (timeout > 0ms) {
       ret = cv.wait_for(lk, timeout, [&] {

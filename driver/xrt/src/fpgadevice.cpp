@@ -19,6 +19,8 @@
 #include "accl/fpgadevice.hpp"
 #include "accl/common.hpp"
 
+#include <cassert>
+
 static void finish_fpga_request(const void *unused, ert_cmd_state state,
                                 void *request_ptr) {
   ACCL::FPGARequest *req = reinterpret_cast<ACCL::FPGARequest *>(request_ptr);
@@ -32,9 +34,7 @@ static void finish_fpga_request(const void *unused, ert_cmd_state state,
 
 namespace ACCL {
 void FPGARequest::start() {
-  // Only start if the status is queued, otherwise, this request was already started
-  if (this->get_status() !=  operationStatus::QUEUED)
-    return;
+  assert(this->get_status() ==  operationStatus::EXECUTING);
 
   int function, arg_id = 0;
 
@@ -58,12 +58,8 @@ void FPGARequest::start() {
 
   run.add_callback(ert_cmd_state::ERT_CMD_STATE_COMPLETED, finish_fpga_request,
                    reinterpret_cast<void *>(this));
-
-  run.start();
+  run.start();  
 }
-
-FPGADevice::FPGADevice(xrt::ip &cclo_ip, xrt::kernel &hostctrl_ip)
-    : cclo(cclo_ip), hostctrl(hostctrl_ip) {}
 
 ACCLRequest *FPGADevice::start(const Options &options) {
   if (options.waitfor.size() != 0) {
@@ -80,6 +76,9 @@ ACCLRequest *FPGADevice::start(const Options &options) {
 
   return req;
 }
+
+FPGADevice::FPGADevice(xrt::ip &cclo_ip, xrt::kernel &hostctrl_ip)
+    : cclo(cclo_ip), hostctrl(hostctrl_ip) {}
 
 void FPGADevice::wait(ACCLRequest *request) { request->wait(); }
 
@@ -114,11 +113,12 @@ void FPGADevice::write(addr_t offset, val_t val) {
 }
 
 void FPGADevice::launch_request() {
-  // This guarantees permission to only one thread trying to status an operation
+  // This guarantees permission to only one thread trying to start an operation
   if (queue.run()) {
     FPGARequest *req = queue.front();
-    req->start();
+    assert(req->get_status() == operationStatus::QUEUED);
     req->set_status(operationStatus::EXECUTING);
+    req->start();
   }
 }
 

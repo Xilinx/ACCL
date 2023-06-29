@@ -39,7 +39,7 @@ public:
    * @param cclo   Opaque reference to the main CCLO object
    * @param kernel Hostctrl kernel to be used in the request
    */
-  FPGARequest(void *cclo, xrt::kernel kernel, const CCLO::Options &options)
+  FPGARequest(void *cclo, xrt::kernel &kernel, const CCLO::Options &options)
       : ACCLRequest(cclo), run(xrt::run(kernel)), options(options) {}
 
   /**

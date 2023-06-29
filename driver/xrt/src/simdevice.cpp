@@ -18,6 +18,7 @@
 
 #include "accl/simdevice.hpp"
 #include "accl/common.hpp"
+#include <cassert>
 #include <future>
 #include "zmq_client.h"
 
@@ -34,9 +35,7 @@ static void finish_sim_request(ACCL::SimRequest *req) {
 
 namespace ACCL {
 void SimRequest::start() {
-  // Only start if the status is queued, otherwise, this request was already started
-  if (this->get_status() !=  operationStatus::QUEUED)
-    return;
+  assert(this->get_status() ==  operationStatus::EXECUTING);
 
   int function;
 
@@ -63,13 +62,6 @@ void SimRequest::start() {
   auto f = std::async(std::launch::async, finish_sim_request, this);
 }
 
-SimDevice::SimDevice(unsigned int zmqport, unsigned int local_rank) {
-  debug("SimDevice connecting to ZMQ on port " + std::to_string(zmqport) +
-        " for rank " + std::to_string(local_rank));
-  zmq_ctx = zmq_client_intf(zmqport, local_rank);
-  debug("SimDevice connected");
-};
-
 ACCLRequest *SimDevice::start(const Options &options) {
   if (options.waitfor.size() != 0) {
     throw std::runtime_error("SimDevice does not support chaining");
@@ -83,6 +75,13 @@ ACCLRequest *SimDevice::start(const Options &options) {
   launch_request();
 
   return req;
+};
+
+SimDevice::SimDevice(unsigned int zmqport, unsigned int local_rank) {
+  debug("SimDevice connecting to ZMQ on port " + std::to_string(zmqport) +
+        " for rank " + std::to_string(local_rank));
+  zmq_ctx = zmq_client_intf(zmqport, local_rank);
+  debug("SimDevice connected");
 };
 
 void SimDevice::wait(ACCLRequest *request) { 
@@ -125,11 +124,12 @@ void SimDevice::write(addr_t offset, val_t val) {
 }
 
 void SimDevice::launch_request() {
-  // This guarantees permission to only one thread trying to status an operation
+  // This guarantees permission to only one thread trying to start an operation
   if (queue.run()) {
     SimRequest *req = queue.front();
-    req->start();
+    assert(req->get_status() == operationStatus::QUEUED);
     req->set_status(operationStatus::EXECUTING);
+    req->start();
   }
 }
 
