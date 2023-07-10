@@ -133,6 +133,12 @@ proc edit_core {core} {
         config_axis_if $core "s_axis_eth_port_status" "ap_clk" 1 0 0 0 1 0 1 1
     }
 
+    if { $stacktype == "RDMA" } {
+        config_axis_if $core "s_axis_rdma_rq" "ap_clk" 68 0 0 0 1 0 1 1
+        config_axis_if $core "m_axis_rdma_sq" "ap_clk" 68 0 0 0 1 0 1 1
+        config_axis_if $core "s_axis_eth_notification" "ap_clk" 16 0 0 0 1 0 1 1
+    }
+
     if { $en_extkrnl == 1 } {
         config_axis_if $core "s_axis_krnl" "ap_clk" 64 0 0 0 1 0 1 1
         config_axis_if $core "m_axis_krnl" "ap_clk" 64 0 0 8 1 0 1 1

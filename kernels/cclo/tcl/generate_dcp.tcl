@@ -38,6 +38,7 @@ if { $en_dma == 1 } {
 }
 if { $en_extkrnl == 1 } { set extra_synth_options "$extra_synth_options -verilog_define STREAM_ENABLE " }
 if { $stacktype == "TCP" } { set extra_synth_options "$extra_synth_options -verilog_define TCP_ENABLE " }
+if { $stacktype == "RDMA" } { set extra_synth_options "$extra_synth_options -verilog_define RDMA_ENABLE " }
 if { $mb_debug_level > 0 } { set extra_synth_options "$extra_synth_options -verilog_define MB_DEBUG_ENABLE " }
 set_property -name {STEPS.SYNTH_DESIGN.ARGS.MORE OPTIONS} -value $extra_synth_options -objects [get_runs synth_1]
 launch_runs synth_1 -jobs 6

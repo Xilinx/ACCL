@@ -418,6 +418,53 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
     assign_bd_address -offset 0x00030000 -range 0x00010000 -target_address_space [get_bd_addr_spaces control/microblaze_0/Data] [get_bd_addr_segs eth_rx_subsystem/tcp_depacketizer_0/s_axi_control/Reg] -force
     assign_bd_address -offset 0x00040000 -range 0x00010000 -target_address_space [get_bd_addr_spaces control/microblaze_0/Data] [get_bd_addr_segs eth_tx_subsystem/tcp_packetizer_0/s_axi_control/Reg] -force
 
+  } elseif { $netStackType == "RDMA" } {
+    
+    # RDMA interfaces
+    set s_axis_eth_notification [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 s_axis_eth_notification ]
+    set_property -dict [ list CONFIG.FREQ_HZ {250000000} CONFIG.HAS_TKEEP {1} CONFIG.HAS_TLAST {1} CONFIG.HAS_TREADY {1} CONFIG.HAS_TSTRB {1} CONFIG.LAYERED_METADATA {undef} CONFIG.TDATA_NUM_BYTES {16} CONFIG.TDEST_WIDTH {0} CONFIG.TID_WIDTH {0} CONFIG.TUSER_WIDTH {0} ] $s_axis_eth_notification
+
+    set m_axis_rdma_sq [ create_bd_intf_port -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_rdma_sq ]
+    set_property -dict [ list CONFIG.FREQ_HZ {250000000} ] $m_axis_rdma_sq
+
+    set s_axis_rdma_rq [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 s_axis_rdma_rq ]
+    set_property -dict [ list CONFIG.FREQ_HZ {250000000} CONFIG.HAS_TKEEP {0} CONFIG.HAS_TLAST {0} CONFIG.HAS_TREADY {1} CONFIG.HAS_TSTRB {0} CONFIG.LAYERED_METADATA {undef} CONFIG.TDATA_NUM_BYTES {68} CONFIG.TDEST_WIDTH {0} CONFIG.TID_WIDTH {0} CONFIG.TUSER_WIDTH {0} ] $s_axis_rdma_rq
+  
+    create_rdma_tx_subsystem [current_bd_instance .] eth_tx_subsystem
+    create_rdma_rx_subsystem [current_bd_instance .] eth_rx_subsystem
+
+    connect_bd_intf_net [get_bd_intf_pins eth_rx_subsystem/m_axis_pktsts] [get_bd_intf_pins control/eth_depacketizer_sts]
+    connect_bd_intf_net [get_bd_intf_pins eth_tx_subsystem/s_axis_pktcmd] [get_bd_intf_pins control/eth_packetizer_cmd]
+    connect_bd_intf_net [get_bd_intf_pins eth_tx_subsystem/m_axis_packetizer_sts] [get_bd_intf_pins control/eth_packetizer_sts]
+
+    connect_bd_intf_net [get_bd_intf_pins eth_rx_subsystem/m_axis_notification] [get_bd_intf_pins control/eth_depacketizer_notif]
+
+    connect_bd_intf_net [get_bd_intf_ports s_axis_eth_rx_data] [get_bd_intf_pins eth_rx_subsystem/s_axis_rx_data]
+    connect_bd_intf_net [get_bd_intf_ports s_axis_eth_notification] [get_bd_intf_pins eth_rx_subsystem/s_axis_notification]
+
+    connect_bd_intf_net [get_bd_intf_ports m_axis_eth_tx_data] [get_bd_intf_pins eth_tx_subsystem/m_axis_tx_data]
+
+    connect_bd_intf_net -intf_net rdma_depacketizer_control [get_bd_intf_pins control_xbar/M01_AXI] [get_bd_intf_pins eth_rx_subsystem/s_axi_control]
+    connect_bd_intf_net -intf_net rdma_packetizer_control [get_bd_intf_pins control_xbar/M00_AXI] [get_bd_intf_pins eth_tx_subsystem/s_axi_control]
+    connect_bd_intf_net [get_bd_intf_pins eth_rx_subsystem/m_axis_rx_data] [get_bd_intf_pins axis_switch_0/S02_AXIS]
+    connect_bd_intf_net [get_bd_intf_pins eth_tx_subsystem/s_axis_tx_data] [get_bd_intf_pins axis_switch_0/M02_AXIS]
+
+    connect_bd_intf_net [get_bd_intf_pins eth_rx_subsystem/m_axis_metatable_upd] [get_bd_intf_pins eth_tx_subsystem/s_axis_meta_upd]
+
+    connect_bd_intf_net [get_bd_intf_pins eth_rx_subsystem/s_axis_rdma_rq] [get_bd_intf_pins s_axis_rdma_rq]
+    connect_bd_intf_net [get_bd_intf_pins eth_tx_subsystem/m_axis_rdma_sq] [get_bd_intf_pins m_axis_rdma_sq]
+
+    connect_bd_net [get_bd_ports ap_clk] \
+                   [get_bd_pins eth_rx_subsystem/ap_clk] \
+                   [get_bd_pins eth_tx_subsystem/ap_clk]
+
+    connect_bd_net [get_bd_pins control/encore_aresetn] \
+                   [get_bd_pins eth_rx_subsystem/ap_rst_n] \
+                   [get_bd_pins eth_tx_subsystem/ap_rst_n]
+
+    assign_bd_address -offset 0x00030000 -range 0x00010000 -target_address_space [get_bd_addr_spaces control/microblaze_0/Data] [get_bd_addr_segs eth_rx_subsystem/rdma_depacketizer_0/s_axi_control/Reg] -force
+    assign_bd_address -offset 0x00040000 -range 0x00010000 -target_address_space [get_bd_addr_spaces control/microblaze_0/Data] [get_bd_addr_segs eth_tx_subsystem/rdma_packetizer_0/s_axi_control/Reg] -force
+
   } elseif { $netStackType == "UDP" } {
 
     create_udp_tx_subsystem [current_bd_instance .] eth_tx_subsystem

@@ -71,11 +71,84 @@ switch $nettype {
     }
 }
 
+
 # externalize DMA data streams
-make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/m_axis_dma0_s2mm]
-make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/s_axis_dma0_mm2s]
-make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/s_axis_dma1_mm2s]
-make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/m_axis_dma1_s2mm]
+# make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/m_axis_dma0_s2mm]
+# make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/s_axis_dma0_mm2s]
+# make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/s_axis_dma1_mm2s]
+# make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/m_axis_dma1_s2mm]
+
+set m_axis_host_0 [ create_bd_intf_port -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_host_0 ]
+set_property -dict [ list CONFIG.FREQ_HZ {250000000} ] $m_axis_host_0
+set m_axis_host_1 [ create_bd_intf_port -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_host_1 ]
+set_property -dict [ list CONFIG.FREQ_HZ {250000000} ] $m_axis_host_1
+set m_axis_card_0 [ create_bd_intf_port -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_card_0 ]
+set_property -dict [ list CONFIG.FREQ_HZ {250000000} ] $m_axis_card_0
+set m_axis_card_1 [ create_bd_intf_port -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_card_1 ]
+set_property -dict [ list CONFIG.FREQ_HZ {250000000} ] $m_axis_card_1
+
+set s_axis_host_0 [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 s_axis_host_0 ]
+set_property -dict [ list CONFIG.FREQ_HZ {250000000} CONFIG.HAS_TKEEP {1} CONFIG.HAS_TLAST {1} CONFIG.HAS_TREADY {1} CONFIG.HAS_TSTRB {0} CONFIG.LAYERED_METADATA {undef} CONFIG.TDATA_NUM_BYTES {64} CONFIG.TDEST_WIDTH {0} CONFIG.TID_WIDTH {0} CONFIG.TUSER_WIDTH {0} ] $s_axis_host_0
+set s_axis_host_1 [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 s_axis_host_1 ]
+set_property -dict [ list CONFIG.FREQ_HZ {250000000} CONFIG.HAS_TKEEP {1} CONFIG.HAS_TLAST {1} CONFIG.HAS_TREADY {1} CONFIG.HAS_TSTRB {0} CONFIG.LAYERED_METADATA {undef} CONFIG.TDATA_NUM_BYTES {64} CONFIG.TDEST_WIDTH {0} CONFIG.TID_WIDTH {0} CONFIG.TUSER_WIDTH {0} ] $s_axis_host_1
+set s_axis_card_0 [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 s_axis_card_0 ]
+set_property -dict [ list CONFIG.FREQ_HZ {250000000} CONFIG.HAS_TKEEP {1} CONFIG.HAS_TLAST {1} CONFIG.HAS_TREADY {1} CONFIG.HAS_TSTRB {0} CONFIG.LAYERED_METADATA {undef} CONFIG.TDATA_NUM_BYTES {64} CONFIG.TDEST_WIDTH {0} CONFIG.TID_WIDTH {0} CONFIG.TUSER_WIDTH {0} ] $s_axis_card_0
+set s_axis_card_1 [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 s_axis_card_1 ]
+set_property -dict [ list CONFIG.FREQ_HZ {250000000} CONFIG.HAS_TKEEP {1} CONFIG.HAS_TLAST {1} CONFIG.HAS_TREADY {1} CONFIG.HAS_TSTRB {0} CONFIG.LAYERED_METADATA {undef} CONFIG.TDATA_NUM_BYTES {64} CONFIG.TDEST_WIDTH {0} CONFIG.TID_WIDTH {0} CONFIG.TUSER_WIDTH {0} ] $s_axis_card_1
+
+
+# create axis switch
+create_bd_cell -type ip -vlnv xilinx.com:ip:axis_switch:1.1 axis_switch_2_to_1_inst_0
+set_property -dict [list CONFIG.NUM_SI {2} CONFIG.TDATA_NUM_BYTES {64} CONFIG.HAS_TKEEP {1} CONFIG.HAS_TLAST {1} CONFIG.ARB_ON_TLAST {1} CONFIG.NUM_MI {1} CONFIG.DECODER_REG {0} CONFIG.ARB_ON_MAX_XFERS {0} CONFIG.Component_Name {axis_switch_2_to_1_inst_0}] [get_bd_cells axis_switch_2_to_1_inst_0]
+
+create_bd_cell -type ip -vlnv xilinx.com:ip:axis_switch:1.1 axis_switch_2_to_1_inst_1
+set_property -dict [list CONFIG.NUM_SI {2} CONFIG.TDATA_NUM_BYTES {64} CONFIG.HAS_TKEEP {1} CONFIG.HAS_TLAST {1} CONFIG.ARB_ON_TLAST {1} CONFIG.NUM_MI {1} CONFIG.DECODER_REG {0} CONFIG.ARB_ON_MAX_XFERS {0} CONFIG.Component_Name {axis_switch_2_to_1_inst_1}] [get_bd_cells axis_switch_2_to_1_inst_1]
+
+create_bd_cell -type ip -vlnv xilinx.com:ip:axis_switch:1.1 axis_switch_1_to_2_inst_0
+set_property -dict [list CONFIG.NUM_SI {1} CONFIG.NUM_MI {2} CONFIG.TDATA_NUM_BYTES {64} CONFIG.HAS_TKEEP {1} CONFIG.HAS_TLAST {1} CONFIG.TDEST_WIDTH {8} CONFIG.DECODER_REG {1} CONFIG.Component_Name {axis_switch_1_to_2_inst_0}] [get_bd_cells axis_switch_1_to_2_inst_0]
+
+create_bd_cell -type ip -vlnv xilinx.com:ip:axis_switch:1.1 axis_switch_1_to_2_inst_1
+set_property -dict [list CONFIG.NUM_SI {1} CONFIG.NUM_MI {2} CONFIG.TDATA_NUM_BYTES {64} CONFIG.HAS_TKEEP {1} CONFIG.HAS_TLAST {1} CONFIG.TDEST_WIDTH {8} CONFIG.DECODER_REG {1} CONFIG.Component_Name {axis_switch_1_to_2_inst_1}] [get_bd_cells axis_switch_1_to_2_inst_1]
+
+# s_axis_host_0 and s_axis_card_0 multiplexed to single s_axis_dma0_mm2s stream, round-robin by tlast
+connect_bd_intf_net [get_bd_intf_ports s_axis_host_0] [get_bd_intf_pins axis_switch_2_to_1_inst_0/S00_AXIS]
+connect_bd_intf_net [get_bd_intf_ports s_axis_card_0] [get_bd_intf_pins axis_switch_2_to_1_inst_0/S01_AXIS]
+connect_bd_intf_net [get_bd_intf_pins axis_switch_2_to_1_inst_0/M00_AXIS] [get_bd_intf_pins ccl_offload_0/s_axis_dma0_mm2s]
+connect_bd_net [get_bd_ports ap_clk_0] [get_bd_pins axis_switch_2_to_1_inst_0/aclk]
+connect_bd_net [get_bd_ports ap_rst_n_0] [get_bd_pins axis_switch_2_to_1_inst_0/aresetn]
+
+create_bd_cell -type ip -vlnv xilinx.com:ip:xlconstant:1.1 xlconstant_0
+set_property -dict [list CONFIG.CONST_WIDTH {2}] [get_bd_cells xlconstant_0]
+set_property -dict [list CONFIG.CONST_VAL {0}] [get_bd_cells xlconstant_0]
+connect_bd_net [get_bd_pins xlconstant_0/dout] [get_bd_pins axis_switch_2_to_1_inst_0/s_req_suppress]
+
+# s_axis_host_1 and s_axis_card_1 multiplexed to single s_axis_dma1_mm2s stream, round-robin by tlast
+connect_bd_intf_net [get_bd_intf_ports s_axis_host_1] [get_bd_intf_pins axis_switch_2_to_1_inst_1/S00_AXIS]
+connect_bd_intf_net [get_bd_intf_ports s_axis_card_1] [get_bd_intf_pins axis_switch_2_to_1_inst_1/S01_AXIS]
+connect_bd_intf_net [get_bd_intf_pins axis_switch_2_to_1_inst_1/M00_AXIS] [get_bd_intf_pins ccl_offload_0/s_axis_dma1_mm2s]
+connect_bd_net [get_bd_ports ap_clk_0] [get_bd_pins axis_switch_2_to_1_inst_1/aclk]
+connect_bd_net [get_bd_ports ap_rst_n_0] [get_bd_pins axis_switch_2_to_1_inst_1/aresetn]
+
+create_bd_cell -type ip -vlnv xilinx.com:ip:xlconstant:1.1 xlconstant_1
+set_property -dict [list CONFIG.CONST_WIDTH {2}] [get_bd_cells xlconstant_1]
+set_property -dict [list CONFIG.CONST_VAL {0}] [get_bd_cells xlconstant_1]
+connect_bd_net [get_bd_pins xlconstant_1/dout] [get_bd_pins axis_switch_2_to_1_inst_1/s_req_suppress]
+
+# m_axis_dma0_s2mm multiplex to m_axis_host_0 and m_axis_card_0 according to the strm flag encoded in m_axis_dma0_s2mm tdest
+connect_bd_intf_net [get_bd_intf_pins ccl_offload_0/m_axis_dma0_s2mm] [get_bd_intf_pins axis_switch_1_to_2_inst_0/S00_AXIS]
+connect_bd_intf_net [get_bd_intf_ports m_axis_card_0] [get_bd_intf_pins axis_switch_1_to_2_inst_0/M00_AXIS]
+connect_bd_intf_net [get_bd_intf_ports m_axis_host_0] [get_bd_intf_pins axis_switch_1_to_2_inst_0/M01_AXIS]
+connect_bd_net [get_bd_ports ap_clk_0] [get_bd_pins axis_switch_1_to_2_inst_0/aclk]
+connect_bd_net [get_bd_ports ap_rst_n_0] [get_bd_pins axis_switch_1_to_2_inst_0/aresetn]
+
+# m_axis_dma1_s2mm multiplex to m_axis_host_1 and m_axis_card_1 according to the strm flag encoded in m_axis_dma1_s2mm tdest
+connect_bd_intf_net [get_bd_intf_pins ccl_offload_0/m_axis_dma1_s2mm] [get_bd_intf_pins axis_switch_1_to_2_inst_1/S00_AXIS]
+connect_bd_intf_net [get_bd_intf_ports m_axis_card_1] [get_bd_intf_pins axis_switch_1_to_2_inst_1/M00_AXIS]
+connect_bd_intf_net [get_bd_intf_ports m_axis_host_1] [get_bd_intf_pins axis_switch_1_to_2_inst_1/M01_AXIS]
+connect_bd_net [get_bd_ports ap_clk_0] [get_bd_pins axis_switch_1_to_2_inst_1/aclk]
+connect_bd_net [get_bd_ports ap_rst_n_0] [get_bd_pins axis_switch_1_to_2_inst_1/aresetn]
+
+
 
 # connect up AXI lite
 create_bd_cell -type ip -vlnv xilinx.com:ip:smartconnect:1.0 smartconnect_0
