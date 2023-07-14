@@ -53,7 +53,7 @@ switch $command {
 
 open_project tcp_session_handler
 
-add_files tcp_session_handler.cpp -cflags "-std=c++14 -I../../../driver/hls/ -I../../cclo/hls/eth_intf/ -I../../../hlslib/include/hlslib/xilinx -DACCL_SYNTHESIS"
+add_files tcp_session_handler.cpp -cflags "-std=c++14 -I../../../driver/hls/ -I../../../hlslib/include/hlslib/xilinx -DACCL_SYNTHESIS"
 
 set_top tcp_session_handler
 

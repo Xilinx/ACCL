@@ -24,11 +24,11 @@ void tcp_session_handler(
     bool close,	
     unsigned int *session_id,
     bool *success,
-    STREAM<pkt16>& listen_port, 
-    STREAM<pkt8>& port_status,
-	STREAM<pkt64>& open_connection,
-    STREAM<pkt16>& close_connection,
-    STREAM<pkt128>& open_status
+    STREAM<ap_axiu<16, 0, 0, 0>>& listen_port, 
+    STREAM<ap_axiu<8, 0, 0, 0>>& port_status,
+	STREAM<ap_axiu<64, 0, 0, 0>>& open_connection,
+    STREAM<ap_axiu<16, 0, 0, 0>>& close_connection,
+    STREAM<ap_axiu<128, 0, 0, 0>>& open_status
 ){
 #pragma HLS INTERFACE s_axilite port=ip
 #pragma HLS INTERFACE s_axilite port=port_nr
@@ -43,26 +43,26 @@ void tcp_session_handler(
 
     //first open port, unless the instruction is to close
     if(!close){
-        pkt16 listen_port_pkt;
+        ap_axiu<16, 0, 0, 0> listen_port_pkt;
         listen_port_pkt.data(15,0) = port_nr;
         STREAM_WRITE(listen_port, listen_port_pkt);
-        pkt8 port_status_pkt = STREAM_READ(port_status);
+        ap_axiu<8, 0, 0, 0> port_status_pkt = STREAM_READ(port_status);
         *success = port_status_pkt.data;
         //if we weren't successful setting up port, stop here
         if(!port_status_pkt.data) return;
     }
     //then open or close connection
     if(!close){
-        pkt64 openConnection_pkt;
+        ap_axiu<64, 0, 0, 0> openConnection_pkt;
         openConnection_pkt.data(31,0) = ip;
         openConnection_pkt.data(47,32) = port_nr;
         STREAM_WRITE(open_connection, openConnection_pkt);
-        pkt128 open_status_pkt;
+        ap_axiu<128, 0, 0, 0> open_status_pkt;
         open_status_pkt = STREAM_READ(open_status);
         *session_id = open_status_pkt.data(15,0);
         *success = open_status_pkt.data(23,16);
     } else {
-        pkt16 closeConnection_pkt;
+        ap_axiu<16, 0, 0, 0> closeConnection_pkt;
         closeConnection_pkt.data = *session_id;
         STREAM_WRITE(close_connection, closeConnection_pkt);
     }
