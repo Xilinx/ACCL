@@ -23,7 +23,6 @@
 #include "mb_interface.h"
 #endif
 
-static volatile int 		 use_tcp = 1;
 static volatile unsigned int timeout = 1 << 28;
 static volatile	unsigned int max_segment_size = DMA_MAX_BTT;
 
@@ -90,91 +89,6 @@ static inline void start_offload_engines(){
     //start rxbuf seek
     Xil_Out32(RX_SEEK_BASEADDR+0x10, EXCHMEM_BASEADDR);
     SET(RX_SEEK_BASEADDR, CONTROL_REPEAT_MASK | CONTROL_START_MASK);
-}
-
-//connection management
-
-//establish connection with every other rank in the communicator
-int openCon()
-{
-    unsigned int session 	= 0;
-    unsigned int dst_ip 	= 0;
-    unsigned int dst_port 	= 0;
-    unsigned int success	= 0;
-    int ret = 0;
-
-    unsigned int cur_rank_ip	= 0;
-    unsigned int cur_rank_port 	= 0;
-
-    unsigned int size 		= world.size;
-    unsigned int local_rank = world.local_rank;
-
-    //open connection to all the ranks except for the local rank
-    ret = NO_ERROR;
-    for (int i = 0; i < size; i++)
-    {
-        if (i != local_rank)
-        {
-            cur_rank_ip 	= world.ranks[i].ip;
-            cur_rank_port 	= world.ranks[i].port;
-            //send open connection request to the packetizer
-            putd(CMD_NET_CON, cur_rank_ip);
-            putd(CMD_NET_CON, cur_rank_port);
-
-            //wait until the connections status is returned
-            session = getd(STS_NET_CON);
-            dst_ip = getd(STS_NET_CON);
-            dst_port = getd(STS_NET_CON);
-            success = getd(STS_NET_CON);
-
-            if(success){
-                world.ranks[i].session = session;
-            } else {
-                ret = OPEN_CON_NOT_SUCCEEDED;
-            }
-        }
-    }
-    return ret;
-}
-
-//close connection with every other rank in the communicator
-int closeCon()
-{
-    unsigned int cur_rank_sess_id;
-    int ret = NO_ERROR;
-
-    unsigned int size 		= world.size;
-    unsigned int local_rank = world.local_rank;
-
-    //close connection to all the ranks except for the local rank
-    for (int i = 0; i < size; i++)
-    {
-        if (i != local_rank)
-        {
-            cur_rank_sess_id 	= world.ranks[i].session;
-            //send close connection request to the packetizer
-            putd(CMD_NET_CON, 0);
-            putd(CMD_NET_CON, cur_rank_sess_id);
-        }
-    }
-
-    return ret;
-}
-
-//open local port for listening
-int openPort()
-{
-    int success = 0;
-
-    //open port with only the local rank
-    putd(CMD_NET_PORT, world.ranks[world.local_rank].port);
-    success = getd(STS_NET_PORT);
-
-    if (success)
-        return NO_ERROR;
-    else
-        return OPEN_PORT_NOT_SUCCEEDED;
-
 }
 
 static inline unsigned int segment(unsigned int number_of_bytes,unsigned int segment_size){
@@ -1455,30 +1369,6 @@ void run() {
                         break;
                     case HOUSEKEEP_TIMEOUT:
                         timeout = count;
-                        break;
-                    case HOUSEKEEP_OPEN_PORT:
-                        if(use_tcp == 1){
-                            retval = openPort();
-                        } else{
-                            retval = OPEN_PORT_NOT_SUCCEEDED;
-                        }
-                        break;
-                    case HOUSEKEEP_OPEN_CON:
-                        if(use_tcp == 1){
-                            retval = openCon();
-                        } else{
-                            retval = OPEN_CON_NOT_SUCCEEDED;
-                        }
-                        break;
-                    case HOUSEKEEP_CLOSE_CON:
-                        if(use_tcp == 1){
-                            retval = closeCon();
-                        } else{
-                            retval = CLOSE_CON_NOT_SUCCEEDED;
-                        }
-                        break;
-                    case HOUSEKEEP_SET_STACK_TYPE:
-                        use_tcp = count;
                         break;
                     case HOUSEKEEP_SET_MAX_SEGMENT_SIZE:
                         retval = DMA_NOT_EXPECTED_BTT_ERROR;

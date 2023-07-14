@@ -348,13 +348,6 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
   create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 eth_packetizer_cmd
   create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 eth_depacketizer_sts
   create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 eth_packetizer_sts
-  
-  create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 eth_opencon_cmd
-  create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 eth_closecon_cmd
-  create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 eth_opencon_sts
-
-  create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 eth_openport_cmd
-  create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 eth_openport_sts
 
   create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 call_req
   create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 call_ack
@@ -388,8 +381,6 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
    # Create instance: fifo_eth_packetizer_sts, and set properties
   set fifo_eth_packetizer_sts [ create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 fifo_eth_packetizer_sts ]
   set_property -dict [ list  CONFIG.HAS_TLAST {1}  CONFIG.TDATA_NUM_BYTES {4} CONFIG.FIFO_DEPTH {32} CONFIG.FIFO_MEMORY_TYPE {distributed}] $fifo_eth_packetizer_sts
-  # Create instance: tcp session handler
-  set tcp_session [create_bd_cell -type ip -vlnv xilinx.com:hls:tcp_sessionHandler:1.0 tcp_session]
 
   # Create instance: microblaze_0, and set properties
   # TODO: make debug/trace optional; the profiling buffer is large
@@ -400,7 +391,7 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
    CONFIG.C_USE_INTERRUPT {0} \
    CONFIG.C_D_AXI {1} \
    CONFIG.C_D_LMB {1} \
-   CONFIG.C_FSL_LINKS {4} \
+   CONFIG.C_FSL_LINKS {3} \
    CONFIG.C_I_LMB {1} \
    CONFIG.C_TRACE {0} \
    CONFIG.C_USE_EXTENDED_FSL_INSTR {1} \
@@ -549,22 +540,11 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
   connect_bd_intf_net -intf_net c0 [get_bd_intf_pins exchange_mem/S_AXI_MB] [get_bd_intf_pins microblaze_0_axi_periph/M00_AXI]
   connect_bd_intf_net -intf_net c1 [get_bd_intf_pins encore_control] [get_bd_intf_pins microblaze_0_axi_periph/M01_AXI]
 
-  connect_bd_intf_net -intf_net eth_openport_cmd [get_bd_intf_pins tcp_session/m_axis_tcp_listen_port] [get_bd_intf_pins eth_openport_cmd]
-  connect_bd_intf_net -intf_net eth_opencon_cmd [get_bd_intf_pins tcp_session/m_axis_tcp_open_connection] [get_bd_intf_pins eth_opencon_cmd]
-  connect_bd_intf_net [get_bd_intf_pins tcp_session/m_axis_tcp_close_connection] [get_bd_intf_pins eth_closecon_cmd]
   connect_bd_intf_net -intf_net eth_packetizer_cmd [get_bd_intf_pins fifo_eth_packetizer_cmd/M_AXIS] [get_bd_intf_pins eth_packetizer_cmd]
-  connect_bd_intf_net -intf_net eth_openport_sts [get_bd_intf_pins tcp_session/s_axis_tcp_port_status] [get_bd_intf_pins eth_openport_sts]
-  connect_bd_intf_net -intf_net eth_opencon_sts [get_bd_intf_pins tcp_session/s_axis_tcp_open_status] [get_bd_intf_pins eth_opencon_sts]
   connect_bd_intf_net -intf_net eth_packetizer_sts [get_bd_intf_pins fifo_eth_packetizer_sts/S_AXIS] [get_bd_intf_pins eth_packetizer_sts]
   connect_bd_intf_net [get_bd_intf_pins fifo_eth_depacketizer_sts/S_AXIS] [get_bd_intf_pins eth_depacketizer_sts]
 
   connect_bd_intf_net [get_bd_intf_pins microblaze_0/M_AXI_DP] [get_bd_intf_pins microblaze_0_axi_periph/S00_AXI]
-
-  connect_bd_intf_net [get_bd_intf_pins tcp_session/port_cmd] [get_bd_intf_pins microblaze_0/M2_AXIS]
-  connect_bd_intf_net [get_bd_intf_pins tcp_session/port_sts] [get_bd_intf_pins microblaze_0/S2_AXIS]
-
-  connect_bd_intf_net [get_bd_intf_pins tcp_session/con_cmd] [get_bd_intf_pins microblaze_0/M3_AXIS]
-  connect_bd_intf_net [get_bd_intf_pins tcp_session/con_sts] [get_bd_intf_pins microblaze_0/S3_AXIS]
 
   connect_bd_intf_net [get_bd_intf_pins call_req] [get_bd_intf_pins microblaze_0/S0_AXIS]
   connect_bd_intf_net [get_bd_intf_pins call_ack] [get_bd_intf_pins microblaze_0/M0_AXIS]
@@ -595,8 +575,7 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
 
   # Clocks and resets
   connect_bd_net -net SYS_Rst_1 [get_bd_pins microblaze_0_local_memory/SYS_Rst] [get_bd_pins proc_sys_reset_0/peripheral_reset]
-  connect_bd_net [get_bd_pins ap_clk] [get_bd_pins tcp_session/ap_clk] \
-                                      [get_bd_pins fifo_eth_depacketizer_sts/s_axis_aclk] \
+  connect_bd_net [get_bd_pins ap_clk] [get_bd_pins fifo_eth_depacketizer_sts/s_axis_aclk] \
                                       [get_bd_pins fifo_eth_packetizer_cmd/s_axis_aclk] \
                                       [get_bd_pins fifo_eth_packetizer_sts/s_axis_aclk] \
                                       [get_bd_pins fifo_seek/s_axis_aclk] \
@@ -644,7 +623,6 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
                                                                    [get_bd_pins fifo_eth_depacketizer_sts/s_axis_aresetn] \
                                                                    [get_bd_pins fifo_eth_packetizer_cmd/s_axis_aresetn] \
                                                                    [get_bd_pins fifo_eth_packetizer_sts/s_axis_aresetn] \
-                                                                   [get_bd_pins tcp_session/ap_rst_n] \
                                                                    [get_bd_pins fifo_seek/s_axis_aresetn] \
                                                                    [get_bd_pins fifo_inflight/s_axis_aresetn] \
                                                                    [get_bd_pins rxbuf_enqueue/ap_rst_n] \

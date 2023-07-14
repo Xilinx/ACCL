@@ -253,27 +253,6 @@ module ccl_offload
 `endif
 
 `ifdef TCP_ENABLE
-  output [15:0] m_axis_eth_listen_port_tdata,
-  output [1:0] m_axis_eth_listen_port_tkeep,
-  output [0:0] m_axis_eth_listen_port_tlast,
-  input m_axis_eth_listen_port_tready,
-  output [1:0] m_axis_eth_listen_port_tstrb,
-  output m_axis_eth_listen_port_tvalid,
-
-  output [63:0] m_axis_eth_open_connection_tdata,
-  output [7:0] m_axis_eth_open_connection_tkeep,
-  output [0:0] m_axis_eth_open_connection_tlast,
-  input m_axis_eth_open_connection_tready,
-  output [7:0] m_axis_eth_open_connection_tstrb,
-  output m_axis_eth_open_connection_tvalid,
-
-  output [15:0] m_axis_eth_close_connection_tdata,
-  output [1:0] m_axis_eth_close_connection_tkeep,
-  output [0:0] m_axis_eth_close_connection_tlast,
-  input m_axis_eth_close_connection_tready,
-  output [1:0] m_axis_eth_close_connection_tstrb,
-  output m_axis_eth_close_connection_tvalid,
-
   output [31:0] m_axis_eth_read_pkg_tdata,
   output [3:0] m_axis_eth_read_pkg_tkeep,
   output [0:0] m_axis_eth_read_pkg_tlast,
@@ -294,20 +273,6 @@ module ccl_offload
   output s_axis_eth_notification_tready,
   input [15:0] s_axis_eth_notification_tstrb,
   input s_axis_eth_notification_tvalid,
-
-  input [127:0] s_axis_eth_open_status_tdata,
-  input [15:0] s_axis_eth_open_status_tkeep,
-  input [0:0] s_axis_eth_open_status_tlast,
-  output s_axis_eth_open_status_tready,
-  input [15:0] s_axis_eth_open_status_tstrb,
-  input s_axis_eth_open_status_tvalid,
-
-  input [7:0] s_axis_eth_port_status_tdata,
-  input [0:0] s_axis_eth_port_status_tkeep,
-  input [0:0] s_axis_eth_port_status_tlast,
-  output s_axis_eth_port_status_tready,
-  input [0:0] s_axis_eth_port_status_tstrb,
-  input s_axis_eth_port_status_tvalid,
 
   input [15:0] s_axis_eth_rx_meta_tdata,
   input [1:0] s_axis_eth_rx_meta_tkeep,
@@ -668,20 +633,6 @@ module ccl_offload
 `endif
 
 `ifdef TCP_ENABLE
-        .m_axis_eth_listen_port_tdata(m_axis_eth_listen_port_tdata),
-        .m_axis_eth_listen_port_tkeep(m_axis_eth_listen_port_tkeep),
-        .m_axis_eth_listen_port_tlast(m_axis_eth_listen_port_tlast),
-        .m_axis_eth_listen_port_tready(m_axis_eth_listen_port_tready),
-        .m_axis_eth_listen_port_tstrb(m_axis_eth_listen_port_tstrb),
-        .m_axis_eth_listen_port_tvalid(m_axis_eth_listen_port_tvalid),
-
-        .m_axis_eth_open_connection_tdata(m_axis_eth_open_connection_tdata),
-        .m_axis_eth_open_connection_tkeep(m_axis_eth_open_connection_tkeep),
-        .m_axis_eth_open_connection_tlast(m_axis_eth_open_connection_tlast),
-        .m_axis_eth_open_connection_tready(m_axis_eth_open_connection_tready),
-        .m_axis_eth_open_connection_tstrb(m_axis_eth_open_connection_tstrb),
-        .m_axis_eth_open_connection_tvalid(m_axis_eth_open_connection_tvalid),
-
         .m_axis_eth_read_pkg_tdata(m_axis_eth_read_pkg_tdata),
         .m_axis_eth_read_pkg_tkeep(m_axis_eth_read_pkg_tkeep),
         .m_axis_eth_read_pkg_tlast(m_axis_eth_read_pkg_tlast),
@@ -702,20 +653,6 @@ module ccl_offload
         .s_axis_eth_notification_tready(s_axis_eth_notification_tready),
         .s_axis_eth_notification_tstrb(s_axis_eth_notification_tstrb),
         .s_axis_eth_notification_tvalid(s_axis_eth_notification_tvalid),
-
-        .s_axis_eth_open_status_tdata(s_axis_eth_open_status_tdata),
-        .s_axis_eth_open_status_tkeep(s_axis_eth_open_status_tkeep),
-        .s_axis_eth_open_status_tlast(s_axis_eth_open_status_tlast),
-        .s_axis_eth_open_status_tready(s_axis_eth_open_status_tready),
-        .s_axis_eth_open_status_tstrb(s_axis_eth_open_status_tstrb),
-        .s_axis_eth_open_status_tvalid(s_axis_eth_open_status_tvalid),
-
-        .s_axis_eth_port_status_tdata(s_axis_eth_port_status_tdata),
-        .s_axis_eth_port_status_tkeep(s_axis_eth_port_status_tkeep),
-        .s_axis_eth_port_status_tlast(s_axis_eth_port_status_tlast),
-        .s_axis_eth_port_status_tready(s_axis_eth_port_status_tready),
-        .s_axis_eth_port_status_tstrb(s_axis_eth_port_status_tstrb),
-        .s_axis_eth_port_status_tvalid(s_axis_eth_port_status_tvalid),
 
         .s_axis_eth_rx_meta_tdata(s_axis_eth_rx_meta_tdata),
         .s_axis_eth_rx_meta_tkeep(s_axis_eth_rx_meta_tkeep),
