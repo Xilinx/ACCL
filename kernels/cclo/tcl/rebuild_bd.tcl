@@ -429,7 +429,8 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
     connect_bd_intf_net [get_bd_intf_pins eth_rx_subsystem/m_axis_rx_data] [get_bd_intf_pins axis_switch_0/S02_AXIS]
     connect_bd_intf_net [get_bd_intf_pins eth_tx_subsystem/s_axis_tx_data] [get_bd_intf_pins axis_switch_0/M02_AXIS]
 
-    connect_bd_intf_net [get_bd_intf_pins eth_rx_subsystem/m_axis_metatable_upd] [get_bd_intf_pins eth_tx_subsystem/s_axis_meta_upd]
+    connect_bd_intf_net [get_bd_intf_pins control/m_axis_ub_sq] [get_bd_intf_pins eth_tx_subsystem/s_axis_ub_sq]
+    connect_bd_intf_net [get_bd_intf_pins control/s_axis_ub_rq] [get_bd_intf_pins eth_rx_subsystem/m_axis_ub_rq]
 
     connect_bd_intf_net [get_bd_intf_pins eth_rx_subsystem/s_axis_rdma_rq] [get_bd_intf_pins s_axis_rdma_rq]
     connect_bd_intf_net [get_bd_intf_pins eth_tx_subsystem/m_axis_rdma_sq] [get_bd_intf_pins m_axis_rdma_sq]
@@ -458,7 +459,6 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
     connect_bd_intf_net [get_bd_intf_ports m_axis_eth_tx_data] [get_bd_intf_pins eth_tx_subsystem/m_axis_data]
     connect_bd_intf_net [get_bd_intf_pins control/eth_packetizer_sts] [get_bd_intf_pins eth_tx_subsystem/m_axis_sts]
     connect_bd_intf_net [get_bd_intf_pins eth_rx_subsystem/m_axis_notification] [get_bd_intf_pins control/eth_depacketizer_notif]
-
     connect_bd_intf_net -intf_net udp_packetizer_control [get_bd_intf_pins control_xbar/M00_AXI] [get_bd_intf_pins eth_tx_subsystem/s_axi_control]
     connect_bd_intf_net -intf_net udp_depacketizer_control [get_bd_intf_pins control_xbar/M01_AXI] [get_bd_intf_pins eth_rx_subsystem/s_axi_control]
 

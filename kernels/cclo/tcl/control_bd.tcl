@@ -367,6 +367,9 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
   create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 clane2_res_seg_cmd
   create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 krnl_out_seg_sts
 
+  create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_ub_sq
+  create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 s_axis_ub_rq
+
   # Create pins
   create_bd_pin -dir I -type clk ap_clk
   create_bd_pin -dir I -type rst ap_rst_n
@@ -572,6 +575,9 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
   connect_bd_intf_net [get_bd_intf_pins clane2_op_seg_cmd] [get_bd_intf_pins dma_mover/clane2_op_seg_cmd]
   connect_bd_intf_net [get_bd_intf_pins clane2_res_seg_cmd] [get_bd_intf_pins dma_mover/clane2_res_seg_cmd]
   connect_bd_intf_net [get_bd_intf_pins krnl_out_seg_sts] [get_bd_intf_pins dma_mover/krnl_out_seg_sts]
+
+  connect_bd_intf_net [get_bd_intf_pins microblaze_0/M2_AXIS] [get_bd_intf_pins m_axis_ub_sq] 
+  connect_bd_intf_net [get_bd_intf_pins s_axis_ub_rq] [get_bd_intf_pins microblaze_0/S2_AXIS] 
 
   # Clocks and resets
   connect_bd_net -net SYS_Rst_1 [get_bd_pins microblaze_0_local_memory/SYS_Rst] [get_bd_pins proc_sys_reset_0/peripheral_reset]

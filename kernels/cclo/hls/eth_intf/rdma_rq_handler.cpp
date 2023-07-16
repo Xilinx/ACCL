@@ -24,12 +24,12 @@ using namespace std;
 
 void rdma_rq_handler(
 	STREAM<rdma_req_t> & rdma_rq, 
-	STREAM<rdma_meta_upd_t> & rdma_meta_upd,
+	STREAM<rdma_req_t> & rdma_rq_fwd,
 	STREAM<rxbuf_notification> & notify
 
 ) {
 #pragma HLS INTERFACE axis register both port=rdma_rq
-#pragma HLS INTERFACE axis register both port=rdma_meta_upd
+#pragma HLS INTERFACE axis register both port=rdma_rq_fwd
 #pragma HLS INTERFACE axis register both port=notify
 #pragma HLS INTERFACE ap_ctrl_none port=return
 #pragma HLS PIPELINE II=1 style=flp
@@ -61,8 +61,8 @@ void rdma_rq_handler(
 				// get the opcode
 				params_opcode = params(7,0);
 				if (params_opcode == PARAMS_RNDZVS_INIT){
-					// do sth
-					STREAM_WRITE(rdma_meta_upd, meta_upd);
+					// forward this command for decoding elsewhere
+					STREAM_WRITE(rdma_rq_fwd, rdma_req);
 				} else if (params_opcode == PARAMS_RNDZVS_WR_DONE){
 					hdr = eth_header(params(HEADER_LENGTH+8-1,8));
 					rxbuf_sig.tag = hdr.tag;

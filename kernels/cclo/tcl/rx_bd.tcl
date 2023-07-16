@@ -249,7 +249,8 @@ proc create_rdma_rx_subsystem { parentCell nameHier } {
   create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_notification
   create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 s_axis_rdma_rq
 	create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_rxbuf_notif
-	create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_metatable_upd
+
+  create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_ub_rq
 
   # Create pins
   create_bd_pin -dir I -type clk ap_clk
@@ -276,6 +277,14 @@ proc create_rdma_rx_subsystem { parentCell nameHier } {
   set rdma_depacketizer_0 [ create_bd_cell -type ip -vlnv xilinx.com:hls:rdma_depacketizer:1.0 rdma_depacketizer_0 ]
   set rdma_rq_handler_0 [ create_bd_cell -type ip -vlnv xilinx.com:hls:rdma_rq_handler:1.0 rdma_rq_handler_0 ]
 
+  # Create instances for RQ forward to Microblaze
+  create_bd_cell -type ip -vlnv xilinx.com:ip:axis_dwidth_converter:1.1 ub_rq_dwc
+  set_property CONFIG.M_TDATA_NUM_BYTES {4} [get_bd_cells ub_rq_dwc]
+
+  create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 ub_rq_fifo 
+  set_property -dict [list CONFIG.HAS_TLAST.VALUE_SRC USER] [get_bd_cells ub_rq_fifo]
+  set_property -dict [list CONFIG.FIFO_DEPTH {64} CONFIG.FIFO_MEMORY_TYPE {distributed} CONFIG.HAS_TLAST {1}] [get_bd_cells ub_rq_fifo]
+
   # Create interface connections
   connect_bd_intf_net -intf_net control [get_bd_intf_pins s_axi_control] [get_bd_intf_pins rdma_depacketizer_0/s_axi_control]
 
@@ -285,14 +294,16 @@ proc create_rdma_rx_subsystem { parentCell nameHier } {
 	connect_bd_intf_net [get_bd_intf_pins rdma_depacketizer_0/notif_out] [get_bd_intf_pins m_axis_notification]
 	connect_bd_intf_net [get_bd_intf_pins s_axis_rdma_rq] [get_bd_intf_pins rdma_rq_handler_0/rdma_rq]
 	connect_bd_intf_net [get_bd_intf_pins rdma_rq_handler_0/notify] [get_bd_intf_pins m_axis_rxbuf_notif]
-	connect_bd_intf_net [get_bd_intf_pins rdma_rq_handler_0/rdma_meta_upd] [get_bd_intf_pins m_axis_metatable_upd]
-
 
   # main data path through FIFO, RX depacketizer
   connect_bd_intf_net [get_bd_intf_pins s_axis_rx_data] [get_bd_intf_pins rx_fifo/S_AXIS]
   connect_bd_intf_net [get_bd_intf_pins rx_fifo/M_AXIS] [get_bd_intf_pins rdma_depacketizer_0/in_r]
   connect_bd_intf_net [get_bd_intf_pins rdma_depacketizer_0/out_r] [get_bd_intf_pins dpkt_fifo/S_AXIS]
   connect_bd_intf_net [get_bd_intf_pins dpkt_fifo/M_AXIS] [get_bd_intf_pins m_axis_rx_data]
+
+  connect_bd_intf_net [get_bd_intf_pins rdma_rq_handler_0/rdma_rq_fwd] [get_bd_intf_pins ub_rq_dwc/S_AXIS] 
+  connect_bd_intf_net [get_bd_intf_pins ub_rq_dwc/M_AXIS] [get_bd_intf_pins ub_rq_fifo/S_AXIS] 
+  connect_bd_intf_net [get_bd_intf_pins ub_rq_fifo/M_AXIS] [get_bd_intf_pins m_axis_ub_rq] 
 
   # Create port connections
   connect_bd_net -net ap_clk [get_bd_pins ap_clk]  [get_bd_pins rdma_depacketizer_0/ap_clk] \
@@ -302,6 +313,8 @@ proc create_rdma_rx_subsystem { parentCell nameHier } {
                                                    [get_bd_pins axi_interconnect_0/M00_ACLK] \
                                                    [get_bd_pins axi_interconnect_0/M01_ACLK] \
                                                    [get_bd_pins dpkt_fifo/s_axis_aclk] \
+                                                   [get_bd_pins ub_rq_fifo/s_axis_aclk] \
+                                                   [get_bd_pins ub_rq_dwc/aclk] \
                                                    [get_bd_pins rx_fifo/s_axis_aclk]
   connect_bd_net -net ap_rst_n [get_bd_pins ap_rst_n] [get_bd_pins rdma_depacketizer_0/ap_rst_n] \
                                                       [get_bd_pins rdma_rq_handler_0/ap_rst_n] \
@@ -310,6 +323,8 @@ proc create_rdma_rx_subsystem { parentCell nameHier } {
                                                       [get_bd_pins axi_interconnect_0/M00_ARESETN] \
                                                       [get_bd_pins axi_interconnect_0/M01_ARESETN] \
                                                       [get_bd_pins dpkt_fifo/s_axis_aresetn] \
+                                                      [get_bd_pins ub_rq_fifo/s_axis_aresetn] \
+                                                      [get_bd_pins ub_rq_dwc/aresetn] \
                                                       [get_bd_pins rx_fifo/s_axis_aresetn]
 
   # Restore current instance
