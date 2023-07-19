@@ -248,8 +248,8 @@ accl_bd_wrapper accl_system(
     .m_axis_rdma_sq_tready(rdma_0_sq.ready),
     
     .s_axis_rdma_rq_tdata(rdma_0_rq.data),
-    .s_axis_rdma_rq_tvalid(rdma_0_sq.valid),
-    .s_axis_rdma_rq_tready(rdma_0_sq.ready)
+    .s_axis_rdma_rq_tvalid(rdma_0_rq.valid),
+    .s_axis_rdma_rq_tready(rdma_0_rq.ready)
 
 );
 
