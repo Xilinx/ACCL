@@ -221,12 +221,19 @@ accl_bd_wrapper accl_system(
     .s_axis_card_2_tready(axis_card_2_sink_s.tready),
     .s_axis_card_2_tvalid(axis_card_2_sink_s.tvalid),
 
-    .s_axis_eth_rx_data_0_tdata(axis_rdma_0_sink.tdata),
-    .s_axis_eth_rx_data_0_tdest(axis_rdma_0_sink.tid),
-    .s_axis_eth_rx_data_0_tkeep(axis_rdma_0_sink.tkeep),
-    .s_axis_eth_rx_data_0_tlast(axis_rdma_0_sink.tlast),
-    .s_axis_eth_rx_data_0_tready(axis_rdma_0_sink.tready),
-    .s_axis_eth_rx_data_0_tvalid(axis_rdma_0_sink.tvalid),
+    .s_axis_eth_rx_data_tdata(axis_rdma_0_sink.tdata),
+    .s_axis_eth_rx_data_tdest(axis_rdma_0_sink.tid),
+    .s_axis_eth_rx_data_tkeep(axis_rdma_0_sink.tkeep),
+    .s_axis_eth_rx_data_tlast(axis_rdma_0_sink.tlast),
+    .s_axis_eth_rx_data_tready(axis_rdma_0_sink.tready),
+    .s_axis_eth_rx_data_tvalid(axis_rdma_0_sink.tvalid),
+
+    .m_axis_eth_tx_data_tdata(axis_rdma_0_src.tdata),
+    .m_axis_eth_tx_data_tdest(axis_rdma_0_src.tid), // not driven, default 0
+    .m_axis_eth_tx_data_tkeep(axis_rdma_0_src.tkeep),
+    .m_axis_eth_tx_data_tlast(axis_rdma_0_src.tlast),
+    .m_axis_eth_tx_data_tready(axis_rdma_0_src.tready),
+    .m_axis_eth_tx_data_tvalid(axis_rdma_0_src.tvalid),
 
     .s_axis_rdma_wr_req_tdata(rdma_0_wr_req.data),
     .s_axis_rdma_wr_req_tvalid(rdma_0_wr_req.valid),
@@ -240,9 +247,9 @@ accl_bd_wrapper accl_system(
     .m_axis_rdma_sq_tvalid(rdma_0_sq.valid),
     .m_axis_rdma_sq_tready(rdma_0_sq.ready),
     
-    .m_axis_rdma_rq_tdata(rdma_0_rq.data),
-    .m_axis_rdma_rq_tvalid(rdma_0_sq.valid),
-    .m_axis_rdma_rq_tready(rdma_0_sq.ready)
+    .s_axis_rdma_rq_tdata(rdma_0_rq.data),
+    .s_axis_rdma_rq_tvalid(rdma_0_sq.valid),
+    .s_axis_rdma_rq_tready(rdma_0_sq.ready)
 
 );
 
