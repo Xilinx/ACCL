@@ -82,7 +82,6 @@ void rxbuf_session_command(
             if(notif.type == 1){
                 cmd.address = desc.address;
                 cmd.length = notif.length;
-                cmd.address = desc.address;
                 cmd_word.data = cmd;
                 cmd_word.last = 1;//always last, each command is a single word
                 cmd_word.dest = 0;//always write RX data to device (not host)

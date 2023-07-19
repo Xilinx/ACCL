@@ -16,10 +16,11 @@
 #
 # *******************************************************************************/
 
-PERIPHERAL_IPS = hostctrl loopback reduce_ops hp_compression dummy_tcp_stack client_arbiter vadd_put call_probe cyt_dma_adapter external_dma
+PERIPHERAL_IPS = hostctrl loopback reduce_ops hp_compression dummy_tcp_stack client_arbiter vadd_put call_probe cyt_adapter external_dma
 TARGET=ip
 PLATFORM ?= xilinx_u280_xdma_201920_3
 DEBUG ?= none
+STACK_TYPE ?= UDP
 
 ifeq (u250,$(findstring u250, $(PLATFORM)))
 	FPGAPART=xcu250-figd2104-2L-e
@@ -37,7 +38,7 @@ endif
 
 all: $(PERIPHERAL_IPS)
 
-.PHONY: hostctrl loopback reduce_ops hp_compression dummy_tcp_stack client_arbiter vadd_put call_probe cyt_dma_adapter external_dma
+.PHONY: hostctrl loopback reduce_ops hp_compression dummy_tcp_stack client_arbiter vadd_put call_probe cyt_adapter external_dma
 
 $(PERIPHERAL_IPS):
-	$(MAKE) -C $@ DEVICE=$(FPGAPART) TARGET=$(TARGET)
+	$(MAKE) -C $@ DEVICE=$(FPGAPART) TARGET=$(TARGET) STACK_TYPE=$(STACK_TYPE)
