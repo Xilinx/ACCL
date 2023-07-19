@@ -162,7 +162,9 @@ typedef struct{
 #define HEADER_DST_END	    HEADER_DST_START+15
 #define HEADER_PROTOC_START HEADER_DST_END+1
 #define HEADER_PROTOC_END   HEADER_PROTOC_START+15
-#define HEADER_LENGTH       HEADER_PROTOC_END+1
+#define HEADER_RVADDR_START HEADER_PROTOC_END+1
+#define HEADER_RVADDR_END   HEADER_RVADDR_START+RDMA_VADDR_BITS
+#define HEADER_LENGTH       HEADER_RVADDR_END+1
 
 struct eth_header{
 	ap_uint<32> count;
@@ -172,7 +174,8 @@ struct eth_header{
 	ap_uint<32> strm;
 	ap_uint<16> dst;
     ap_uint<16> protoc;
-	eth_header() : count(0), tag(0), src(0), seqn(0), strm(0), dst(0), protoc(0) {}
+    ap_uint<RDMA_VADDR_BITS> rvaddr;
+	eth_header() : count(0), tag(0), src(0), seqn(0), strm(0), dst(0), protoc(0), rvaddr() {}
 	eth_header(ap_uint<HEADER_LENGTH> in) : 
 		count(in(HEADER_COUNT_END, HEADER_COUNT_START)),
 		tag(in(HEADER_TAG_END, HEADER_TAG_START)),
@@ -180,7 +183,8 @@ struct eth_header{
 		seqn(in(HEADER_SEQ_END, HEADER_SEQ_START)),
 		strm(in(HEADER_STRM_END, HEADER_STRM_START)),
 		dst(in(HEADER_DST_END, HEADER_DST_START)),
-        protoc(in(HEADER_PROTOC_END, HEADER_PROTOC_START)) {}
+        protoc(in(HEADER_PROTOC_END, HEADER_PROTOC_START)),
+        rvaddr(in(HEADER_RVADDR_END, HEADER_RVADDR_START)) {}
 	operator ap_uint<HEADER_LENGTH>(){
 		ap_uint<HEADER_LENGTH> ret;
 		ret(HEADER_COUNT_END, HEADER_COUNT_START) = count;
@@ -190,6 +194,7 @@ struct eth_header{
         ret(HEADER_STRM_END, HEADER_STRM_START) = strm;
 		ret(HEADER_DST_END, HEADER_DST_START) = dst;
         ret(HEADER_PROTOC_END, HEADER_PROTOC_START) = protoc;
+        ret(HEADER_RVADDR_END, HEADER_RVADDR_START) = rvaddr;
 		return ret;
 	}
 };

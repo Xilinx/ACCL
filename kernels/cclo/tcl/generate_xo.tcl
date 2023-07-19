@@ -126,11 +126,6 @@ proc edit_core {core} {
         config_axis_if $core "s_axis_eth_rx_meta" "ap_clk" 2 0 0 0 1 0 1 1
         config_axis_if $core "m_axis_eth_tx_meta" "ap_clk" 4 0 0 0 1 0 1 1
         config_axis_if $core "s_axis_eth_tx_status" "ap_clk" 8 0 0 0 1 0 1 1
-        config_axis_if $core "m_axis_eth_open_connection" "ap_clk" 8 0 0 0 1 0 1 1
-        config_axis_if $core "m_axis_eth_close_connection" "ap_clk" 2 0 0 0 1 0 1 1
-        config_axis_if $core "s_axis_eth_open_status" "ap_clk" 16 0 0 0 1 0 1 1
-        config_axis_if $core "m_axis_eth_listen_port" "ap_clk" 2 0 0 0 1 0 1 1
-        config_axis_if $core "s_axis_eth_port_status" "ap_clk" 1 0 0 0 1 0 1 1
     }
 
     if { $stacktype == "RDMA" } {

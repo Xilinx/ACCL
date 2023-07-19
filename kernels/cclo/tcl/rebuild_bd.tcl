@@ -347,15 +347,6 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
   if { $netStackType == "TCP" } {
   
     # TCP interfaces
-    set m_axis_eth_listen_port [ create_bd_intf_port -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_eth_listen_port ]
-    set_property -dict [ list CONFIG.FREQ_HZ {250000000} ] $m_axis_eth_listen_port
-  
-    set m_axis_eth_open_connection [ create_bd_intf_port -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_eth_open_connection ]
-    set_property -dict [ list CONFIG.FREQ_HZ {250000000} ] $m_axis_eth_open_connection
-
-    set m_axis_eth_close_connection [ create_bd_intf_port -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_eth_close_connection ]
-    set_property -dict [ list CONFIG.FREQ_HZ {250000000} ] $m_axis_eth_open_connection
-  
     set m_axis_eth_read_pkg [ create_bd_intf_port -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_eth_read_pkg ]
     set_property -dict [ list CONFIG.FREQ_HZ {250000000} ] $m_axis_eth_read_pkg
 
@@ -364,12 +355,6 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
   
     set s_axis_eth_notification [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 s_axis_eth_notification ]
     set_property -dict [ list CONFIG.FREQ_HZ {250000000} CONFIG.HAS_TKEEP {1} CONFIG.HAS_TLAST {1} CONFIG.HAS_TREADY {1} CONFIG.HAS_TSTRB {1} CONFIG.LAYERED_METADATA {undef} CONFIG.TDATA_NUM_BYTES {16} CONFIG.TDEST_WIDTH {0} CONFIG.TID_WIDTH {0} CONFIG.TUSER_WIDTH {0} ] $s_axis_eth_notification
-  
-    set s_axis_eth_open_status [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 s_axis_eth_open_status ]
-    set_property -dict [ list CONFIG.FREQ_HZ {250000000} CONFIG.HAS_TKEEP {1} CONFIG.HAS_TLAST {1} CONFIG.HAS_TREADY {1} CONFIG.HAS_TSTRB {1} CONFIG.LAYERED_METADATA {undef} CONFIG.TDATA_NUM_BYTES {16} CONFIG.TDEST_WIDTH {0} CONFIG.TID_WIDTH {0} CONFIG.TUSER_WIDTH {0} ] $s_axis_eth_open_status
-  
-    set s_axis_eth_port_status [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 s_axis_eth_port_status ]
-    set_property -dict [ list CONFIG.FREQ_HZ {250000000} CONFIG.HAS_TKEEP {1} CONFIG.HAS_TLAST {1} CONFIG.HAS_TREADY {1} CONFIG.HAS_TSTRB {1} CONFIG.LAYERED_METADATA {undef} CONFIG.TDATA_NUM_BYTES {1} CONFIG.TDEST_WIDTH {0} CONFIG.TID_WIDTH {0} CONFIG.TUSER_WIDTH {0} ] $s_axis_eth_port_status
 
     set s_axis_eth_rx_meta [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 s_axis_eth_rx_meta ]
     set_property -dict [ list CONFIG.FREQ_HZ {250000000} CONFIG.HAS_TKEEP {1} CONFIG.HAS_TLAST {1} CONFIG.HAS_TREADY {1} CONFIG.HAS_TSTRB {1} CONFIG.LAYERED_METADATA {undef} CONFIG.TDATA_NUM_BYTES {2} CONFIG.TDEST_WIDTH {0} CONFIG.TID_WIDTH {0} CONFIG.TUSER_WIDTH {0} ] $s_axis_eth_rx_meta
@@ -377,7 +362,7 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
     set s_axis_eth_tx_status [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 s_axis_eth_tx_status ]
     set_property -dict [ list CONFIG.FREQ_HZ {250000000} CONFIG.HAS_TKEEP {1} CONFIG.HAS_TLAST {1} CONFIG.HAS_TREADY {1} CONFIG.HAS_TSTRB {1} CONFIG.LAYERED_METADATA {undef} CONFIG.TDATA_NUM_BYTES {8} CONFIG.TDEST_WIDTH {0} CONFIG.TID_WIDTH {0} CONFIG.TUSER_WIDTH {0} ] $s_axis_eth_tx_status
   
-    set interfaces "$interfaces:m_axis_eth_listen_port:m_axis_eth_open_connection:m_axis_eth_close_connection:m_axis_eth_read_pkg:m_axis_eth_tx_meta:s_axis_eth_notification:s_axis_eth_open_status:s_axis_eth_port_status:s_axis_eth_rx_meta:s_axis_eth_tx_status"
+    set interfaces "$interfaces:m_axis_eth_read_pkg:m_axis_eth_tx_meta:s_axis_eth_notification:s_axis_eth_rx_meta:s_axis_eth_tx_status"
   
     create_tcp_tx_subsystem [current_bd_instance .] eth_tx_subsystem
     create_tcp_rx_subsystem [current_bd_instance .] eth_rx_subsystem
@@ -392,14 +377,9 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
     connect_bd_intf_net [get_bd_intf_ports m_axis_eth_read_pkg] [get_bd_intf_pins eth_rx_subsystem/m_axis_read_pkg]
     connect_bd_intf_net [get_bd_intf_ports s_axis_eth_rx_meta] [get_bd_intf_pins eth_rx_subsystem/s_axis_rx_meta]
     connect_bd_intf_net [get_bd_intf_ports s_axis_eth_notification] [get_bd_intf_pins eth_rx_subsystem/s_axis_notification]
-    connect_bd_intf_net [get_bd_intf_ports m_axis_eth_listen_port] [get_bd_intf_pins control/eth_openport_cmd]
-    connect_bd_intf_net [get_bd_intf_ports s_axis_eth_port_status] [get_bd_intf_pins control/eth_openport_sts]
   
     connect_bd_intf_net [get_bd_intf_ports m_axis_eth_tx_meta] [get_bd_intf_pins eth_tx_subsystem/m_axis_tx_meta]
     connect_bd_intf_net [get_bd_intf_ports m_axis_eth_tx_data] [get_bd_intf_pins eth_tx_subsystem/m_axis_tx_data]
-    connect_bd_intf_net [get_bd_intf_ports m_axis_eth_open_connection] [get_bd_intf_pins control/eth_opencon_cmd]
-    connect_bd_intf_net [get_bd_intf_ports m_axis_eth_close_connection] [get_bd_intf_pins control/eth_closecon_cmd]
-    connect_bd_intf_net [get_bd_intf_ports s_axis_eth_open_status] [get_bd_intf_pins control/eth_opencon_sts]
     connect_bd_intf_net [get_bd_intf_ports s_axis_eth_tx_status] [get_bd_intf_pins eth_tx_subsystem/s_axis_tx_status]
 
     connect_bd_intf_net -intf_net tcp_depacketizer_control [get_bd_intf_pins control_xbar/M01_AXI] [get_bd_intf_pins eth_rx_subsystem/s_axi_control]
@@ -449,7 +429,8 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
     connect_bd_intf_net [get_bd_intf_pins eth_rx_subsystem/m_axis_rx_data] [get_bd_intf_pins axis_switch_0/S02_AXIS]
     connect_bd_intf_net [get_bd_intf_pins eth_tx_subsystem/s_axis_tx_data] [get_bd_intf_pins axis_switch_0/M02_AXIS]
 
-    connect_bd_intf_net [get_bd_intf_pins eth_rx_subsystem/m_axis_metatable_upd] [get_bd_intf_pins eth_tx_subsystem/s_axis_meta_upd]
+    connect_bd_intf_net [get_bd_intf_pins control/m_axis_ub_sq] [get_bd_intf_pins eth_tx_subsystem/s_axis_ub_sq]
+    connect_bd_intf_net [get_bd_intf_pins control/s_axis_ub_rq] [get_bd_intf_pins eth_rx_subsystem/m_axis_ub_rq]
 
     connect_bd_intf_net [get_bd_intf_pins eth_rx_subsystem/s_axis_rdma_rq] [get_bd_intf_pins s_axis_rdma_rq]
     connect_bd_intf_net [get_bd_intf_pins eth_tx_subsystem/m_axis_rdma_sq] [get_bd_intf_pins m_axis_rdma_sq]
@@ -478,7 +459,6 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
     connect_bd_intf_net [get_bd_intf_ports m_axis_eth_tx_data] [get_bd_intf_pins eth_tx_subsystem/m_axis_data]
     connect_bd_intf_net [get_bd_intf_pins control/eth_packetizer_sts] [get_bd_intf_pins eth_tx_subsystem/m_axis_sts]
     connect_bd_intf_net [get_bd_intf_pins eth_rx_subsystem/m_axis_notification] [get_bd_intf_pins control/eth_depacketizer_notif]
-
     connect_bd_intf_net -intf_net udp_packetizer_control [get_bd_intf_pins control_xbar/M00_AXI] [get_bd_intf_pins eth_tx_subsystem/s_axi_control]
     connect_bd_intf_net -intf_net udp_depacketizer_control [get_bd_intf_pins control_xbar/M01_AXI] [get_bd_intf_pins eth_rx_subsystem/s_axi_control]
 

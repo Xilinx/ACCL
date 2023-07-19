@@ -37,14 +37,11 @@
 
 #define CMD_CALL     0
 #define CMD_DMA_MOVE 1
-#define CMD_NET_PORT 2
-#define CMD_NET_CON  3
+#define CMD_RNDZV_ADR 2
 
 #define STS_CALL     0
 #define STS_DMA_MOVE 1
-#define STS_NET_PORT 2
-#define STS_NET_CON  3
-
+#define STS_RNDZV_ADR 2
 
 //PACKT CONST
 #define MAX_PACKETSIZE 4096
@@ -80,11 +77,7 @@
 #define HOUSEKEEP_SWRST                0
 #define HOUSEKEEP_PKTEN                1
 #define HOUSEKEEP_TIMEOUT              2
-#define HOUSEKEEP_OPEN_PORT            3
-#define HOUSEKEEP_OPEN_CON             4
-#define HOUSEKEEP_SET_STACK_TYPE       5
 #define HOUSEKEEP_SET_MAX_SEGMENT_SIZE 6
-#define HOUSEKEEP_CLOSE_CON            7
 
 //AXI MMAP address
 #define CFGRDY_OFFSET     0x1FF4
