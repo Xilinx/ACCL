@@ -355,6 +355,8 @@ int send(
     //calculate number of segments required for this send
     unsigned int nseg = (count+max_seg_count-1)/max_seg_count;
     int i;
+    unsigned int expected_ack_count = 0;
+    unsigned int ret = NO_ERROR;
     for(i=0; i<nseg; i++){
         start_move(
             (stream & OP0_STREAM) ? MOVE_STREAM : ((i==0) ? MOVE_IMMEDIATE : MOVE_STRIDE),
@@ -367,9 +369,13 @@ int send(
             max_seg_count, 0, 0,
             0, 0, dst_rank, dst_tag
         );
+        expected_ack_count++;
+        if(expected_ack_count > 2){
+            ret |= end_move();
+            expected_ack_count--;
+        }
     }
-    unsigned int ret = NO_ERROR;
-    for(i=0; i<nseg; i++){
+    for(i=0; i<expected_ack_count; i++){
         ret |= end_move();
     }
     return ret;
@@ -394,6 +400,8 @@ int recv(
     //calculate number of segments required for this send
     unsigned int nseg = (count+max_seg_count-1)/max_seg_count;
     int i;
+    unsigned int expected_ack_count = 0;
+    unsigned int ret = NO_ERROR;
     for(i=0; i<nseg; i++){
         start_move(
             MOVE_NONE,
@@ -406,9 +414,13 @@ int recv(
             0, 0, max_seg_count,
             src_rank, src_tag, 0, (stream & RES_STREAM) ? src_tag : 0
         );
+        expected_ack_count++;
+        if(expected_ack_count > 2){
+            ret |= end_move();
+            expected_ack_count--;
+        }
     }
-    unsigned int ret = NO_ERROR;
-    for(i=0; i<nseg; i++){
+    for(i=0; i<expected_ack_count; i++){
         ret |= end_move();
     }
     return ret;
