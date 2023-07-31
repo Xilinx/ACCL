@@ -109,9 +109,6 @@ TEST_F(ACCLTest, test_sendrcv_bo) {
   }
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
-  if (count_bytes > options.segment_size) {
-    GTEST_SKIP() << "Send recv currently doesn't support segmentation. ";
-  }
 
   // Initialize bo
   float *data =
@@ -166,9 +163,6 @@ TEST_F(ACCLTest, test_sendrcv_bo) {
 TEST_F(ACCLTest, test_sendrcv) {
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
-  if (count_bytes > options.segment_size) {
-    GTEST_SKIP() << "Send recv currently doesn't support segmentation. ";
-  }
 
   auto op_buf = accl->create_buffer<float>(count, dataType::float32);
   auto res_buf = accl->create_buffer<float>(count, dataType::float32);
@@ -205,9 +199,6 @@ TEST_F(ACCLTest, test_sendrcv) {
 TEST_F(ACCLTest, test_sendrcv_stream) {
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
-  if (count_bytes > options.segment_size) {
-    GTEST_SKIP() << "Send recv currently doesn't support segmentation. ";
-  }
 
   auto op_buf = accl->create_buffer<float>(count, dataType::float32);
   auto res_buf = accl->create_buffer<float>(count, dataType::float32);
@@ -240,9 +231,6 @@ TEST_F(ACCLTest, test_sendrcv_stream) {
 TEST_F(ACCLTest, test_stream_put) {
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
-  if (count_bytes > options.segment_size) {
-    GTEST_SKIP() << "Send recv currently doesn't support segmentation. ";
-  }
 
   auto op_buf = accl->create_buffer<float>(count, dataType::float32);
   auto res_buf = accl->create_buffer<float>(count, dataType::float32);
@@ -272,9 +260,6 @@ TEST_F(ACCLTest, test_sendrcv_compressed) {
 
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
-  if (count_bytes > options.segment_size) {
-    GTEST_SKIP() << "Send recv currently doesn't support segmentation. ";
-  }
 
   auto op_buf = accl->create_buffer<float>(count, dataType::float32);
   auto res_buf = accl->create_buffer<float>(count, dataType::float32);
@@ -959,7 +944,7 @@ options_t parse_options(int argc, char *argv[]) {
   opts.count = count_arg.getValue();
   opts.rxbuf_count = bufcount_arg.getValue();
   opts.rxbuf_size = bufsize_arg.getValue() * 1024; // convert to bytes
-  opts.segment_size = opts.rxbuf_size;
+  opts.segment_size = std::min((unsigned)opts.rxbuf_size, (unsigned)4*1024*1024); //min of rxbuf_size and max_btt
   opts.debug = debug_arg.getValue();
   opts.hardware = hardware_arg.getValue();
   opts.axis3 = axis3_arg.getValue();

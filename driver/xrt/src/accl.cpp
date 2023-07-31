@@ -129,13 +129,6 @@ CCLO *ACCL::send(BaseBuffer &srcbuf, unsigned int count,
   }
 
   unsigned count_bytes = count * (dataTypeSize.at(srcbuf.type()) / 8);
-  if (count_bytes > segment_size) {
-    std::cerr << "[ACCL] Warning: Send is too large! (" << count_bytes
-              << " B > " << segment_size << " B). "
-              << "Send does not currently support segmentation; "
-              << "the operation might get stuck or data may be corrupted. "
-              << std::endl;
-  }
 
   options.scenario = operation::send;
   options.comm = communicators[comm_id].communicators_addr();
@@ -164,13 +157,6 @@ CCLO *ACCL::send(dataType src_data_type, unsigned int count,
   CCLO::Options options{};
 
   unsigned count_bytes = count * (dataTypeSize.at(src_data_type) / 8);
-  if (count_bytes > segment_size) {
-    std::cerr << "[ACCL] Warning: Send is too large! (" << count_bytes
-              << " B > " << segment_size << " B). "
-              << "Send does not currently support segmentation; "
-              << "the operation might get stuck or data may be corrupted. "
-              << std::endl;
-  }
 
   options.scenario = operation::send;
   options.comm = communicators[comm_id].communicators_addr();
@@ -200,13 +186,6 @@ CCLO *ACCL::stream_put(BaseBuffer &srcbuf, unsigned int count,
   CCLO::Options options{};
 
   unsigned count_bytes = count * (dataTypeSize.at(srcbuf.type()) / 8);
-  if (count_bytes > segment_size) {
-    std::cerr << "[ACCL] Warning: Stream put is too large! (" << count_bytes
-              << " B > " << segment_size << " B). "
-              << "Stream put does not currently support segmentation; "
-              << "the operation might get stuck or data may be corrupted. "
-              << std::endl;
-  }
 
   if (stream_id > 246) {
     throw std::invalid_argument("Stream ID must < 247");
@@ -243,13 +222,6 @@ CCLO *ACCL::stream_put(dataType src_data_type, unsigned int count,
   CCLO::Options options{};
 
   unsigned count_bytes = count * (dataTypeSize.at(src_data_type) / 8);
-  if (count_bytes > segment_size) {
-    std::cerr << "[ACCL] Warning: Stream put is too large! (" << count_bytes
-              << " B > " << segment_size << " B). "
-              << "Stream put does not currently support segmentation; "
-              << "the operation might get stuck or data may be corrupted. "
-              << std::endl;
-  }
 
   if (stream_id > 246) {
     throw std::invalid_argument("Stream ID must < 247");
@@ -289,13 +261,6 @@ CCLO *ACCL::recv(BaseBuffer &dstbuf, unsigned int count,
   }
 
   unsigned count_bytes = count * (dataTypeSize.at(dstbuf.type()) / 8);
-  if (count_bytes > segment_size) {
-    std::cerr << "[ACCL] Warning: Recv is too large! (" << count_bytes
-              << " B > " << segment_size << " B). "
-              << "Recv does not currently support segmentation; "
-              << "the operation might get stuck or data may be corrupted. "
-              << std::endl;
-  }
 
   options.scenario = operation::recv;
   options.comm = communicators[comm_id].communicators_addr();
@@ -327,13 +292,6 @@ CCLO *ACCL::recv(dataType dst_data_type, unsigned int count,
   CCLO::Options options{};
 
   unsigned count_bytes = count * (dataTypeSize.at(dst_data_type) / 8);
-  if (count_bytes > segment_size) {
-    std::cerr << "[ACCL] Warning: Recv is too large! (" << count_bytes
-              << " B > " << segment_size << " B). "
-              << "Recv does not currently support segmentation; "
-              << "the operation might get stuck or data may be corrupted. "
-              << std::endl;
-  }
 
   options.scenario = operation::recv;
   options.comm = communicators[comm_id].communicators_addr();
