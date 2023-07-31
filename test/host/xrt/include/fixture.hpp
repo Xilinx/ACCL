@@ -152,4 +152,5 @@ protected:
 class ACCLRootTest : public ACCLTest, public testing::WithParamInterface<int> {};
 class ACCLFuncTest : public ACCLTest, public testing::WithParamInterface<reduceFunction> {};
 class ACCLRootFuncTest : public ACCLTest, public testing::WithParamInterface<std::tuple<int, reduceFunction>> {};
+class ACCLSegmentationTest : public ACCLTest, public testing::WithParamInterface<std::tuple<unsigned int, int>> {};
 class ACCLSweepBenchmark : public ACCLBenchmark, public testing::WithParamInterface<int> {};

@@ -196,6 +196,53 @@ TEST_F(ACCLTest, test_sendrcv) {
 
 }
 
+TEST_P(ACCLSegmentationTest, test_sendrcv_segmentation){
+  unsigned int count_per_segment = options.segment_size / (dataTypeSize.at(dataType::float32) / 8);
+  unsigned int multiplier = std::get<0>(GetParam());
+  int offset = std::get<1>(GetParam());
+  unsigned int count;
+  if((count_per_segment * multiplier + offset) <= 0) {
+    GTEST_SKIP() << "Multiplier/offset resolve non-positive count. ";
+  } else {
+    count = count_per_segment * multiplier + offset;
+  }
+  if(((count + count_per_segment -1) / count_per_segment) > options.rxbuf_count){
+    GTEST_SKIP() << "Not enough spare buffers for segmentation test. ";
+  }
+  test_debug("Testing send/recv segmentation with count=" + std::to_string(count), options);
+  unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
+
+  auto op_buf = accl->create_buffer<float>(count, dataType::float32);
+  auto res_buf = accl->create_buffer<float>(count, dataType::float32);
+  random_array(op_buf->buffer(), count);
+  int next_rank = (rank + 1) % size;
+  int prev_rank = (rank + size - 1) % size;
+
+  test_debug("Sending data on " + std::to_string(rank) + " to " +
+                 std::to_string(next_rank) + "...",
+             options);
+  accl->send(*op_buf, count, next_rank, 0);
+
+  test_debug("Receiving data on " + std::to_string(rank) + " from " +
+                 std::to_string(prev_rank) + "...",
+             options);
+  accl->recv(*res_buf, count, prev_rank, 0);
+
+  test_debug("Sending data on " + std::to_string(rank) + " to " +
+                 std::to_string(prev_rank) + "...",
+             options);
+  accl->send(*res_buf, count, prev_rank, 1);
+
+  test_debug("Receiving data on " + std::to_string(rank) + " from " +
+                 std::to_string(next_rank) + "...",
+             options);
+  accl->recv(*res_buf, count, next_rank, 1);
+
+  for (unsigned int i = 0; i < count; ++i) {
+    EXPECT_EQ((*res_buf)[i], (*op_buf)[i]);
+  }
+}
+
 TEST_F(ACCLTest, test_sendrcv_stream) {
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
@@ -877,6 +924,7 @@ INSTANTIATE_TEST_SUITE_P(rooted_tests, ACCLRootTest, testing::Range(0, size));
 INSTANTIATE_TEST_SUITE_P(rooted_reduction_tests, ACCLRootFuncTest, 
   testing::Combine(testing::Range(0, size), testing::Values(reduceFunction::SUM, reduceFunction::MAX))
 );
+INSTANTIATE_TEST_SUITE_P(segmentation_tests, ACCLSegmentationTest, testing::Combine(testing::Values(1, 2), testing::Values(-1, 0, 1)));
 
 options_t parse_options(int argc, char *argv[]) {
   TCLAP::CmdLine cmd("Test ACCL C++ driver");
