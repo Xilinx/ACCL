@@ -565,7 +565,7 @@ int main(int argc, char **argv)
                                     aximm_wr_addr, aximm_wr_data, aximm_wr_strb,
                                     callreq, callack);
         //ZMQ to other nodes process(es)
-        HLSLIB_DATAFLOW_FUNCTION(zmq_eth_egress_server, &ctx, eth_tx_data, local_rank, !udp_arg.getValue());
+        HLSLIB_DATAFLOW_FUNCTION(zmq_eth_egress_server, &ctx, eth_tx_data, local_rank);
         HLSLIB_DATAFLOW_FUNCTION(zmq_eth_ingress_server, &ctx, eth_rx_data);
         HLSLIB_DATAFLOW_FUNCTION(zmq_krnl_egress_server, &ctx, cclo_to_krnl_data);
         HLSLIB_DATAFLOW_FUNCTION(zmq_krnl_ingress_server, &ctx, krnl_to_cclo_data);

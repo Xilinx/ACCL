@@ -30,9 +30,9 @@ namespace ACCL {
 ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
            xrt::device &device, xrt::ip &cclo_ip, xrt::kernel &hostctrl_ip,
            int devicemem, const std::vector<int> &rxbufmem,
-           networkProtocol protocol, int nbufs, addr_t bufsize, addr_t segsize,
+           int nbufs, addr_t bufsize, addr_t segsize,
            const arithConfigMap &arith_config)
-    : arith_config(arith_config), protocol(protocol), sim_mode(false),
+    : arith_config(arith_config), sim_mode(false),
       _devicemem(devicemem), rxbufmem(rxbufmem) {
   cclo = new FPGADevice(cclo_ip, hostctrl_ip, device);
   initialize_accl(ranks, local_rank, nbufs, bufsize, segsize);
@@ -40,9 +40,9 @@ ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
 
 // Simulation constructor
 ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
-           unsigned int sim_start_port, networkProtocol protocol, int nbufs,
+           unsigned int sim_start_port, int nbufs,
            addr_t bufsize, addr_t segsize, const arithConfigMap &arith_config)
-    : arith_config(arith_config), protocol(protocol), sim_mode(true),
+    : arith_config(arith_config), sim_mode(true),
       _devicemem(0), rxbufmem({}) {
   cclo = new SimDevice(sim_start_port, local_rank);
   debug("initialize_accl");
@@ -51,9 +51,9 @@ ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
 
 ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
            unsigned int sim_start_port, xrt::device &device,
-           networkProtocol protocol, int nbufs, addr_t bufsize, addr_t segsize,
+           int nbufs, addr_t bufsize, addr_t segsize,
            const arithConfigMap &arith_config)
-    : arith_config(arith_config), protocol(protocol), sim_mode(true),
+    : arith_config(arith_config), sim_mode(true),
       _devicemem(0), rxbufmem({}) {
   cclo = new SimDevice(sim_start_port, local_rank, device);
   initialize_accl(ranks, local_rank, nbufs, bufsize, segsize);
@@ -61,9 +61,9 @@ ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
 
 // constructor for coyote fpga device
 ACCL::ACCL(CoyoteDevice *dev, const std::vector<rank_t> &ranks, int local_rank,
-        networkProtocol protocol, int nbufs, addr_t bufsize, addr_t segsize,
+        int nbufs, addr_t bufsize, addr_t segsize,
         const arithConfigMap &arith_config)
-  : arith_config(arith_config), protocol(protocol), sim_mode(false),
+  : arith_config(arith_config), sim_mode(false),
     _devicemem(0), rxbufmem(0)
 {
   cclo = dev;
@@ -82,7 +82,7 @@ void ACCL::deinit() {
   CCLO::Options options{};
   options.scenario = operation::config;
   options.cfg_function = cfgFunc::reset_periph;
-  call_sync(options, false);
+  call_sync(options);
 
   for (auto &buf : rx_buffer_spares) {
     buf->free_buffer();
@@ -103,7 +103,7 @@ CCLO *ACCL::set_timeout(unsigned int value, bool run_async,
   options.scenario = operation::config;
   options.count = value;
   options.cfg_function = cfgFunc::set_timeout;
-  CCLO *handle = call_async(options, false);
+  CCLO *handle = call_async(options);
 
   if (run_async) {
     return handle;
@@ -1201,7 +1201,7 @@ void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
   CCLO::Options options{};
   options.scenario = operation::config;
   options.cfg_function = cfgFunc::enable_pkt;
-  call_sync(options, false);
+  call_sync(options);
 
   debug("Set max segment size: " + std::to_string(segsize));
   set_max_segment_size(segsize);
@@ -1318,18 +1318,8 @@ void ACCL::check_return_value(const std::string function_name) {
   }
 }
 
-void ACCL::prepare_call(CCLO::Options &options, bool check_tcp) {
+void ACCL::prepare_call(CCLO::Options &options) {
   const ArithConfig *arithcfg;
-
-  if (check_tcp && protocol == networkProtocol::TCP) {
-    if (!port_open) {
-      throw std::runtime_error("ACCL not ready yet; port still closed!");
-    }
-
-    if (!con_open) {
-      throw std::runtime_error("ACCL not ready yet; connection still closed!");
-    }
-  }
 
   std::set<dataType> dtypes;
   // set flags for host-only buffers
@@ -1451,22 +1441,22 @@ void ACCL::prepare_call(CCLO::Options &options, bool check_tcp) {
   options.arithcfg_addr = arithcfg->addr();
 }
 
-CCLO *ACCL::call_async(CCLO::Options &options, bool check_tcp) {
+CCLO *ACCL::call_async(CCLO::Options &options) {
   if (!config_rdy) {
     throw std::runtime_error("CCLO not configured, cannot call");
   }
 
-  prepare_call(options, check_tcp);
+  prepare_call(options);
   cclo->start(options);
   return cclo;
 }
 
-CCLO *ACCL::call_sync(CCLO::Options &options, bool check_tcp) {
+CCLO *ACCL::call_sync(CCLO::Options &options) {
   if (!config_rdy) {
     throw std::runtime_error("CCLO not configured, cannot call");
   }
 
-  prepare_call(options, check_tcp);
+  prepare_call(options);
   cclo->call(options);
   return cclo;
 }
@@ -1482,7 +1472,7 @@ void ACCL::open_port(communicatorId comm_id) {
   options.scenario = operation::config;
   options.comm = communicators[comm_id].communicators_addr();
   options.cfg_function = cfgFunc::open_port;
-  call_sync(options, false);
+  call_sync(options);
   check_return_value("open_port");
   port_open = true;
   debug("Ports open!");
@@ -1499,7 +1489,7 @@ void ACCL::open_con(communicatorId comm_id) {
   options.scenario = operation::config;
   options.comm = communicators[comm_id].communicators_addr();
   options.cfg_function = cfgFunc::open_con;
-  call_sync(options, false);
+  call_sync(options);
   check_return_value("open_con");
   con_open = true;
   debug("Connections open!");
@@ -1514,7 +1504,7 @@ void ACCL::close_con(communicatorId comm_id) {
   options.scenario = operation::config;
   options.comm = communicators[comm_id].communicators_addr();
   options.cfg_function = cfgFunc::close_con;
-  call_sync(options, false);
+  call_sync(options);
   check_return_value("close_con");
   con_open = false;
 }
@@ -1525,7 +1515,7 @@ void ACCL::use_udp(communicatorId comm_id) {
   options.comm = communicators[comm_id].communicators_addr();
   options.cfg_function = cfgFunc::set_stack_type;
   options.count = 0;
-  call_sync(options, false);
+  call_sync(options);
   check_return_value("use_udp");
 }
 
@@ -1535,7 +1525,7 @@ void ACCL::use_tcp(communicatorId comm_id) {
   options.comm = communicators[comm_id].communicators_addr();
   options.cfg_function = cfgFunc::set_stack_type;
   options.count = 1;
-  call_sync(options, false);
+  call_sync(options);
   check_return_value("use_tcp");
 }
 
@@ -1565,7 +1555,7 @@ void ACCL::set_max_segment_size(unsigned int value) {
   options.scenario = operation::config;
   options.cfg_function = cfgFunc::set_max_segment_size;
   options.count = value;
-  call_sync(options, false);
+  call_sync(options);
   segment_size = value;
   check_return_value("set_max_segment_size");
 }

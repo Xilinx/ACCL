@@ -94,7 +94,7 @@ zmq_intf_context zmq_server_intf(unsigned int starting_port, unsigned int local_
     return ctx;
 }
 
-void eth_endpoint_egress_port(zmq_intf_context *ctx, Stream<stream_word > &in, unsigned int local_rank, bool remap_dest){
+void eth_endpoint_egress_port(zmq_intf_context *ctx, Stream<stream_word > &in, unsigned int local_rank){
 
     zmqpp::message message;
     Json::Value packet;
@@ -116,16 +116,6 @@ void eth_endpoint_egress_port(zmq_intf_context *ctx, Stream<stream_word > &in, u
         }
     }while(tmp.last == 0);
     dest = tmp.dest;
-    //do a bit of dest translation, because
-    //dest is actually a local session number, and sessions are allocated
-    //sequentially to ranks, skipping the local rank
-    //therefore ranks  0, 1, ... , local_rank, local_rank+1, ... , N-2, N-1
-    //map to sesssions 0, 1, ... ,        N/A, local_rank  , ... , N-3, N-2
-    if(remap_dest){
-        if(dest >= local_rank){
-            dest++;
-        }
-    }
     //first part of the message is the destination port ID
     message << to_string(dest);
     //second part of the message is the local rank of the sender
@@ -700,10 +690,10 @@ void zmq_cmd_server(zmq_intf_context *ctx,
     (*logger)("Exiting ZMQ server\n", log_level::info);
 }
 
-void zmq_eth_egress_server(zmq_intf_context *ctx, Stream<stream_word > &in, unsigned int local_rank, bool remap_dest){
+void zmq_eth_egress_server(zmq_intf_context *ctx, Stream<stream_word > &in, unsigned int local_rank){
     (*logger)("Starting ZMQ Eth Egress server\n", log_level::info);
     while(!ctx->stop){
-        eth_endpoint_egress_port(ctx, in, local_rank, remap_dest);
+        eth_endpoint_egress_port(ctx, in, local_rank);
         this_thread::sleep_for(chrono::milliseconds(10));
     }
     (*logger)("Exiting ZMQ Eth Egress server\n", log_level::info);

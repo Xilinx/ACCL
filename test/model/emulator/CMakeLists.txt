@@ -65,7 +65,7 @@ set_source_files_properties(${MB_FW_DIR}/ccl_offload_control.c PROPERTIES LANGUA
 
 set(EMU_INCLUDES ${HLS_INCLUDES} ${REDUCTION_DIR} ${COMPRESSOR_DIR} ${CCLO_ETH_DIR} ${SEGMENTER_DIR} ${MB_FW_DIR} ${CCLO_HLS_ROOT} ${DMA_MOVER_DIR} ${RXBUF_OFFLOAD_DIR} ${DUMMY_TCP_DIR} ${HOSTCTRL_DIR} ${ARBITER_DIR} ${ACCL_HLSDRV_DIR} ${ZMQ_INTF_DIR} ${LOG_DIR})
 set(EMU_SOURCES cclo_emu.cpp ${MB_FW_DIR}/ccl_offload_control.c ${REDUCTION_DIR}/reduce_ops.cpp ${COMPRESSOR_DIR}/hp_compression.cpp
-                ${CCLO_ETH_DIR}/udp_depacketizer.cpp ${CCLO_ETH_DIR}/tcp_txHandler.cpp ${CCLO_ETH_DIR}/tcp_sessionHandler.cpp ${CCLO_ETH_DIR}/tcp_rxHandler.cpp ${CCLO_ETH_DIR}/udp_packetizer.cpp ${CCLO_ETH_DIR}/tcp_packetizer.cpp ${CCLO_ETH_DIR}/tcp_depacketizer.cpp
+                ${CCLO_ETH_DIR}/udp_depacketizer.cpp ${CCLO_ETH_DIR}/tcp_txHandler.cpp ${CCLO_ETH_DIR}/tcp_rxHandler.cpp ${CCLO_ETH_DIR}/udp_packetizer.cpp ${CCLO_ETH_DIR}/tcp_packetizer.cpp ${CCLO_ETH_DIR}/tcp_depacketizer.cpp
                 ${SEGMENTER_DIR}/stream_segmenter.cpp ${RXBUF_OFFLOAD_DIR}/rxbuf_dequeue.cpp ${RXBUF_OFFLOAD_DIR}/rxbuf_enqueue.cpp ${RXBUF_OFFLOAD_DIR}/rxbuf_seek.cpp ${RXBUF_OFFLOAD_DIR}/rxbuf_session.cpp
                 ${DMA_MOVER_DIR}/dma_mover.cpp ${DUMMY_TCP_DIR}/dummy_tcp_stack.cpp ${HOSTCTRL_DIR}/hostctrl.cpp ${ARBITER_DIR}/client_arbiter.cpp ${ZMQ_INTF_DIR}/zmq_server.cpp)
 
