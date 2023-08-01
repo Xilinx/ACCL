@@ -1212,6 +1212,9 @@ void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
   case networkProtocol::TCP:
     use_tcp();
     break;
+  case networkProtocol::RDMA:
+    use_rdma();
+    break;
   default:
     throw std::runtime_error(
         "Requested network protocol is not yet supported.");
@@ -1534,6 +1537,16 @@ void ACCL::use_tcp(communicatorId comm_id) {
   options.count = 1;
   call_sync(options, false);
   check_return_value("use_tcp");
+}
+
+void ACCL::use_rdma(communicatorId comm_id) {
+  CCLO::Options options{};
+  options.scenario = operation::config;
+  options.comm = communicators[comm_id].communicators_addr();
+  options.cfg_function = cfgFunc::set_stack_type;
+  options.count = 2;
+  call_sync(options, false);
+  check_return_value("use_rdma");
 }
 
 void ACCL::set_max_segment_size(unsigned int value) {
