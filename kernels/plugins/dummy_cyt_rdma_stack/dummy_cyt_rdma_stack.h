@@ -22,7 +22,7 @@
 
 void cyt_rdma(
 	STREAM<rdma_req_t> & rdma_sq,
-    STREAM<rdma_req_t> & rdma_rq,
+    STREAM<eth_notification> & notif,
     STREAM<stream_word> & rd_data,
     STREAM<stream_word> & wr_data,
     STREAM<stream_word> & rx,
