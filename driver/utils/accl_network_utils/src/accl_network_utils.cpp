@@ -194,8 +194,8 @@ void configure_vnx(vnx::CMAC &cmac, vnx::Networklayer &network_layer,
 }
 
 void configure_tcp(FPGABuffer<int8_t> &tx_buf_network, FPGABuffer<int8_t> &rx_buf_network,
-                   xrt::kernel &network_krnl, const std::vector<rank_t> &ranks,
-                   int local_rank) {
+                   xrt::kernel &network_krnl, xrt::kernel &session_krnl,
+                   const std::vector<rank_t> &ranks, int local_rank) {
   tx_buf_network.sync_to_device();
   rx_buf_network.sync_to_device();
 
@@ -212,6 +212,26 @@ void configure_tcp(FPGABuffer<int8_t> &tx_buf_network, FPGABuffer<int8_t> &rx_bu
   ss << std::hex << "ip_reg: " << ip_reg << " board_reg IP: " << board_reg
      << std::dec << std::endl;
   log_debug(ss.str());
+
+  //set up sessions for ranks
+  for(size_t i = 0; i < ranks.size(); ++i){
+    bool success;
+    if (i == static_cast<size_t>(local_rank)) {
+      continue;
+    }
+    session_krnl(ranks[i].ip, ranks[i].port, false, 	
+                  &(ranks[i].session_id), &success);
+    if(!success){
+      throw std::runtime_error("Failed to establish session for IP:"+
+                                ranks[i].ip+
+                                " port: "+
+                                std::to_string(ranks[i].port));
+    }
+    std::ostringstream ss;
+    ss << "Established session ID: " << ranks[i].session_id << std::endl;
+    log_debug(ss.str());
+  }
+
 }
 
 void configure_roce(roce::CMAC &cmac, roce::Hivenet &hivenet,
@@ -330,7 +350,6 @@ initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
                 fs::path xclbin, int nbufs, addr_t bufsize, addr_t segsize,
                 bool rsfec) {
   std::size_t world_size = ranks.size();
-  networkProtocol protocol;
   std::unique_ptr<ACCL::ACCL> accl;
 
   if (segsize == 0) {
@@ -338,15 +357,8 @@ initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
   }
 
   if (simulator) {
-    if (design == acclDesign::UDP) {
-      protocol = networkProtocol::UDP;
-    } else {
-      protocol = networkProtocol::TCP;
-    }
-
-    accl =
-        std::make_unique<ACCL::ACCL>(ranks, local_rank, ranks[0].port, device,
-                                     protocol, nbufs, bufsize, segsize);
+    accl = std::make_unique<ACCL::ACCL>(ranks, local_rank, ranks[0].port, 
+                                        device, nbufs, bufsize, segsize);
   } else {
     int devicemem;
     std::vector<int> rxbufmem;
@@ -380,12 +392,6 @@ initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
       networkmem = 6;
     }
 
-    if (design == acclDesign::UDP || design == acclDesign::AXIS3x) {
-      protocol = networkProtocol::UDP;
-    } else {
-      protocol = networkProtocol::TCP;
-    }
-
     if (design == acclDesign::UDP) {
       auto cmac = vnx::CMAC(xrt::ip(device, xclbin_uuid, "cmac_0:{cmac_0}"));
       auto network_layer = vnx::Networklayer(
@@ -403,8 +409,11 @@ initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
       auto network_krnl =
           xrt::kernel(device, xclbin_uuid, "network_krnl:{network_krnl_0}",
                       xrt::kernel::cu_access_mode::exclusive);
-      configure_tcp(*tx_buf_network, *rx_buf_network, network_krnl, ranks,
-                    local_rank);
+      auto session_krnl =
+          xrt::kernel(device, xclbin_uuid, "tcp_session_handler:{session_handler_0}",
+                      xrt::kernel::cu_access_mode::exclusive);
+      configure_tcp(*tx_buf_network, *rx_buf_network, network_krnl, session_krnl,
+                     ranks, local_rank);
     } else if (design == acclDesign::ROCE) {
       auto cmac = roce::CMAC(xrt::ip(device, xclbin_uuid, "cmac_0:{cmac_0}"));
       auto hivenet = roce::Hivenet(
@@ -416,14 +425,7 @@ initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
 
     accl = std::make_unique<ACCL::ACCL>(ranks, local_rank, device, cclo_ip,
                                         hostctrl_ip, devicemem, rxbufmem,
-                                        protocol, nbufs, bufsize, segsize);
-  }
-
-  if (protocol == networkProtocol::TCP) {
-    barrier();
-    accl->open_port();
-    pause_barrier();
-    accl->open_con();
+                                        nbufs, bufsize, segsize);
   }
 
   return accl;

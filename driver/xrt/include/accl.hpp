@@ -54,15 +54,13 @@ public:
    * @param hostctrl_ip   The hostctrl kernel on the FPGA
    * @param devicemem     Memory bank of device memory
    * @param rxbufmem      Memory banks of rxbuf memory
-   * @param protocol      Network protocol to use
    * @param nbufs         Amount of buffers to use
    * @param bufsize       Size of buffers
    * @param arith_config  Arithmetic configuration to use
    */
   ACCL(const std::vector<rank_t> &ranks, int local_rank, xrt::device &device,
        xrt::ip &cclo_ip, xrt::kernel &hostctrl_ip, int devicemem,
-       const std::vector<int> &rxbufmem,
-       networkProtocol protocol = networkProtocol::TCP, int nbufs = 16,
+       const std::vector<int> &rxbufmem, int nbufs = 16,
        addr_t bufsize = 1024, addr_t segsize = 1024,
        const arithConfigMap &arith_config = DEFAULT_ARITH_CONFIG);
 
@@ -73,13 +71,12 @@ public:
    * @param local_rank    Rank of this process
    * @param start_port    First port to use to connect to the ACCL emulator/
    *                      simulator
-   * @param protocol      Network protocol to use
    * @param nbufs         Amount of buffers to use
    * @param bufsize       Size of buffers
    * @param arith_config  Arithmetic configuration to use
    */
   ACCL(const std::vector<rank_t> &ranks, int local_rank,
-       unsigned int start_port, networkProtocol protocol = networkProtocol::TCP,
+       unsigned int start_port,
        int nbufs = 16, addr_t bufsize = 1024, addr_t segsize = 1024,
        const arithConfigMap &arith_config = DEFAULT_ARITH_CONFIG);
 
@@ -92,21 +89,19 @@ public:
    * @param start_port    First port to use to connect to the ACCL emulator/
    *                      simulator
    * @param device        Simulated FPGA device from the Vitis emulator
-   * @param protocol      Network protocol to use
    * @param nbufs         Amount of buffers to use
    * @param bufsize       Size of buffers
    * @param arith_config  Arithmetic configuration to use
 
    */
   ACCL(const std::vector<rank_t> &ranks, int local_rank,
-       unsigned int start_port, xrt::device &device,
-       networkProtocol protocol = networkProtocol::TCP, int nbufs = 16,
+       unsigned int start_port, xrt::device &device, int nbufs = 16,
        addr_t bufsize = 1024, addr_t segsize = 1024,
        const arithConfigMap &arith_config = DEFAULT_ARITH_CONFIG);
 
   // constructor for coyote fpga device
   ACCL(CoyoteDevice *dev, const std::vector<rank_t> &ranks, int local_rank,
-          networkProtocol protocol = networkProtocol::TCP, int nbufs = 16, addr_t bufsize = 1024, addr_t segsize = 1024,
+       int nbufs = 16, addr_t bufsize = 1024, addr_t segsize = 1024,
        const arithConfigMap &arith_config = DEFAULT_ARITH_CONFIG);
   
   /**
@@ -1025,8 +1020,6 @@ private:
   bool ignore_safety_checks{};
   // TODO: use description to gather info about where to allocate spare buffers
   addr_t segment_size{};
-  // protocol being used
-  const networkProtocol protocol;
   // flag to indicate whether we've finished config
   bool config_rdy{};
   // flag to indicate whether we're simulating
@@ -1060,11 +1053,11 @@ private:
 
   void check_return_value(const std::string function_name);
 
-  void prepare_call(CCLO::Options &options, bool check_tcp);
+  void prepare_call(CCLO::Options &options);
 
-  CCLO *call_async(CCLO::Options &options, bool check_tcp = true);
+  CCLO *call_async(CCLO::Options &options);
 
-  CCLO *call_sync(CCLO::Options &options, bool check_tcp = true);
+  CCLO *call_sync(CCLO::Options &options);
 
   void use_udp(communicatorId comm_id = GLOBAL_COMM);
 

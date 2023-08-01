@@ -70,8 +70,8 @@ void configure_vnx(vnx::CMAC &cmac, vnx::Networklayer &network_layer,
                    bool rsfec = false);
 
 // Configure the TCP kernel, this function is called by initialize_accl
-void configure_tcp(ACCL::BaseBuffer &tx_buf_network,
-                   ACCL::BaseBuffer &rx_buf_network, xrt::kernel &network_krnl,
+void configure_tcp(ACCL::BaseBuffer &tx_buf_network, ACCL::BaseBuffer &rx_buf_network, 
+                   xrt::kernel &network_krnl, xrt::kernel &session_krnl,
                    const std::vector<ACCL::rank_t> &ranks, int local_rank);
 
 // Configure the RoCE kernel, this function is called by initialize_accl
