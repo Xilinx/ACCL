@@ -37,7 +37,7 @@ typedef ap_axiu<DWIDTH32, 0, 0, 0> pkt32;
 typedef ap_axiu<DWIDTH16, 0, 0, 0> pkt16;
 typedef ap_axiu<DWIDTH8, 0, 0, 0> pkt8;
 
-
+// MPI Protocol
 #define EGR_PROTOC      0
 #define RNDZVS_PROTOC   1
 
@@ -105,15 +105,13 @@ struct rdma_req_t {
 #define HEADER_STRM_END     HEADER_STRM_START + 31
 #define HEADER_DST_START    HEADER_STRM_END + 1
 #define HEADER_DST_END      HEADER_DST_START + 15
-#define HEADER_PROTOC_START HEADER_DST_END + 1
-#define HEADER_PROTOC_END   HEADER_PROTOC_START + 7
 #define HEADER_MSG_TYPE_START   HEADER_PROTOC_END + 1
 #define HEADER_MSG_TYPE_END     HEADER_MSG_TYPE_START + 7
 #define HEADER_HOST_START       HEADER_MSG_TYPE_END + 1
 #define HEADER_HOST_END         HEADER_HOST_START + 0
-#define HEADER_RVADDR_START HEADER_HOST_END + 1
-#define HEADER_RVADDR_END   HEADER_RVADDR_START + RDMA_VADDR_BITS
-#define HEADER_LENGTH       HEADER_RVADDR_END + 1
+#define HEADER_VADDR_START HEADER_HOST_END + 1
+#define HEADER_VADDR_END   HEADER_VADDR_START + RDMA_VADDR_BITS
+#define HEADER_LENGTH       HEADER_VADDR_END + 1
 
 struct eth_header {
     ap_uint<32> count;
@@ -121,13 +119,12 @@ struct eth_header {
     ap_uint<32> src;
     ap_uint<32> seqn;
     ap_uint<32> strm;
-    ap_uint<16> dst; // encode either session or qpn;
-    ap_uint<8> protoc; // whether this is EGR_PROTOC or RNDZVS_PROTOC, default EGR_PROTOC, provided by DMP
-    ap_uint<8> msg_type; // message types, default EGR_MSG; Resolved at RDMA_SQ_Handler
+    ap_uint<16> dst; // encode either session or qpn; // provided by DMP
+    ap_uint<8> msg_type; // message types, default EGR_MSG;
     ap_uint<1> host; // 0-device memory, 1-host memory; not used in SEND // needs to be resolved in rdzv handshake // provided by DMP
-    ap_uint<RDMA_VADDR_BITS> rvaddr; // remote virual address, not used in SEND // provided by DMP
+    ap_uint<RDMA_VADDR_BITS> vaddr; // virual address, not used in SEND // provided by DMP
 
-    eth_header() : count(0), tag(0), src(0), seqn(0), strm(0), dst(0), protoc(0), msg_type(0), host(0), rvaddr(0) {}
+    eth_header() : count(0), tag(0), src(0), seqn(0), strm(0), dst(0), msg_type(0), host(0), vaddr(0) {}
 
     eth_header(ap_uint<HEADER_LENGTH> in) :
         count(in(HEADER_COUNT_END, HEADER_COUNT_START)),
@@ -136,10 +133,9 @@ struct eth_header {
         seqn(in(HEADER_SEQ_END, HEADER_SEQ_START)),
         strm(in(HEADER_STRM_END, HEADER_STRM_START)),
         dst(in(HEADER_DST_END, HEADER_DST_START)),
-        protoc(in(HEADER_PROTOC_END, HEADER_PROTOC_START)),
         msg_type(in(HEADER_MSG_TYPE_END, HEADER_MSG_TYPE_START)),
         host(in(HEADER_HOST_END, HEADER_HOST_START)),
-        rvaddr(in(HEADER_RVADDR_END, HEADER_RVADDR_START)) {}
+        vaddr(in(HEADER_VADDR_END, HEADER_VADDR_START)) {}
 
     operator ap_uint<HEADER_LENGTH>() {
         ap_uint<HEADER_LENGTH> ret;
@@ -149,10 +145,9 @@ struct eth_header {
         ret(HEADER_SEQ_END, HEADER_SEQ_START) = seqn;
         ret(HEADER_STRM_END, HEADER_STRM_START) = strm;
         ret(HEADER_DST_END, HEADER_DST_START) = dst;
-        ret(HEADER_PROTOC_END, HEADER_PROTOC_START) = protoc;
         ret(HEADER_MSG_TYPE_END, HEADER_MSG_TYPE_START) = msg_type;
         ret(HEADER_HOST_END, HEADER_HOST_START) = host;
-        ret(HEADER_RVADDR_END, HEADER_RVADDR_START) = rvaddr;
+        ret(HEADER_VADDR_END, HEADER_VADDR_START) = vaddr;
         return ret;
     }
 };
