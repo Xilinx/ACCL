@@ -40,10 +40,11 @@ void rdma_packetizer(
 
 	int bytes_to_process;
 	
-	if (cmdword.protoc == EGR_PROTOC){
-		bytes_to_process = cmdword.count + bytes_per_word;
-	} else if (cmdword.protoc == RNDZVS_PROTOC){
+	// RNDZVS_MSG doesn't have header
+	if (cmdword.msg_type == RNDZVS_MSG){
 		bytes_to_process = cmdword.count;
+	} else {
+		bytes_to_process = cmdword.count + bytes_per_word;
 	}
 	 
 	int bytes_processed  = 0;
@@ -52,8 +53,8 @@ void rdma_packetizer(
 	#pragma HLS PIPELINE II=1
 		stream_word outword;
 		outword.dest = cmdword.dst;
-		//if this is the first word and it is the eager protocol, put in a header
-		if(bytes_processed == 0 && cmdword.protoc == EGR_PROTOC){
+		//if this is the first word and it is not the RNDZVS_MSG, put the header
+		if(bytes_processed == 0 && (cmdword.msg_type != RNDZVS_MSG)){
 			outword.data(DATA_WIDTH-1, HEADER_LENGTH) = 0;
 			outword.data(HEADER_LENGTH-1,0) = (ap_uint<HEADER_LENGTH>)cmdword;
 		} else {
@@ -77,7 +78,10 @@ void rdma_packetizer(
 		//write output stream
 		STREAM_WRITE(out, outword);
 	}
-	//acknowledge that message_seq has been sent successfully
+	// acknowledge to the DMP that message_seq has been sent successfully
+	// only ack to RNDZVS_MSG and EGR_MSG that are managed by DMP
 	ap_uint<32> outsts;
-	STREAM_WRITE(sts, cmdword.seqn);
+	if (cmdword.msg_type == RNDZVS_MSG || cmdword.msg_type == EGR_MSG){
+		STREAM_WRITE(sts, cmdword.seqn);
+	}
 }

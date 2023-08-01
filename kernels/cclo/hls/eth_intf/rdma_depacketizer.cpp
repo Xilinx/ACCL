@@ -17,10 +17,11 @@
 #include "ap_axi_sdata.h"
 #include "ap_int.h"
 #include "eth_intf.h"
+#include "rxbuf_offload.h"
 
 using namespace std;
 
-//this rdma depacketizer is intended for rdma eager protocol
+//this rdma depacketizer is intended to parse EGR_MSG, RNDZVS_INIT and RNDZVS_WR_DONE
 //how this works:
 //read a notification from notif_in which says we'll get B bytes for session S
 //check how many bytes remaining for any ongoing messages on session S
@@ -45,13 +46,17 @@ void rdma_depacketizer(
 	STREAM<stream_word > & out,
 	STREAM<eth_header > & sts,
     STREAM<eth_notification> &notif_in,
-    STREAM<eth_notification> &notif_out
+    STREAM<eth_notification> &notif_out,
+	STREAM<eth_header> & ub_notif_out,
+	STREAM<rxbuf_notification> & rxbuf_notif_out
 ) {
 #pragma HLS INTERFACE axis register both port=in
 #pragma HLS INTERFACE axis register both port=out
 #pragma HLS INTERFACE axis register both port=sts
 #pragma HLS INTERFACE axis register both port=notif_in
 #pragma HLS INTERFACE axis register both port=notif_out
+#pragma HLS INTERFACE axis register both port=ub_notif_out
+#pragma HLS INTERFACE axis register both port=rxbuf_notif_out
 #pragma HLS INTERFACE s_axilite port=return
 #pragma HLS PIPELINE II=1 style=flp
 	
@@ -73,6 +78,8 @@ void rdma_depacketizer(
 	stream_word inword;
 	eth_header hdr;
 	eth_notification downstream_notif;
+	rxbuf_notification rxbuf_notif;
+	rxbuf_signature rxbuf_sig;
 
 	if(STREAM_IS_EMPTY(notif_in) && STREAM_IS_EMPTY(in)) return;
 
@@ -83,7 +90,7 @@ void rdma_depacketizer(
 
 #ifndef ACCL_SYNTHESIS
 	std::stringstream ss;
-	ss << "TCP Depacketizer: Processing incoming fragment count=" << notif.length << " for session " << notif.session_id << "\n";
+	ss << "RDMA Depacketizer: Processing incoming fragment count=" << notif.length << " for qpn " << notif.session_id << "\n";
 	std::cout << ss.str();
 #endif
 
@@ -97,51 +104,66 @@ void rdma_depacketizer(
 		//get header and some important info from it
 		inword = STREAM_READ(in);
 		hdr = eth_header(inword.data(HEADER_LENGTH-1,0));
-		message_rem = hdr.count;//length of upcoming message (excluding the header itself)
-		message_strm = hdr.strm;//target of message (0 is targeting memory so managed, everything else is  stream so unmanaged)
-		if(message_strm == 0){
-			//put notification, header in output streams
-			STREAM_WRITE(sts, hdr);
-			downstream_notif.session_id = notif.session_id;
-			downstream_notif.type = 0; //for SOM
-			downstream_notif.length = hdr.count;
-			STREAM_WRITE(notif_out, downstream_notif);
+		if (hdr.msg_type == RNDZVS_INIT){
+			STREAM_WRITE(ub_notif_out, hdr);
+		} else if (hdr.msg_type == RNDZVS_WR_DONE) {
+			rxbuf_sig.tag = hdr.tag;
+			rxbuf_sig.len = hdr.count; // TODO: check the count
+			rxbuf_sig.src = hdr.src;
+			rxbuf_sig.seqn = hdr.seqn;
+			rxbuf_notif.index = 0; // TODO: figure out the mechanism of this index
+			rxbuf_notif.signature = rxbuf_sig;
+			STREAM_WRITE(rxbuf_notif_out, rxbuf_notif);
+		} else if (hdr.msg_type == EGR_MSG) {
+			message_rem = hdr.count;//length of upcoming message (excluding the header itself)
+			message_strm = hdr.strm;//target of message (0 is targeting memory so managed, everything else is stream so unmanaged)
+			if(message_strm == 0){
+				//put notification, header in output streams
+				STREAM_WRITE(sts, hdr);
+				downstream_notif.session_id = notif.session_id;
+				downstream_notif.type = 0; //for SOM
+				downstream_notif.length = hdr.count;
+				STREAM_WRITE(notif_out, downstream_notif);
+			}
+			//decrement the length to reflect the fact that we have removed the 64B header
+			//Note: the rxHandler must make sure to not give us fragments less than 64B
+			notif.length -= bytes_per_word;
+			target_strm[notif.session_id] = message_strm;
 		}
-		//decrement the length to reflect the fact that we have removed the 64B header
-		//Note: the rxHandler must make sure to not give us fragments less than 64B
-		notif.length -= bytes_per_word;
-		target_strm[notif.session_id] = message_strm;
 	} else{//if remaining bytes is not zero, then this is a continuation of an old message
 		message_strm = target_strm[notif.session_id];
 	}
 	//write out notifications
 	//in case the fragment spans the end of the current message and beginning of another,
 	//only notify for the part up to the end of the current message
-	if(message_strm == 0){
-		downstream_notif.type = 1; //for SOF
-		downstream_notif.length = notif.length;
-		STREAM_WRITE(notif_out, downstream_notif);
+	if(hdr.msg_type == EGR_MSG){
+		if(message_strm == 0){
+			downstream_notif.type = 1; //for SOF
+			downstream_notif.length = notif.length;
+			STREAM_WRITE(notif_out, downstream_notif);
+		}
+
+		//copy data in -> out
+		do{
+			#pragma HLS PIPELINE II=1
+			inword = STREAM_READ(in);
+			inword.dest = message_strm;
+			STREAM_WRITE(out, inword);
+			notif.length = (notif.length < bytes_per_word) ? 0u : (unsigned int)notif.length-bytes_per_word;//floor at zero
+			current_bytes += (message_rem < bytes_per_word) ? message_rem : bytes_per_word;
+			message_rem = (message_rem < bytes_per_word) ? 0u : message_rem-bytes_per_word;//slight problem here if the message doesnt end on a 64B boundary...
+		} while(notif.length > 0 && message_rem > 0 && current_bytes < (max_dma_bytes-bytes_per_word));
+		if(message_strm == 0){
+			downstream_notif.type = 2; //for EOF
+			downstream_notif.length = current_bytes;
+			STREAM_WRITE(notif_out, downstream_notif);
+		}
+		//update session info (remaining bytes and target of currently processing message)
+		remaining[notif.session_id] = message_rem;
+		//if we're not finished with this fragment, skip notification read on the next run
+		continue_notif = (notif.length > 0);
+		continue_message = (notif.length > 0) && (message_rem > 0);
+		//update session id for caching
+		prev_session_id = notif.session_id;
 	}
-	//copy data in -> out
-	do{
-		#pragma HLS PIPELINE II=1
-		inword = STREAM_READ(in);
-		inword.dest = message_strm;
-		STREAM_WRITE(out, inword);
-		notif.length = (notif.length < bytes_per_word) ? 0u : (unsigned int)notif.length-bytes_per_word;//floor at zero
-		current_bytes += (message_rem < bytes_per_word) ? message_rem : bytes_per_word;
-		message_rem = (message_rem < bytes_per_word) ? 0u : message_rem-bytes_per_word;//slight problem here if the message doesnt end on a 64B boundary...
-	} while(notif.length > 0 && message_rem > 0 && current_bytes < (max_dma_bytes-bytes_per_word));
-	if(message_strm == 0){
-		downstream_notif.type = 2; //for EOF
-		downstream_notif.length = current_bytes;
-		STREAM_WRITE(notif_out, downstream_notif);
-	}
-	//update session info (remaining bytes and target of currently processing message)
-	remaining[notif.session_id] = message_rem;
-	//if we're not finished with this fragment, skip notification read on the next run
-	continue_notif = (notif.length > 0);
-	continue_message = (notif.length > 0) && (message_rem > 0);
-	//update session id for caching
-	prev_session_id = notif.session_id;
 }

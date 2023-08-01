@@ -403,12 +403,6 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
     # RDMA interfaces
     set s_axis_eth_notification [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 s_axis_eth_notification ]
     set_property -dict [ list CONFIG.FREQ_HZ {250000000} CONFIG.HAS_TKEEP {1} CONFIG.HAS_TLAST {1} CONFIG.HAS_TREADY {1} CONFIG.HAS_TSTRB {1} CONFIG.LAYERED_METADATA {undef} CONFIG.TDATA_NUM_BYTES {8} CONFIG.TDEST_WIDTH {0} CONFIG.TID_WIDTH {0} CONFIG.TUSER_WIDTH {0} ] $s_axis_eth_notification
-
-    set m_axis_rdma_sq [ create_bd_intf_port -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_rdma_sq ]
-    set_property -dict [ list CONFIG.FREQ_HZ {250000000} ] $m_axis_rdma_sq
-
-    set s_axis_rdma_rq [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 s_axis_rdma_rq ]
-    set_property -dict [ list CONFIG.FREQ_HZ {250000000} CONFIG.HAS_TKEEP {0} CONFIG.HAS_TLAST {0} CONFIG.HAS_TREADY {1} CONFIG.HAS_TSTRB {0} CONFIG.LAYERED_METADATA {undef} CONFIG.TDATA_NUM_BYTES {68} CONFIG.TDEST_WIDTH {0} CONFIG.TID_WIDTH {0} CONFIG.TUSER_WIDTH {0} ] $s_axis_rdma_rq
   
     create_rdma_tx_subsystem [current_bd_instance .] eth_tx_subsystem
     create_rdma_rx_subsystem [current_bd_instance .] eth_rx_subsystem
@@ -431,9 +425,6 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
 
     connect_bd_intf_net [get_bd_intf_pins control/m_axis_ub_sq] [get_bd_intf_pins eth_tx_subsystem/s_axis_ub_sq]
     connect_bd_intf_net [get_bd_intf_pins control/s_axis_ub_rq] [get_bd_intf_pins eth_rx_subsystem/m_axis_ub_rq]
-
-    connect_bd_intf_net [get_bd_intf_pins eth_rx_subsystem/s_axis_rdma_rq] [get_bd_intf_pins s_axis_rdma_rq]
-    connect_bd_intf_net [get_bd_intf_pins eth_tx_subsystem/m_axis_rdma_sq] [get_bd_intf_pins m_axis_rdma_sq]
 
     connect_bd_net [get_bd_ports ap_clk] \
                    [get_bd_pins eth_rx_subsystem/ap_clk] \

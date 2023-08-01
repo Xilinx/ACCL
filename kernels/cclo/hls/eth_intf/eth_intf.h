@@ -37,9 +37,6 @@ typedef ap_axiu<DWIDTH32, 0, 0, 0> pkt32;
 typedef ap_axiu<DWIDTH16, 0, 0, 0> pkt16;
 typedef ap_axiu<DWIDTH8, 0, 0, 0> pkt8;
 
-// MPI Protocol
-#define EGR_PROTOC      0
-#define RNDZVS_PROTOC   1
 
 // Different message types
 #define EGR_MSG       	0
@@ -105,10 +102,10 @@ struct rdma_req_t {
 #define HEADER_STRM_END     HEADER_STRM_START + 31
 #define HEADER_DST_START    HEADER_STRM_END + 1
 #define HEADER_DST_END      HEADER_DST_START + 15
-#define HEADER_MSG_TYPE_START   HEADER_PROTOC_END + 1
+#define HEADER_MSG_TYPE_START   HEADER_DST_END + 1
 #define HEADER_MSG_TYPE_END     HEADER_MSG_TYPE_START + 7
 #define HEADER_HOST_START       HEADER_MSG_TYPE_END + 1
-#define HEADER_HOST_END         HEADER_HOST_START + 0
+#define HEADER_HOST_END         HEADER_HOST_START + 7
 #define HEADER_VADDR_START HEADER_HOST_END + 1
 #define HEADER_VADDR_END   HEADER_VADDR_START + RDMA_VADDR_BITS
 #define HEADER_LENGTH       HEADER_VADDR_END + 1
@@ -121,7 +118,7 @@ struct eth_header {
     ap_uint<32> strm;
     ap_uint<16> dst; // encode either session or qpn; // provided by DMP
     ap_uint<8> msg_type; // message types, default EGR_MSG;
-    ap_uint<1> host; // 0-device memory, 1-host memory; not used in SEND // needs to be resolved in rdzv handshake // provided by DMP
+    ap_uint<8> host; // 0-device memory, 1-host memory; not used in SEND // needs to be resolved in rdzv handshake // provided by DMP
     ap_uint<RDMA_VADDR_BITS> vaddr; // virual address, not used in SEND // provided by DMP
 
     eth_header() : count(0), tag(0), src(0), seqn(0), strm(0), dst(0), msg_type(0), host(0), vaddr(0) {}
@@ -219,3 +216,4 @@ void tcp_rxHandler(
     STREAM<stream_word>& m_data_out,
     STREAM<eth_notification>& m_notif_out
 );
+
