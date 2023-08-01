@@ -298,12 +298,6 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsign
     Stream<rxbuf_seek_result> eth_rx_seek_ack;
     Stream<ap_uint<32> > rxbuf_release_req;
 
-    Stream<pkt16> eth_listen_port;
-    Stream<pkt8> eth_port_status;
-    Stream<pkt64> eth_open_connection;
-    Stream<pkt16> eth_close_connection;
-    Stream<pkt128> eth_open_status;
-
     Stream<ap_uint<96> > cmd_txHandler;
     Stream<pkt32> eth_tx_meta;
     Stream<pkt64> eth_tx_status;
@@ -387,21 +381,12 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsign
         HLSLIB_FREERUNNING_FUNCTION(tcp_depacketizer, eth_rx_data_int, switch_s[SWITCH_S_ETH_RX], eth_rx_sts, eth_notif_out, eth_notif_out_dpkt);
         HLSLIB_FREERUNNING_FUNCTION(tcp_rxHandler, eth_notif,  eth_read_pkg, eth_rx_meta,  eth_rx_data_stack, eth_rx_data_int, eth_notif_out);
         HLSLIB_FREERUNNING_FUNCTION(tcp_txHandler, eth_tx_data_int, cmd_txHandler, eth_tx_meta,  eth_tx_data_stack,  eth_tx_status);
-        HLSLIB_FREERUNNING_FUNCTION(
-            tcp_sessionHandler,
-            cmd_fifos[CMD_NET_PORT], sts_fifos[STS_NET_PORT],
-            cmd_fifos[CMD_NET_CON], sts_fifos[STS_NET_CON],
-            eth_listen_port, eth_port_status,
-            eth_open_connection, eth_close_connection, eth_open_status
-        );
         //instantiate dummy TCP stack which responds to appropriate comm patterns
         HLSLIB_FREERUNNING_FUNCTION(
             network_krnl,
             eth_notif, eth_read_pkg,
             eth_rx_meta, eth_rx_data_stack,
             eth_tx_meta, eth_tx_data_stack, eth_tx_status,
-            eth_open_connection, eth_open_status, eth_close_connection,
-            eth_listen_port, eth_port_status,
             eth_rx_data, eth_tx_data
         );
     } else{
@@ -422,7 +407,7 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsign
     //ZMQ to host process
     HLSLIB_FREERUNNING_FUNCTION(serve_zmq, ctx, cfgmem, devicemem, callreq_fifos, callack_fifos);
     //ZMQ to other nodes process(es)
-    HLSLIB_FREERUNNING_FUNCTION(eth_endpoint_egress_port, ctx, eth_tx_data, local_rank, use_tcp && world_size > 1);
+    HLSLIB_FREERUNNING_FUNCTION(eth_endpoint_egress_port, ctx, eth_tx_data, local_rank);
     HLSLIB_FREERUNNING_FUNCTION(eth_endpoint_ingress_port, ctx, eth_rx_data);
     //MICROBLAZE
     HLSLIB_DATAFLOW_FUNCTION(run_accl);
