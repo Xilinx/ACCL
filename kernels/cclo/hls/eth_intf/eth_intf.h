@@ -45,36 +45,37 @@ typedef ap_axiu<DWIDTH8, 0, 0, 0> pkt8;
 #define RNDZVS_WR_DONE 	3
 
 // RDMA Opcode
-#define RDMA_WRITE   0
-#define RDMA_SEND    1
+#define RDMA_WRITE   1
+#define RDMA_SEND    2
 
 // rdma_req_t structs
 #define RDMA_VADDR_BITS     64
 #define RDMA_LEN_BITS       32
-#define RDMA_QPN_BITS 		10
-#define RDMA_OPCODE_BITS	5
-#define RDMA_REQ_BITS		RDMA_VADDR_BITS+RDMA_LEN_BITS+1+RDMA_QPN_BITS+RDMA_OPCODE_BITS
+#define RDMA_QPN_BITS 		16
+#define RDMA_OPCODE_BITS	8
+#define RDMA_HOST_BITS      8
+#define RDMA_REQ_BITS		RDMA_VADDR_BITS+RDMA_LEN_BITS+RDMA_HOST_BITS+RDMA_QPN_BITS+RDMA_OPCODE_BITS
 
 struct rdma_req_t {
     ap_uint<RDMA_VADDR_BITS> vaddr; // only needed in WRITE // needs to be resolved in rdzv handshake
     ap_uint<RDMA_LEN_BITS> len;
-    ap_uint<1> host; // 0-device memory, 1-host memory; not used in SEND // needs to be resolved in rdzv handshake
+    ap_uint<RDMA_HOST_BITS> host; // 0-device memory, 1-host memory; not used in SEND // needs to be resolved in rdzv handshake
     ap_uint<RDMA_QPN_BITS> qpn;
     ap_uint<RDMA_OPCODE_BITS> opcode;
 
     rdma_req_t() : vaddr(0), len(0), host(0), qpn(0), opcode(0) {}
     
     // Constructor for initializing all members
-    rdma_req_t(ap_uint<RDMA_VADDR_BITS> vaddr, ap_uint<RDMA_LEN_BITS> len, ap_uint<1> host, ap_uint<RDMA_QPN_BITS> qpn, ap_uint<RDMA_OPCODE_BITS> opcode)
+    rdma_req_t(ap_uint<RDMA_VADDR_BITS> vaddr, ap_uint<RDMA_LEN_BITS> len, ap_uint<RDMA_HOST_BITS> host, ap_uint<RDMA_QPN_BITS> qpn, ap_uint<RDMA_OPCODE_BITS> opcode)
         : vaddr(vaddr), len(len), host(host), qpn(qpn), opcode(opcode) {}
 
     // Constructor for converting an existing ap_uint<RDMA_REQ_BITS> to rdma_req_t
     rdma_req_t(ap_uint<RDMA_REQ_BITS> in) {
         vaddr = in(RDMA_VADDR_BITS - 1, 0);
         len = in(RDMA_VADDR_BITS + RDMA_LEN_BITS - 1, RDMA_VADDR_BITS);
-        host = in(RDMA_VADDR_BITS + RDMA_LEN_BITS, RDMA_VADDR_BITS + RDMA_LEN_BITS);
-        qpn = in(RDMA_VADDR_BITS + RDMA_LEN_BITS + 1 + 1 + RDMA_QPN_BITS - 1, RDMA_VADDR_BITS + RDMA_LEN_BITS + 1 + 1);
-        opcode = in(RDMA_VADDR_BITS + RDMA_LEN_BITS + 1 + 1 + RDMA_QPN_BITS + RDMA_OPCODE_BITS - 1, RDMA_VADDR_BITS + RDMA_LEN_BITS + 1 + 1 + RDMA_QPN_BITS);
+        host = in(RDMA_VADDR_BITS + RDMA_LEN_BITS + RDMA_HOST_BITS - 1, RDMA_VADDR_BITS + RDMA_LEN_BITS);
+        qpn = in(RDMA_VADDR_BITS + RDMA_LEN_BITS + RDMA_HOST_BITS + RDMA_QPN_BITS - 1, RDMA_VADDR_BITS + RDMA_LEN_BITS + RDMA_HOST_BITS);
+        opcode = in(RDMA_VADDR_BITS + RDMA_LEN_BITS + RDMA_HOST_BITS + RDMA_QPN_BITS + RDMA_OPCODE_BITS - 1, RDMA_VADDR_BITS + RDMA_LEN_BITS + RDMA_HOST_BITS + RDMA_QPN_BITS);
     }
 
     // Conversion operator for converting rdma_req_t to ap_uint<RDMA_REQ_BITS>
@@ -82,9 +83,9 @@ struct rdma_req_t {
         ap_uint<RDMA_REQ_BITS> ret;
         ret(RDMA_VADDR_BITS - 1, 0) = vaddr;
         ret(RDMA_VADDR_BITS + RDMA_LEN_BITS - 1, RDMA_VADDR_BITS) = len;
-        ret(RDMA_VADDR_BITS + RDMA_LEN_BITS, RDMA_VADDR_BITS + RDMA_LEN_BITS) = host;
-        ret(RDMA_VADDR_BITS + RDMA_LEN_BITS + 1 + 1 + RDMA_QPN_BITS - 1, RDMA_VADDR_BITS + RDMA_LEN_BITS + 1 + 1) = qpn;
-        ret(RDMA_VADDR_BITS + RDMA_LEN_BITS + 1 + 1 + RDMA_QPN_BITS + RDMA_OPCODE_BITS - 1, RDMA_VADDR_BITS + RDMA_LEN_BITS + 1 + 1 + RDMA_QPN_BITS) = opcode;
+        ret(RDMA_VADDR_BITS + RDMA_LEN_BITS + RDMA_HOST_BITS - 1, RDMA_VADDR_BITS + RDMA_LEN_BITS) = host;
+        ret(RDMA_VADDR_BITS + RDMA_LEN_BITS + RDMA_HOST_BITS + RDMA_QPN_BITS - 1, RDMA_VADDR_BITS + RDMA_LEN_BITS + RDMA_HOST_BITS) = qpn;
+        ret(RDMA_VADDR_BITS + RDMA_LEN_BITS + RDMA_HOST_BITS + RDMA_QPN_BITS + RDMA_OPCODE_BITS - 1, RDMA_VADDR_BITS + RDMA_LEN_BITS + RDMA_HOST_BITS + RDMA_QPN_BITS) = opcode;
         return ret;
     }
 };

@@ -377,10 +377,10 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
 
   # Create instance: fifo_eth_packetizer_cmd, and set properties
   set fifo_eth_packetizer_cmd [ create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 fifo_eth_packetizer_cmd ]
-  set_property -dict [ list CONFIG.HAS_TLAST {1} CONFIG.TDATA_NUM_BYTES {24} CONFIG.FIFO_DEPTH {32} CONFIG.FIFO_MEMORY_TYPE {distributed}] $fifo_eth_packetizer_cmd
+  set_property -dict [ list CONFIG.HAS_TLAST {1} CONFIG.TDATA_NUM_BYTES {32} CONFIG.FIFO_DEPTH {32} CONFIG.FIFO_MEMORY_TYPE {distributed}] $fifo_eth_packetizer_cmd
   # Create instance: fifo_eth_depacketizer_sts, and set properties
   set fifo_eth_depacketizer_sts [ create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 fifo_eth_depacketizer_sts ]
-  set_property -dict [ list CONFIG.HAS_TLAST {1} CONFIG.TDATA_NUM_BYTES {24} CONFIG.FIFO_DEPTH {32} CONFIG.FIFO_MEMORY_TYPE {distributed}] $fifo_eth_depacketizer_sts
+  set_property -dict [ list CONFIG.HAS_TLAST {1} CONFIG.TDATA_NUM_BYTES {32} CONFIG.FIFO_DEPTH {32} CONFIG.FIFO_MEMORY_TYPE {distributed}] $fifo_eth_depacketizer_sts
    # Create instance: fifo_eth_packetizer_sts, and set properties
   set fifo_eth_packetizer_sts [ create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 fifo_eth_packetizer_sts ]
   set_property -dict [ list  CONFIG.HAS_TLAST {1}  CONFIG.TDATA_NUM_BYTES {4} CONFIG.FIFO_DEPTH {32} CONFIG.FIFO_MEMORY_TYPE {distributed}] $fifo_eth_packetizer_sts
@@ -472,7 +472,7 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
   set_property -dict [ list CONFIG.HAS_TLAST {1} CONFIG.TDATA_NUM_BYTES {4} CONFIG.FIFO_DEPTH {32} CONFIG.FIFO_MEMORY_TYPE {distributed}] [get_bd_cells fifo_dmasts_session]
 
   create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 fifo_hdr_session
-  set_property -dict [ list CONFIG.HAS_TLAST {1} CONFIG.TDATA_NUM_BYTES {24} CONFIG.FIFO_DEPTH {32} CONFIG.FIFO_MEMORY_TYPE {distributed}] [get_bd_cells fifo_hdr_session]
+  set_property -dict [ list CONFIG.HAS_TLAST {1} CONFIG.TDATA_NUM_BYTES {32} CONFIG.FIFO_DEPTH {32} CONFIG.FIFO_MEMORY_TYPE {distributed}] [get_bd_cells fifo_hdr_session]
 
 
   connect_bd_intf_net [get_bd_intf_pins rxbuf_enqueue/dma_cmd] [get_bd_intf_pins fifo_dmacmd_session/S_AXIS] 

@@ -85,8 +85,6 @@ switch $nettype {
         # RDMA sq and rq
         set m_axis_rdma_sq [ create_bd_intf_port -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_rdma_sq ]
         set_property -dict [ list CONFIG.FREQ_HZ {250000000} ] $m_axis_rdma_sq
-        set s_axis_rdma_rq [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 s_axis_rdma_rq ]
-        set_property -dict [ list CONFIG.FREQ_HZ {250000000} CONFIG.HAS_TKEEP {0} CONFIG.HAS_TLAST {0} CONFIG.HAS_TREADY {1} CONFIG.HAS_TSTRB {0} CONFIG.LAYERED_METADATA {undef} CONFIG.TDATA_NUM_BYTES {68} CONFIG.TDEST_WIDTH {0} CONFIG.TID_WIDTH {0} CONFIG.TUSER_WIDTH {0} ] $s_axis_rdma_rq
 
         # RDMA extra pair of host/card streams
         set m_axis_host_2 [ create_bd_intf_port -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_host_2 ]
@@ -145,8 +143,6 @@ switch $nettype {
         connect_bd_intf_net [get_bd_intf_ports s_axis_host_2] [get_bd_intf_pins axis_switch_2_to_1_inst_2/S00_AXIS]
         connect_bd_intf_net [get_bd_intf_ports s_axis_card_2] [get_bd_intf_pins axis_switch_2_to_1_inst_2/S01_AXIS]
 
-        # connections rdma_rq
-        connect_bd_intf_net [get_bd_intf_ports s_axis_rdma_rq] [get_bd_intf_pins ccl_offload_0/s_axis_rdma_rq]
 
     }
     default {

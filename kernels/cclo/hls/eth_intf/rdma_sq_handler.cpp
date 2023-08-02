@@ -32,6 +32,7 @@ void rdma_sq_handler(
 #pragma HLS INTERFACE ap_ctrl_none port=return
 #pragma HLS PIPELINE II=1
 
+#pragma HLS aggregate variable=rdma_sq compact=bit
 
 	unsigned const bytes_per_word = DATA_WIDTH/8;
 

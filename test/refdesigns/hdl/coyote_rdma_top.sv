@@ -45,7 +45,6 @@ module design_user_logic_c0_0 (
 
     // RDMA QSFP0 SQ and RQ
     metaIntf.m 			        rdma_0_sq,
-    metaIntf.s 			        rdma_0_rq,
     metaIntf.s                  rdma_0_ack,
 
     // Clock and reset
@@ -245,11 +244,7 @@ accl_bd_wrapper accl_system(
 
     .m_axis_rdma_sq_tdata(rdma_0_sq.data),
     .m_axis_rdma_sq_tvalid(rdma_0_sq.valid),
-    .m_axis_rdma_sq_tready(rdma_0_sq.ready),
-    
-    .s_axis_rdma_rq_tdata(rdma_0_rq.data),
-    .s_axis_rdma_rq_tvalid(rdma_0_rq.valid),
-    .s_axis_rdma_rq_tready(rdma_0_rq.ready)
+    .m_axis_rdma_sq_tready(rdma_0_sq.ready)
 
 );
 
@@ -261,5 +256,7 @@ assign axis_host_2_src_s.tid = 0;
 assign axis_card_0_src_s.tid = 0;
 assign axis_card_1_src_s.tid = 0;
 assign axis_card_2_src_s.tid = 0;
+
+assign rdma_0_ack.ready = 1'b1;
 
 endmodule
