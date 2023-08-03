@@ -73,7 +73,8 @@ void rdma_sq_handler(
 				cmd_in_word.strm = 0;
 				cmd_in_word.dst = 0;
 				cmd_in_word.host = 0;
-				cmd_in_word.vaddr = STREAM_READ(ub_sq).data;
+				cmd_in_word.vaddr(31,0) = STREAM_READ(ub_sq).data;
+				cmd_in_word.vaddr(RDMA_VADDR_BITS-1,32) = STREAM_READ(ub_sq).data;
 				STREAM_WRITE(cmd_out, cmd_in_word);
 			}
 			break;

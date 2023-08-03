@@ -110,8 +110,11 @@ void rdma_depacketizer(
 			ub_notif.data = notif.session_id;
 			ub_notif.last = 0;
 			STREAM_WRITE(ub_notif_out, ub_notif);
-			ub_notif.data = hdr.vaddr;
-			ub_notif.last = 1;
+			ub_notif.data = hdr.vaddr(31,0);
+			ub_notif.last = 0;
+			STREAM_WRITE(ub_notif_out, ub_notif);
+			ub_notif.data = hdr.vaddr(RDMA_VADDR_BITS-1,32);
+			ub_notif.last = 0;
 			STREAM_WRITE(ub_notif_out, ub_notif);
 		} else if (hdr.msg_type == EGR_MSG) {
 			message_rem = hdr.count;//length of upcoming message (excluding the header itself)

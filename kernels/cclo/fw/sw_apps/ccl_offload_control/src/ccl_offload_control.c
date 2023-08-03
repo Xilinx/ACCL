@@ -101,6 +101,26 @@ static inline uint32_t pack_flags(uint32_t compression_flags, uint32_t remote_fl
     return ret;
 }
 
+//sends a buffer address to a remote peer,
+//enabling them to perform a RDMA WRITE to our buffer
+void rendezvous_send_addr(uint32_t qpn, uint64_t addr){
+    putd(CMD_RNDZV, qpn);
+    putd(CMD_RNDZV, (uint32_t)addr);
+    cputd(CMD_RNDZV, (uint32_t)(addr>>32));
+}
+
+//receive a buffer address from a remote peer,
+//enabling us to perform a RDMA WRITE to their buffer
+void rendezvous_get_addr(){
+    //TODO
+}
+
+//receives an acknowledgement that a RDMA WRITE to 
+//our buffer has completed
+void rendezvous_get_completion(){
+    //TODO
+}
+
 //configure datapath before calling this method
 //instructs the data plane to move data
 //use MOVE_IMMEDIATE
