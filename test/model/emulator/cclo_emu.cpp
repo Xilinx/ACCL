@@ -30,6 +30,7 @@
 #include "hp_compression.h"
 #include "eth_intf.h"
 #include "dummy_tcp_stack.h"
+#include "dummy_cyt_rdma_stack.h"
 #include "stream_segmenter.h"
 #include "client_arbiter.h"
 #include "hostctrl.h"
@@ -244,7 +245,12 @@ void axis_ssc(Stream<stream_word> &in, Stream<stream_word> &out, int adj){
     out.Push(word);
 }
 
-void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsigned int world_size) {
+void sim_bd(zmq_intf_context *ctx, string comm_backend, unsigned int local_rank, unsigned int world_size) {
+
+    bool use_udp = comm_backend.compare("udp");
+    bool use_tcp = comm_backend.compare("tcp");
+    bool use_cyt_rdma = comm_backend.compare("cyt_rdma");
+
     vector<char> devicemem;
 
     Stream<ap_uint<32>, 32> host_cmd("host_cmd");
@@ -313,13 +319,17 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsign
     Stream<stream_word> eth_tx_data_stack;
     Stream<stream_word> eth_rx_data_stack;
 
+	Stream<rdma_req_t> rdma_sq;
+    Stream<eth_header > eth_tx_cmd_fwd;
+    Stream<eth_header> eth_notif_out_ub;
+
     Stream<command_word> callreq_fifos[NUM_CTRL_STREAMS];
     Stream<command_word> callack_fifos[NUM_CTRL_STREAMS];
 
     Stream<command_word, 512> callreq_arb[NUM_CTRL_STREAMS], callack_arb[NUM_CTRL_STREAMS];
     Stream<command_word, 512> callreq_arb_host, callack_arb_host;
 
-    unsigned int max_words_per_pkt = MAX_PACKETSIZE/DATAPATH_WIDTH_BYTES;
+    unsigned int max_words_per_pkt = (use_cyt_rdma ? 4096 : MAX_PACKETSIZE)/DATAPATH_WIDTH_BYTES;
 
     // Dataflow functions running in parallel
     HLSLIB_DATAFLOW_INIT();
@@ -389,6 +399,17 @@ void sim_bd(zmq_intf_context *ctx, bool use_tcp, unsigned int local_rank, unsign
             eth_tx_meta, eth_tx_data_stack, eth_tx_status,
             eth_rx_data, eth_tx_data
         );
+    } else if(use_cyt_rdma) {
+        HLSLIB_FREERUNNING_FUNCTION(rdma_packetizer, switch_m[SWITCH_M_ETH_TX], eth_tx_data_int, eth_tx_cmd_fwd, eth_tx_sts, max_words_per_pkt);
+        HLSLIB_FREERUNNING_FUNCTION(rdma_depacketizer, eth_rx_data_int, switch_s[SWITCH_S_ETH_RX], eth_rx_sts, eth_notif_out, eth_notif_out_dpkt, eth_notif_out_ub);
+        HLSLIB_FREERUNNING_FUNCTION(rdma_sq_handler, rdma_sq, eth_tx_cmd, eth_tx_cmd_fwd);
+        //instantiate dummy Coyote RDMA stack which responds to appropriate comm patterns
+        HLSLIB_FREERUNNING_FUNCTION(
+            cyt_rdma,
+            rdma_sq, eth_notif_out,
+            eth_tx_data_int, eth_rx_data_int,
+            eth_rx_data, eth_tx_data
+        );
     } else{
         HLSLIB_FREERUNNING_FUNCTION(udp_packetizer, switch_m[SWITCH_M_ETH_TX], eth_tx_data, eth_tx_cmd, eth_tx_sts, max_words_per_pkt);
         HLSLIB_FREERUNNING_FUNCTION(udp_depacketizer, eth_rx_data, switch_s[SWITCH_S_ETH_RX], eth_rx_sts, eth_notif_out_dpkt);
@@ -438,7 +459,14 @@ int main(int argc, char** argv){
                                           false, 5500, "positive integer");
     cmd.add(startport);
 
-    TCLAP::SwitchArg udp_arg("u", "udp", "Use UDP hardware setup", cmd, false);
+    vector<string> allowed_backends;
+    allowed_backends.push_back("udp");
+    allowed_backends.push_back("tcp");
+    allowed_backends.push_back("cyt_rdma");
+	TCLAP::ValuesConstraint<string> allowed_backend_vals(allowed_backends);
+    TCLAP::ValueArg<string> backend_arg("c", "comms", "Type of comms backend", false, "tcp", &allowed_backend_vals);
+	cmd.add(backend_arg);
+
     TCLAP::SwitchArg loopback_arg("b", "loopback", "Enable kernel loopback", cmd, false);
 
     try {
@@ -453,5 +481,5 @@ int main(int argc, char** argv){
     logger = Log(static_cast<log_level>(loglevel.getValue()));
 
     zmq_intf_context ctx = zmq_server_intf(startport.getValue(), local_rank, world_size, loopback_arg.getValue(), logger);
-    sim_bd(&ctx, !udp_arg.getValue(), local_rank, world_size);
+    sim_bd(&ctx, backend_arg.getValue(), local_rank, world_size);
 }

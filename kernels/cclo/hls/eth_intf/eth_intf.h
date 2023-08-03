@@ -217,3 +217,25 @@ void tcp_rxHandler(
     STREAM<eth_notification>& m_notif_out
 );
 
+void rdma_depacketizer(
+	STREAM<stream_word > & in,
+	STREAM<stream_word > & out,
+	STREAM<eth_header > & sts,
+    STREAM<eth_notification> &notif_in,
+    STREAM<eth_notification> &notif_out,
+	STREAM<eth_header> & ub_notif_out
+);
+
+void rdma_packetizer(
+	STREAM<stream_word > & in,
+	STREAM<stream_word > & out,
+	STREAM<eth_header> & cmd,
+	STREAM<ap_uint<32> > & sts,
+	unsigned int max_pktsize
+);
+
+void rdma_sq_handler(
+	STREAM<rdma_req_t> & rdma_sq,
+	STREAM<eth_header> & cmd_in,
+	STREAM<eth_header> & cmd_out
+);

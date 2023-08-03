@@ -47,8 +47,7 @@ void rdma_depacketizer(
 	STREAM<eth_header > & sts,
     STREAM<eth_notification> &notif_in,
     STREAM<eth_notification> &notif_out,
-	STREAM<eth_header> & ub_notif_out,
-	STREAM<rxbuf_notification> & rxbuf_notif_out
+	STREAM<eth_header> & ub_notif_out
 ) {
 #pragma HLS INTERFACE axis register both port=in
 #pragma HLS INTERFACE axis register both port=out
@@ -56,7 +55,6 @@ void rdma_depacketizer(
 #pragma HLS INTERFACE axis register both port=notif_in
 #pragma HLS INTERFACE axis register both port=notif_out
 #pragma HLS INTERFACE axis register both port=ub_notif_out
-#pragma HLS INTERFACE axis register both port=rxbuf_notif_out
 #pragma HLS INTERFACE s_axilite port=return
 #pragma HLS PIPELINE II=1 style=flp
 	
@@ -104,16 +102,8 @@ void rdma_depacketizer(
 		//get header and some important info from it
 		inword = STREAM_READ(in);
 		hdr = eth_header(inword.data(HEADER_LENGTH-1,0));
-		if (hdr.msg_type == RNDZVS_INIT){
+		if (hdr.msg_type == RNDZVS_INIT || hdr.msg_type == RNDZVS_WR_DONE){
 			STREAM_WRITE(ub_notif_out, hdr);
-		} else if (hdr.msg_type == RNDZVS_WR_DONE) {
-			rxbuf_sig.tag = hdr.tag;
-			rxbuf_sig.len = hdr.count; // TODO: check the count
-			rxbuf_sig.src = hdr.src;
-			rxbuf_sig.seqn = hdr.seqn;
-			rxbuf_notif.index = 0; // TODO: figure out the mechanism of this index
-			rxbuf_notif.signature = rxbuf_sig;
-			STREAM_WRITE(rxbuf_notif_out, rxbuf_notif);
 		} else if (hdr.msg_type == EGR_MSG) {
 			message_rem = hdr.count;//length of upcoming message (excluding the header itself)
 			message_strm = hdr.strm;//target of message (0 is targeting memory so managed, everything else is stream so unmanaged)
