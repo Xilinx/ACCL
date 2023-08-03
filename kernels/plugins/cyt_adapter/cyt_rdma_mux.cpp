@@ -23,9 +23,9 @@ using namespace std;
 
 void cyt_rdma_mux_meta(
                 hls::stream<rdma_req_t>& s_meta_0,
-                hls::stream<req_t>& s_meta_1,
-                hls::stream<rdma_req_t>& m_meta_0,
-                hls::stream<req_t>& m_meta_1,
+                hls::stream<cyt_req_t>& s_meta_1,
+                hls::stream<cyt_rdma_req_t>& m_meta_0,
+                hls::stream<cyt_req_t>& m_meta_1,
                 hls::stream<ap_uint<8> >& meta_int
                 )
 {
@@ -33,25 +33,41 @@ void cyt_rdma_mux_meta(
 #pragma HLS PIPELINE II=1
 #pragma HLS INLINE off
 
-    static rdma_req_t metaWord_0;
-    static req_t metaWord_1;
-
+    static rdma_req_t s_metaWord_0;
+    static cyt_rdma_req_t m_metaWord_0;
+    static cyt_req_t s_metaWord_1;
+    static cyt_rdma_req_msg_t rdma_req_msg;
     static ap_uint<8> dest = 0;
 
     // if there is a rdma_sq cmd
+    // sq command comes from CCLO only has WRITE and SEND Verb
     if (!STREAM_IS_EMPTY(s_meta_0)){
-		metaWord_0 = STREAM_READ(s_meta_0);
-        STREAM_WRITE(m_meta_0, metaWord_0);
+		s_metaWord_0 = STREAM_READ(s_meta_0);
+        m_metaWord_0.opcode = s_metaWord_0.qpn;
+        m_metaWord_0.qpn = s_metaWord_0.qpn;
+        m_metaWord_0.host = 0; // data always managed by CCLO
+        m_metaWord_0.mode = 0; // always PARSE
+        m_metaWord_0.last = 1; // always assert last
+        m_metaWord_0.cmplt = 0; // no need to ack
+        m_metaWord_0.ssn = 0;
+        m_metaWord_0.offs = 0;
+        m_metaWord_0.rsrvd = 0;
 
-        // only if the opcode is RDMA WRITE/SEND and host flag equal 0, the data comes from the CCLO 
-        if((metaWord_0.opcode == RDMA_WRITE || metaWord_0.opcode == RDMA_SEND) && metaWord_0.host == 0)
-        {
-            dest = 0;
-            STREAM_WRITE(meta_int, dest);
-        }
-	} else if (!STREAM_IS_EMPTY(s_meta_1)){
-        metaWord_1 = STREAM_READ(s_meta_1);
-        STREAM_WRITE(m_meta_1, metaWord_1);
+        rdma_req_msg.lvaddr = 0; // we don't care about local vaddr
+        rdma_req_msg.rvaddr(47,0) = s_metaWord_0.vaddr;
+        rdma_req_msg.rvaddr(52,52) = s_metaWord_0.host;
+        rdma_req_msg.len = s_metaWord_0.len;
+        rdma_req_msg.params = 0;
+
+        m_metaWord_0.msg = (ap_uint<CYT_RDMA_MSG_BITS>)rdma_req_msg;
+        
+        STREAM_WRITE(m_meta_0, m_metaWord_0);
+        dest = 0;
+        STREAM_WRITE(meta_int, dest);
+	} 
+    else if (!STREAM_IS_EMPTY(s_meta_1)){
+        s_metaWord_1 = STREAM_READ(s_meta_1);
+        STREAM_WRITE(m_meta_1, s_metaWord_1);
         dest = 1;
         STREAM_WRITE(meta_int, dest);
     }
@@ -119,10 +135,10 @@ void cyt_rdma_mux_data(
 void cyt_rdma_mux(
                 hls::stream<rdma_req_t >& s_meta_0,
                 hls::stream<ap_axiu<512, 0, 0, 8> >& s_axis_0,
-                hls::stream<req_t >& s_meta_1,
+                hls::stream<cyt_req_t >& s_meta_1,
                 hls::stream<ap_axiu<512, 0, 0, 8> >& s_axis_1,
-                hls::stream<rdma_req_t>& m_meta_0,
-                hls::stream<req_t>& m_meta_1,
+                hls::stream<cyt_rdma_req_t>& m_meta_0,
+                hls::stream<cyt_req_t>& m_meta_1,
                 hls::stream<ap_axiu<512, 0, 0, 8> >& m_axis
                 )
 {

@@ -21,7 +21,7 @@ using namespace std;
 
 template <int DMA_CHANNEL>
 void dm_byp_cmd_converter(hls::stream<ap_axiu<104,0,0,DEST_WIDTH>>& dm_cmd,
-							hls::stream<req_t>& byp_cmd
+							hls::stream<cyt_req_t>& byp_cmd
 							)
 {
 #pragma HLS inline off
@@ -36,7 +36,7 @@ void dm_byp_cmd_converter(hls::stream<ap_axiu<104,0,0,DEST_WIDTH>>& dm_cmd,
 		ap_uint<64> saddr = dm_cmd_word(95,32);
 		ap_uint<3> tag = dm_cmd_with_dest.dest(2,0); // dest field encodes the host stream/fpga stream information
 
-		req_t req(0, 0, 0, DMA_CHANNEL, 0, 1, 0, tag, btt, saddr);
+		cyt_req_t req(0, 0, 0, DMA_CHANNEL, 0, 1, 0, tag, btt, saddr);
 
 		STREAM_WRITE(byp_cmd, req);
 	}
@@ -44,29 +44,29 @@ void dm_byp_cmd_converter(hls::stream<ap_axiu<104,0,0,DEST_WIDTH>>& dm_cmd,
 
 template <int DMA_CHANNEL>
 void rdma_req_byp_cmd_converter(
-						hls::stream<req_t>& rdma_req,
-						hls::stream<req_t>& byp_cmd
+						hls::stream<cyt_req_t>& rdma_req,
+						hls::stream<cyt_req_t>& byp_cmd
 )
 {
 #pragma HLS inline off
 #pragma HLS pipeline II=1
 
 	if(!STREAM_IS_EMPTY(rdma_req)){
-		req_t req = STREAM_READ(rdma_req);
-		req_t cmd(req.rsrvd, req.vfid, req.pid, DMA_CHANNEL, 0, 1, 0, req.stream, req.len, req.vaddr);
+		cyt_req_t req = STREAM_READ(rdma_req);
+		cyt_req_t cmd(req.rsrvd, req.vfid, req.pid, DMA_CHANNEL, 0, 1, 0, req.stream, req.len, req.vaddr);
 		STREAM_WRITE(byp_cmd, cmd);
 	}
 
 }
 
-void multiplexor(hls::stream<req_t>& in0,
-				hls::stream<req_t>& in1,
-				hls::stream<req_t>& out)
+void multiplexor(hls::stream<cyt_req_t>& in0,
+				hls::stream<cyt_req_t>& in1,
+				hls::stream<cyt_req_t>& out)
 {
 #pragma HLS inline off
 #pragma HLS pipeline II=1
 
-	req_t currWord;
+	cyt_req_t currWord;
 
 	if (!STREAM_IS_EMPTY(in0))
 	{
@@ -80,15 +80,15 @@ void multiplexor(hls::stream<req_t>& in0,
 	}
 }
 
-void multiplexor(hls::stream<req_t>& in0,
-				hls::stream<req_t>& in1,
-				hls::stream<req_t>& in2,
-				hls::stream<req_t>& out)
+void multiplexor(hls::stream<cyt_req_t>& in0,
+				hls::stream<cyt_req_t>& in1,
+				hls::stream<cyt_req_t>& in2,
+				hls::stream<cyt_req_t>& out)
 {
 #pragma HLS inline off
 #pragma HLS pipeline II=1
 
-	req_t currWord;
+	cyt_req_t currWord;
 
 	if (!STREAM_IS_EMPTY(in0))
 	{
@@ -167,13 +167,13 @@ void cyt_dma_adapter(
 	hls::stream<ap_axiu<32,0,0,0>> &dma1_mm2s_sts,
 #ifdef ACCL_RDMA
 	//RDMA rd_req and wr_req
-	hls::stream<req_t> & rdma_wr_req,
-	hls::stream<req_t> & rdma_rd_req,
+	hls::stream<cyt_req_t> & rdma_wr_req,
+	hls::stream<cyt_req_t> & rdma_rd_req,
 #endif
 	//Coyote Bypass interface command and status
-	hls::stream<req_t> &cyt_byp_wr_cmd,
+	hls::stream<cyt_req_t> &cyt_byp_wr_cmd,
 	hls::stream<ap_uint<16>> &cyt_byp_wr_sts,
-	hls::stream<req_t> &cyt_byp_rd_cmd,
+	hls::stream<cyt_req_t> &cyt_byp_rd_cmd,
 	hls::stream<ap_uint<16>> &cyt_byp_rd_sts
 ) {
 #pragma HLS INTERFACE axis port=dma0_s2mm_cmd
@@ -202,19 +202,19 @@ void cyt_dma_adapter(
 #endif
 	
 
-	static hls::stream<req_t > byp_wr_cmd_0;
+	static hls::stream<cyt_req_t > byp_wr_cmd_0;
     #pragma HLS stream variable=byp_wr_cmd_0 depth=16
-	static hls::stream<req_t > byp_wr_cmd_1;
+	static hls::stream<cyt_req_t > byp_wr_cmd_1;
     #pragma HLS stream variable=byp_wr_cmd_1 depth=16
-	static hls::stream<req_t > byp_rd_cmd_0;
+	static hls::stream<cyt_req_t > byp_rd_cmd_0;
     #pragma HLS stream variable=byp_rd_cmd_0 depth=16
-	static hls::stream<req_t > byp_rd_cmd_1;
+	static hls::stream<cyt_req_t > byp_rd_cmd_1;
     #pragma HLS stream variable=byp_rd_cmd_1 depth=16
 
 #ifdef ACCL_RDMA
-	static hls::stream<req_t > byp_wr_cmd_2;
+	static hls::stream<cyt_req_t > byp_wr_cmd_2;
     #pragma HLS stream variable=byp_wr_cmd_2 depth=16
-	static hls::stream<req_t > byp_rd_cmd_2;
+	static hls::stream<cyt_req_t > byp_rd_cmd_2;
     #pragma HLS stream variable=byp_rd_cmd_2 depth=16
 #endif
 

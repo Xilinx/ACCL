@@ -290,25 +290,12 @@ module ccl_offload
 `endif
 
 `ifdef RDMA_ENABLE
-  output [543:0] m_axis_rdma_sq_tdata,
-  output [67:0] m_axis_rdma_sq_tkeep,
-  output [0:0] m_axis_rdma_sq_tlast,
+  output [127:0] m_axis_rdma_sq_tdata,
   input m_axis_rdma_sq_tready,
-  output [67:0] m_axis_rdma_sq_tstrb,
   output m_axis_rdma_sq_tvalid,
 
-  input [543:0] s_axis_rdma_rq_tdata,
-  input [67:0] s_axis_rdma_rq_tkeep,
-  input [0:0] s_axis_rdma_rq_tlast,
-  output s_axis_rdma_rq_tready,
-  input [67:0] s_axis_rdma_rq_tstrb,
-  input s_axis_rdma_rq_tvalid,
-
   input [63:0] s_axis_eth_notification_tdata,
-  input [7:0] s_axis_eth_notification_tkeep,
-  input [0:0] s_axis_eth_notification_tlast,
   output s_axis_eth_notification_tready,
-  input [7:0] s_axis_eth_notification_tstrb,
   input s_axis_eth_notification_tvalid,
 `endif
 
@@ -667,6 +654,16 @@ module ccl_offload
         .s_axis_eth_tx_status_tready(s_axis_eth_tx_status_tready),
         .s_axis_eth_tx_status_tstrb(s_axis_eth_tx_status_tstrb),
         .s_axis_eth_tx_status_tvalid(s_axis_eth_tx_status_tvalid),
+`endif
+
+`ifdef RDMA_ENABLE
+        .m_axis_rdma_sq_tdata(m_axis_rdma_sq_tdata),
+        .m_axis_rdma_sq_tready(m_axis_rdma_sq_tready),
+        .m_axis_rdma_sq_tvalid(m_axis_rdma_sq_tvalid),
+
+        .s_axis_eth_notification_tdata(s_axis_eth_notification_tdata),
+        .s_axis_eth_notification_tready(s_axis_eth_notification_tready),
+        .s_axis_eth_notification_tvalid(s_axis_eth_notification_tvalid),
 `endif
 
 `ifdef AXI_DATA_ACCESS

@@ -62,8 +62,7 @@ if sys.argv[1] == "TCP":
 
 if sys.argv[1] == "RDMA":
     xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "s_axis_eth_notification", False, 64, id)
-    xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "m_axis_rdma_sq", True, 544, id)
-    xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "s_axis_rdma_rq", False, 544, id)
+    xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "m_axis_rdma_sq", True, 128, id)
 
 if  int(sys.argv[5]) == 1:
     xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "s_axis_krnl", False, 512, id)

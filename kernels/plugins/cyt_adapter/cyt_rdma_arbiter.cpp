@@ -21,9 +21,9 @@
 using namespace std;
 
 void cyt_rdma_arbiter_meta(
-                hls::stream<req_t >& s_meta,
+                hls::stream<cyt_req_t >& s_meta,
                 hls::stream<eth_notification>& m_meta_0,
-                hls::stream<req_t >& m_meta_1,
+                hls::stream<cyt_req_t >& m_meta_1,
                 hls::stream<ap_uint<32> >& meta_int
                 )
 {
@@ -31,7 +31,7 @@ void cyt_rdma_arbiter_meta(
 #pragma HLS PIPELINE II=1
 #pragma HLS INLINE off
 
-    static req_t reqWord;
+    static cyt_req_t reqWord;
     static eth_notification meta_notif;
 
     static ap_uint<32> meta_internal = 0;
@@ -131,15 +131,15 @@ void cyt_rdma_arbiter_data(
 // check the host bit of the s_meta, which corresponds to the wr_req
 // if host bit equals 0, this is a SEND Verb, route meta to eth notification and route data stream to channel 0
 // if host bit equals 1, this is an WRITE Verb, route meta and data to channel 1
-// if data routes to channel 1, set the meta_internal field according to the stream flag in the req_t to indicate host/card
-// compact bit pragma required for req_t as this interfaces with Coyote. 
+// if data routes to channel 1, set the meta_internal field according to the stream flag in the cyt_req_t to indicate host/card
+// compact bit pragma required for cyt_req_t as this interfaces with Coyote. 
 
 void cyt_rdma_arbiter(
-                hls::stream<req_t >& s_meta,
+                hls::stream<cyt_req_t >& s_meta,
                 hls::stream<ap_axiu<512, 0, 0, 8> >& s_axis,
                 hls::stream<eth_notification >& m_meta_0,
                 hls::stream<ap_axiu<512, 0, 0, 8> >& m_axis_0,
-                hls::stream<req_t>& m_meta_1,
+                hls::stream<cyt_req_t>& m_meta_1,
                 hls::stream<ap_axiu<512, 0, 0, 8> >& m_axis_1
                 )
 {
