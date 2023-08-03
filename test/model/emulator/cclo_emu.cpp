@@ -321,7 +321,6 @@ void sim_bd(zmq_intf_context *ctx, string comm_backend, unsigned int local_rank,
 
 	Stream<rdma_req_t> rdma_sq;
     Stream<eth_header > eth_tx_cmd_fwd;
-    Stream<eth_header> eth_notif_out_ub;
 
     Stream<command_word> callreq_fifos[NUM_CTRL_STREAMS];
     Stream<command_word> callack_fifos[NUM_CTRL_STREAMS];
@@ -401,8 +400,8 @@ void sim_bd(zmq_intf_context *ctx, string comm_backend, unsigned int local_rank,
         );
     } else if(use_cyt_rdma) {
         HLSLIB_FREERUNNING_FUNCTION(rdma_packetizer, switch_m[SWITCH_M_ETH_TX], eth_tx_data_int, eth_tx_cmd_fwd, eth_tx_sts, max_words_per_pkt);
-        HLSLIB_FREERUNNING_FUNCTION(rdma_depacketizer, eth_rx_data_int, switch_s[SWITCH_S_ETH_RX], eth_rx_sts, eth_notif_out, eth_notif_out_dpkt, eth_notif_out_ub);
-        HLSLIB_FREERUNNING_FUNCTION(rdma_sq_handler, rdma_sq, eth_tx_cmd, eth_tx_cmd_fwd);
+        HLSLIB_FREERUNNING_FUNCTION(rdma_depacketizer, eth_rx_data_int, switch_s[SWITCH_S_ETH_RX], eth_rx_sts, eth_notif_out, eth_notif_out_dpkt, sts_fifos[STS_RNDZV]);
+        HLSLIB_FREERUNNING_FUNCTION(rdma_sq_handler, rdma_sq, cmd_fifos[CMD_RNDZV], eth_tx_cmd, eth_tx_cmd_fwd);
         //instantiate dummy Coyote RDMA stack which responds to appropriate comm patterns
         HLSLIB_FREERUNNING_FUNCTION(
             cyt_rdma,

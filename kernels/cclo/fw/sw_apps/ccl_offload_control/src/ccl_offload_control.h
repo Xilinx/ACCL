@@ -37,11 +37,11 @@
 
 #define CMD_CALL     0
 #define CMD_DMA_MOVE 1
-#define CMD_RNDZV_ADR 2
+#define CMD_RNDZV    2
 
 #define STS_CALL     0
 #define STS_DMA_MOVE 1
-#define STS_RNDZV_ADR 2
+#define STS_RNDZV    2
 
 //PACKT CONST
 #define MAX_PACKETSIZE 4096

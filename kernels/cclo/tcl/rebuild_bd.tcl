@@ -18,7 +18,7 @@
 ##################################################################
 # DESIGN PROCs
 ##################################################################
-# netStackType - UDP or TCP - type of POE attachment generated
+# netStackType - UDP or TCP or RDMA - type of POE attachment generated
 # enableDMA - 0/1 - enables DMAs, providing support for send/recv from/to memory, and collectives
 # externalDMA - 0/1 - exports all DMA streams to the kernel interface, allowing exteral datamovers to be used
 # enableArithmetic - 0/1 - enables arithmetic, providing support for reduction collectives and combine primitive

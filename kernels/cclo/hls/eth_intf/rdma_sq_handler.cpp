@@ -22,11 +22,13 @@ using namespace std;
 
 void rdma_sq_handler(
 	STREAM<rdma_req_t> & rdma_sq,
+	STREAM<ap_axiu<32,0,0,0>> & ub_sq,
 	STREAM<eth_header> & cmd_in,
 	STREAM<eth_header> & cmd_out
 )
 {
 #pragma HLS INTERFACE axis register both port=rdma_sq
+#pragma HLS INTERFACE axis register both port=ub_sq
 #pragma HLS INTERFACE axis register both port=cmd_in
 #pragma HLS INTERFACE axis register both port=cmd_out
 #pragma HLS INTERFACE ap_ctrl_none port=return
@@ -39,7 +41,7 @@ void rdma_sq_handler(
 	static rdma_req_t rdma_req;
 	static eth_header cmd_in_word;
 	
-	enum fsmStateType {WAIT_CMD, RNDZVS_INIT_CMD, RNDZVS_MSG_CMD, RNDZVS_DONE_CMD, EGR_MSG_CMD};
+	enum fsmStateType {WAIT_CMD, RNDZVS_MSG_CMD, RNDZVS_DONE_CMD, EGR_MSG_CMD};
     static fsmStateType  fsmState = WAIT_CMD;
 
 
@@ -53,26 +55,27 @@ void rdma_sq_handler(
 					fsmState = EGR_MSG_CMD;
 				} else if (cmd_in_word.msg_type == RNDZVS_MSG) {
 					fsmState = RNDZVS_MSG_CMD;
-				} else if (cmd_in_word.msg_type == RNDZVS_INIT) {
-					fsmState = RNDZVS_INIT_CMD;
 				}
+			} else if (!STREAM_IS_EMPTY(ub_sq)){
+				//issue sq command
+				rdma_req.opcode = RDMA_SEND;
+				rdma_req.qpn = STREAM_READ(ub_sq).data;
+				rdma_req.host = 0;
+				rdma_req.len = bytes_per_word;//will send just a header
+				rdma_req.vaddr = 0;
+				STREAM_WRITE(rdma_sq, rdma_req);
+				//issue packetizer command
+				cmd_in_word.msg_type = RNDZVS_INIT;
+				cmd_in_word.count = 0;//will send just a header
+				cmd_in_word.tag = 0;
+				cmd_in_word.src = 0;
+				cmd_in_word.seqn = 0;
+				cmd_in_word.strm = 0;
+				cmd_in_word.dst = 0;
+				cmd_in_word.host = 0;
+				cmd_in_word.vaddr = STREAM_READ(ub_sq).data;
+				STREAM_WRITE(cmd_out, cmd_in_word);
 			}
-			break;
-		case RNDZVS_INIT_CMD:
-			// issue an RDMA SEND to tell the remote end about the local vaddr and other meta
-			rdma_req.opcode = RDMA_SEND;
-			rdma_req.qpn = cmd_in_word.dst;
-			rdma_req.host = cmd_in_word.host;
-			rdma_req.len = bytes_per_word; // only the header len
-			rdma_req.vaddr = 0; // not used in SEND Verb
-			STREAM_WRITE(rdma_sq, rdma_req);
-
-			// and issue the eth cmd to the rdma packetizer
-			cmd_in_word.count = 0; // no message payload, only the header
-			cmd_in_word.msg_type = RNDZVS_INIT;
-			STREAM_WRITE(cmd_out, cmd_in_word);
-
-			fsmState = WAIT_CMD;	
 			break;
 		case RNDZVS_MSG_CMD:
 			// issue an RDMA WRITE to target remote address
@@ -91,9 +94,9 @@ void rdma_sq_handler(
 			// issue an RDMA SEND to tell the remote end that the WRITE is done
 			rdma_req.opcode = RDMA_SEND;
 			rdma_req.qpn = cmd_in_word.dst;
-			rdma_req.host = cmd_in_word.host;
+			rdma_req.host = 0;
 			rdma_req.len = bytes_per_word; // only the header len
-			rdma_req.vaddr = 0; // not used in SEND Verb
+			rdma_req.vaddr = 0;
 			STREAM_WRITE(rdma_sq, rdma_req);
 
 			// and issue the eth cmd to the rdma packetizer

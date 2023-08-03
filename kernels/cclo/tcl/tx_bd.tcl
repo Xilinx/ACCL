@@ -235,22 +235,10 @@ proc create_rdma_tx_subsystem { parentCell nameHier } {
   set rdma_packetizer_0 [ create_bd_cell -type ip -vlnv xilinx.com:hls:rdma_packetizer:1.0 rdma_packetizer_0 ]
   set rdma_sq_handler_0 [ create_bd_cell -type ip -vlnv xilinx.com:hls:rdma_sq_handler:1.0 rdma_sq_handler_0 ]
 
-  # Create instances for SQ mastering from Microblaze
+  # Create FIFO for SQ mastering from Microblaze
   create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 ub_sq_fifo 
   set_property -dict [list CONFIG.HAS_TLAST.VALUE_SRC USER] [get_bd_cells ub_sq_fifo]
   set_property -dict [list CONFIG.FIFO_DEPTH {64} CONFIG.FIFO_MEMORY_TYPE {distributed} CONFIG.HAS_TLAST {1}] [get_bd_cells ub_sq_fifo]
-
-  create_bd_cell -type ip -vlnv xilinx.com:ip:axis_dwidth_converter:1.1 ub_sq_dwc
-  set_property CONFIG.M_TDATA_NUM_BYTES {32} [get_bd_cells ub_sq_dwc]
-
-  create_bd_cell -type ip -vlnv xilinx.com:ip:axis_switch:1.1 sq_mux
-  set_property -dict [list CONFIG.HAS_TLAST.VALUE_SRC USER] [get_bd_cells sq_mux]
-  set_property -dict [list CONFIG.ARB_ON_MAX_XFERS {1} CONFIG.ARB_ON_TLAST {0}] [get_bd_cells sq_mux]
-
-  create_bd_cell -type ip -vlnv xilinx.com:ip:xlconstant:1.1 xlconstant_0
-  set_property -dict [list CONFIG.CONST_WIDTH {2}] [get_bd_cells xlconstant_0]
-  set_property -dict [list CONFIG.CONST_VAL {0}] [get_bd_cells xlconstant_0]
-  connect_bd_net [get_bd_pins xlconstant_0/dout] [get_bd_pins sq_mux/s_req_suppress]
 
   # Create interface connections
   connect_bd_intf_net -intf_net control [get_bd_intf_pins s_axi_control] [get_bd_intf_pins rdma_packetizer_0/s_axi_control]
@@ -261,24 +249,19 @@ proc create_rdma_tx_subsystem { parentCell nameHier } {
   connect_bd_intf_net -intf_net rdma_packetizer_0_cmd [get_bd_intf_pins rdma_packetizer_0/cmd] [get_bd_intf_pins rdma_sq_handler_0/cmd_out]
 
   connect_bd_intf_net [get_bd_intf_pins s_axis_ub_sq] [get_bd_intf_pins ub_sq_fifo/S_AXIS]
-  connect_bd_intf_net [get_bd_intf_pins ub_sq_fifo/M_AXIS] [get_bd_intf_pins ub_sq_dwc/S_AXIS]
-  connect_bd_intf_net [get_bd_intf_pins ub_sq_dwc/M_AXIS] [get_bd_intf_pins sq_mux/S01_AXIS]
-  connect_bd_intf_net -intf_net s_axis_pktcmd [get_bd_intf_pins s_axis_pktcmd] [get_bd_intf_pins sq_mux/S00_AXIS]
-  connect_bd_intf_net [get_bd_intf_pins sq_mux/M00_AXIS] [get_bd_intf_pins rdma_sq_handler_0/cmd_in]
-  connect_bd_intf_net [get_bd_intf_pins m_axis_rdma_sq] [get_bd_intf_pins rdma_sq_handler_0/rdma_sq]
+  connect_bd_intf_net [get_bd_intf_pins ub_sq_fifo/M_AXIS] [get_bd_intf_pins rdma_sq_handler_0/ub_sq]
+
+connect_bd_intf_net [get_bd_intf_pins s_axis_pktcmd] [get_bd_intf_pins rdma_sq_handler_0/cmd_in]
+connect_bd_intf_net [get_bd_intf_pins rdma_sq_handler_0/rdma_sq] [get_bd_intf_pins m_axis_rdma_sq] 
 
   # Create port connections
   connect_bd_net -net ap_clk [get_bd_pins ap_clk]   [get_bd_pins rdma_packetizer_0/ap_clk] \
                                                     [get_bd_pins rdma_sq_handler_0/ap_clk] \
                                                     [get_bd_pins ub_sq_fifo/s_axis_aclk] \
-                                                    [get_bd_pins ub_sq_dwc/aclk] \
-                                                    [get_bd_pins sq_mux/aclk] \
                                                     [get_bd_pins tx_fifo/s_axis_aclk]
   connect_bd_net -net ap_rst_n [get_bd_pins ap_rst_n] [get_bd_pins rdma_packetizer_0/ap_rst_n] \
                                                       [get_bd_pins rdma_sq_handler_0/ap_rst_n] \
                                                       [get_bd_pins ub_sq_fifo/s_axis_aresetn] \
-                                                      [get_bd_pins ub_sq_dwc/aresetn] \
-                                                      [get_bd_pins sq_mux/aresetn] \
                                                       [get_bd_pins tx_fifo/s_axis_aresetn]
 
   # Restore current instance

@@ -47,7 +47,7 @@ void rdma_depacketizer(
 	STREAM<eth_header > & sts,
     STREAM<eth_notification> &notif_in,
     STREAM<eth_notification> &notif_out,
-	STREAM<eth_header> & ub_notif_out
+	STREAM<ap_axiu<32,0,0,0>> & ub_notif_out
 ) {
 #pragma HLS INTERFACE axis register both port=in
 #pragma HLS INTERFACE axis register both port=out
@@ -103,7 +103,16 @@ void rdma_depacketizer(
 		inword = STREAM_READ(in);
 		hdr = eth_header(inword.data(HEADER_LENGTH-1,0));
 		if (hdr.msg_type == RNDZVS_INIT || hdr.msg_type == RNDZVS_WR_DONE){
-			STREAM_WRITE(ub_notif_out, hdr);
+			ap_axiu<32,0,0,0> ub_notif;
+			ub_notif.data = hdr.msg_type;
+			ub_notif.last = 0;
+			STREAM_WRITE(ub_notif_out, ub_notif);
+			ub_notif.data = notif.session_id;
+			ub_notif.last = 0;
+			STREAM_WRITE(ub_notif_out, ub_notif);
+			ub_notif.data = hdr.vaddr;
+			ub_notif.last = 1;
+			STREAM_WRITE(ub_notif_out, ub_notif);
 		} else if (hdr.msg_type == EGR_MSG) {
 			message_rem = hdr.count;//length of upcoming message (excluding the header itself)
 			message_strm = hdr.strm;//target of message (0 is targeting memory so managed, everything else is stream so unmanaged)

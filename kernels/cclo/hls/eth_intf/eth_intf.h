@@ -224,7 +224,7 @@ void rdma_depacketizer(
 	STREAM<eth_header > & sts,
     STREAM<eth_notification> &notif_in,
     STREAM<eth_notification> &notif_out,
-	STREAM<eth_header> & ub_notif_out
+	STREAM<ap_axiu<32,0,0,0> > & ub_notif_out
 );
 
 void rdma_packetizer(
@@ -237,6 +237,7 @@ void rdma_packetizer(
 
 void rdma_sq_handler(
 	STREAM<rdma_req_t> & rdma_sq,
+    STREAM<ap_axiu<32,0,0,0> > & ub_sq,
 	STREAM<eth_header> & cmd_in,
 	STREAM<eth_header> & cmd_out
 );
