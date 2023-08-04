@@ -25,14 +25,15 @@ using namespace std;
 //TODO: memory interfacing ops - READ/WRITE
 
 //TX process reads a descriptor from SQ,
-//then read message from rd_data and send to TX
+//then read message from send_data and send to TX
 //append appropriate header / tdest
 void cyt_rdma_tx(
     STREAM<rdma_req_t> & rdma_sq,
-    STREAM<stream_word> & rd_data,
+    STREAM<stream_word> & send_data,
     STREAM<stream_word> & tx
 ){
-
+#pragma HLS PIPELINE II=1 style=flp
+#pragma HLS INLINE off
     enum txFsmStateType {WAIT_SQ, TX_DATA};
     static txFsmStateType txFsmState = WAIT_SQ;
     static rdma_req_t command;
@@ -47,26 +48,29 @@ void cyt_rdma_tx(
                 txFsmState = TX_DATA;
             }
         case TX_DATA:
-            if(!STREAM_IS_EMPTY(rd_data) && !STREAM_IS_FULL(tx)){
+            if(!STREAM_IS_EMPTY(send_data) && !STREAM_IS_FULL(tx)){
                 //transmit in chunks of 4KB of data plus header
                 //first send command over to remote in packet header
                 tx_word.dest = command.qpn;
-                tx_word.last = 0;
-                tx_word.data(RDMA_REQ_BITS-1,0) = (ap_uint<RDMA_REQ_BITS>)command;
-                STREAM_WRITE(tx, tx_word);
-                unsigned int i;
-                for(i=0; i<4096 && tx_word.last==0; i+=64){
-                    tx_word = STREAM_READ(rd_data);
-                    tx_word.last |= (i == 4032);
-                    tx_word.dest = command.qpn;
+                do {
+                    tx_word.last = 0;
+                    tx_word.data(RDMA_REQ_BITS-1,0) = (ap_uint<RDMA_REQ_BITS>)command;
+                    //header
                     STREAM_WRITE(tx, tx_word);
-                }
-                //update command length
-                command.len = (command.len < 64*i) ? (unsigned)0 : (unsigned)(command.len - 64*i);
+                    //data
+                    unsigned int i;
+                    for(i=0; i<4096 && tx_word.last==0; i+=64){
+                        tx_word = STREAM_READ(send_data);
+                        tx_word.last |= (i == 4032);
+                        STREAM_WRITE(tx, tx_word);
+                    }
+                    //update command length
+                    command.len = (command.len < 64*i) ? (unsigned)0 : (unsigned)(command.len - 64*i);
+                    //update target address, if WRITE
+                    command.vaddr += 64*i;
+                } while(command.len > 0);
                 //we're done with this command, listen on SQ
-                if(command.len == 0){
-                    txFsmState = WAIT_SQ;
-                }
+                txFsmState = WAIT_SQ;
             }
         break;
     }
@@ -77,9 +81,14 @@ void cyt_rdma_tx(
 //next is data
 void cyt_rdma_rx(
     STREAM<eth_notification> & notif,
+    STREAM<stream_word> & recv_data,
     STREAM<stream_word> & wr_data,
+    STREAM<ap_axiu<104,0,0,DEST_WIDTH>> & wr_cmd,
+    STREAM<ap_uint<32> > & wr_sts,
     STREAM<stream_word> & rx
 ){
+#pragma HLS PIPELINE II=1 style=flp
+#pragma HLS INLINE off
     stream_word rx_word;
 
     if(!STREAM_IS_EMPTY(rx)){
@@ -90,33 +99,59 @@ void cyt_rdma_rx(
         current_notif.session_id = command.qpn;
         current_notif.type = 0; //type not used here
         current_notif.length = std::min((unsigned)command.len,(unsigned)4096);
-        STREAM_WRITE(notif, current_notif);
         //forward data
-        do{
-            STREAM_WRITE(wr_data, rx_word);
-        } while(rx_word.last == 0);
+        if(command.opcode == RDMA_WRITE){
+            //write DMA command
+            ap_axiu<104,0,0,DEST_WIDTH> dma_cmd_word;
+            hlslib::axi::Command<64, 23> dma_cmd;
+            dma_cmd.length = current_notif.length;
+            dma_cmd.address = command.vaddr;
+            dma_cmd.tag = 0;
+            dma_cmd_word.data = dma_cmd;
+            dma_cmd_word.last = 1;//always last
+            dma_cmd_word.dest = command.host;
+            STREAM_WRITE(wr_cmd, dma_cmd_word);
+            //data to write
+            do{
+                STREAM_WRITE(wr_data, rx_word);
+            } while(rx_word.last == 0); 
+            STREAM_READ(wr_sts);
+        } else {
+            //notify
+            STREAM_WRITE(notif, current_notif);
+            //data received
+            do{
+                STREAM_WRITE(recv_data, rx_word);
+            } while(rx_word.last == 0);
+        }
     }
 }
 
 void cyt_rdma(
 	STREAM<rdma_req_t> & rdma_sq,
     STREAM<eth_notification> & notif,
-    STREAM<stream_word> & rd_data,
+    STREAM<stream_word> & send_data,
+    STREAM<stream_word> & recv_data,
     STREAM<stream_word> & wr_data,
+    STREAM<ap_axiu<104,0,0,DEST_WIDTH>> & wr_cmd,
+    STREAM<ap_uint<32> > & wr_sts,
     STREAM<stream_word> & rx,
     STREAM<stream_word> & tx
 ){
 #pragma HLS INTERFACE axis register both port=rdma_sq
 #pragma HLS INTERFACE axis register both port=notif
-#pragma HLS INTERFACE axis register both port=rd_data
+#pragma HLS INTERFACE axis register both port=send_data
+#pragma HLS INTERFACE axis register both port=recv_data
 #pragma HLS INTERFACE axis register both port=wr_data
+#pragma HLS INTERFACE axis register both port=wr_cmd
+#pragma HLS INTERFACE axis register both port=wr_sts
 #pragma HLS INTERFACE axis register both port=rx
 #pragma HLS INTERFACE axis register both port=tx
 #pragma HLS INTERFACE ap_ctrl_none port=return
 
 #pragma HLS DATAFLOW disable_start_propagation
 
-cyt_rdma_tx(rdma_sq, rd_data, tx);
-cyt_rdma_rx(notif, wr_data, rx);
+cyt_rdma_tx(rdma_sq, send_data, tx);
+cyt_rdma_rx(notif, recv_data, wr_data, wr_cmd, wr_sts, rx);
 
 }
