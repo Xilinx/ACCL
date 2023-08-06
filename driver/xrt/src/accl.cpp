@@ -1205,20 +1205,6 @@ void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
 
   debug("Set max segment size: " + std::to_string(segsize));
   set_max_segment_size(segsize);
-  switch (protocol) {
-  case networkProtocol::UDP:
-    use_udp();
-    break;
-  case networkProtocol::TCP:
-    use_tcp();
-    break;
-  case networkProtocol::RDMA:
-    use_rdma();
-    break;
-  default:
-    throw std::runtime_error(
-        "Requested network protocol is not yet supported.");
-  }
 
   debug("Accelerator ready!");
 }
@@ -1535,7 +1521,7 @@ void ACCL::use_rdma(communicatorId comm_id) {
   options.comm = communicators[comm_id].communicators_addr();
   options.cfg_function = cfgFunc::set_stack_type;
   options.count = 2;
-  call_sync(options, false);
+  call_sync(options);
   check_return_value("use_rdma");
 }
 

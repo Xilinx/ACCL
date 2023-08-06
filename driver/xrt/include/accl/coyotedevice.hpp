@@ -20,6 +20,8 @@
 #include "cclo.hpp"
 #include "constants.hpp"
 #include "cProcess.hpp"
+#include "ibvQpConn.hpp"
+#include "ibvStructs.hpp"
 #include <string>
 
 constexpr int targetRegion = 0;
@@ -138,7 +140,7 @@ constexpr auto const ISR                    = 0x0c;
 class CoyoteDevice : public CCLO {
 public:
   CoyoteDevice();
-
+  CoyoteDevice(unsigned int num_qp);
   /**
    * Destroy the CoyoteDevice object
    *
@@ -169,6 +171,12 @@ public:
   }
   
   fpga::cProcess coyote_proc;
+
+  // RDMA related 
+  // RDMA requires multiple processes to establish queue pairs
+  // The CCLO kernel is still managed by coyote_proc
+  unsigned int num_qp;
+  std::vector<fpga::cProcess*> coyote_qProc_vec;
 
 private:
   

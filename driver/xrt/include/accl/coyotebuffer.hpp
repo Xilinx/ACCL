@@ -55,8 +55,8 @@ template <typename dtype> class CoyoteBuffer : public Buffer<dtype> {
       this->device = dev;
       // 2M pages
       size_t page_size = 1ULL << 21;
-      size_t buffer_size = length * sizeof(dtype);
-      uint32_t n_pages = (buffer_size + page_size - 1) / page_size;
+      this->buffer_size = length * sizeof(dtype);
+      this->n_pages = (buffer_size + page_size - 1) / page_size;
       std::cerr << "CoyoteBuffer contructor called! page_size:"<<page_size<<", buffer_size:"<<buffer_size<<",n_pages:"<<n_pages<< std::endl;
 
       this->aligned_buffer = (dtype *)this->device->coyote_proc.getMem({fpga::CoyoteAlloc::HUGE_2M, n_pages});
@@ -66,6 +66,16 @@ template <typename dtype> class CoyoteBuffer : public Buffer<dtype> {
       std::cerr << "Allocation successful! Allocated buffer: "<<std::setbase(16)<<(uint64_t)this->aligned_buffer << std::setbase(10) <<", Size: " << this->_size << std::endl;
 
       host_flag = true;
+      
+
+      // if Coyote device has multiple qProc, map the allocated buffer with all qProc
+      if(this->device->num_qp > 0 && this->device->coyote_qProc_vec.size()!=0){
+        for (int i=0; i<this->device->coyote_qProc_vec.size(); i++)
+        {
+          std::cerr << "Mapping coyote buffer to qProc cPid:"<<this->device->coyote_qProc_vec[i]->getCpid()<<", buffer_size:"<<buffer_size<<std::endl;
+          this->device->coyote_qProc_vec[i]->userMap(this->aligned_buffer, buffer_size);
+        }
+      }
     }
 
     /**
@@ -74,8 +84,7 @@ template <typename dtype> class CoyoteBuffer : public Buffer<dtype> {
      */
     virtual ~CoyoteBuffer()
     {
-
-      this->device->coyote_proc.freeMem(this->aligned_buffer);
+      free_buffer();
     }
 
     /**
@@ -128,6 +137,15 @@ template <typename dtype> class CoyoteBuffer : public Buffer<dtype> {
 
     void free_buffer() override
     {
+      // if Coyote device has multiple qProc, unmap the allocated buffer with all qProc
+      if(this->device->num_qp > 0 && this->device->coyote_qProc_vec.size()!=0){
+        for (int i=0; i<this->device->coyote_qProc_vec.size(); i++)
+        {
+          std::cerr << "Unmapping user buffer from qProc pid:"<<this->device->coyote_qProc_vec[i]->getPid()<<", buffer_size:"<<buffer_size<<std::endl;
+          this->device->coyote_qProc_vec[i]->userUnmap(this->aligned_buffer);
+        }
+      }
+      
       this->device->coyote_proc.freeMem(this->aligned_buffer);
       return;
     }
@@ -144,10 +162,16 @@ template <typename dtype> class CoyoteBuffer : public Buffer<dtype> {
       return std::unique_ptr<BaseBuffer>(nullptr);
     }
 
+    size_t size() const { return this->buffer_size; }
+
+    size_t page() const { return this->n_pages; }
+
 
   private:
     dtype *aligned_buffer;
     CoyoteDevice *device;
     bool host_flag; 
+    size_t buffer_size;
+    uint32_t n_pages;
   };
 } // namespace ACCL
