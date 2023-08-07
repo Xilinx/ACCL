@@ -59,6 +59,7 @@ struct options_t
 	bool axis3;
 	bool udp;
 	bool tcp;
+	bool rdma;
 	unsigned int host;
 	std::string xclbin;
 	std::string fpgaIP;
@@ -237,6 +238,7 @@ options_t parse_options(int argc, char *argv[])
 		TCLAP::SwitchArg axis3_arg("a", "axis3", "Use axis3 hardware setup", cmd, false);
 		TCLAP::SwitchArg udp_arg("u", "udp", "Use UDP hardware setup", cmd, false);
 		TCLAP::SwitchArg tcp_arg("t", "tcp", "Use TCP hardware setup", cmd, false);
+		TCLAP::SwitchArg rdma_arg("r", "rdma", "Use RDMA hardware setup", cmd, false);
 		TCLAP::SwitchArg userkernel_arg("k", "userkernel", "Enable user kernel(by default vadd kernel)", cmd, false);
 		TCLAP::ValueArg<std::string> xclbin_arg(
 			"x", "xclbin", "xclbin of accl driver if hardware mode is used", false,
@@ -255,32 +257,40 @@ options_t parse_options(int argc, char *argv[])
 		{
 			if (axis3_arg.getValue())
 			{
-				if (udp_arg.getValue() || tcp_arg.getValue())
+				if (udp_arg.getValue() || tcp_arg.getValue() || rdma_arg.getValue())
 				{
-					throw std::runtime_error("When using hardware axis3 mode, tcp or udp can not be used.");
+					throw std::runtime_error("When using hardware axis3 mode, tcp or rdma or udp can not be used.");
 				}
 				std::cout << "Hardware axis3 mode" << std::endl;
 			}
 			if (udp_arg.getValue())
 			{
-				if (axis3_arg.getValue() || tcp_arg.getValue())
+				if (axis3_arg.getValue() || tcp_arg.getValue() || rdma_arg.getValue())
 				{
-					throw std::runtime_error("When using hardware udp mode, tcp or axis3 can not be used.");
+					throw std::runtime_error("When using hardware udp mode, tcp or rdma or axis3 can not be used.");
 				}
 				std::cout << "Hardware udp mode" << std::endl;
 			}
 			if (tcp_arg.getValue())
 			{
-				if (axis3_arg.getValue() || udp_arg.getValue())
+				if (axis3_arg.getValue() || udp_arg.getValue() || rdma_arg.getValue())
 				{
-					throw std::runtime_error("When using hardware tcp mode, udp or axis3 can not be used.");
+					throw std::runtime_error("When using hardware tcp mode, udp or rdma or axis3 can not be used.");
 				}
 				std::cout << "Hardware tcp mode" << std::endl;
 			}
-			if ((axis3_arg.getValue() || udp_arg.getValue() || tcp_arg.getValue()) == false)
+			if (rdma_arg.getValue())
+			{
+				if (axis3_arg.getValue() || udp_arg.getValue() || tcp_arg.getValue())
+				{
+					throw std::runtime_error("When using hardware rdma mode, udp or tcp or axis3 can not be used.");
+				}
+				std::cout << "Hardware tcp mode" << std::endl;
+			}
+			if ((axis3_arg.getValue() || udp_arg.getValue() || tcp_arg.getValue() || rdma_arg.getValue()) == false)
 			{
 				throw std::runtime_error("When using hardware, specify either axis3 or tcp or"
-										 "udp mode.");
+										 "udp or rdma mode.");
 			}
 		}
 
@@ -297,6 +307,7 @@ options_t parse_options(int argc, char *argv[])
 		opts.axis3 = axis3_arg.getValue();
 		opts.udp = udp_arg.getValue();
 		opts.tcp = tcp_arg.getValue();
+		opts.rdma = rdma_arg.getValue();
 		opts.test_mode = test_mode_arg.getValue();
 		opts.device_index = device_index_arg.getValue();
 		opts.xclbin = xclbin_arg.getValue();
@@ -316,6 +327,98 @@ options_t parse_options(int argc, char *argv[])
 		exit(1);
 	}
 }
+
+
+void exchange_qp(unsigned int master_rank, unsigned int slave_rank, unsigned int local_rank, std::vector<fpga::ibvQpConn*> &ibvQpConn_vec, std::vector<rank_t> &ranks)
+{
+  	
+	if (local_rank == master_rank)
+	{
+		std::cout<<"Local rank "<<local_rank<<" sending local QP to remote rank "<<slave_rank<<std::endl;
+		// Send the local queue pair information to the slave rank
+		MPI_Send(&(ibvQpConn_vec[slave_rank]->getQpairStruct()->local), sizeof(fpga::ibvQ), MPI_CHAR, slave_rank, 0, MPI_COMM_WORLD);
+	}
+	else if (local_rank == slave_rank)
+	{
+		std::cout<<"Local rank "<<local_rank<<" receiving remote QP from remote rank "<<master_rank<<std::endl;
+		// Receive the queue pair information from the master rank
+		fpga::ibvQ received_q;
+		MPI_Recv(&received_q, sizeof(fpga::ibvQ), MPI_CHAR, master_rank, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+		// Copy the received data to the remote queue pair
+		ibvQpConn_vec[master_rank]->getQpairStruct()->remote = received_q;
+	}
+
+	// Synchronize after the first exchange to avoid race conditions
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	if (local_rank == slave_rank)
+	{
+		std::cout<<"Local rank "<<local_rank<<" sending local QP to remote rank "<<master_rank<<std::endl;
+		// Send the local queue pair information to the master rank
+		MPI_Send(&(ibvQpConn_vec[master_rank]->getQpairStruct()->local), sizeof(fpga::ibvQ), MPI_CHAR, master_rank, 0, MPI_COMM_WORLD);
+	}
+	else if (local_rank == master_rank)
+	{
+		std::cout<<"Local rank "<<local_rank<<" receiving remote QP from remote rank "<<slave_rank<<std::endl;
+		// Receive the queue pair information from the slave rank
+		fpga::ibvQ received_q;
+		MPI_Recv(&received_q, sizeof(fpga::ibvQ), MPI_CHAR, slave_rank, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+		// Copy the received data to the remote queue pair
+		ibvQpConn_vec[slave_rank]->getQpairStruct()->remote = received_q;
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	// write established connection to hardware and perform arp lookup
+	if (local_rank == master_rank)
+	{
+		int connection = (ibvQpConn_vec[slave_rank]->getQpairStruct()->local.qpn & 0xFFFF) | ((ibvQpConn_vec[slave_rank]->getQpairStruct()->remote.qpn & 0xFFFF) << 16);
+		ibvQpConn_vec[slave_rank]->getQpairStruct()->print();
+		ibvQpConn_vec[slave_rank]->setConnection(connection);
+		ibvQpConn_vec[slave_rank]->writeContext(ranks[slave_rank].port);
+		ibvQpConn_vec[slave_rank]->doArpLookup();
+		ranks[slave_rank].session_id = ibvQpConn_vec[slave_rank]->getQpairStruct()->local.qpn;
+	} else if (local_rank == slave_rank) 
+	{
+		int connection = (ibvQpConn_vec[master_rank]->getQpairStruct()->local.qpn & 0xFFFF) | ((ibvQpConn_vec[master_rank]->getQpairStruct()->remote.qpn & 0xFFFF) << 16);
+		ibvQpConn_vec[master_rank]->getQpairStruct()->print();
+		ibvQpConn_vec[master_rank]->setConnection(connection);
+		ibvQpConn_vec[master_rank]->writeContext(ranks[master_rank].port);
+		ibvQpConn_vec[master_rank]->doArpLookup();
+		ranks[master_rank].session_id = ibvQpConn_vec[master_rank]->getQpairStruct()->local.qpn;
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+}
+
+
+void configure_cyt_rdma(std::vector<rank_t> &ranks, int local_rank, ACCL::CoyoteDevice* device)
+{
+
+	std::cout<<"Initializing QP connections..."<<std::endl;
+	// create queue pair connections
+	std::vector<fpga::ibvQpConn*> ibvQpConn_vec;
+	// create single page dummy memory space for each qp
+	uint32_t n_pages = 1;
+	for(int i=0; i<ranks.size(); i++)
+	{
+		fpga::ibvQpConn* qpConn = new fpga::ibvQpConn(device->coyote_qProc_vec[i], ranks[local_rank].ip, n_pages);
+		ibvQpConn_vec.push_back(qpConn);
+		// qpConn->getQpairStruct()->print();
+	}
+
+	std::cout<<"Exchanging QP..."<<std::endl;
+	for(int i=0; i<ranks.size(); i++)
+	{
+		for(int j=i+1; j<ranks.size();j++)
+		{
+			exchange_qp(i, j, local_rank, ibvQpConn_vec, ranks);
+		}
+	}
+}
+
 
 void test_sendrcv(ACCL::ACCL &accl, options_t &options) {
   	std::cout << "Start send recv test..." << std::endl<<std::flush;
@@ -727,15 +830,29 @@ void test_accl_base(options_t options)
 		{
 			ip = "127.0.0.1";
 		}
-		rank_t new_rank = {ip, options.start_port + i, i, options.rxbuf_size};
-		ranks.emplace_back(new_rank);
+
+		if(options.hardware && options.rdma) {
+			rank_t new_rank = {ip, options.start_port, i, options.rxbuf_size};
+			ranks.emplace_back(new_rank);
+		} else {
+			rank_t new_rank = {ip, options.start_port + i, i, options.rxbuf_size};
+			ranks.emplace_back(new_rank);
+		}
+		
 	}
 	
-	// more complex initialization now, since the basics seem to work
 	std::unique_ptr<ACCL::ACCL> accl;
 	// construct CoyoteDevice out here already, since it is necessary for creating buffers
 	// before the ACCL instance exists.
-	ACCL::CoyoteDevice* device = new ACCL::CoyoteDevice();
+	ACCL::CoyoteDevice* device;
+	
+	if (options.tcp){
+		device = new ACCL::CoyoteDevice();
+	} else if (options.rdma){
+		device = new ACCL::CoyoteDevice(mpi_size);
+		configure_cyt_rdma(ranks, local_rank, device);
+	}
+	
 	
 	if (options.hardware)
 	{
@@ -744,18 +861,16 @@ void test_accl_base(options_t options)
 			debug("ERROR: we don't support UDP for now!!!");
 			exit(1);
 		}
-		else if (options.tcp)
+		else if (options.tcp || options.rdma)
 		{
 			uint localFPGAIP = _ip_encode(ipList[mpi_rank]);
 			std::cout << "rank: " << mpi_rank << " FPGA IP: " << std::hex << localFPGAIP << std::endl;
-
 		}
 
 		MPI_Barrier(MPI_COMM_WORLD);
 
 		accl = std::make_unique<ACCL::ACCL>(device,
 			ranks, mpi_rank,
-			options.udp ? networkProtocol::UDP : networkProtocol::TCP,
 			mpi_size, options.rxbuf_size, options.seg_size);
 
 		if (options.tcp)
@@ -766,8 +881,9 @@ void test_accl_base(options_t options)
 			MPI_Barrier(MPI_COMM_WORLD);
 			debug("Starting session to communicator ranks");
 			accl->open_con();
-			debug(accl->dump_communicator());
 		}
+
+		debug(accl->dump_communicator());
 
 		MPI_Barrier(MPI_COMM_WORLD);
 

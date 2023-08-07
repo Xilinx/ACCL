@@ -1063,6 +1063,8 @@ private:
 
   void use_tcp(communicatorId comm_id = GLOBAL_COMM);
 
+  void use_rdma(communicatorId comm_id = GLOBAL_COMM);
+
   void set_max_segment_size(unsigned int value = 0);
 
   void configure_communicator(const std::vector<rank_t> &ranks, int local_rank);

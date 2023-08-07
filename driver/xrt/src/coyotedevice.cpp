@@ -23,8 +23,21 @@
 #include <iomanip>
 
 namespace ACCL {
-CoyoteDevice::CoyoteDevice(): coyote_proc(targetRegion, getpid()) {
-	std::cout << "ACLL DEBUG: aquiring cProc: targetRegion: " << targetRegion << ", pid: " << getpid() << std::endl;
+CoyoteDevice::CoyoteDevice(): coyote_proc(targetRegion, getpid()), num_qp(0) {
+	std::cerr << "ACLL DEBUG: aquiring cProc: targetRegion: " << targetRegion << ", cPid: " << coyote_proc.getCpid() << std::endl;
+}
+
+CoyoteDevice::CoyoteDevice(unsigned int num_qp): coyote_proc(targetRegion, getpid()), num_qp(num_qp) {
+	std::cerr << "ACLL DEBUG: aquiring cProc: targetRegion: " << targetRegion << ", cPid: " << coyote_proc.getCpid() << std::endl;
+
+  for (int i=0; i<num_qp; i++)
+  {
+    
+    fpga::cProcess* cproc = new fpga::cProcess(targetRegion, getpid());
+    coyote_qProc_vec.push_back(cproc);
+    std::cerr << "ACLL DEBUG: aquiring qProc: targetRegion: " << targetRegion << ", cPid: " <<  cproc->getCpid() << std::endl;
+  }
+
 }
 
 void CoyoteDevice::start(const Options &options) {
@@ -72,7 +85,7 @@ void CoyoteDevice::start(const Options &options) {
   auto end = std::chrono::high_resolution_clock::now();
   durationUs = (std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() / 1000.0);
 
-  std::cout<<"CoyoteDevice invocation latency:"<<durationUs<<"[us]"<<std::endl;
+  std::cerr<<"CoyoteDevice invocation latency:"<<durationUs<<"[us]"<<std::endl;
 }
 
 void CoyoteDevice::wait() {
@@ -97,7 +110,7 @@ CCLO::timeoutStatus CoyoteDevice::wait(std::chrono::milliseconds timeout) {
 
 CCLO::deviceType CoyoteDevice::get_device_type()
 {
-  std::cout<<"get_device_type: coyote_device"<<std::endl;
+  std::cerr<<"get_device_type: coyote_device"<<std::endl;
   return CCLO::coyote_device;
 }
 
@@ -107,12 +120,12 @@ void CoyoteDevice::call(const Options &options) {
 }
 
 val_t CoyoteDevice::read(addr_t offset) {
-	std::cout << "CoyoteDevice read address: " << ((OFFSET_CCLO + offset)>>2) << std::endl;
+	std::cerr << "CoyoteDevice read address: " << ((OFFSET_CCLO + offset)>>2) << std::endl;
   return coyote_proc.getCSR((OFFSET_CCLO + offset)>>2);
 }
 
 void CoyoteDevice::write(addr_t offset, val_t val) {
-	std::cout << "CoyoteDevice write address: " << ((OFFSET_CCLO + offset)>>2) << std::endl;
+	std::cerr << "CoyoteDevice write address: " << ((OFFSET_CCLO + offset)>>2) << std::endl;
   coyote_proc.setCSR(val, (OFFSET_CCLO + offset)>>2);
 }
 } // namespace ACCL
