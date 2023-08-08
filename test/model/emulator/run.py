@@ -42,13 +42,11 @@ def build_executable():
         sys.exit(1)
 
 
-def run_emulator(ranks: int, log_level: int, start_port: int, use_udp: bool, kernel_loopback: bool, debug: bool = False):
+def run_emulator(ranks: int, log_level: int, start_port: int, comms: str, kernel_loopback: bool, debug: bool = False):
     env = os.environ.copy()
     processes = []
     for r in range(ranks):
-        args = [str(executable), '-s', str(ranks), '-r', str(r), '-l', str(log_level), '-p', str(start_port)]
-        if use_udp:
-            args.append('-u')
+        args = [str(executable), '-s', str(ranks), '-r', str(r), '-l', str(log_level), '-p', str(start_port), '-c', str(comms)]
         if kernel_loopback:
             args.append('-b')
         print(' '.join(args))
@@ -81,7 +79,7 @@ def run_emulator(ranks: int, log_level: int, start_port: int, use_udp: bool, ker
             print(f"Simulator {i} exited with error code {processes[i].returncode}")
 
 def main(ranks: int, log_level: int, start_port: int,
-         use_udp: bool, kernel_loopback: bool, build: bool, debug: bool):
+         comms: str, kernel_loopback: bool, build: bool, debug: bool):
     if not build and not executable.exists():
         print(f"Executable {executable} does not exists!")
         sys.exit(1)
@@ -93,7 +91,7 @@ def main(ranks: int, log_level: int, start_port: int,
         build_executable()
 
     print("Starting emulator...")
-    run_emulator(ranks, log_level, start_port, use_udp, kernel_loopback, debug)
+    run_emulator(ranks, log_level, start_port, comms, kernel_loopback, debug)
 
 
 if __name__ == '__main__':
@@ -104,8 +102,8 @@ if __name__ == '__main__':
                         help='Log level to use, defaults to 3 (info)')
     parser.add_argument('-s', '--start-port', type=int, default=5500,
                         help='Start port of emulator')
-    parser.add_argument('-u', '--udp', action='store_true', default=False,
-                        help='Run emulator over UDP instead of TCP')
+    parser.add_argument('-c', '--comms', choices=['udp', 'tcp', 'cyt_rdma'], default='tcp',
+                        help='Run emulator over specied communication backend')
     parser.add_argument('--no-build', action='store_true', default=False,
                         help="Don't build latest executable")
     parser.add_argument('--no-kernel-loopback', action='store_true', default=False,
@@ -113,5 +111,5 @@ if __name__ == '__main__':
     parser.add_argument('-d', '--debug', action='store_true', default=False,
                         help='Forward stderr of emulator to terminal')
     args = parser.parse_args()
-    main(args.nranks, args.log_level, args.start_port, args.udp,
+    main(args.nranks, args.log_level, args.start_port, args.comms,
         not args.no_kernel_loopback, not args.no_build, args.debug)

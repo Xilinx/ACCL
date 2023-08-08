@@ -70,7 +70,7 @@ template <typename dtype> class CoyoteBuffer : public Buffer<dtype> {
 
       // if Coyote device has multiple qProc, map the allocated buffer with all qProc
       if(this->device->num_qp > 0 && this->device->coyote_qProc_vec.size()!=0){
-        for (int i=0; i<this->device->coyote_qProc_vec.size(); i++)
+        for (unsigned int i=0; i<this->device->coyote_qProc_vec.size(); i++)
         {
           std::cerr << "Mapping coyote buffer to qProc cPid:"<<this->device->coyote_qProc_vec[i]->getCpid()<<", buffer_size:"<<buffer_size<<std::endl;
           this->device->coyote_qProc_vec[i]->userMap(this->aligned_buffer, buffer_size);
@@ -139,7 +139,7 @@ template <typename dtype> class CoyoteBuffer : public Buffer<dtype> {
     {
       // if Coyote device has multiple qProc, unmap the allocated buffer with all qProc
       if(this->device->num_qp > 0 && this->device->coyote_qProc_vec.size()!=0){
-        for (int i=0; i<this->device->coyote_qProc_vec.size(); i++)
+        for (unsigned int i=0; i<this->device->coyote_qProc_vec.size(); i++)
         {
           std::cerr << "Unmapping user buffer from qProc pid:"<<this->device->coyote_qProc_vec[i]->getPid()<<", buffer_size:"<<buffer_size<<std::endl;
           this->device->coyote_qProc_vec[i]->userUnmap(this->aligned_buffer);

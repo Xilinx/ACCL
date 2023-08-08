@@ -34,6 +34,7 @@ void cyt_rdma_tx(
 ){
 #pragma HLS PIPELINE II=1 style=flp
 #pragma HLS INLINE off
+#pragma HLS aggregate variable=rdma_sq compact=bit
     enum txFsmStateType {WAIT_SQ, TX_DATA};
     static txFsmStateType txFsmState = WAIT_SQ;
     static rdma_req_t command;
@@ -150,6 +151,7 @@ void cyt_rdma(
 #pragma HLS INTERFACE ap_ctrl_none port=return
 
 #pragma HLS DATAFLOW disable_start_propagation
+#pragma HLS aggregate variable=rdma_sq compact=bit
 
 cyt_rdma_tx(rdma_sq, send_data, tx);
 cyt_rdma_rx(notif, recv_data, wr_data, wr_cmd, wr_sts, rx);
