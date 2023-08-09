@@ -24,6 +24,7 @@
 #endif
 
 static volatile unsigned int timeout = 1 << 28;
+static volatile unsigned int max_eager_size = (1<<15);
 static volatile	unsigned int max_segment_size = DMA_MAX_BTT;
 
 static datapath_arith_config arcfg;
@@ -101,24 +102,50 @@ static inline uint32_t pack_flags(uint32_t compression_flags, uint32_t remote_fl
     return ret;
 }
 
+static inline uint32_t pack_flags_rendezvous(uint32_t host_flags){
+    uint32_t ret;
+    ret = (1 << 24) | ((host_flags & 0xff) << 16) | ((RES_REMOTE & 0xff) << 8) | (NO_COMPRESSION & 0xff);
+    return ret;
+}
+
 //sends a buffer address to a remote peer,
 //enabling them to perform a RDMA WRITE to our buffer
-void rendezvous_send_addr(uint32_t qpn, uint64_t addr){
+void rendezvous_send_addr(uint32_t qpn, uint64_t addr, bool host, uint32_t count, uint32_t tag){
     putd(CMD_RNDZV, qpn);
     putd(CMD_RNDZV, (uint32_t)addr);
-    cputd(CMD_RNDZV, (uint32_t)(addr>>32));
+    putd(CMD_RNDZV, (uint32_t)(addr>>32));
+    putd(CMD_RNDZV, host);
+    putd(CMD_RNDZV, count);
+    cputd(CMD_RNDZV, tag);
 }
 
 //receive a buffer address from a remote peer,
 //enabling us to perform a RDMA WRITE to their buffer
-void rendezvous_get_addr(){
-    //TODO
+int rendezvous_get_addr(unsigned int target_qpn, uint64_t *target_addr, bool *target_host, uint32_t target_count, uint32_t target_tag){
+    unsigned int type = getd(STS_RNDZV);//TODO should be RNDZVS_INIT = 2
+    unsigned int qpn = getd(STS_RNDZV);//TODO should be equal to target_qpn
+    uint64_t addr = (uint64_t)getd(STS_RNDZV);
+    addr = (addr << 32) | (uint64_t)getd(STS_RNDZV);
+    *target_addr = addr;
+    *target_host = getd(STS_RNDZV);
+    getd(STS_RNDZV);//count
+    getd(STS_RNDZV);//tag
+    return NO_ERROR;
 }
 
 //receives an acknowledgement that a RDMA WRITE to 
 //our buffer has completed
-void rendezvous_get_completion(){
-    //TODO
+int rendezvous_get_completion(unsigned int target_qpn, uint64_t target_addr, bool target_host, uint32_t target_count, uint32_t target_tag){
+    unsigned int type = getd(STS_RNDZV);//TODO should be RNDZVS_WR_DONE = 3
+    unsigned int qpn = getd(STS_RNDZV);//TODO should be equal to target_qpn
+    uint64_t addr = (uint64_t)getd(STS_RNDZV);
+    addr = (addr << 32) | (uint64_t)getd(STS_RNDZV);
+    //TODO addr should be equal to target_addr
+    bool host = getd(STS_RNDZV);
+    //TODO host should be equal to target_host
+    getd(STS_RNDZV);//count
+    getd(STS_RNDZV);//tag
+    return NO_ERROR;
 }
 
 //configure datapath before calling this method
@@ -153,12 +180,14 @@ void start_move(
     uint32_t compression_flags = flags & 0xff;
     uint32_t remote_flags = (flags>>8) & 0xff;
     uint32_t host_flags = (flags>>16) & 0xff;
+    uint32_t rendezvous_flag = (flags>>24) & 0xff;
 
     opcode |= remote_flags << 9;
     bool res_is_remote = (remote_flags == RES_REMOTE);
     opcode |= (compression_flags & 0x7) << 10;//mask is to prevent ETH_COMPRESSED flag leaking into func_id
     opcode |= func_id << 13;
     opcode |= host_flags << 17;
+    opcode |= rendezvous_flag << 20;
     putd(CMD_DMA_MOVE, opcode);
     putd(CMD_DMA_MOVE, count);
 
@@ -305,7 +334,40 @@ int send(
         MOVE_NONE,
         (stream & RES_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE,
         pack_flags(compression, (dst_rank == world.local_rank) ? RES_LOCAL : RES_REMOTE, host),
-        0, count, comm_offset, arcfg_offset, src_addr, 0, 0, 0, 0, 0,
+        0, count, comm_offset, arcfg_offset, 
+        src_addr, 0, 0, 0, 0, 0,
+        0, 0, dst_rank, dst_tag
+    );
+}
+
+//transmits a buffer to a rank of the world communicator
+//via RDMA WRITE, after getting the remote address
+//does not support streaming or compression
+//use MOVE_IMMEDIATE
+int send_rendezvous(
+    unsigned int dst_rank,
+    unsigned int count,
+    uint64_t src_addr,
+    unsigned int comm_offset,
+    unsigned int arcfg_offset,
+    unsigned int dst_tag,
+    unsigned int host
+) {
+    //get remote address
+    uint64_t dst_addr;
+    bool dst_host;
+    rendezvous_get_addr(world.ranks[dst_rank].session, &dst_addr, &dst_host, count, dst_tag);
+    if(dst_host){
+        host |= RES_HOST;
+    }
+    //do a RDMA write to the remote address 
+    return move(
+        MOVE_IMMEDIATE,
+        MOVE_NONE,
+        MOVE_IMMEDIATE,
+        pack_flags_rendezvous(host),
+        0, count, comm_offset, arcfg_offset, 
+        src_addr, 0, dst_addr, 0, 0, 0,
         0, 0, dst_rank, dst_tag
     );
 }
@@ -331,9 +393,26 @@ int recv(
         MOVE_ON_RECV,
         (stream & RES_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE,
         pack_flags(compression, RES_LOCAL, host),
-        0, count, comm_offset, arcfg_offset, 0, 0, dst_addr, 0, 0, 0,
+        0, count, comm_offset, arcfg_offset, 
+        0, 0, dst_addr, 0, 0, 0,
         src_rank, src_tag, 0, (stream & RES_STREAM) ? src_tag : 0
     );
+}
+
+//waits for a messages to come and move their contents in a buffer
+//use MOVE_ON_RECV
+int recv_rendezvous(
+    unsigned int src_rank,
+    unsigned int count,
+    uint64_t dst_addr,
+    unsigned int comm_offset,
+    unsigned int arcfg_offset,
+    unsigned int src_tag,
+    unsigned int host
+) {
+    bool is_host = (host & RES_HOST) != 0;
+    rendezvous_send_addr(world.ranks[src_rank].session, dst_addr, is_host, count, src_tag);
+    return rendezvous_get_completion(world.ranks[src_rank].session, dst_addr, is_host, count, src_tag);
 }
 
 //iterates over rx buffers until match is found or a timeout expires
@@ -1389,6 +1468,9 @@ void run() {
                         break;
                     case HOUSEKEEP_TIMEOUT:
                         timeout = count;
+                        break;
+                    case HOUSEKEEP_EAGER_MAX_SIZE:
+                        max_eager_size = count;
                         break;
                     case HOUSEKEEP_SET_MAX_SEGMENT_SIZE:
                         retval = DMA_NOT_EXPECTED_BTT_ERROR;

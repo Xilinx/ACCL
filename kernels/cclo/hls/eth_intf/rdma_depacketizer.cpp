@@ -116,6 +116,15 @@ void rdma_depacketizer(
 			ub_notif.data = hdr.vaddr(RDMA_VADDR_BITS-1,32);
 			ub_notif.last = 0;
 			STREAM_WRITE(ub_notif_out, ub_notif);
+			ub_notif.data = hdr.host;
+			ub_notif.last = 0;
+			STREAM_WRITE(ub_notif_out, ub_notif);
+			ub_notif.data = hdr.count;
+			ub_notif.last = 0;
+			STREAM_WRITE(ub_notif_out, ub_notif);
+			ub_notif.data = hdr.tag;
+			ub_notif.last = 1;
+			STREAM_WRITE(ub_notif_out, ub_notif);
 		} else if (hdr.msg_type == EGR_MSG) {
 			message_rem = hdr.count;//length of upcoming message (excluding the header itself)
 			message_strm = hdr.strm;//target of message (0 is targeting memory so managed, everything else is stream so unmanaged)

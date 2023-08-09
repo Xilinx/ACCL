@@ -66,15 +66,15 @@ void rdma_sq_handler(
 				STREAM_WRITE(rdma_sq, rdma_req);
 				//issue packetizer command
 				cmd_in_word.msg_type = RNDZVS_INIT;
-				cmd_in_word.count = 0;//will send just a header
-				cmd_in_word.tag = 0;
 				cmd_in_word.src = 0;
 				cmd_in_word.seqn = 0;
 				cmd_in_word.strm = 0;
 				cmd_in_word.dst = 0;
-				cmd_in_word.host = 0;
 				cmd_in_word.vaddr(31,0) = STREAM_READ(ub_sq).data;
 				cmd_in_word.vaddr(RDMA_VADDR_BITS-1,32) = STREAM_READ(ub_sq).data;
+				cmd_in_word.host = STREAM_READ(ub_sq).data;
+				cmd_in_word.count = STREAM_READ(ub_sq).data;
+				cmd_in_word.tag = STREAM_READ(ub_sq).data;
 				STREAM_WRITE(cmd_out, cmd_in_word);
 			}
 			break;
