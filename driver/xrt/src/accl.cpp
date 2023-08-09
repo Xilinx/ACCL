@@ -115,6 +115,24 @@ CCLO *ACCL::set_timeout(unsigned int value, bool run_async,
   return nullptr;
 }
 
+CCLO *ACCL::set_rendezvous_threshold(unsigned int value, bool run_async,
+                        std::vector<CCLO *> waitfor) {
+  CCLO::Options options{};
+  options.scenario = operation::config;
+  options.count = value;
+  options.cfg_function = cfgFunc::set_rendezvous_threshold;
+  CCLO *handle = call_async(options);
+
+  if (run_async) {
+    return handle;
+  } else {
+    handle->wait();
+    check_return_value("set_timeout");
+  }
+
+  return nullptr;
+}
+
 CCLO *ACCL::nop(bool run_async, std::vector<CCLO *> waitfor) {
   double durationUs = 0.0;
 	auto start = std::chrono::high_resolution_clock::now();
@@ -145,15 +163,6 @@ CCLO *ACCL::send(BaseBuffer &srcbuf, unsigned int count,
     srcbuf.sync_to_device();
   }
 
-  unsigned count_bytes = count * (dataTypeSize.at(srcbuf.type()) / 8);
-  if (count_bytes > segment_size) {
-    std::cerr << "[ACCL] Warning: Send is too large! (" << count_bytes
-              << " B > " << segment_size << " B). "
-              << "Send does not currently support segmentation; "
-              << "the operation might get stuck or data may be corrupted. "
-              << std::endl;
-  }
-
   options.scenario = operation::send;
   options.comm = communicators[comm_id].communicators_addr();
   options.addr_0 = &srcbuf;
@@ -179,15 +188,6 @@ CCLO *ACCL::send(dataType src_data_type, unsigned int count,
                  dataType compress_dtype, bool run_async,
                  std::vector<CCLO *> waitfor) {
   CCLO::Options options{};
-
-  unsigned count_bytes = count * (dataTypeSize.at(src_data_type) / 8);
-  if (count_bytes > segment_size) {
-    std::cerr << "[ACCL] Warning: Send is too large! (" << count_bytes
-              << " B > " << segment_size << " B). "
-              << "Send does not currently support segmentation; "
-              << "the operation might get stuck or data may be corrupted. "
-              << std::endl;
-  }
 
   options.scenario = operation::send;
   options.comm = communicators[comm_id].communicators_addr();
@@ -215,15 +215,6 @@ CCLO *ACCL::stream_put(BaseBuffer &srcbuf, unsigned int count,
                  bool from_fpga, dataType compress_dtype, bool run_async,
                  std::vector<CCLO *> waitfor) {
   CCLO::Options options{};
-
-  unsigned count_bytes = count * (dataTypeSize.at(srcbuf.type()) / 8);
-  if (count_bytes > segment_size) {
-    std::cerr << "[ACCL] Warning: Stream put is too large! (" << count_bytes
-              << " B > " << segment_size << " B). "
-              << "Stream put does not currently support segmentation; "
-              << "the operation might get stuck or data may be corrupted. "
-              << std::endl;
-  }
 
   if (stream_id > 246) {
     throw std::invalid_argument("Stream ID must < 247");
@@ -258,15 +249,6 @@ CCLO *ACCL::stream_put(dataType src_data_type, unsigned int count,
                  dataType compress_dtype, bool run_async,
                  std::vector<CCLO *> waitfor) {
   CCLO::Options options{};
-
-  unsigned count_bytes = count * (dataTypeSize.at(src_data_type) / 8);
-  if (count_bytes > segment_size) {
-    std::cerr << "[ACCL] Warning: Stream put is too large! (" << count_bytes
-              << " B > " << segment_size << " B). "
-              << "Stream put does not currently support segmentation; "
-              << "the operation might get stuck or data may be corrupted. "
-              << std::endl;
-  }
 
   if (stream_id > 246) {
     throw std::invalid_argument("Stream ID must < 247");
@@ -305,15 +287,6 @@ CCLO *ACCL::recv(BaseBuffer &dstbuf, unsigned int count,
               << std::endl;
   }
 
-  unsigned count_bytes = count * (dataTypeSize.at(dstbuf.type()) / 8);
-  if (count_bytes > segment_size) {
-    std::cerr << "[ACCL] Warning: Recv is too large! (" << count_bytes
-              << " B > " << segment_size << " B). "
-              << "Recv does not currently support segmentation; "
-              << "the operation might get stuck or data may be corrupted. "
-              << std::endl;
-  }
-
   options.scenario = operation::recv;
   options.comm = communicators[comm_id].communicators_addr();
   options.addr_2 = &dstbuf;
@@ -342,15 +315,6 @@ CCLO *ACCL::recv(dataType dst_data_type, unsigned int count,
                  dataType compress_dtype, bool run_async,
                  std::vector<CCLO *> waitfor) {
   CCLO::Options options{};
-
-  unsigned count_bytes = count * (dataTypeSize.at(dst_data_type) / 8);
-  if (count_bytes > segment_size) {
-    std::cerr << "[ACCL] Warning: Recv is too large! (" << count_bytes
-              << " B > " << segment_size << " B). "
-              << "Recv does not currently support segmentation; "
-              << "the operation might get stuck or data may be corrupted. "
-              << std::endl;
-  }
 
   options.scenario = operation::recv;
   options.comm = communicators[comm_id].communicators_addr();
@@ -1445,84 +1409,6 @@ CCLO *ACCL::call_sync(CCLO::Options &options) {
   prepare_call(options);
   cclo->call(options);
   return cclo;
-}
-
-void ACCL::open_port(communicatorId comm_id) {
-  if (port_open) {
-    throw std::runtime_error("Port already open");
-  }
-
-  debug("Opening ports...");
-
-  CCLO::Options options{};
-  options.scenario = operation::config;
-  options.comm = communicators[comm_id].communicators_addr();
-  options.cfg_function = cfgFunc::open_port;
-  call_sync(options);
-  check_return_value("open_port");
-  port_open = true;
-  debug("Ports open!");
-}
-
-void ACCL::open_con(communicatorId comm_id) {
-  if (con_open) {
-    throw std::runtime_error("Connection already open");
-  }
-
-  debug("Opening connections...");
-
-  CCLO::Options options{};
-  options.scenario = operation::config;
-  options.comm = communicators[comm_id].communicators_addr();
-  options.cfg_function = cfgFunc::open_con;
-  call_sync(options);
-  check_return_value("open_con");
-  con_open = true;
-  debug("Connections open!");
-}
-
-void ACCL::close_con(communicatorId comm_id) {
-    if (!con_open) {
-    throw std::runtime_error("Connection not open yet");
-  }
-
-  CCLO::Options options{};
-  options.scenario = operation::config;
-  options.comm = communicators[comm_id].communicators_addr();
-  options.cfg_function = cfgFunc::close_con;
-  call_sync(options);
-  check_return_value("close_con");
-  con_open = false;
-}
-
-void ACCL::use_udp(communicatorId comm_id) {
-  CCLO::Options options{};
-  options.scenario = operation::config;
-  options.comm = communicators[comm_id].communicators_addr();
-  options.cfg_function = cfgFunc::set_stack_type;
-  options.count = 0;
-  call_sync(options);
-  check_return_value("use_udp");
-}
-
-void ACCL::use_tcp(communicatorId comm_id) {
-  CCLO::Options options{};
-  options.scenario = operation::config;
-  options.comm = communicators[comm_id].communicators_addr();
-  options.cfg_function = cfgFunc::set_stack_type;
-  options.count = 1;
-  call_sync(options);
-  check_return_value("use_tcp");
-}
-
-void ACCL::use_rdma(communicatorId comm_id) {
-  CCLO::Options options{};
-  options.scenario = operation::config;
-  options.comm = communicators[comm_id].communicators_addr();
-  options.cfg_function = cfgFunc::set_stack_type;
-  options.count = 2;
-  call_sync(options);
-  check_return_value("use_rdma");
 }
 
 void ACCL::set_max_segment_size(unsigned int value) {

@@ -144,6 +144,19 @@ public:
                     std::vector<CCLO *> waitfor = {});
 
   /**
+   * Set the threshold for eager/rendezvous decision.
+   *
+   * @param value      Threshold in bytes
+   * @param run_async  Run the ACCL call asynchronously.
+   * @param waitfor    ACCL call will wait for these operations before it will
+   *                   start. Currently not implemented.
+   * @return CCLO*     CCLO object that can be waited on and passed to waitfor;
+   *                   nullptr if run_async is false.
+   */
+  CCLO *set_rendezvous_threshold(unsigned int value, bool run_async = false,
+                    std::vector<CCLO *> waitfor = {});
+
+  /**
    * Performs the nop operation on the FPGA.
    *
    * @param run_async  Run the ACCL call asynchronously.

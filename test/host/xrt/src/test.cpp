@@ -109,9 +109,6 @@ TEST_F(ACCLTest, test_sendrcv_bo) {
   }
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
-  if (count_bytes > options.segment_size) {
-    GTEST_SKIP() << "Send recv currently doesn't support segmentation. ";
-  }
 
   // Initialize bo
   float *data =
@@ -166,9 +163,6 @@ TEST_F(ACCLTest, test_sendrcv_bo) {
 TEST_F(ACCLTest, test_sendrcv) {
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
-  if (count_bytes > options.segment_size) {
-    GTEST_SKIP() << "Send recv currently doesn't support segmentation. ";
-  }
 
   auto op_buf = accl->create_buffer<float>(count, dataType::float32);
   auto res_buf = accl->create_buffer<float>(count, dataType::float32);
@@ -205,9 +199,6 @@ TEST_F(ACCLTest, test_sendrcv) {
 TEST_F(ACCLTest, test_sendrcv_stream) {
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
-  if (count_bytes > options.segment_size) {
-    GTEST_SKIP() << "Send recv currently doesn't support segmentation. ";
-  }
 
   auto op_buf = accl->create_buffer<float>(count, dataType::float32);
   auto res_buf = accl->create_buffer<float>(count, dataType::float32);
@@ -240,9 +231,6 @@ TEST_F(ACCLTest, test_sendrcv_stream) {
 TEST_F(ACCLTest, test_stream_put) {
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
-  if (count_bytes > options.segment_size) {
-    GTEST_SKIP() << "Send recv currently doesn't support segmentation. ";
-  }
 
   auto op_buf = accl->create_buffer<float>(count, dataType::float32);
   auto res_buf = accl->create_buffer<float>(count, dataType::float32);
@@ -272,9 +260,6 @@ TEST_F(ACCLTest, test_sendrcv_compressed) {
 
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
-  if (count_bytes > options.segment_size) {
-    GTEST_SKIP() << "Send recv currently doesn't support segmentation. ";
-  }
 
   auto op_buf = accl->create_buffer<float>(count, dataType::float32);
   auto res_buf = accl->create_buffer<float>(count, dataType::float32);
@@ -369,9 +354,6 @@ TEST_P(ACCLRootTest, test_bcast_compressed) {
 TEST_P(ACCLRootTest, test_scatter) {
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
-  if (count_bytes > options.segment_size) {
-    GTEST_SKIP() << "Scatter currently doesn't support segmentation. ";
-  }
 
   auto op_buf = accl->create_buffer<float>(count * ::size, dataType::float32);
   auto res_buf = accl->create_buffer<float>(count, dataType::float32);
@@ -388,9 +370,6 @@ TEST_P(ACCLRootTest, test_scatter) {
 TEST_P(ACCLRootTest, test_scatter_compressed) {
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
-  if (count_bytes > options.segment_size) {
-    GTEST_SKIP() << "Scatter currently doesn't support segmentation. ";
-  }
 
   auto op_buf = accl->create_buffer<float>(count * ::size, dataType::float32);
   auto res_buf = accl->create_buffer<float>(count, dataType::float32);
@@ -409,9 +388,7 @@ TEST_P(ACCLRootTest, test_scatter_compressed) {
 TEST_P(ACCLRootTest, test_gather) {
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
-  if (count_bytes > options.segment_size) {
-    GTEST_SKIP() << "Gather currently doesn't support segmentation. ";
-  }
+
   int root = GetParam();
   std::unique_ptr<float> host_op_buf = random_array<float>(count * ::size);
   auto op_buf = accl->create_buffer(host_op_buf.get() + count *::rank, count, dataType::float32);
@@ -437,9 +414,7 @@ TEST_P(ACCLRootTest, test_gather) {
 TEST_P(ACCLRootTest, test_gather_compressed) {
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
-  if (count_bytes > options.segment_size) {
-    GTEST_SKIP() << "Gather currently doesn't support segmentation. ";
-  }
+
   int root = GetParam();
   std::unique_ptr<float> host_op_buf = random_array<float>(count *::size);
   auto op_buf = accl->create_buffer(host_op_buf.get() + count *::rank, count, dataType::float32);
@@ -467,9 +442,6 @@ TEST_P(ACCLRootTest, test_gather_compressed) {
 TEST_F(ACCLTest, test_allgather) {
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
-  if (count_bytes > options.segment_size) {
-    GTEST_SKIP() << "Allgather currently doesn't support segmentation. ";
-  }
 
   std::unique_ptr<float> host_op_buf = random_array<float>(count *::size);
   auto op_buf = accl->create_buffer(host_op_buf.get() + count *::rank, count, dataType::float32);
@@ -486,9 +458,6 @@ TEST_F(ACCLTest, test_allgather) {
 TEST_F(ACCLTest, test_allgather_compressed) {
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
-  if (count_bytes > options.segment_size) {
-    GTEST_SKIP() << "Allgather currently doesn't support segmentation. ";
-  }
 
   std::unique_ptr<float> host_op_buf = random_array<float>(count *::size);
   auto op_buf = accl->create_buffer(host_op_buf.get() + count *::rank, count,
@@ -507,9 +476,6 @@ TEST_F(ACCLTest, test_allgather_compressed) {
 TEST_F(ACCLTest, test_allgather_comms) {
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
-  if (count_bytes > options.segment_size) {
-    GTEST_SKIP() << "Allgather currently doesn't support segmentation. ";
-  }
 
   std::unique_ptr<float> host_op_buf(new float[count *::size]);
   auto op_buf = accl->create_buffer(host_op_buf.get(), count, dataType::float32);
@@ -565,9 +531,6 @@ TEST_F(ACCLTest, test_allgather_comms) {
 TEST_F(ACCLTest, test_multicomm) {
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
-  if (count_bytes > options.segment_size) {
-    GTEST_SKIP() << "Send currently doesn't support segmentation. ";
-  }
 
   auto group = accl->get_comm_group(GLOBAL_COMM);
   unsigned int own_rank = accl->get_comm_rank(GLOBAL_COMM);
@@ -622,9 +585,6 @@ TEST_P(ACCLRootFuncTest, test_reduce) {
 
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
-  if (count_bytes > options.segment_size) {
-    GTEST_SKIP() << "Reduce currently doesn't support segmentation. ";
-  }
 
   auto op_buf = accl->create_buffer<float>(count, dataType::float32);
   auto res_buf = accl->create_buffer<float>(count, dataType::float32);
@@ -654,9 +614,6 @@ TEST_P(ACCLRootFuncTest, test_reduce_compressed) {
 
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
-  if (count_bytes > options.segment_size) {
-    GTEST_SKIP() << "Reduce currently doesn't support segmentation. ";
-  }
 
   auto op_buf = accl->create_buffer<float>(count, dataType::float32);
   auto res_buf = accl->create_buffer<float>(count, dataType::float32);
@@ -687,9 +644,6 @@ TEST_P(ACCLRootFuncTest, test_reduce_stream2mem) {
 
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
-  if (count_bytes > options.segment_size) {
-    GTEST_SKIP() << "Reduce currently doesn't support segmentation. ";
-  }
 
   auto op_buf = accl->create_buffer<float>(count, dataType::float32);
   auto res_buf = accl->create_buffer<float>(count, dataType::float32);
@@ -721,9 +675,6 @@ TEST_P(ACCLRootFuncTest, test_reduce_mem2stream) {
 
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
-  if (count_bytes > options.segment_size) {
-    GTEST_SKIP() << "Reduce currently doesn't support segmentation. ";
-  }
 
   auto op_buf = accl->create_buffer<float>(count, dataType::float32);
   auto res_buf = accl->create_buffer<float>(count, dataType::float32);
@@ -757,9 +708,6 @@ TEST_P(ACCLRootFuncTest, test_reduce_stream2stream) {
 
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
-  if (count_bytes > options.segment_size) {
-    GTEST_SKIP() << "Reduce currently doesn't support segmentation. ";
-  }
 
   auto op_buf = accl->create_buffer<float>(count, dataType::float32);
   auto res_buf = accl->create_buffer<float>(count, dataType::float32);
@@ -794,9 +742,6 @@ TEST_P(ACCLFuncTest, test_reduce_scatter) {
 
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
-  if (count_bytes > options.segment_size) {
-    GTEST_SKIP() << "Reduce scatter currently doesn't support segmentation. ";
-  }
 
   auto op_buf = accl->create_buffer<float>(count *::size, dataType::float32);
   auto res_buf = accl->create_buffer<float>(count, dataType::float32);
@@ -821,9 +766,6 @@ TEST_P(ACCLFuncTest, test_reduce_scatter_compressed) {
 
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
-  if (count_bytes > options.segment_size) {
-    GTEST_SKIP() << "Reduce scatter currently doesn't support segmentation. ";
-  }
 
   auto op_buf = accl->create_buffer<float>(count *::size, dataType::float32);
   auto res_buf = accl->create_buffer<float>(count, dataType::float32);
@@ -936,6 +878,10 @@ options_t parse_options(int argc, char *argv[]) {
   TCLAP::ValueArg<std::string> csvfile_arg("", "csvfile",
                                           "Name of CSV file to be created for benchmark results",
                                           false, "", "string");
+  TCLAP::ValueArg<unsigned int> max_eager_arg("", "max-eager-count",
+                                            "Maximum byte count for eager mode", false,
+                                            16*1024, "positive integer");
+  cmd.add(max_eager_arg);
   try {
     cmd.parse(argc, argv);
     if (hardware_arg.getValue()) {
@@ -974,6 +920,7 @@ options_t parse_options(int argc, char *argv[]) {
   opts.startemu = startemu_arg.getValue();
   opts.benchmark = bench_arg.getValue();
   opts.csvfile = csvfile_arg.getValue();
+  opts.max_eager_count = max_eager_arg.getValue();
   return opts;
 }
 

@@ -54,9 +54,7 @@ enum class cfgFunc {
   reset_periph = 0,
   enable_pkt = 1,
   set_timeout = 2,
-  open_port = 3,
-  open_con = 4,
-  set_stack_type = 5,
+  set_rendezvous_threshold = 3,
   set_max_segment_size = 6,
   close_con = 7
 };

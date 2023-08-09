@@ -107,6 +107,7 @@ class TestEnvironment : public ::testing::Environment {
           options.rxbuf_size, options.segment_size, options.rsfec);
       std::cout << "Setting up TestEnvironment" << std::endl;
       accl->set_timeout(1e6);
+      accl->set_rendezvous_threshold(options.max_eager_count);
 
       if(options.benchmark){
         probe->read();

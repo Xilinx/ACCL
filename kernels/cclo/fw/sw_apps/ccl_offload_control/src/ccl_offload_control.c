@@ -321,55 +321,46 @@ int send(
     unsigned int compression,
     unsigned int buftype
 ) {
-    unsigned int stream = buftype & 0xff;
     unsigned int host = (buftype >> 8) & 0xff;
-    //if ETH_COMPRESSED is set, also set RES_COMPRESSED
-    compression |= (compression & ETH_COMPRESSED) >> 1;
-    //TODO: when doing a one-sided send to a remote stream, check:
-    //dst_tag is < 247 (for correct routing on remote side)
-    //destination compression == Ethernet compression
-    //(since data can't be decompressed on remote side)
-    return move(
-        (stream & OP0_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE,
-        MOVE_NONE,
-        (stream & RES_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE,
-        pack_flags(compression, (dst_rank == world.local_rank) ? RES_LOCAL : RES_REMOTE, host),
-        0, count, comm_offset, arcfg_offset, 
-        src_addr, 0, 0, 0, 0, 0,
-        0, 0, dst_rank, dst_tag
-    );
-}
-
-//transmits a buffer to a rank of the world communicator
-//via RDMA WRITE, after getting the remote address
-//does not support streaming or compression
-//use MOVE_IMMEDIATE
-int send_rendezvous(
-    unsigned int dst_rank,
-    unsigned int count,
-    uint64_t src_addr,
-    unsigned int comm_offset,
-    unsigned int arcfg_offset,
-    unsigned int dst_tag,
-    unsigned int host
-) {
-    //get remote address
-    uint64_t dst_addr;
-    bool dst_host;
-    rendezvous_get_addr(world.ranks[dst_rank].session, &dst_addr, &dst_host, count, dst_tag);
-    if(dst_host){
-        host |= RES_HOST;
+    unsigned int stream = buftype & 0xff;
+    //get count in bytes
+    unsigned int bytes_count = Xil_In32(arcfg_offset)*count;
+    if((bytes_count > max_eager_size) && (compression == NO_COMPRESSION) && (stream == NO_STREAM)){
+        //get remote address
+        uint64_t dst_addr;
+        bool dst_host;
+        rendezvous_get_addr(world.ranks[dst_rank].session, &dst_addr, &dst_host, count, dst_tag);
+        if(dst_host){
+            host |= RES_HOST;
+        }
+        //do a RDMA write to the remote address 
+        return move(
+            MOVE_IMMEDIATE,
+            MOVE_NONE,
+            MOVE_IMMEDIATE,
+            pack_flags_rendezvous(host),
+            0, count, comm_offset, arcfg_offset, 
+            src_addr, 0, dst_addr, 0, 0, 0,
+            0, 0, dst_rank, dst_tag
+        );
+    } else {
+        //if ETH_COMPRESSED is set, also set RES_COMPRESSED
+        compression |= (compression & ETH_COMPRESSED) >> 1;
+        //TODO: when doing a one-sided send to a remote stream, check:
+        //dst_tag is < 247 (for correct routing on remote side)
+        //destination compression == Ethernet compression
+        //(since data can't be decompressed on remote side)
+        return move(
+            (stream & OP0_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE,
+            MOVE_NONE,
+            (stream & RES_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE,
+            pack_flags(compression, (dst_rank == world.local_rank) ? RES_LOCAL : RES_REMOTE, host),
+            0, count, comm_offset, arcfg_offset, 
+            src_addr, 0, 0, 0, 0, 0,
+            0, 0, dst_rank, dst_tag
+        );
     }
-    //do a RDMA write to the remote address 
-    return move(
-        MOVE_IMMEDIATE,
-        MOVE_NONE,
-        MOVE_IMMEDIATE,
-        pack_flags_rendezvous(host),
-        0, count, comm_offset, arcfg_offset, 
-        src_addr, 0, dst_addr, 0, 0, 0,
-        0, 0, dst_rank, dst_tag
-    );
+
 }
 
 //waits for a messages to come and move their contents in a buffer
@@ -386,33 +377,25 @@ int recv(
 ) {
     unsigned int stream = buftype & 0xff;
     unsigned int host = (buftype >> 8) & 0xff;
-    //if ETH_COMPRESSED is set, also set OP1_COMPRESSED
-    compression |= (compression & ETH_COMPRESSED) >> 2;
-    return move(
-        MOVE_NONE,
-        MOVE_ON_RECV,
-        (stream & RES_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE,
-        pack_flags(compression, RES_LOCAL, host),
-        0, count, comm_offset, arcfg_offset, 
-        0, 0, dst_addr, 0, 0, 0,
-        src_rank, src_tag, 0, (stream & RES_STREAM) ? src_tag : 0
-    );
-}
-
-//waits for a messages to come and move their contents in a buffer
-//use MOVE_ON_RECV
-int recv_rendezvous(
-    unsigned int src_rank,
-    unsigned int count,
-    uint64_t dst_addr,
-    unsigned int comm_offset,
-    unsigned int arcfg_offset,
-    unsigned int src_tag,
-    unsigned int host
-) {
-    bool is_host = (host & RES_HOST) != 0;
-    rendezvous_send_addr(world.ranks[src_rank].session, dst_addr, is_host, count, src_tag);
-    return rendezvous_get_completion(world.ranks[src_rank].session, dst_addr, is_host, count, src_tag);
+    //get count in bytes
+    unsigned int bytes_count = Xil_In32(arcfg_offset)*count;
+    if((bytes_count > max_eager_size) && (compression == NO_COMPRESSION) && (stream == NO_STREAM)){
+        bool is_host = ((host & RES_HOST) != 0);
+        rendezvous_send_addr(world.ranks[src_rank].session, dst_addr, is_host, count, src_tag);
+        return rendezvous_get_completion(world.ranks[src_rank].session, dst_addr, is_host, count, src_tag);
+    } else {
+        //if ETH_COMPRESSED is set, also set OP1_COMPRESSED
+        compression |= (compression & ETH_COMPRESSED) >> 2;
+        return move(
+            MOVE_NONE,
+            MOVE_ON_RECV,
+            (stream & RES_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE,
+            pack_flags(compression, RES_LOCAL, host),
+            0, count, comm_offset, arcfg_offset, 
+            0, 0, dst_addr, 0, 0, 0,
+            src_rank, src_tag, 0, (stream & RES_STREAM) ? src_tag : 0
+        );
+    }
 }
 
 //iterates over rx buffers until match is found or a timeout expires

@@ -30,7 +30,7 @@ CoyoteDevice::CoyoteDevice(): coyote_proc(targetRegion, getpid()), num_qp(0) {
 CoyoteDevice::CoyoteDevice(unsigned int num_qp): coyote_proc(targetRegion, getpid()), num_qp(num_qp) {
 	std::cerr << "ACLL DEBUG: aquiring cProc: targetRegion: " << targetRegion << ", cPid: " << coyote_proc.getCpid() << std::endl;
 
-  for (int i=0; i<num_qp; i++)
+  for (unsigned int i=0; i<num_qp; i++)
   {
     
     fpga::cProcess* cproc = new fpga::cProcess(targetRegion, getpid());
@@ -45,7 +45,7 @@ void CoyoteDevice::start(const Options &options) {
   double durationUs = 0.0;
   auto start = std::chrono::high_resolution_clock::now();
 
-  if (coyote_proc.getCSR((OFFSET_HOSTCTRL + HOSTCTRL_ADDR::AP_CTRL)>>2) & 0x02 == 0) { // read AP_CTRL and check bit 2 (the done bit)
+  if (coyote_proc.getCSR((OFFSET_HOSTCTRL + HOSTCTRL_ADDR::AP_CTRL)>>2) && (0x02 == 0)) { // read AP_CTRL and check bit 2 (the done bit)
     throw std::runtime_error(
         "Error, collective is already running, wait for previous to complete!");
   }
