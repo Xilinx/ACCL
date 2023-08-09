@@ -215,25 +215,25 @@ TEST_P(ACCLSegmentationTest, test_sendrcv_segmentation){
   auto op_buf = accl->create_buffer<float>(count, dataType::float32);
   auto res_buf = accl->create_buffer<float>(count, dataType::float32);
   random_array(op_buf->buffer(), count);
-  int next_rank = (rank + 1) % size;
-  int prev_rank = (rank + size - 1) % size;
+  int next_rank = (::rank + 1) % ::size;
+  int prev_rank = (::rank + ::size - 1) % ::size;
 
-  test_debug("Sending data on " + std::to_string(rank) + " to " +
+  test_debug("Sending data on " + std::to_string(::rank) + " to " +
                  std::to_string(next_rank) + "...",
              options);
   accl->send(*op_buf, count, next_rank, 0);
 
-  test_debug("Receiving data on " + std::to_string(rank) + " from " +
+  test_debug("Receiving data on " + std::to_string(::rank) + " from " +
                  std::to_string(prev_rank) + "...",
              options);
   accl->recv(*res_buf, count, prev_rank, 0);
 
-  test_debug("Sending data on " + std::to_string(rank) + " to " +
+  test_debug("Sending data on " + std::to_string(::rank) + " to " +
                  std::to_string(prev_rank) + "...",
              options);
   accl->send(*res_buf, count, prev_rank, 1);
 
-  test_debug("Receiving data on " + std::to_string(rank) + " from " +
+  test_debug("Receiving data on " + std::to_string(::rank) + " from " +
                  std::to_string(next_rank) + "...",
              options);
   accl->recv(*res_buf, count, next_rank, 1);

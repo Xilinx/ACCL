@@ -364,8 +364,8 @@ int send(
                 (stream & OP0_STREAM) ? MOVE_STREAM : ((i==0) ? MOVE_IMMEDIATE : MOVE_STRIDE),
                 MOVE_NONE,
                 (stream & RES_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE,
-                compression, (dst_rank == world.local_rank) ? RES_LOCAL : RES_REMOTE, 0,
-                (i!=(nseg-1)) ? max_seg_count : (count-i*max_seg_count), 
+                pack_flags(compression, (dst_rank == world.local_rank) ? RES_LOCAL : RES_REMOTE, host),
+                0, (i!=(nseg-1)) ? max_seg_count : (count-i*max_seg_count), 
                 comm_offset, arcfg_offset, 
                 src_addr, 0, 0, 
                 max_seg_count, 0, 0,
@@ -421,8 +421,8 @@ int recv(
                 MOVE_NONE,
                 MOVE_ON_RECV,
                 (stream & RES_STREAM) ? MOVE_STREAM : ((i==0) ? MOVE_IMMEDIATE : MOVE_STRIDE),
-                compression, RES_LOCAL, 0,
-                (i!=(nseg-1)) ? max_seg_count : (count-i*max_seg_count), 
+                pack_flags(compression, RES_LOCAL, host), 
+                0, (i!=(nseg-1)) ? max_seg_count : (count-i*max_seg_count), 
                 comm_offset, arcfg_offset, 
                 0, 0, dst_addr, 
                 0, 0, max_seg_count,
@@ -439,60 +439,6 @@ int recv(
         }
         return ret;
     }
-}
-
-//iterates over rx buffers until match is found or a timeout expires
-//matches count, src and tag if tag is not ANY
-//returns the index of the spare_buffer or -1 if not found
-int seek_rx_buffer(
-    unsigned int src_rank,
-    unsigned int count,
-    unsigned int src_tag
-){
-    unsigned int seq_num; //src_port TODO: use this variable to choose depending on session id or port
-    int i;
-    seq_num = world.ranks[src_rank].inbound_seq + 1;
-
-    //TODO: use a list to store recent message received to avoid scanning in the entire spare_buffer_struct.
-    //parse rx buffers until match is found
-    //matches count, src
-    //matches tag or tag is ANY
-    //return buffer index
-    unsigned int nbufs = Xil_In32(RX_BUFFER_COUNT_OFFSET);
-    rx_buffer *rx_buf_list = (rx_buffer*)(cfgmem+RX_BUFFER_COUNT_OFFSET/4+1);
-    for(i=0; i<nbufs; i++){
-        if(rx_buf_list[i].status == STATUS_RESERVED)
-        {
-            if((rx_buf_list[i].rx_src == src_rank) && (rx_buf_list[i].rx_len == count))
-            {
-                if(((rx_buf_list[i].rx_tag == src_tag) || (src_tag == TAG_ANY)) && (rx_buf_list[i].sequence_number == seq_num) )
-                {
-                    //only now advance sequence number
-                    world.ranks[src_rank].inbound_seq++;
-                    return i;
-                }
-            }
-        }
-    }
-    return -1;
-}
-
-//iterates over rx buffers until match is found or a timeout expires
-//matches count, src and tag if tag is not ANY
-//returns the index of the spare_buffer
-//timeout is jumps to exception handler
-//useful as infrastructure for [I]MProbe/[I]MRecv
-int wait_on_rx(
-    unsigned int src_rank,
-    unsigned int count,
-    unsigned int src_tag
-){
-    int idx, i;
-    for(i = 0; timeout == 0 || i < timeout; i++){
-        idx = seek_rx_buffer(src_rank, count, src_tag);
-        if(idx >= 0) return idx;
-    }
-    return -1;
 }
 
 //1) receives from a rank
