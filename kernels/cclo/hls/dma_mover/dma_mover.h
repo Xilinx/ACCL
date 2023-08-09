@@ -31,6 +31,7 @@ typedef struct {
     ap_uint<3> op1_opcode;
     ap_uint<3> res_opcode;
     bool res_is_remote;
+    bool res_is_rendezvous;
     bool op0_is_compressed;
     bool op1_is_compressed;
     bool res_is_compressed;
@@ -112,6 +113,9 @@ typedef struct{
     unsigned int mpi_tag;
     unsigned int max_seg_len;
     bool to_stream;
+    bool to_host;
+    bool rendezvous;
+    ap_uint<64> addr;
 } packetizer_instruction;
 
 typedef struct{

@@ -306,6 +306,9 @@ void eth_cmd_execute(
             pkt_cmd.seqn = sequence_number;
             pkt_cmd.strm = insn.to_stream ? (insn.mpi_tag + SWITCH_M_BYPASS) : 0;
             pkt_cmd.dst = insn.dst_sess_id;
+            pkt_cmd.host = insn.to_host;
+            pkt_cmd.vaddr = insn.addr;
+            pkt_cmd.msg_type = insn.rendezvous ? RNDZVS_MSG : EGR_MSG;
             STREAM_WRITE(eth_cmd_channel, pkt_cmd);
             packetizer_ack_instruction ack_insn;
             ack_insn.expected_seqn = sequence_number;
@@ -367,7 +370,8 @@ void instruction_fetch(
         ret.op0_is_host = tmp(17,17);
         ret.op1_is_host = tmp(18,18);
         ret.res_is_host = tmp(19,19);
-        
+        ret.res_is_rendezvous = tmp(20,20);
+
         ret.count = (STREAM_READ(cmd)).data;
 
         //get arith config offset
@@ -629,6 +633,9 @@ void instruction_decode(
                 pkt_wr.len = insn.res_is_compressed ? total_bytes_compressed : total_bytes_uncompressed;
                 pkt_wr.mpi_tag = insn.mpi_tag;
                 pkt_wr.to_stream = (insn.res_opcode == MOVE_STREAM);
+                pkt_wr.to_host = insn.res_is_host;
+                pkt_wr.addr = insn.res_addr;
+                pkt_wr.rendezvous = insn.res_is_rendezvous;
                 STREAM_WRITE(eth_insn, pkt_wr);
                 ack_insn.check_eth_tx = true;
                 //if we're not sending to a remote stream, update sequence number

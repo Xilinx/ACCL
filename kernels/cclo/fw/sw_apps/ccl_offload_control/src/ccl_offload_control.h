@@ -77,6 +77,7 @@
 #define HOUSEKEEP_SWRST                0
 #define HOUSEKEEP_PKTEN                1
 #define HOUSEKEEP_TIMEOUT              2
+#define HOUSEKEEP_EAGER_MAX_SIZE       3
 #define HOUSEKEEP_SET_MAX_SEGMENT_SIZE 6
 
 //AXI MMAP address

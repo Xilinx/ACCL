@@ -715,8 +715,7 @@ public:
    * @return std::unique_ptr<Buffer<dtype>> The allocated buffer.
    */
   template <typename dtype>
-  std::unique_ptr<Buffer<dtype>> create_buffer(size_t length, dataType type,
-                                               unsigned mem_grp) {
+  std::unique_ptr<Buffer<dtype>> create_buffer(size_t length, dataType type, unsigned mem_grp) {
     if (sim_mode) {
       return std::unique_ptr<Buffer<dtype>>(new SimBuffer<dtype>(
           length, type, static_cast<SimDevice *>(cclo)->get_context()));

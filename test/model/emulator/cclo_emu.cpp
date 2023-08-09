@@ -321,6 +321,9 @@ void sim_bd(zmq_intf_context *ctx, string comm_backend, unsigned int local_rank,
 
 	Stream<rdma_req_t> rdma_sq;
     Stream<eth_header > eth_tx_cmd_fwd;
+    Stream<stream_word, 64> rdma_wr_data;
+    Stream<ap_axiu<104,0,0,DEST_WIDTH>, 32> rdma_wr_cmd;
+    Stream<ap_uint<32>, 32> rdma_wr_sts;
 
     Stream<command_word> callreq_fifos[NUM_CTRL_STREAMS];
     Stream<command_word> callack_fifos[NUM_CTRL_STREAMS];
@@ -407,8 +410,10 @@ void sim_bd(zmq_intf_context *ctx, string comm_backend, unsigned int local_rank,
             cyt_rdma,
             rdma_sq, eth_notif_out,
             eth_tx_data_int, eth_rx_data_int,
+            rdma_wr_data, rdma_wr_cmd, rdma_wr_sts,
             eth_rx_data, eth_tx_data
         );
+        HLSLIB_FREERUNNING_FUNCTION(dma_write, devicemem, rdma_wr_cmd, rdma_wr_sts, rdma_wr_data);
     } else{
         HLSLIB_FREERUNNING_FUNCTION(udp_packetizer, switch_m[SWITCH_M_ETH_TX], eth_tx_data, eth_tx_cmd, eth_tx_sts, max_words_per_pkt);
         HLSLIB_FREERUNNING_FUNCTION(udp_depacketizer, eth_rx_data, switch_s[SWITCH_S_ETH_RX], eth_rx_sts, eth_notif_out_dpkt);
