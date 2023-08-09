@@ -169,6 +169,8 @@ public:
   fpga::cProcess* get_device(){
     return &coyote_proc;
   }
+
+  void printDebug();
   
   fpga::cProcess coyote_proc;
 

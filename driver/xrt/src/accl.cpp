@@ -78,7 +78,7 @@ ACCL::~ACCL() {
 
 void ACCL::deinit() {
   debug("Removing CCLO object at " + debug_hex(cclo->get_base_addr()));
-
+  
   CCLO::Options options{};
   options.scenario = operation::config;
   options.cfg_function = cfgFunc::reset_periph;
@@ -176,7 +176,8 @@ CCLO *ACCL::send(BaseBuffer &srcbuf, unsigned int count,
   if (run_async) {
     return handle;
   } else {
-    handle->wait();
+    std::chrono::milliseconds timeout(6000);
+    handle->wait(timeout);
     check_return_value("send");
   }
 
@@ -203,7 +204,8 @@ CCLO *ACCL::send(dataType src_data_type, unsigned int count,
   if (run_async) {
     return handle;
   } else {
-    handle->wait();
+    std::chrono::milliseconds timeout(6000);
+    handle->wait(timeout);
     check_return_value("send");
   }
 
@@ -300,7 +302,8 @@ CCLO *ACCL::recv(BaseBuffer &dstbuf, unsigned int count,
   if (run_async) {
     return handle;
   } else {
-    handle->wait();
+    std::chrono::milliseconds timeout(6000);
+    handle->wait(timeout);
     if (to_fpga == false) {
       dstbuf.sync_from_device();
     }

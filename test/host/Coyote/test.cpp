@@ -479,6 +479,8 @@ void test_sendrcv(ACCL::ACCL &accl, options_t &options) {
 	} else {
 		std::cout << "Test is successful!" << std::endl;
 	}
+
+	op_buf->free_buffer();
 }
 
 
@@ -536,6 +538,8 @@ void test_bcast(ACCL::ACCL &accl, options_t &options, int root) {
 		}
 	}
 
+	op_buf->free_buffer();
+
 }
 
 void test_scatter(ACCL::ACCL &accl, options_t &options, int root) {
@@ -584,6 +588,9 @@ void test_scatter(ACCL::ACCL &accl, options_t &options, int root) {
 	} else {
 		std::cout << "Test is successful!" << std::endl;
 	}
+
+	op_buf->free_buffer();
+	res_buf->free_buffer();
 
 }
 
@@ -647,6 +654,9 @@ void test_gather(ACCL::ACCL &accl, options_t &options, int root) {
 		}
 	}
 
+	op_buf->free_buffer();
+	res_buf->free_buffer();
+
 }
 
 
@@ -701,100 +711,109 @@ void test_allgather(ACCL::ACCL &accl, options_t &options) {
 		std::cout << "Test is successful!" << std::endl;
 	}
 
+	op_buf->free_buffer();
+	res_buf->free_buffer();
+
 }
 
 void test_reduce(ACCL::ACCL &accl, options_t &options, int root,
                  reduceFunction function) {
-  std::cout << "Start reduce test with root " + std::to_string(root) +
-                   " and reduce function " +
-                   std::to_string(static_cast<int>(function)) + "..."
-            << std::endl;
-  unsigned int count = options.count;
-  auto op_buf = accl.create_coyotebuffer<float>(count, dataType::float32);
-  auto res_buf = accl.create_coyotebuffer<float>(count, dataType::float32);
-  for (int i = 0; i < count; i++) op_buf.get()->buffer()[i] = i;
+	std::cout << "Start reduce test with root " + std::to_string(root) +
+					" and reduce function " +
+					std::to_string(static_cast<int>(function)) + "..."
+				<< std::endl;
+	unsigned int count = options.count;
+	auto op_buf = accl.create_coyotebuffer<float>(count, dataType::float32);
+	auto res_buf = accl.create_coyotebuffer<float>(count, dataType::float32);
+	for (int i = 0; i < count; i++) op_buf.get()->buffer()[i] = i;
 
-  if (options.host == 0){ op_buf->sync_to_device(); }
+	if (options.host == 0){ op_buf->sync_to_device(); }
 
-  test_debug("Reduce data to " + std::to_string(root) + "...", options);
+	test_debug("Reduce data to " + std::to_string(root) + "...", options);
 
-  MPI_Barrier(MPI_COMM_WORLD);
-  double durationUs = 0.0;
-  auto start = std::chrono::high_resolution_clock::now();
-  accl.reduce(*op_buf, *res_buf, count, root, function, GLOBAL_COMM, true, true);
+	MPI_Barrier(MPI_COMM_WORLD);
+	double durationUs = 0.0;
+	auto start = std::chrono::high_resolution_clock::now();
+	accl.reduce(*op_buf, *res_buf, count, root, function, GLOBAL_COMM, true, true);
 
-  auto end = std::chrono::high_resolution_clock::now();
-  durationUs = (std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() / 1000.0);
+	auto end = std::chrono::high_resolution_clock::now();
+	durationUs = (std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() / 1000.0);
 
-  accl_log(mpi_rank, format_log("reduce", options, durationUs, 0));
+	accl_log(mpi_rank, format_log("reduce", options, durationUs, 0));
 
-  if (mpi_rank == root) {
-    int errors = 0;
+	if (mpi_rank == root) {
+		int errors = 0;
 
-    for (unsigned int i = 0; i < count; ++i) {
-      float res = res_buf.get()->buffer()[i];
-      float ref = op_buf.get()->buffer()[i] * mpi_size;
+		for (unsigned int i = 0; i < count; ++i) {
+		float res = res_buf.get()->buffer()[i];
+		float ref = op_buf.get()->buffer()[i] * mpi_size;
 
-      if (res != ref) {
-        // std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
-        //                  std::to_string(res) + " != " + std::to_string(ref) +
-        //                  ")"
-        //           << std::endl;
-        errors += 1;
-      }
-    }
+		if (res != ref) {
+			// std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
+			//                  std::to_string(res) + " != " + std::to_string(ref) +
+			//                  ")"
+			//           << std::endl;
+			errors += 1;
+		}
+		}
 
-    if (errors > 0) {
-      std::cout << std::to_string(errors) + " errors!" << std::endl;
-      failed_tests++;
-    } else {
-      std::cout << "Test is successful!" << std::endl;
-    }
-  }
+		if (errors > 0) {
+		std::cout << std::to_string(errors) + " errors!" << std::endl;
+		failed_tests++;
+		} else {
+		std::cout << "Test is successful!" << std::endl;
+		}
+	}
+
+  	op_buf->free_buffer();
+	res_buf->free_buffer();
 }
 
 void test_allreduce(ACCL::ACCL &accl, options_t &options,
                     reduceFunction function) {
-  std::cout << "Start allreduce test and reduce function " +
-                   std::to_string(static_cast<int>(function)) + "..."
-            << std::endl;
-  unsigned int count = options.count;
-  auto op_buf = accl.create_coyotebuffer<float>(count, dataType::float32);
-  auto res_buf = accl.create_coyotebuffer<float>(count, dataType::float32);
-  for (int i = 0; i < count; i++) op_buf.get()->buffer()[i] = i;
+	std::cout << "Start allreduce test and reduce function " +
+					std::to_string(static_cast<int>(function)) + "..."
+				<< std::endl;
+	unsigned int count = options.count;
+	auto op_buf = accl.create_coyotebuffer<float>(count, dataType::float32);
+	auto res_buf = accl.create_coyotebuffer<float>(count, dataType::float32);
+	for (int i = 0; i < count; i++) op_buf.get()->buffer()[i] = i;
 
-  test_debug("Reducing data...", options);
+	test_debug("Reducing data...", options);
 
-  MPI_Barrier(MPI_COMM_WORLD);
-  double durationUs = 0.0;
-  auto start = std::chrono::high_resolution_clock::now();
-  accl.allreduce(*op_buf, *res_buf, count, function, GLOBAL_COMM, true, true);
+	MPI_Barrier(MPI_COMM_WORLD);
+	double durationUs = 0.0;
+	auto start = std::chrono::high_resolution_clock::now();
+	accl.allreduce(*op_buf, *res_buf, count, function, GLOBAL_COMM, true, true);
 
-  auto end = std::chrono::high_resolution_clock::now();
-  durationUs = (std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() / 1000.0);
+	auto end = std::chrono::high_resolution_clock::now();
+	durationUs = (std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() / 1000.0);
 
-  accl_log(mpi_rank, format_log("allreduce", options, durationUs, 0));
+	accl_log(mpi_rank, format_log("allreduce", options, durationUs, 0));
 
-  int errors = 0;
+	int errors = 0;
 
-  for (unsigned int i = 0; i < count; ++i) {
-    float res = res_buf.get()->buffer()[i];
-    float ref = op_buf.get()->buffer()[i] * mpi_size;
+	for (unsigned int i = 0; i < count; ++i) {
+		float res = res_buf.get()->buffer()[i];
+		float ref = op_buf.get()->buffer()[i] * mpi_size;
 
-    if (res != ref) {
-      // std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
-      //                  std::to_string(res) + " != " + std::to_string(ref) + ")"
-      //           << std::endl;
-      errors += 1;
-    }
-  }
+		if (res != ref) {
+		// std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
+		//                  std::to_string(res) + " != " + std::to_string(ref) + ")"
+		//           << std::endl;
+		errors += 1;
+		}
+	}
 
-  if (errors > 0) {
-    std::cout << std::to_string(errors) + " errors!" << std::endl;
-    failed_tests++;
-  } else {
-    std::cout << "Test is successful!" << std::endl;
-  }
+	if (errors > 0) {
+		std::cout << std::to_string(errors) + " errors!" << std::endl;
+		failed_tests++;
+	} else {
+		std::cout << "Test is successful!" << std::endl;
+	}
+
+	op_buf->free_buffer();
+	res_buf->free_buffer();
 
 }
 
@@ -835,7 +854,7 @@ void test_accl_base(options_t options)
 			rank_t new_rank = {ip, options.start_port, i, options.rxbuf_size};
 			ranks.emplace_back(new_rank);
 		} else {
-			rank_t new_rank = {ip, options.start_port + i, i, options.rxbuf_size};
+			rank_t new_rank = {ip, options.start_port + i, 0, options.rxbuf_size};
 			ranks.emplace_back(new_rank);
 		}
 		

@@ -58,7 +58,7 @@ void CoyoteDevice::start(const Options &options) {
 
   uint32_t flags = static_cast<uint32_t>(options.host_flags) << 8 | static_cast<uint32_t>(options.stream_flags);
 
-  std::cerr << "start: COMPRESSION_FLAGS:" << std::setbase(16) << static_cast<uint32_t>(options.compression_flags) << ", HOST_STREAM_FLAGS:"<<flags<<std::setbase(10) << std::endl;
+  // std::cerr << "start: COMPRESSION_FLAGS:" << std::setbase(16) << static_cast<uint32_t>(options.compression_flags) << ", HOST_STREAM_FLAGS:"<<flags<<std::setbase(10) << std::endl;
 
   coyote_proc.setCSR(static_cast<uint32_t>(options.scenario), (OFFSET_HOSTCTRL + HOSTCTRL_ADDR::SCEN)>>2);
   coyote_proc.setCSR(static_cast<uint32_t>(options.count), (OFFSET_HOSTCTRL + HOSTCTRL_ADDR::LEN)>>2);
@@ -99,11 +99,29 @@ void CoyoteDevice::wait() {
     }
     is_done = (regi >> 1) & 0x1;
   }
+
 }
 
 CCLO::timeoutStatus CoyoteDevice::wait(std::chrono::milliseconds timeout) {
 
-  debug("CoyoteDevice::wait(std::chrono::milliseconds timeout) not yet implemented!!!");
+  uint32_t is_done = 0;
+  uint32_t last = 0xffffffff;
+  auto start = std::chrono::high_resolution_clock::now();
+  while (!is_done) {
+    uint32_t regi = coyote_proc.getCSR((OFFSET_HOSTCTRL + HOSTCTRL_ADDR::AP_CTRL)>>2);
+    if (last != regi) {
+      // std::cerr << "Read from AP_CTRL: " << std::setbase(16) << regi << std::setbase(10) << std::endl;
+      last = regi;
+    }
+    is_done = (regi >> 1) & 0x1;
+    auto end = std::chrono::high_resolution_clock::now();
+    if (std::chrono::duration_cast<std::chrono::milliseconds>(end-start) > timeout){
+        std::cout<<"CoyoteDevice Wait Time Out"<<std::endl;
+        break;
+    } 
+  }
+
+  printDebug();
 
   return CCLO::no_timeout;
 }
@@ -112,6 +130,10 @@ CCLO::deviceType CoyoteDevice::get_device_type()
 {
   std::cerr<<"get_device_type: coyote_device"<<std::endl;
   return CCLO::coyote_device;
+}
+
+void CoyoteDevice::printDebug(){
+  coyote_proc.printDebug();
 }
 
 void CoyoteDevice::call(const Options &options) {

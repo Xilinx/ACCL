@@ -43,7 +43,7 @@ void cyt_rdma_mux_meta(
     // sq command comes from CCLO only has WRITE and SEND Verb
     if (!STREAM_IS_EMPTY(s_meta_0)){
 		s_metaWord_0 = STREAM_READ(s_meta_0);
-        m_metaWord_0.opcode = s_metaWord_0.qpn;
+        m_metaWord_0.opcode = s_metaWord_0.opcode;
         m_metaWord_0.qpn = s_metaWord_0.qpn;
         m_metaWord_0.host = 0; // data always managed by CCLO
         m_metaWord_0.mode = 0; // always PARSE

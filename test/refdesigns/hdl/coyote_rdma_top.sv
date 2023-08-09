@@ -259,4 +259,32 @@ assign axis_card_2_src_s.tid = 0;
 
 assign rdma_0_ack.ready = 1'b1;
 
+// // DEBUG
+
+// ila_rdma ila_rdma (
+//   .clk(aclk),
+//   .probe0(rdma_0_wr_req.valid),
+//   .probe1(rdma_0_wr_req.ready),
+//   .probe2(rdma_0_rd_req.valid),
+//   .probe3(rdma_0_rd_req.ready), 
+//   .probe4(rdma_0_sq.valid),
+//   .probe5(rdma_0_sq.ready),
+//   .probe6(bpss_rd_req.valid),
+//   .probe7(bpss_rd_req.ready),
+//   .probe8(bpss_wr_req.valid),
+//   .probe9(bpss_wr_req.ready),
+//   .probe10(axis_rdma_0_sink.tvalid),
+//   .probe11(axis_rdma_0_sink.tready),
+//   .probe12(axis_rdma_0_sink.tlast),
+//   .probe13(axis_rdma_0_src.tvalid),
+//   .probe14(axis_rdma_0_src.tready),
+//   .probe15(axis_rdma_0_src.tlast),
+//   .probe16(rdma_0_wr_req.data), //96
+//   .probe17(rdma_0_rd_req.data), //96
+//   .probe18(bpss_rd_req.data), //96
+//   .probe19(bpss_wr_req.data), //96
+//   .probe20(rdma_0_sq.data) //512
+// );
+
+
 endmodule

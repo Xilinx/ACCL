@@ -56,7 +56,7 @@ void rdma_packetizer(
 		stream_word outword;
 		outword.dest = cmdword.dst;
 		//if this is the first word and it is not the RNDZVS_MSG, put the header
-		if(bytes_processed == 0 && (cmdword.msg_type != RNDZVS_MSG)){
+		if((bytes_processed == 0) && (cmdword.msg_type != RNDZVS_MSG)){
 			outword.data(DATA_WIDTH-1, HEADER_LENGTH) = 0;
 			outword.data(HEADER_LENGTH-1,0) = (ap_uint<HEADER_LENGTH>)cmdword;
 		} else {
