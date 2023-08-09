@@ -310,7 +310,7 @@ int combine(unsigned int count,
 }
 
 //transmits a buffer to a rank of the world communicator
-//use MOVE_IMMEDIATE
+//TODO: non-streaming send to self
 int send(
     unsigned int dst_rank,
     unsigned int count,
@@ -326,6 +326,7 @@ int send(
     //get count in bytes
     unsigned int bytes_count = Xil_In32(arcfg_offset)*count;
     if((bytes_count > max_eager_size) && (compression == NO_COMPRESSION) && (stream == NO_STREAM)){
+        //Rendezvous without segmentation
         //get remote address
         uint64_t dst_addr;
         bool dst_host;
@@ -344,23 +345,43 @@ int send(
             0, 0, dst_rank, dst_tag
         );
     } else {
+        //Eager with segmentation
         //if ETH_COMPRESSED is set, also set RES_COMPRESSED
         compression |= (compression & ETH_COMPRESSED) >> 1;
         //TODO: when doing a one-sided send to a remote stream, check:
         //dst_tag is < 247 (for correct routing on remote side)
         //destination compression == Ethernet compression
         //(since data can't be decompressed on remote side)
-        return move(
-            (stream & OP0_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE,
-            MOVE_NONE,
-            (stream & RES_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE,
-            pack_flags(compression, (dst_rank == world.local_rank) ? RES_LOCAL : RES_REMOTE, host),
-            0, count, comm_offset, arcfg_offset, 
-            src_addr, 0, 0, 0, 0, 0,
-            0, 0, dst_rank, dst_tag
-        );
+        //calculate max segment size in elements, from element size 
+        unsigned int max_seg_count = max_segment_size / Xil_In32(arcfg_offset);
+        //calculate number of segments required for this send
+        unsigned int nseg = (count+max_seg_count-1)/max_seg_count;
+        int i;
+        unsigned int expected_ack_count = 0;
+        unsigned int ret = NO_ERROR;
+        for(i=0; i<nseg; i++){
+            start_move(
+                (stream & OP0_STREAM) ? MOVE_STREAM : ((i==0) ? MOVE_IMMEDIATE : MOVE_STRIDE),
+                MOVE_NONE,
+                (stream & RES_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE,
+                compression, (dst_rank == world.local_rank) ? RES_LOCAL : RES_REMOTE, 0,
+                (i!=(nseg-1)) ? max_seg_count : (count-i*max_seg_count), 
+                comm_offset, arcfg_offset, 
+                src_addr, 0, 0, 
+                max_seg_count, 0, 0,
+                0, 0, dst_rank, dst_tag
+            );
+            expected_ack_count++;
+            if(expected_ack_count > 2){
+                ret |= end_move();
+                expected_ack_count--;
+            }
+        }
+        for(i=0; i<expected_ack_count; i++){
+            ret |= end_move();
+        }
+        return ret;
     }
-
 }
 
 //waits for a messages to come and move their contents in a buffer
@@ -380,21 +401,43 @@ int recv(
     //get count in bytes
     unsigned int bytes_count = Xil_In32(arcfg_offset)*count;
     if((bytes_count > max_eager_size) && (compression == NO_COMPRESSION) && (stream == NO_STREAM)){
+        //rendezvous without segmentation
         bool is_host = ((host & RES_HOST) != 0);
         rendezvous_send_addr(world.ranks[src_rank].session, dst_addr, is_host, count, src_tag);
         return rendezvous_get_completion(world.ranks[src_rank].session, dst_addr, is_host, count, src_tag);
     } else {
+        //Eager with segmentation
         //if ETH_COMPRESSED is set, also set OP1_COMPRESSED
         compression |= (compression & ETH_COMPRESSED) >> 2;
-        return move(
-            MOVE_NONE,
-            MOVE_ON_RECV,
-            (stream & RES_STREAM) ? MOVE_STREAM : MOVE_IMMEDIATE,
-            pack_flags(compression, RES_LOCAL, host),
-            0, count, comm_offset, arcfg_offset, 
-            0, 0, dst_addr, 0, 0, 0,
-            src_rank, src_tag, 0, (stream & RES_STREAM) ? src_tag : 0
-        );
+        //calculate max segment size in elements, from element size 
+        unsigned int max_seg_count = max_segment_size / Xil_In32(arcfg_offset);
+        //calculate number of segments required for this send
+        unsigned int nseg = (count+max_seg_count-1)/max_seg_count;
+        int i;
+        unsigned int expected_ack_count = 0;
+        unsigned int ret = NO_ERROR;
+        for(i=0; i<nseg; i++){
+            start_move(
+                MOVE_NONE,
+                MOVE_ON_RECV,
+                (stream & RES_STREAM) ? MOVE_STREAM : ((i==0) ? MOVE_IMMEDIATE : MOVE_STRIDE),
+                compression, RES_LOCAL, 0,
+                (i!=(nseg-1)) ? max_seg_count : (count-i*max_seg_count), 
+                comm_offset, arcfg_offset, 
+                0, 0, dst_addr, 
+                0, 0, max_seg_count,
+                src_rank, src_tag, 0, (stream & RES_STREAM) ? src_tag : 0
+            );
+            expected_ack_count++;
+            if(expected_ack_count > 2){
+                ret |= end_move();
+                expected_ack_count--;
+            }
+        }
+        for(i=0; i<expected_ack_count; i++){
+            ret |= end_move();
+        }
+        return ret;
     }
 }
 
