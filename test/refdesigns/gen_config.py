@@ -38,8 +38,6 @@ if args.board != "u55c" and args.poe == "roce":
 if args.host:
     if args.board == "u280" or args.board == "u50":
         raise "Host memory only supported on U55C/U200/U250"
-    else:
-        args.external_dma = True
 
 if args.poe == "axis3x":
     args.axis3x = True
@@ -77,7 +75,7 @@ hc_instantiation = "nk=hostctrl:{num_inst}:".format(num_inst=2*num_cclo)
 reduce_instantiation = "nk=reduce_ops:{num_inst}:".format(num_inst=num_cclo)
 cast_instantiation = "nk=hp_compression:{num_inst}:".format(num_inst=3*num_cclo)
 
-if args.external_dma:
+if args.host:
     extdma_instantiation = "nk=external_dma:{num_inst}:".format(num_inst=2*num_cclo)
 else:
     extdma_instantiation = ""
@@ -89,7 +87,7 @@ for i in range(num_cclo):
     hc_instantiation += "hostctrl_{inst_nr}_0.hostctrl_{inst_nr}_1".format(inst_nr=i) + endch
     reduce_instantiation += "arith_{inst_nr}".format(inst_nr=i) + endch
     cast_instantiation += "compression_{inst_nr}_0.compression_{inst_nr}_1.compression_{inst_nr}_2".format(inst_nr=i) + endch
-    if args.external_dma:
+    if args.host:
         extdma_instantiation += "extdma_{num_inst}_0.extdma_{num_inst}_1".format(num_inst=i) + endch
 
 probe_instantiation = "nk=call_probe:1:probe_0" if args.probe else ""
@@ -143,7 +141,7 @@ for i in range(num_cclo):
         slr_constraints += "slr=lb_user_krnl_{inst_nr}:SLR{slr_nr}\n".format(inst_nr=i, slr_nr=target_slr)
     else:
         slr_constraints += "slr=vadd_{inst_nr}_0:SLR{slr_nr}\n".format(inst_nr=i, slr_nr=target_slr)
-    if args.external_dma:
+    if args.host:
         for j in range(2):
             slr_constraints += "slr=extdma_{inst_nr}_{dp_nr}:SLR{slr_nr}\n".format(inst_nr=i, dp_nr=j, slr_nr=target_slr)
 
@@ -161,7 +159,7 @@ bank_ctr = 0
 for i in range(num_cclo):
     if mem_type == "DDR":
         target_bank = i if args.axis3x else gt_slr-1
-        if args.external_dma:
+        if args.host:
             mem_constraints += "sp=extdma_{inst_nr}_0.m_axi_0:DDR[{start_bank}]\n".format(inst_nr=i, start_bank=target_bank)
             mem_constraints += "sp=extdma_{inst_nr}_0.m_axi_1:HOST[0]\n".format(inst_nr=i)
             mem_constraints += "sp=extdma_{inst_nr}_1.m_axi_0:DDR[{start_bank}]\n".format(inst_nr=i, start_bank=target_bank)
@@ -170,7 +168,7 @@ for i in range(num_cclo):
             mem_constraints += "sp=ccl_offload_{inst_nr}.m_axi_0:DDR[{start_bank}]\n".format(inst_nr=i, start_bank=target_bank)
             mem_constraints += "sp=ccl_offload_{inst_nr}.m_axi_1:DDR[{start_bank}]\n".format(inst_nr=i, start_bank=target_bank)
     else:
-        if args.external_dma:
+        if args.host:
             mem_constraints += "sp=extdma_{inst_nr}_0.m_axi_0:HBM[{start_bank}:{end_bank}]\n".format(inst_nr=i, start_bank=bank_ctr, end_bank=bank_ctr+5)
             mem_constraints += "sp=extdma_{inst_nr}_0.m_axi_1:HOST[0]\n".format(inst_nr=i)
             mem_constraints += "sp=extdma_{inst_nr}_1.m_axi_0:HBM[{start_bank}:{end_bank}]\n".format(inst_nr=i, start_bank=bank_ctr, end_bank=bank_ctr+5)
@@ -250,7 +248,7 @@ for i in range(num_cclo):
         stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_krnl:lb_user_krnl_{inst_nr}.in\n".format(inst_nr=i)
         stream_connections += "stream_connect=lb_user_krnl_{inst_nr}.out:ccl_offload_{inst_nr}.s_axis_krnl\n".format(inst_nr=i)
     # External DMA interface
-    if args.external_dma:
+    if args.host:
         stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_dma0_s2mm:extdma_{inst_nr}_0.s_axis_s2mm\n".format(inst_nr=i)
         stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_dma0_mm2s_cmd:extdma_{inst_nr}_0.s_axis_mm2s_cmd\n".format(inst_nr=i)
         stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_dma0_s2mm_cmd:extdma_{inst_nr}_0.s_axis_s2mm_cmd\n".format(inst_nr=i)

@@ -125,7 +125,7 @@ int rendezvous_get_addr(unsigned int target_qpn, uint64_t *target_addr, bool *ta
     unsigned int type = getd(STS_RNDZV);//TODO should be RNDZVS_INIT = 2
     unsigned int qpn = getd(STS_RNDZV);//TODO should be equal to target_qpn
     uint64_t addr = (uint64_t)getd(STS_RNDZV);
-    addr = (addr << 32) | (uint64_t)getd(STS_RNDZV);
+    addr |= (uint64_t)getd(STS_RNDZV) << 32;
     *target_addr = addr;
     *target_host = getd(STS_RNDZV);
     getd(STS_RNDZV);//count

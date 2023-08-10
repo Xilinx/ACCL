@@ -100,6 +100,49 @@ TEST_P(ACCLFuncTest, test_combine) {
   }
 }
 
+TEST_F(ACCLTest, test_sendrcv_basic) {
+  unsigned int count = options.count;
+  unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
+
+  auto op_buf = accl->create_buffer<float>(count, dataType::float32);
+  auto res_buf = accl->create_buffer<float>(count, dataType::float32);
+  random_array(op_buf->buffer(), count);
+  int next_rank = ::rank + 1;
+  int prev_rank = ::rank - 1;
+
+  if(::rank % 2 == 0){
+    if(next_rank < ::size){
+      test_debug("Sending data on " + std::to_string(::rank) + " to " +
+                    std::to_string(next_rank) + "...", options);
+      accl->send(*op_buf, count, next_rank, 0);
+    }
+  } else {
+      test_debug("Receiving data on " + std::to_string(::rank) + " from " +
+                    std::to_string(prev_rank) + "...", options);
+      accl->recv(*res_buf, count, prev_rank, 0);
+  }
+
+  if(::rank % 2 == 1){
+    test_debug("Sending data on " + std::to_string(::rank) + " to " +
+                  std::to_string(prev_rank) + "...", options);
+    accl->send(*res_buf, count, prev_rank, 1);
+  } else {
+    if(next_rank < ::size){
+      test_debug("Receiving data on " + std::to_string(::rank) + " from " +
+                    std::to_string(next_rank) + "...", options);
+      accl->recv(*res_buf, count, next_rank, 1);
+    }
+  }
+
+  if(next_rank < ::size){
+    for (unsigned int i = 0; i < count; ++i) {
+      EXPECT_EQ((*res_buf)[i], (*op_buf)[i]);
+    }
+  } else {
+    SUCCEED();
+  }
+}
+
 TEST_F(ACCLTest, test_sendrcv_bo) {
 
   if(!options.test_xrt_simulator) {

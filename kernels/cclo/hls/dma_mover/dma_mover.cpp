@@ -629,8 +629,12 @@ void instruction_decode(
                 pkt_wr.src_rank = exchange_mem[insn.comm_offset + COMM_LOCAL_RANK_OFFSET];
                 pkt_wr.seqn = exchange_mem[insn.comm_offset + COMM_RANKS_OFFSET + (insn.dst_rank * RANK_SIZE) + RANK_OUTBOUND_SEQ_OFFSET];
                 pkt_wr.dst_sess_id = exchange_mem[insn.comm_offset + COMM_RANKS_OFFSET + (insn.dst_rank * RANK_SIZE) + RANK_SESSION_OFFSET];
-                pkt_wr.max_seg_len = exchange_mem[insn.comm_offset + COMM_RANKS_OFFSET + (insn.dst_rank * RANK_SIZE) + RANK_SEGLEN_OFFSET];
                 pkt_wr.len = insn.res_is_compressed ? total_bytes_compressed : total_bytes_uncompressed;
+                if(insn.res_is_rendezvous){
+                    pkt_wr.max_seg_len = pkt_wr.len;
+                } else {
+                    pkt_wr.max_seg_len = exchange_mem[insn.comm_offset + COMM_RANKS_OFFSET + (insn.dst_rank * RANK_SIZE) + RANK_SEGLEN_OFFSET];
+                }
                 pkt_wr.mpi_tag = insn.mpi_tag;
                 pkt_wr.to_stream = (insn.res_opcode == MOVE_STREAM);
                 pkt_wr.to_host = insn.res_is_host;

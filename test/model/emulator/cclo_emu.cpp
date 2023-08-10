@@ -247,9 +247,9 @@ void axis_ssc(Stream<stream_word> &in, Stream<stream_word> &out, int adj){
 
 void sim_bd(zmq_intf_context *ctx, string comm_backend, unsigned int local_rank, unsigned int world_size) {
 
-    bool use_udp = comm_backend.compare("udp");
-    bool use_tcp = comm_backend.compare("tcp");
-    bool use_cyt_rdma = comm_backend.compare("cyt_rdma");
+    bool use_udp = !comm_backend.compare("udp");
+    bool use_tcp = !comm_backend.compare("tcp");
+    bool use_cyt_rdma = !comm_backend.compare("cyt_rdma");
 
     vector<char> devicemem;
 

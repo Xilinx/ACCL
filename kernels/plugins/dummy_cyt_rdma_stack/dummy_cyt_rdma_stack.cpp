@@ -52,16 +52,18 @@ void cyt_rdma_tx(
             if(!STREAM_IS_EMPTY(send_data) && !STREAM_IS_FULL(tx)){
                 //transmit in chunks of 4KB of data plus header
                 //first send command over to remote in packet header
-                tx_word.dest = command.qpn;
                 do {
                     tx_word.last = 0;
-                    tx_word.data(RDMA_REQ_BITS-1,0) = (ap_uint<RDMA_REQ_BITS>)command;
+                    tx_word.dest = command.qpn;
+                    tx_word.keep = -1;
+                    tx_word.data = (ap_uint<RDMA_REQ_BITS>)command;
                     //header
                     STREAM_WRITE(tx, tx_word);
                     //data
                     unsigned int i;
                     for(i=0; i<4096 && tx_word.last==0; i+=64){
                         tx_word = STREAM_READ(send_data);
+                        tx_word.dest = command.qpn;
                         tx_word.last |= (i == 4032);
                         STREAM_WRITE(tx, tx_word);
                     }
@@ -97,7 +99,7 @@ void cyt_rdma_rx(
         rx_word = STREAM_READ(rx);
         rdma_req_t command = (ap_uint<RDMA_REQ_BITS>)rx_word.data;
         eth_notification current_notif;
-        current_notif.session_id = command.qpn;
+        current_notif.session_id = rx_word.dest;
         current_notif.type = 0; //type not used here
         current_notif.length = std::min((unsigned)command.len,(unsigned)4096);
         //forward data
