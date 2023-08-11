@@ -68,9 +68,9 @@ void cyt_rdma_tx(
                         STREAM_WRITE(tx, tx_word);
                     }
                     //update command length
-                    command.len = (command.len < 64*i) ? (unsigned)0 : (unsigned)(command.len - 64*i);
+                    command.len = (command.len < i) ? (unsigned)0 : (unsigned)(command.len - i);
                     //update target address, if WRITE
-                    command.vaddr += 64*i;
+                    command.vaddr += i;
                 } while(command.len > 0);
                 //we're done with this command, listen on SQ
                 txFsmState = WAIT_SQ;
@@ -116,6 +116,7 @@ void cyt_rdma_rx(
             STREAM_WRITE(wr_cmd, dma_cmd_word);
             //data to write
             do{
+                rx_word = STREAM_READ(rx);
                 STREAM_WRITE(wr_data, rx_word);
             } while(rx_word.last == 0); 
             STREAM_READ(wr_sts);
@@ -124,6 +125,7 @@ void cyt_rdma_rx(
             STREAM_WRITE(notif, current_notif);
             //data received
             do{
+                rx_word = STREAM_READ(rx);
                 STREAM_WRITE(recv_data, rx_word);
             } while(rx_word.last == 0);
         }

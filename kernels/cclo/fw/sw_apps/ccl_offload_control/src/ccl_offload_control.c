@@ -139,7 +139,7 @@ int rendezvous_get_completion(unsigned int target_qpn, uint64_t target_addr, boo
     unsigned int type = getd(STS_RNDZV);//TODO should be RNDZVS_WR_DONE = 3
     unsigned int qpn = getd(STS_RNDZV);//TODO should be equal to target_qpn
     uint64_t addr = (uint64_t)getd(STS_RNDZV);
-    addr = (addr << 32) | (uint64_t)getd(STS_RNDZV);
+    addr |= (uint64_t)getd(STS_RNDZV) << 32;
     //TODO addr should be equal to target_addr
     bool host = getd(STS_RNDZV);
     //TODO host should be equal to target_host
