@@ -65,7 +65,7 @@ enum class cfgFunc {
  * Supported ACCL operations
  *
  */
-enum class operation {
+enum class operation : int {
   config = 0,           /**< Set CCLO config */
   copy = 1,             /**< Copy FPGA buffer */
   combine = 2,          /**< Perform reduce operator on FPGA buffers */
@@ -95,6 +95,35 @@ enum class operation {
 enum class reduceFunction {
   SUM = 0, /**< Elementwise sum */
   MAX = 1  /**< Elementwise max */
+};
+
+/**
+ * Status of ACCL operations
+ *
+ */
+enum class operationStatus : int {
+  QUEUED = 0,    /**< Operation waiting in hardware queue */
+  EXECUTING = 1, /**< Operation currently executing */
+  COMPLETED = 2  /**< Operation completed */
+};
+
+/**
+ * Request handle passe to the user
+ */  
+typedef long long ACCLRequest;
+
+/**
+ * Status of the FPGA queue
+ * 
+ */
+enum class queueStatus {
+  IDLE = 0,
+  BUSY = 1
+};
+
+enum timeoutStatus {
+  no_timeout,
+  timeout
 };
 
 /**

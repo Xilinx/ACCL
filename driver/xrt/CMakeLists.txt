@@ -46,6 +46,7 @@ set(ACCL_HEADERS
     ${ACCL_HEADER_PATH}/simdevice.hpp
     ${ACCL_HEADER_PATH}/simbuffer.hpp
     ${ACCL_HEADER_PATH}/fpgadevice.hpp
+    ${ACCL_HEADER_PATH}/acclrequest.hpp
 )
 
 set(ACCL_SOURCES
