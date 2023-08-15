@@ -394,7 +394,7 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
    CONFIG.C_USE_INTERRUPT {0} \
    CONFIG.C_D_AXI {1} \
    CONFIG.C_D_LMB {1} \
-   CONFIG.C_FSL_LINKS {3} \
+   CONFIG.C_FSL_LINKS {5} \
    CONFIG.C_I_LMB {1} \
    CONFIG.C_TRACE {0} \
    CONFIG.C_USE_EXTENDED_FSL_INSTR {1} \
@@ -534,6 +534,12 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
   connect_bd_intf_net [get_bd_intf_pins dma_mover/m_axi_mem] [get_bd_intf_pins dma_memory_ic/S03_AXI]
   connect_bd_intf_net [get_bd_intf_pins exchange_mem/S_AXI_BYP] [get_bd_intf_pins dma_memory_ic/M00_AXI]
   
+  # call retry and pending notification FIFOs
+  create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 fifo_call_retry
+  set_property -dict [ list CONFIG.HAS_TLAST {1} CONFIG.TDATA_NUM_BYTES {4} CONFIG.FIFO_DEPTH {64} CONFIG.FIFO_MEMORY_TYPE {distributed}] [get_bd_cells fifo_call_retry]
+  create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 fifo_rndzv_pending
+  set_property -dict [ list CONFIG.HAS_TLAST {1} CONFIG.TDATA_NUM_BYTES {4} CONFIG.FIFO_DEPTH {64} CONFIG.FIFO_MEMORY_TYPE {distributed}] [get_bd_cells fifo_rndzv_pending]
+
   # Create interface connections
   connect_bd_intf_net -intf_net microblaze_0_dlmb_1 [get_bd_intf_pins microblaze_0/DLMB] [get_bd_intf_pins microblaze_0_local_memory/DLMB]
   connect_bd_intf_net -intf_net microblaze_0_ilmb_1 [get_bd_intf_pins microblaze_0/ILMB] [get_bd_intf_pins microblaze_0_local_memory/ILMB]
@@ -579,6 +585,11 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
   connect_bd_intf_net [get_bd_intf_pins microblaze_0/M2_AXIS] [get_bd_intf_pins m_axis_ub_sq] 
   connect_bd_intf_net [get_bd_intf_pins s_axis_ub_rq] [get_bd_intf_pins microblaze_0/S2_AXIS] 
 
+  connect_bd_intf_net [get_bd_intf_pins microblaze_0/M3_AXIS] [get_bd_intf_pins fifo_rndzv_pending/S_AXIS] 
+  connect_bd_intf_net [get_bd_intf_pins fifo_rndzv_pending/M_AXIS] [get_bd_intf_pins microblaze_0/S3_AXIS] 
+  connect_bd_intf_net [get_bd_intf_pins microblaze_0/M4_AXIS] [get_bd_intf_pins fifo_call_retry/S_AXIS] 
+  connect_bd_intf_net [get_bd_intf_pins fifo_call_retry/M_AXIS] [get_bd_intf_pins microblaze_0/S4_AXIS] 
+
   # Clocks and resets
   connect_bd_net -net SYS_Rst_1 [get_bd_pins microblaze_0_local_memory/SYS_Rst] [get_bd_pins proc_sys_reset_0/peripheral_reset]
   connect_bd_net [get_bd_pins ap_clk] [get_bd_pins fifo_eth_depacketizer_sts/s_axis_aclk] \
@@ -605,6 +616,8 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
                                       [get_bd_pins dma_mover/ap_clk] \
                                       [get_bd_pins fifo_dma_mover_command/s_axis_aclk] \
                                       [get_bd_pins fifo_dma_mover_error/s_axis_aclk] \
+                                      [get_bd_pins fifo_call_retry/s_axis_aclk] \
+                                      [get_bd_pins fifo_rndzv_pending/s_axis_aclk] \
                                       [get_bd_pins dma_memory_ic/aclk]
                                       
   connect_bd_net [get_bd_pins ap_rst_n] [get_bd_pins proc_sys_reset_0/ext_reset_in]
@@ -637,6 +650,8 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
                                                                    [get_bd_pins dma_mover/ap_rst_n] \
                                                                    [get_bd_pins fifo_dma_mover_command/s_axis_aresetn] \
                                                                    [get_bd_pins fifo_dma_mover_error/s_axis_aresetn] \
+                                                                   [get_bd_pins fifo_call_retry/s_axis_aresetn] \
+                                                                   [get_bd_pins fifo_rndzv_pending/s_axis_aresetn] \
                                                                    [get_bd_pins dma_memory_ic/aresetn]
 
   # Create some hierarchies to keep things organized
