@@ -63,18 +63,20 @@ void SimRequest::start() {
 }
 
 ACCLRequest *SimDevice::start(const Options &options) {
+  ACCLRequest *request = new ACCLRequest;
+
   if (options.waitfor.size() != 0) {
     throw std::runtime_error("SimDevice does not support chaining");
   }
   
-  SimRequest *req = new SimRequest(reinterpret_cast<void *>(this), options);
+  SimRequest *sim_handle = new SimRequest(reinterpret_cast<void *>(this), options);
  
-  queue.push(req);
-  req->set_status(operationStatus::QUEUED);
+  *request = queue.push(sim_handle);
+  sim_handle->set_status(operationStatus::QUEUED);
 
   launch_request();
 
-  return req;
+  return request;
 };
 
 SimDevice::SimDevice(unsigned int zmqport, unsigned int local_rank) {
@@ -85,23 +87,37 @@ SimDevice::SimDevice(unsigned int zmqport, unsigned int local_rank) {
 };
 
 void SimDevice::wait(ACCLRequest *request) { 
-  request->wait(); 
+  auto sim_handle = request_map.find(*request);
+  if (sim_handle != request_map.end())
+    sim_handle->second->wait(); 
 }
 
 timeoutStatus SimDevice::wait(ACCLRequest *request,
                               std::chrono::milliseconds timeout) {
-  if (request->wait(timeout))
+  auto sim_handle = request_map.find(*request);
+
+  if (sim_handle == request_map.end() || sim_handle->second->wait(timeout))
     return timeoutStatus::no_timeout;
 
   return timeoutStatus::timeout;
 }
 
-bool SimDevice::test(ACCLRequest *request) {
-  return request->get_status() == operationStatus::COMPLETED;
+bool SimDevice::test(ACCLRequest *request) {  
+  auto sim_handle = request_map.find(*request);
+
+  if (sim_handle == request_map.end())
+    return true;
+
+  return sim_handle->second->get_status() == operationStatus::COMPLETED;
 }
 
 void SimDevice::free_request(ACCLRequest *request) {
-  delete request;
+  auto fpga_handle = request_map.find(*request);
+
+  if (fpga_handle != request_map.end()) {
+    delete fpga_handle->second;
+    request_map.erase(fpga_handle);
+  }
 }
 
 ACCLRequest *SimDevice::call(const Options &options) {
@@ -109,6 +125,15 @@ ACCLRequest *SimDevice::call(const Options &options) {
   this->wait(req);
   
   return req;
+}
+
+val_t SimDevice::get_retcode(ACCLRequest *request) {
+  auto sim_handle = request_map.find(*request);
+
+  if (sim_handle != request_map.end())
+    return 0;
+  
+  return sim_handle->second->get_retcode();
 }
 
 // MMIO read request  {"type": 0, "addr": <uint>}
@@ -146,4 +171,5 @@ void SimDevice::complete_request(SimRequest *request) {
     launch_request();
   }
 }
+
 } // namespace ACCL

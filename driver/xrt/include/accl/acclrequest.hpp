@@ -32,18 +32,28 @@ using namespace std::chrono_literals;
 
 namespace ACCL {
 /**
- * Generic ACCL Request class. Each type of device should derive an Request type
+ * Generic Base Request class. Each type of device should derive an Request type
  * from this class, as they may have different ways to handle requests
  * 
  */
-class ACCLRequest {
+class BaseRequest {
+private:
+  std::mutex cv_mtx;
+  std::condition_variable cv;
+  std::atomic<operationStatus> status;
+  val_t retcode;
+
+protected:
+  // opaque reference to cclo
+  void *cclo_ptr;
+
 public:
   /**
    * Construct a new generic object
    * 
    * @param cclo Opaque reference to the main CCLO object
    */
-  ACCLRequest(void *cclo) : cclo_ptr(cclo) {
+  BaseRequest(void *cclo) : cclo_ptr(cclo) {
     status = operationStatus::QUEUED;
   }
 
@@ -115,16 +125,6 @@ public:
   void *cclo() {
     return cclo_ptr;
   }
-
-private:
-  std::mutex cv_mtx;
-  std::condition_variable cv;
-  std::atomic<operationStatus> status;
-  val_t retcode;
-
-protected:
-  // opaque reference to cclo
-  void *cclo_ptr;
 };
 
 /**
@@ -132,16 +132,18 @@ protected:
  *
  */
 template <typename qtype> struct FPGAQueue {
-  FPGAQueue() : qstatus(queueStatus::IDLE) {}
+  FPGAQueue() : qstatus(queueStatus::IDLE), unique_id(0) {}
 
   FPGAQueue &operator=(const FPGAQueue &other) {
     this->queue = other.queue;
     return *this;
   }
 
-  void push(qtype item) {
+  ACCLRequest push(qtype item) {
     std::lock_guard<std::mutex> lk(queue_mtx);
     queue.push(item);
+    unique_id++;
+    return unique_id;
   }
 
   /**
@@ -186,5 +188,6 @@ private:
   queueStatus qstatus;
   std::queue<qtype> queue;
   std::mutex queue_mtx;
+  std::atomic<ACCLRequest> unique_id;
 };
 } // namespace ACCL

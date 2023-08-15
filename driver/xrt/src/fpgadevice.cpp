@@ -21,9 +21,8 @@
 
 #include <cassert>
 
-static void finish_fpga_request(const void *unused, ert_cmd_state state,
-                                void *request_ptr) {
-  ACCL::FPGARequest *req = reinterpret_cast<ACCL::FPGARequest *>(request_ptr);
+static void finish_fpga_request(ACCL::FPGARequest *req) {
+  req->wait_kernel();
   ACCL::FPGADevice *cclo = reinterpret_cast<ACCL::FPGADevice *>(req->cclo());
   // get ret code before notifying waiting theads
   req->set_retcode(cclo->read(ACCL::RETCODE_OFFSET));
@@ -55,47 +54,67 @@ void FPGARequest::start() {
   run.set_arg(arg_id++, static_cast<uint64_t>(options.addr_0->physical_address()));
   run.set_arg(arg_id++, static_cast<uint64_t>(options.addr_1->physical_address()));
   run.set_arg(arg_id++, static_cast<uint64_t>(options.addr_2->physical_address()));
+  
+  auto f = std::async(std::launch::async, finish_fpga_request, this);
 
-  run.add_callback(ert_cmd_state::ERT_CMD_STATE_COMPLETED, finish_fpga_request,
-                   reinterpret_cast<void *>(this));
   run.start();  
 }
 
 ACCLRequest *FPGADevice::start(const Options &options) {
+  ACCLRequest *request = new ACCLRequest;
+
   if (options.waitfor.size() != 0) {
     throw std::runtime_error("FPGADevice does not support chaining");
   }
 
-  FPGARequest *req =
+  FPGARequest *fpga_handle =
       new FPGARequest(reinterpret_cast<void *>(this), hostctrl, options);
 
-  queue.push(req);
-  req->set_status(operationStatus::QUEUED);
+  *request = queue.push(fpga_handle);
+  fpga_handle->set_status(operationStatus::QUEUED);
+
+  request_map.emplace(std::make_pair(*request, fpga_handle));
 
   launch_request();
 
-  return req;
+  return request;
 }
 
 FPGADevice::FPGADevice(xrt::ip &cclo_ip, xrt::kernel &hostctrl_ip)
     : cclo(cclo_ip), hostctrl(hostctrl_ip) {}
 
-void FPGADevice::wait(ACCLRequest *request) { request->wait(); }
+void FPGADevice::wait(ACCLRequest *request) { 
+  auto fpga_handle = request_map.find(*request);
+  if (fpga_handle != request_map.end())
+    fpga_handle->second->wait(); 
+}
 
 timeoutStatus FPGADevice::wait(ACCLRequest *request,
                                std::chrono::milliseconds timeout) {
-  if (request->wait(timeout))
+  auto fpga_handle = request_map.find(*request);
+
+  if (fpga_handle == request_map.end() || fpga_handle->second->wait(timeout))
     return timeoutStatus::no_timeout;
 
   return timeoutStatus::timeout;
 }
 
 bool FPGADevice::test(ACCLRequest *request) {
-  return request->get_status() == operationStatus::COMPLETED;
+  auto fpga_handle = request_map.find(*request);
+
+  if (fpga_handle == request_map.end())
+    return true;
+
+  return fpga_handle->second->get_status() == operationStatus::COMPLETED;
 }
 
 void FPGADevice::free_request(ACCLRequest *request) {
-  delete request;
+  auto fpga_handle = request_map.find(*request);
+
+  if (fpga_handle != request_map.end()) {
+    delete fpga_handle->second;
+    request_map.erase(fpga_handle);
+  }
 }
 
 ACCLRequest *FPGADevice::call(const Options &options) {
@@ -104,6 +123,15 @@ ACCLRequest *FPGADevice::call(const Options &options) {
 
   // internal use only
   return req;
+}
+
+val_t FPGADevice::get_retcode(ACCLRequest *request) {
+  auto fpga_handle = request_map.find(*request);
+
+  if (fpga_handle != request_map.end())
+    return 0;
+  
+  return fpga_handle->second->get_retcode();
 }
 
 val_t FPGADevice::read(addr_t offset) { return cclo.read_register(offset); }
@@ -123,7 +151,6 @@ void FPGADevice::launch_request() {
 }
 
 void FPGADevice::complete_request(FPGARequest *request) {
-  // Avoid user from completing requests
   if (request->get_status() == operationStatus::COMPLETED) {
     queue.pop();
     launch_request();

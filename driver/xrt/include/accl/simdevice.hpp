@@ -17,6 +17,7 @@
 *******************************************************************************/
 
 #pragma once
+#include "acclrequest.hpp"
 #include "cclo.hpp"
 #include "constants.hpp"
 #include <string>
@@ -29,7 +30,7 @@ namespace ACCL {
  * Implementation of the derived request class associated with Sim Devices
  * 
  */
-class SimRequest : public ACCLRequest {
+class SimRequest : public BaseRequest {
 public:
   /**
    * Constructs a new request for Sim Devices
@@ -38,7 +39,7 @@ public:
    * @param options   Constant reference to the associated options
    */
   SimRequest(void *cclo, const CCLO::Options &options)
-      : ACCLRequest(cclo), options(options) {}
+      : BaseRequest(cclo), options(options) {}
 
   /**
    * Return the operation associated options 
@@ -96,6 +97,8 @@ public:
   
   void free_request(ACCLRequest *request) override;
 
+  val_t get_retcode(ACCLRequest *request) override;
+
   addr_t get_base_addr() override { return 0x0; }
 
   /**
@@ -116,6 +119,7 @@ private:
   zmq_intf_context zmq_ctx;
   
   FPGAQueue<SimRequest *> queue;
+  std::unordered_map<ACCLRequest, SimRequest *> request_map;
 
   /**
    * Starts the execution of the first request in the queue. To keep queue

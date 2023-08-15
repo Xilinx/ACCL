@@ -27,7 +27,6 @@
 /** @file cclo.hpp */
 
 namespace ACCL {
-class ACCLRequest;
 /**
  * Abstract class that defines operations to be performed on the CCLO on the
  * FPGA.
@@ -64,7 +63,7 @@ public:
     dataType data_type_io_1;            /**< Data type of ACCL input or output from stream. */
     dataType data_type_io_2;            /**< Data type of ACCL input or output from stream. */
     std::vector<ACCLRequest *> waitfor; /**< Wait for these operations to
-                                             complete; currently unsupported. */
+                                              complete; currently unsupported. */
 
     /**
      * Construct a new CCLO Options object with default parameters.
@@ -158,6 +157,13 @@ public:
    * @param request Request to be freed
    */
   virtual void free_request(ACCLRequest *request) = 0;
+  
+  /**
+   * Gets the return code of a given request
+   * 
+   * @param request Request to be look up
+   */
+  virtual val_t get_retcode(ACCLRequest *request) = 0;
 
   /**
    * Get the base address of the CCLO, this currently returns 0x0 on hardware.

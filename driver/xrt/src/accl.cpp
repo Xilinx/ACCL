@@ -1267,7 +1267,7 @@ void ACCL::setup_rx_buffers(size_t nbufs, addr_t bufsize,
 }
 
 void ACCL::check_return_value(const std::string function_name, ACCLRequest *request) {
-  val_t retcode = request->get_retcode();
+  val_t retcode = cclo->get_retcode(request);
   if (retcode != 0) {
     std::stringstream stream;
     const std::bitset<error_code_bits> retcode_bitset{retcode};
@@ -1429,6 +1429,10 @@ bool ACCL::wait(ACCLRequest *request, std::chrono::milliseconds timeout) {
 }
 
 bool ACCL::test(ACCLRequest *request) {
+  // FPGARequest *req = reinterpret_cast<FPGARequest *>(request);
+  // printf("[ACCL] - Test request %p (%p) - Operation (%d) - status (%d)\n",
+  //        req, request, static_cast<int>(req->options.scenario),
+  //        req->get_status());
   return cclo->test(request);
 }
 

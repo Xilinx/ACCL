@@ -31,7 +31,13 @@ namespace ACCL {
  * Implementation of the request derived class for FPGA devices
  *
  */
-class FPGARequest : public ACCLRequest {
+class FPGARequest : public BaseRequest {
+private:
+  xrt::run run;
+
+public:
+  const CCLO::Options &options;
+
 public:
   /**
    * Construct a new FPGA request object
@@ -40,7 +46,7 @@ public:
    * @param kernel Hostctrl kernel to be used in the request
    */
   FPGARequest(void *cclo, xrt::kernel &kernel, const CCLO::Options &options)
-      : ACCLRequest(cclo), run(xrt::run(kernel)), options(options) {}
+      : BaseRequest(cclo), run(xrt::run(kernel)), options(options) {}
 
   /**
    * Effectively starts the call
@@ -48,9 +54,9 @@ public:
    */
   void start();
 
-private:
-  xrt::run run;
-  const CCLO::Options &options;
+  void wait_kernel() {
+    run.wait();
+  }
 };
 
 /**
@@ -90,6 +96,8 @@ public:
   
   void free_request(ACCLRequest *request) override;
 
+  val_t get_retcode(ACCLRequest *request) override;
+
   addr_t get_base_addr() override {
     // TODO: Find way to retrieve CCLO base address on FPGA
     return 0x0;
@@ -107,6 +115,7 @@ private:
   xrt::kernel hostctrl;
 
   FPGAQueue<FPGARequest *> queue;
+  std::unordered_map<ACCLRequest, FPGARequest *> request_map;
 
   /**
    * Starts the execution of the first request in the queue. To keep queue
