@@ -18,7 +18,7 @@
 
 #include "accl/fpgadevice.hpp"
 #include "accl/common.hpp"
-
+#include <future>
 #include <cassert>
 
 static void finish_fpga_request(ACCL::FPGARequest *req) {
