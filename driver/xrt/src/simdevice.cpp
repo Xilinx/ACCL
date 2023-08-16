@@ -74,6 +74,8 @@ ACCLRequest *SimDevice::start(const Options &options) {
   *request = queue.push(sim_handle);
   sim_handle->set_status(operationStatus::QUEUED);
 
+  request_map.emplace(std::make_pair(*request, sim_handle));
+
   launch_request();
 
   return request;
