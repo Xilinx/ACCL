@@ -61,6 +61,7 @@ struct options_t
 	bool tcp;
 	bool rdma;
 	unsigned int host;
+	unsigned int protoc;
 	std::string xclbin;
 	std::string fpgaIP;
 };
@@ -124,7 +125,7 @@ struct timestamp_t
 
 std::string format_log(std::string collective, options_t options, double time, double tput)
 {
-	std::string log_str = collective + "," + std::to_string(mpi_size) + "," + std::to_string(mpi_rank) + "," + std::to_string(options.num_rxbufmem) + "," + std::to_string(options.count * sizeof(float)) + "," + std::to_string(options.rxbuf_size) + "," + std::to_string(options.rxbuf_size) + "," + std::to_string(MAX_PKT_SIZE) + "," + std::to_string(time) + "," + std::to_string(tput) + "," + std::to_string(options.host);
+	std::string log_str = collective + "," + std::to_string(mpi_size) + "," + std::to_string(mpi_rank) + "," + std::to_string(options.num_rxbufmem) + "," + std::to_string(options.count * sizeof(float)) + "," + std::to_string(options.rxbuf_size) + "," + std::to_string(options.rxbuf_size) + "," + std::to_string(MAX_PKT_SIZE) + "," + std::to_string(time) + "," + std::to_string(tput) + "," + std::to_string(options.host) + "," + std::to_string(options.protoc);
 	return log_str;
 }
 
@@ -233,6 +234,10 @@ options_t parse_options(int argc, char *argv[])
 												"Enable host buffer mode with 1", false, 0,
 												"integer");
 		cmd.add(host_arg);
+		TCLAP::ValueArg<uint16_t> protoc_arg("p", "protocol",
+												"Eager Protocol with 0 and Rendezvous with 1", false, 0,
+												"integer");
+		cmd.add(protoc_arg);
 		TCLAP::SwitchArg debug_arg("d", "debug", "Enable debug mode", cmd, false);
 		TCLAP::SwitchArg hardware_arg("f", "hardware", "enable hardware mode", cmd, false);
 		TCLAP::SwitchArg axis3_arg("a", "axis3", "Use axis3 hardware setup", cmd, false);
@@ -312,6 +317,7 @@ options_t parse_options(int argc, char *argv[])
 		opts.device_index = device_index_arg.getValue();
 		opts.xclbin = xclbin_arg.getValue();
 		opts.fpgaIP = fpgaIP_arg.getValue();
+		opts.protoc = protoc_arg.getValue();
 
 		std::cout << "count:" << opts.count << " rxbuf_size:" << opts.rxbuf_size << " seg_size:" << opts.seg_size << " num_rxbufmem:" << opts.num_rxbufmem << std::endl;
 		return opts;
@@ -655,8 +661,9 @@ void test_gather(ACCL::ACCL &accl, options_t &options, int root) {
 	}
 
 	op_buf->free_buffer();
-	res_buf->free_buffer();
-
+	if (mpi_rank == root) {
+		res_buf->free_buffer();
+	}
 }
 
 
@@ -894,13 +901,14 @@ void test_accl_base(options_t options)
 
 		if (options.tcp)
 		{
-			debug("Starting connections to communicator ranks");
-			debug("Opening ports to communicator ranks");
-			accl->open_port();
-			MPI_Barrier(MPI_COMM_WORLD);
-			debug("Starting session to communicator ranks");
-			accl->open_con();
-		}
+			// TODO:session management of TCP to software
+			// debug("Starting connections to communicator ranks");
+			// debug("Opening ports to communicator ranks");
+			// accl->open_port();
+			// MPI_Barrier(MPI_COMM_WORLD);
+			// debug("Starting session to communicator ranks");
+			// accl->open_con();
+		} 
 
 		debug(accl->dump_communicator());
 
@@ -910,6 +918,15 @@ void test_accl_base(options_t options)
 		debug("unsupported situation!!!");
 		exit(1);
 	}
+
+	if (options.protoc == 0){
+		accl->set_rendezvous_threshold(options.rxbuf_size);
+		std::cout<<"Eager Protocol"<<std::endl;
+	} else if (options.protoc == 1){
+		accl->set_rendezvous_threshold(0);
+		std::cout<<"Rendezvous Protocol"<<std::endl;
+	}
+	
 	
 	// accl->set_timeout(1e6); // the same as in the original
 	// std::cout << "set_timeout done." << std::endl;
@@ -927,41 +944,48 @@ void test_accl_base(options_t options)
 	if(options.test_mode == ACCL_SEND || options.test_mode == 0){
 		test_sendrcv(*accl, options);
 		MPI_Barrier(MPI_COMM_WORLD);
+		debug(accl->dump_communicator());
 	}
 	if(options.test_mode == ACCL_BCAST || options.test_mode == 0){
 		test_bcast(*accl, options, 0);
 		MPI_Barrier(MPI_COMM_WORLD);
+		debug(accl->dump_communicator());
 	}
 	if(options.test_mode == ACCL_SCATTER || options.test_mode == 0){
 		test_scatter(*accl, options, 0);
 		MPI_Barrier(MPI_COMM_WORLD);
+		debug(accl->dump_communicator());
 	}
 	if(options.test_mode == ACCL_GATHER || options.test_mode == 0){
 		test_gather(*accl, options, 0);
 		MPI_Barrier(MPI_COMM_WORLD);
+		debug(accl->dump_communicator());
 	}
 	if(options.test_mode == ACCL_ALLGATHER || options.test_mode == 0){
 		test_allgather(*accl, options);
 		MPI_Barrier(MPI_COMM_WORLD);
+		debug(accl->dump_communicator());
 	}
 	if(options.test_mode == ACCL_REDUCE || options.test_mode == 0){
 		int root = 0;
 		test_reduce(*accl, options, root, reduceFunction::SUM);
 		MPI_Barrier(MPI_COMM_WORLD);
+		debug(accl->dump_communicator());
 	}
 	if(options.test_mode == ACCL_ALLREDUCE || options.test_mode == 0){
 		int root = 0;
 		test_allreduce(*accl, options, reduceFunction::SUM);
 		MPI_Barrier(MPI_COMM_WORLD);
+		debug(accl->dump_communicator());
 	}
+
+	
 
 	if (failed_tests == 0){
 		std::cout << "\nACCL base functionality test completed successfully!\n" << std::endl;
-		return;
 	}
 	else {
 		std::cout << "\nERROR: ACCL base functionality test failed!\n" << std::endl;
-		return;
 	}
 	
 }

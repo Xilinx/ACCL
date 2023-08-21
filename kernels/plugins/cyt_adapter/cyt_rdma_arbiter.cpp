@@ -24,7 +24,7 @@ void cyt_rdma_arbiter_meta(
                 hls::stream<cyt_req_t >& s_meta,
                 hls::stream<eth_notification>& m_meta_0,
                 hls::stream<cyt_req_t >& m_meta_1,
-                hls::stream<ap_uint<32> >& meta_int
+                hls::stream<ap_uint<64> >& meta_int
                 )
 {
 
@@ -34,7 +34,7 @@ void cyt_rdma_arbiter_meta(
     static cyt_req_t reqWord;
     static eth_notification meta_notif;
 
-    static ap_uint<32> meta_internal = 0;
+    static ap_uint<64> meta_internal = 0;
 
     if (!STREAM_IS_EMPTY(s_meta)){
 		reqWord = STREAM_READ(s_meta);
@@ -47,6 +47,7 @@ void cyt_rdma_arbiter_meta(
 
             meta_internal(15,0) = reqWord.host;
             meta_internal(31,16) = reqWord.stream;
+            meta_internal(63,32) = reqWord.len;
             STREAM_WRITE(meta_int, meta_internal);
 
         } else if (reqWord.host == 1) {
@@ -54,14 +55,19 @@ void cyt_rdma_arbiter_meta(
 
             meta_internal(15,0) = reqWord.host;
             meta_internal(31,16) = reqWord.stream;
+            meta_internal(63,32) = reqWord.len;
             STREAM_WRITE(meta_int, meta_internal);
         }
 		
 	} 
 }
 
+// RDMA stream contains last signal only at the last message beats instead of every pkt
+// Arbiter needs to arbite pkts according to the meta_internal_len instead of last
+// We append the last signal for SEND data stream for each packet in case depacketizer needs the last
+// We also append the last signal for WRITE data stream for each packet as the cyt adapter set the ctl bits always to 1
 void cyt_rdma_arbiter_data(	
-                hls::stream<ap_uint<32> >& meta_int,
+                hls::stream<ap_uint<64> >& meta_int,
                 hls::stream<ap_axiu<512, 0, 0, 8> >& s_axis,
                 hls::stream<ap_axiu<512, 0, 0, 8> >& m_axis_0,
                 hls::stream<ap_axiu<512, 0, 0, 8> >& m_axis_1
@@ -75,9 +81,12 @@ void cyt_rdma_arbiter_data(
 
     static ap_axiu<512, 0, 0, 8> currWord;
 
-    static ap_uint<32> meta_internal;
+    static ap_uint<64> meta_internal;
     static ap_uint<16> meta_internal_host;
     static ap_uint<16> meta_internal_stream;
+    static ap_uint<32> meta_internal_len;
+    static ap_uint<32> pkt_word;
+    static ap_uint<32> word_cnt = 0;
 
     switch (fsmState)
     {
@@ -87,6 +96,9 @@ void cyt_rdma_arbiter_data(
             meta_internal = STREAM_READ(meta_int);
             meta_internal_host = meta_internal(15,0);
             meta_internal_stream = meta_internal(31,16);
+            meta_internal_len = meta_internal(63,32);
+
+            pkt_word = (meta_internal_len + 63) >> 6;
 
             if (meta_internal_host == 0){
                 fsmState = SEND_STREAM;
@@ -99,11 +111,14 @@ void cyt_rdma_arbiter_data(
         if (!s_axis.empty())
         {
             currWord = STREAM_READ(s_axis);
-            STREAM_WRITE(m_axis_0, currWord);
-            if (currWord.last)
+            word_cnt++;
+            if (word_cnt == pkt_word)
             {
+                word_cnt = 0;
+                currWord.last = 1;
                 fsmState = META;
             }
+            STREAM_WRITE(m_axis_0, currWord);
         }
         break;
     case WRITE_STREAM:
@@ -116,13 +131,15 @@ void cyt_rdma_arbiter_data(
             outWord.keep = currWord.keep;
             outWord.last = currWord.last;
             outWord.dest = meta_internal_stream;
-
-            STREAM_WRITE(m_axis_1, outWord);
+            word_cnt++;
             
-            if (currWord.last)
+            if (word_cnt == pkt_word)
             {
+                word_cnt = 0;
+                currWord.last = 1;
                 fsmState = META;
             }
+            STREAM_WRITE(m_axis_1, outWord);
         }
         break;
     }
@@ -157,8 +174,8 @@ void cyt_rdma_arbiter(
 
 #pragma HLS DATAFLOW disable_start_propagation
 
-    static hls::stream<ap_uint<32> > meta_int;
-	#pragma HLS STREAM depth=16 variable=meta_int
+    static hls::stream<ap_uint<64> > meta_int;
+	#pragma HLS STREAM depth=8 variable=meta_int
 
     cyt_rdma_arbiter_meta(
                 s_meta,

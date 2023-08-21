@@ -106,7 +106,7 @@ void cyt_rdma_mux_data(
         {
             currWord = STREAM_READ(s_axis_0);
             STREAM_WRITE(m_axis, currWord);
-            if (currWord.last)
+            if (currWord.last) // TODO: check by cnt instead of last
             {
                 fsmState = META;
             }
@@ -115,9 +115,9 @@ void cyt_rdma_mux_data(
     case STREAM_1:
         if (!STREAM_IS_EMPTY(s_axis_1))
         {
-            currWord = STREAM_READ(s_axis_1);
+            currWord = STREAM_READ(s_axis_1); 
             STREAM_WRITE(m_axis, currWord);
-            if (currWord.last)
+            if (currWord.last) // TODO: check by cnt instead of last
             {
                 fsmState = META;
             }
@@ -159,7 +159,7 @@ void cyt_rdma_mux(
 #pragma HLS DATAFLOW disable_start_propagation
 
     static hls::stream<ap_uint<8> > meta_int;
-	#pragma HLS STREAM depth=16 variable=meta_int
+	#pragma HLS STREAM depth=4 variable=meta_int
 
     cyt_rdma_mux_meta(
                 s_meta_0,

@@ -78,11 +78,16 @@ ACCL::~ACCL() {
 
 void ACCL::deinit() {
   debug("Removing CCLO object at " + debug_hex(cclo->get_base_addr()));
+
+  cclo->printDebug();
   
   CCLO::Options options{};
   options.scenario = operation::config;
   options.cfg_function = cfgFunc::reset_periph;
-  call_sync(options);
+  CCLO *handle = call_async(options);
+  std::chrono::milliseconds timeout(100);
+  handle->wait(timeout);
+  check_return_value("reset_periph");
 
   for (auto &buf : rx_buffer_spares) {
     buf->free_buffer();
@@ -239,7 +244,8 @@ CCLO *ACCL::stream_put(BaseBuffer &srcbuf, unsigned int count,
   if (run_async) {
     return handle;
   } else {
-    handle->wait();
+    std::chrono::milliseconds timeout(6000);
+    handle->wait(timeout);
     check_return_value("stream_put");
   }
 
@@ -270,7 +276,8 @@ CCLO *ACCL::stream_put(dataType src_data_type, unsigned int count,
   if (run_async) {
     return handle;
   } else {
-    handle->wait();
+    std::chrono::milliseconds timeout(6000);
+    handle->wait(timeout);
     check_return_value("stream_put");
   }
 
@@ -333,7 +340,8 @@ CCLO *ACCL::recv(dataType dst_data_type, unsigned int count,
   if (run_async) {
     return handle;
   } else {
-    handle->wait();
+    std::chrono::milliseconds timeout(6000);
+    handle->wait(timeout);
     check_return_value("recv");
   }
 
@@ -490,7 +498,8 @@ CCLO *ACCL::bcast(BaseBuffer &buf, unsigned int count,
   if (run_async) {
     return handle;
   } else {
-    handle->wait();
+    std::chrono::milliseconds timeout(6000);
+    handle->wait(timeout);
     if (to_fpga == false) {
       buf.sync_from_device();
     }
@@ -549,7 +558,8 @@ CCLO *ACCL::scatter(BaseBuffer &sendbuf,
   if (run_async) {
     return handle;
   } else {
-    handle->wait();
+    std::chrono::milliseconds timeout(6000);
+    handle->wait(timeout);
     if (to_fpga == false) {
       auto slice = recvbuf.slice(0, count);
       slice->sync_from_device();
@@ -618,7 +628,8 @@ CCLO *ACCL::gather(BaseBuffer &sendbuf,
   if (run_async) {
     return handle;
   } else {
-    handle->wait();
+    std::chrono::milliseconds timeout(6000);
+    handle->wait(timeout);
     if (to_fpga == false && is_root == true) {
       auto slice = recvbuf.slice(0, count * communicator.get_ranks()->size());
       slice->sync_from_device();
@@ -675,6 +686,7 @@ CCLO *ACCL::allgather(BaseBuffer &sendbuf,
   options.scenario = operation::allgather;
   options.comm = communicator.communicators_addr();
   options.addr_0 = &sendbuf;
+  options.addr_1 = &recvbuf; // recvbuf is used with dm1 rd, needs to pass host infomation
   options.addr_2 = &recvbuf;
   options.count = count;
   options.compress_dtype = compress_dtype;
@@ -684,7 +696,8 @@ CCLO *ACCL::allgather(BaseBuffer &sendbuf,
   if (run_async) {
     return handle;
   } else {
-    handle->wait();
+    std::chrono::milliseconds timeout(6000);
+    handle->wait(timeout);
     if (to_fpga == false) {
       auto slice = recvbuf.slice(0, count * communicator.get_ranks()->size());
       slice->sync_from_device();
@@ -745,7 +758,8 @@ CCLO *ACCL::reduce(BaseBuffer &sendbuf,
   if (run_async) {
     return handle;
   } else {
-    handle->wait();
+    std::chrono::milliseconds timeout(6000);
+    handle->wait(timeout);
     if (to_fpga == false && is_root == true) {
       auto slice = recvbuf.slice(0, count);
       slice->sync_from_device();
@@ -802,7 +816,8 @@ CCLO *ACCL::reduce(dataType src_data_type,
   if (run_async) {
     return handle;
   } else {
-    handle->wait();
+    std::chrono::milliseconds timeout(6000);
+    handle->wait(timeout);
     if (to_fpga == false && is_root == true) {
       auto slice = recvbuf.slice(0, count);
       slice->sync_from_device();
@@ -856,7 +871,8 @@ CCLO *ACCL::reduce(BaseBuffer &sendbuf, dataType dst_data_type,
   if (run_async) {
     return handle;
   } else {
-    handle->wait();
+    std::chrono::milliseconds timeout(6000);
+    handle->wait(timeout);
     check_return_value("reduce");
   }
 
@@ -901,7 +917,8 @@ CCLO *ACCL::reduce(dataType src_data_type, dataType dst_data_type,
   if (run_async) {
     return handle;
   } else {
-    handle->wait();
+    std::chrono::milliseconds timeout(6000);
+    handle->wait(timeout);
     check_return_value("reduce");
   }
 
@@ -936,6 +953,7 @@ CCLO *ACCL::allreduce(BaseBuffer &sendbuf,
   options.scenario = operation::allreduce;
   options.comm = communicator.communicators_addr();
   options.addr_0 = &sendbuf;
+  options.addr_1 = &recvbuf; // recvbuf is used with dm1 rd, needs to pass host infomation
   options.addr_2 = &recvbuf;
   options.count = count;
   options.reduce_function = func;
@@ -946,7 +964,8 @@ CCLO *ACCL::allreduce(BaseBuffer &sendbuf,
   if (run_async) {
     return handle;
   } else {
-    handle->wait();
+    std::chrono::milliseconds timeout(6000);
+    handle->wait(timeout);
     if (to_fpga == false) {
       auto slice = recvbuf.slice(0, count);
       slice->sync_from_device();

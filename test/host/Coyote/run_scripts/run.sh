@@ -36,19 +36,23 @@ done
 #define ACCL_ALLGATHER      9
 #define ACCL_ALLREDUCE      10
 
-ARG=" -d -f -t" # debug, hardware, and tcp flags
-TEST_MODE=(5) 
-N_ELEMENTS_KB=(16)
+ARG=" -d -f -r" # debug, hardware, and tcp/rdma flags
+TEST_MODE=(3) 
+N_ELEMENTS=(4096)
 HOST=(1)
+PROTOC=(1) # eager=0, rendezevous=1
 
 echo "Run command: $EXEC $ARG -y $TEST_MODE -c 1024 -l $FPGA_FILE"
 
+rm -f ./rank*
+
 for NP in `seq $NUM_PROCESS $NUM_PROCESS`; do
 	for MODE in ${TEST_MODE[@]}; do
-		for N_ELE in ${N_ELEMENTS_KB}; do
-			N=$((N_ELE*1024))
-			echo "mpirun -n $NP -f $HOST_FILE --iface ens4 $EXEC $ARG -z $HOST -y $MODE -c $N -l $FPGA_FILE &"
-			mpirun -prepend-rank -n $NP -f $HOST_FILE --iface ens4 $EXEC $ARG -z $HOST -y $MODE -c $N -l $FPGA_FILE &
+		for N_ELE in ${N_ELEMENTS}; do
+			# N=$((N_ELE*1024))
+			N=$N_ELE
+			echo "mpirun -n $NP -f $HOST_FILE --iface ens4 $EXEC $ARG -z $HOST -y $MODE -c $N -l $FPGA_FILE -p $PROTOC &"
+			mpirun -n $NP -f $HOST_FILE --iface ens4f0 -outfile-pattern "./rank_%r_stdout.log" -errfile-pattern "./rank_%r_stdout.log" $EXEC $ARG -z $HOST -y $MODE -c $N -l $FPGA_FILE -p $PROTOC &
 			SLEEPTIME=$(((NP-2)*2 + 10))
 			sleep $SLEEPTIME
 			parallel-ssh -H "$HOST_LIST" "kill -9 \$(ps -aux | grep accl_on_coyote | awk '{print \$2}')"
