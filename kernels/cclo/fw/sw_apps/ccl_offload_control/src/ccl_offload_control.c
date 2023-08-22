@@ -26,6 +26,8 @@
 static volatile unsigned int timeout = 1 << 28;
 static volatile unsigned int max_eager_size = (1<<15);
 static volatile	unsigned int max_segment_size = DMA_MAX_BTT;
+static volatile	unsigned int num_rndzv_pending = 0;
+static volatile bool new_call = true;
 
 static datapath_arith_config arcfg;
 static communicator world;
@@ -36,8 +38,8 @@ static bool comm_cache_adr;
 //uint32_t sim_cfgmem[END_OF_EXCHMEM/4];
 uint32_t sim_cfgmem[(GPIO_BASEADDR+0x1000)/4];
 uint32_t *cfgmem = sim_cfgmem;
-hlslib::Stream<ap_axiu<32,0,0,0>, 512> cmd_fifos[4];
-hlslib::Stream<ap_axiu<32,0,0,0>, 512> sts_fifos[4];
+hlslib::Stream<ap_axiu<32,0,0,0>, 512> cmd_fifos[5];
+hlslib::Stream<ap_axiu<32,0,0,0>, 512> sts_fifos[5];
 #else
 uint32_t *cfgmem = (uint32_t *)(EXCHMEM_BASEADDR);
 #endif
@@ -111,6 +113,8 @@ static inline uint32_t pack_flags_rendezvous(uint32_t host_flags){
 //sends a buffer address to a remote peer,
 //enabling them to perform a RDMA WRITE to our buffer
 void rendezvous_send_addr(uint32_t qpn, uint64_t addr, bool host, uint32_t count, uint32_t tag){
+    //if this is a retry call, skip
+    if(new_call) return;
     putd(CMD_RNDZV, qpn);
     putd(CMD_RNDZV, (uint32_t)addr);
     putd(CMD_RNDZV, (uint32_t)(addr>>32));
@@ -122,30 +126,119 @@ void rendezvous_send_addr(uint32_t qpn, uint64_t addr, bool host, uint32_t count
 //receive a buffer address from a remote peer,
 //enabling us to perform a RDMA WRITE to their buffer
 int rendezvous_get_addr(unsigned int target_qpn, uint64_t *target_addr, bool *target_host, uint32_t target_count, uint32_t target_tag){
-    unsigned int type = getd(STS_RNDZV);//TODO should be RNDZVS_INIT = 2
-    unsigned int qpn = getd(STS_RNDZV);//TODO should be equal to target_qpn
-    uint64_t addr = (uint64_t)getd(STS_RNDZV);
-    addr |= (uint64_t)getd(STS_RNDZV) << 32;
-    *target_addr = addr;
-    *target_host = getd(STS_RNDZV);
-    getd(STS_RNDZV);//count
-    getd(STS_RNDZV);//tag
-    return NO_ERROR;
+    unsigned int type, qpn;
+    uint64_t addr;
+    // Check if there are pending notifications in STS_RNDZV_PENDING,
+    // otherwise pull from STS_RNDZV
+    unsigned int i;
+    for(i = 0; i<num_rndzv_pending; i++){
+        type = getd(STS_RNDZV_PENDING);
+        qpn = getd(STS_RNDZV_PENDING);
+        if((type != 2) || (qpn != target_qpn)){
+            //copy from STS_RNDZV to STS_RNDZV_PENDING
+            putd(CMD_RNDZV_PENDING, type);
+            putd(CMD_RNDZV_PENDING, qpn);
+            putd(CMD_RNDZV_PENDING, getd(STS_RNDZV_PENDING));
+            putd(CMD_RNDZV_PENDING, getd(STS_RNDZV_PENDING));
+            putd(CMD_RNDZV_PENDING, getd(STS_RNDZV_PENDING));
+            putd(CMD_RNDZV_PENDING, getd(STS_RNDZV_PENDING));
+            putd(CMD_RNDZV_PENDING, getd(STS_RNDZV_PENDING));
+        } else {
+            addr = (uint64_t)getd(STS_RNDZV_PENDING);
+            addr |= (uint64_t)getd(STS_RNDZV_PENDING) << 32;
+            *target_addr = addr;
+            *target_host = getd(STS_RNDZV_PENDING);
+            getd(STS_RNDZV_PENDING);//count
+            getd(STS_RNDZV_PENDING);//tag
+            num_rndzv_pending--;
+            return NO_ERROR;
+        }
+    }
+    //if we're still executing, no match in RNDZV_PENDING, check STS_RNDZV
+    while(!tngetd(STS_RNDZV)){
+        type = getd(STS_RNDZV);
+        qpn = getd(STS_RNDZV);
+        if((type != 2) || (qpn != target_qpn)){
+            //copy from STS_RNDZV to STS_RNDZV_PENDING
+            putd(CMD_RNDZV_PENDING, type);
+            putd(CMD_RNDZV_PENDING, qpn);
+            putd(CMD_RNDZV_PENDING, getd(STS_RNDZV));
+            putd(CMD_RNDZV_PENDING, getd(STS_RNDZV));
+            putd(CMD_RNDZV_PENDING, getd(STS_RNDZV));
+            putd(CMD_RNDZV_PENDING, getd(STS_RNDZV));
+            putd(CMD_RNDZV_PENDING, getd(STS_RNDZV));
+            num_rndzv_pending++;
+        } else {
+            addr = (uint64_t)getd(STS_RNDZV);
+            addr |= (uint64_t)getd(STS_RNDZV) << 32;
+            *target_addr = addr;
+            *target_host = getd(STS_RNDZV);
+            getd(STS_RNDZV);//count
+            getd(STS_RNDZV);//tag
+            return NO_ERROR;
+        }
+    }
+    //we found nothing, signal this up to caller
+    return NOT_READY_ERROR;
 }
 
 //receives an acknowledgement that a RDMA WRITE to 
 //our buffer has completed
 int rendezvous_get_completion(unsigned int target_qpn, uint64_t target_addr, bool target_host, uint32_t target_count, uint32_t target_tag){
-    unsigned int type = getd(STS_RNDZV);//TODO should be RNDZVS_WR_DONE = 3
-    unsigned int qpn = getd(STS_RNDZV);//TODO should be equal to target_qpn
-    uint64_t addr = (uint64_t)getd(STS_RNDZV);
-    addr |= (uint64_t)getd(STS_RNDZV) << 32;
-    //TODO addr should be equal to target_addr
-    bool host = getd(STS_RNDZV);
-    //TODO host should be equal to target_host
-    getd(STS_RNDZV);//count
-    getd(STS_RNDZV);//tag
-    return NO_ERROR;
+    unsigned int type, qpn;
+    uint64_t addr;
+    // Check if there are pending notifications in STS_RNDZV_PENDING,
+    // otherwise pull from STS_RNDZV
+    unsigned int i;
+    for(i = 0; i<num_rndzv_pending; i++){
+        type = getd(STS_RNDZV_PENDING);
+        qpn = getd(STS_RNDZV_PENDING);
+        if((type != 3) || (qpn != target_qpn)){
+            //copy from STS_RNDZV to STS_RNDZV_PENDING
+            putd(CMD_RNDZV_PENDING, type);
+            putd(CMD_RNDZV_PENDING, qpn);
+            putd(CMD_RNDZV_PENDING, getd(STS_RNDZV_PENDING));
+            putd(CMD_RNDZV_PENDING, getd(STS_RNDZV_PENDING));
+            putd(CMD_RNDZV_PENDING, getd(STS_RNDZV_PENDING));
+            putd(CMD_RNDZV_PENDING, getd(STS_RNDZV_PENDING));
+            putd(CMD_RNDZV_PENDING, getd(STS_RNDZV_PENDING));
+        } else {
+            addr = (uint64_t)getd(STS_RNDZV_PENDING);
+            addr |= (uint64_t)getd(STS_RNDZV_PENDING) << 32;
+            //TODO check addr
+            getd(STS_RNDZV_PENDING);//TODO check host
+            getd(STS_RNDZV_PENDING);//count
+            getd(STS_RNDZV_PENDING);//tag
+            num_rndzv_pending--;
+            return NO_ERROR;
+        }
+    }
+    //if we're still executing, no match in RNDZV_PENDING, check STS_RNDZV
+    while(!tngetd(STS_RNDZV)){
+        type = getd(STS_RNDZV);
+        qpn = getd(STS_RNDZV);
+        if((type != 3) || (qpn != target_qpn)){
+            //copy from STS_RNDZV to STS_RNDZV_PENDING
+            putd(CMD_RNDZV_PENDING, type);
+            putd(CMD_RNDZV_PENDING, qpn);
+            putd(CMD_RNDZV_PENDING, getd(STS_RNDZV));
+            putd(CMD_RNDZV_PENDING, getd(STS_RNDZV));
+            putd(CMD_RNDZV_PENDING, getd(STS_RNDZV));
+            putd(CMD_RNDZV_PENDING, getd(STS_RNDZV));
+            putd(CMD_RNDZV_PENDING, getd(STS_RNDZV));
+            num_rndzv_pending++;
+        } else {
+            addr = (uint64_t)getd(STS_RNDZV);
+            addr |= (uint64_t)getd(STS_RNDZV) << 32;
+            //TODO check addr
+            getd(STS_RNDZV);//TODO check host
+            getd(STS_RNDZV);//count
+            getd(STS_RNDZV);//tag
+            return NO_ERROR;
+        }
+    }
+    //we found nothing, signal this up to caller
+    return NOT_READY_ERROR;
 }
 
 //configure datapath before calling this method
@@ -330,7 +423,11 @@ int send(
         //get remote address
         uint64_t dst_addr;
         bool dst_host;
-        rendezvous_get_addr(world.ranks[dst_rank].session, &dst_addr, &dst_host, count, dst_tag);
+        int status = rendezvous_get_addr(world.ranks[dst_rank].session, &dst_addr, &dst_host, count, dst_tag);
+        if(status == NOT_READY_ERROR){
+            //we're not yet ready to serve this send, queue it for retry
+            return NOT_READY_ERROR;
+        }
         if(dst_host){
             host |= RES_HOST;
         }
@@ -1326,13 +1423,20 @@ void encore_soft_reset(void){
 }
 
 //poll for a call from the host
-static inline void wait_for_call(void) {
+static inline bool wait_for_call(void) {
     // Poll the host cmd queue
     unsigned int invalid;
     do {
         invalid = 0;
-        invalid += tngetd(CMD_CALL);
+        if(new_call){
+            invalid += tngetd(CMD_CALL);
+        } else {
+            invalid += tngetd(STS_CALL_RETRY);
+        }
+        new_call = !new_call;
     } while (invalid);
+    //return true if this a new call
+    return !new_call;
 }
 
 //signal finish to the host and write ret value in exchange mem
@@ -1352,24 +1456,41 @@ void run() {
     init();
 
     while (1) {
-        wait_for_call();
-
-        //read parameters from host command queue
-        scenario            = getd(CMD_CALL);
-        count               = getd(CMD_CALL);
-        comm                = getd(CMD_CALL);
-        root_src_dst        = getd(CMD_CALL);
-        function            = getd(CMD_CALL);
-        msg_tag             = getd(CMD_CALL);
-        datapath_cfg        = getd(CMD_CALL);
-        compression_flags   = getd(CMD_CALL);
-        buftype_flags       = getd(CMD_CALL);
-        op0_addrl           = getd(CMD_CALL);
-        op0_addrh           = getd(CMD_CALL);
-        op1_addrl           = getd(CMD_CALL);
-        op1_addrh           = getd(CMD_CALL);
-        res_addrl           = getd(CMD_CALL);
-        res_addrh           = getd(CMD_CALL);
+        if(wait_for_call()){
+            //read parameters from host command queue
+            scenario            = getd(CMD_CALL);
+            count               = getd(CMD_CALL);
+            comm                = getd(CMD_CALL);
+            root_src_dst        = getd(CMD_CALL);
+            function            = getd(CMD_CALL);
+            msg_tag             = getd(CMD_CALL);
+            datapath_cfg        = getd(CMD_CALL);
+            compression_flags   = getd(CMD_CALL);
+            buftype_flags       = getd(CMD_CALL);
+            op0_addrl           = getd(CMD_CALL);
+            op0_addrh           = getd(CMD_CALL);
+            op1_addrl           = getd(CMD_CALL);
+            op1_addrh           = getd(CMD_CALL);
+            res_addrl           = getd(CMD_CALL);
+            res_addrh           = getd(CMD_CALL);
+        } else {
+            //read parameters from command retry queue
+            scenario            = getd(STS_CALL_RETRY);
+            count               = getd(STS_CALL_RETRY);
+            comm                = getd(STS_CALL_RETRY);
+            root_src_dst        = getd(STS_CALL_RETRY);
+            function            = getd(STS_CALL_RETRY);
+            msg_tag             = getd(STS_CALL_RETRY);
+            datapath_cfg        = getd(STS_CALL_RETRY);
+            compression_flags   = getd(STS_CALL_RETRY);
+            buftype_flags       = getd(STS_CALL_RETRY);
+            op0_addrl           = getd(STS_CALL_RETRY);
+            op0_addrh           = getd(STS_CALL_RETRY);
+            op1_addrl           = getd(STS_CALL_RETRY);
+            op1_addrh           = getd(STS_CALL_RETRY);
+            res_addrl           = getd(STS_CALL_RETRY);
+            res_addrh           = getd(STS_CALL_RETRY);
+        }
 
         op0_addr = ((uint64_t) op0_addrh << 32) | op0_addrl;
         op1_addr = ((uint64_t) op1_addrh << 32) | op1_addrl;
@@ -1459,7 +1580,26 @@ void run() {
                 retval = NO_ERROR;
                 break;
         }
-        finalize_call(retval);
+        if(retval == NOT_READY_ERROR){
+            //put the current call in the retry queue
+            putd(CMD_CALL_RETRY,scenario);
+            putd(CMD_CALL_RETRY,count);
+            putd(CMD_CALL_RETRY,comm);
+            putd(CMD_CALL_RETRY,root_src_dst);
+            putd(CMD_CALL_RETRY,function);
+            putd(CMD_CALL_RETRY,msg_tag);
+            putd(CMD_CALL_RETRY,datapath_cfg);
+            putd(CMD_CALL_RETRY,compression_flags);
+            putd(CMD_CALL_RETRY,buftype_flags);
+            putd(CMD_CALL_RETRY,op0_addrl);
+            putd(CMD_CALL_RETRY,op0_addrh);
+            putd(CMD_CALL_RETRY,op1_addrl);
+            putd(CMD_CALL_RETRY,op1_addrh);
+            putd(CMD_CALL_RETRY,res_addrl);
+            cputd(CMD_CALL_RETRY,res_addrh);
+        } else {
+            finalize_call(retval);
+        }
     }
 }
 

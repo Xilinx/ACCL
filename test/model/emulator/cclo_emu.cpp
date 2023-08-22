@@ -225,15 +225,26 @@ void controller(Stream<command_word> &cmdin, Stream<command_word> &cmdout,
     stsout.Push({.data=0, .last=1});
 }
 
+//function for call retry and pending notification loopback
+void stream_forward(Stream<command_word> &in, Stream<command_word> &out, unsigned int count){
+    if(count == 0){
+        while(!in.IsEmpty()){
+            out.Push(in.Pop());
+        }
+    } else {
+        for(int i=0; i<count; i++){
+            out.Push(in.Pop());
+        }
+    }
+}
+
 //wrap a host controller
 void controller_bypass(Stream<command_word> &cmdin, Stream<command_word> &cmdout,
                 Stream<command_word> &stsin, Stream<command_word> &stsout){
     //gather arguments from input command queue
-    for(int i=0; i<15; i++){
-        cmdout.Push(cmdin.Pop());
-    }
+    stream_forward(cmdin, cmdout, 15);
     logger << log_level::verbose << "Controller bypass: pushed arguments" << endl;
-    stsout.Push(stsin.Pop());
+    stream_forward(stsin, stsout, 1);
     logger << log_level::verbose << "Controller bypass: pushed status" << endl;
 }
 
@@ -434,6 +445,9 @@ void sim_bd(zmq_intf_context *ctx, string comm_backend, unsigned int local_rank,
     //ZMQ to other nodes process(es)
     HLSLIB_FREERUNNING_FUNCTION(eth_endpoint_egress_port, ctx, eth_tx_data, local_rank);
     HLSLIB_FREERUNNING_FUNCTION(eth_endpoint_ingress_port, ctx, eth_rx_data);
+    //pending notification and retry call queue
+    HLSLIB_FREERUNNING_FUNCTION(stream_forward, cmd_fifos[CMD_CALL_RETRY], sts_fifos[STS_CALL_RETRY], 15);
+    HLSLIB_FREERUNNING_FUNCTION(stream_forward, cmd_fifos[CMD_RNDZV_PENDING], sts_fifos[STS_RNDZV_PENDING], 7);
     //MICROBLAZE
     HLSLIB_DATAFLOW_FUNCTION(run_accl);
     HLSLIB_DATAFLOW_FINALIZE();

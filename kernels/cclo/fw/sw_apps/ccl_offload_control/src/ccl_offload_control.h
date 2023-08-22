@@ -38,10 +38,14 @@
 #define CMD_CALL     0
 #define CMD_DMA_MOVE 1
 #define CMD_RNDZV    2
+#define CMD_RNDZV_PENDING 3
+#define CMD_CALL_RETRY    4
 
 #define STS_CALL     0
 #define STS_DMA_MOVE 1
 #define STS_RNDZV    2
+#define STS_RNDZV_PENDING 3
+#define STS_CALL_RETRY    4
 
 //PACKT CONST
 #define MAX_PACKETSIZE 4096
@@ -147,6 +151,7 @@
 #define SEGMENTER_EXPECTED_BTT_ERROR                  (1<<25)
 #define DMA_TAG_MISMATCH_ERROR                        (1<<26)
 #define CLOSE_CON_NOT_SUCCEEDED                       (1<<27)
+#define NOT_READY_ERROR                               (1<<28)
 
 //define opcodes for move offload
 //each address parameter (op0, op1, res) should carry one of these opcodes
@@ -228,9 +233,8 @@ extern uint32_t *cfgmem;
 
 #else
 
-extern hlslib::Stream<ap_axiu<32,0,0,0>, 512> cmd_fifos[4];
-extern hlslib::Stream<ap_axiu<32,0,0,0>, 512> sts_fifos[4];
-extern sem_t mb_irq_mutex;
+extern hlslib::Stream<ap_axiu<32,0,0,0>, 512> cmd_fifos[5];
+extern hlslib::Stream<ap_axiu<32,0,0,0>, 512> sts_fifos[5];
 
 //push data to stream
 #define putd(channel, value) cmd_fifos[channel].Push((ap_axiu<32,0,0,0>){.data=value, .last=0})
