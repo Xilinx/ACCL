@@ -127,7 +127,7 @@ void zmq_eth_ingress_server(zmq_intf_context *ctx, hlslib::Stream<stream_word > 
  * @param local_rank The local rank of this process.
  * @param remap_dest Activate destination remapping. Set to True when using TCP.
  */
-void zmq_eth_egress_server(zmq_intf_context *ctx, hlslib::Stream<stream_word > &in, unsigned int local_rank, bool remap_dest);
+void zmq_eth_egress_server(zmq_intf_context *ctx, hlslib::Stream<stream_word > &in, unsigned int local_rank);
 
 /**
  * @brief Run zmq_krnl_egress_port repeatedly

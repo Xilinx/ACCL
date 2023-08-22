@@ -485,7 +485,6 @@ int main(int argc, char **argv)
                                           false, 5500, "positive integer");
     cmd.add(startport);
 
-    TCLAP::SwitchArg udp_arg("u", "udp", "Use UDP hardware setup", cmd, false);
     TCLAP::SwitchArg loopback_arg("b", "loopback", "Enable kernel loopback", cmd, false);
     TCLAP::SwitchArg wave_en("w", "waveform", "Enable waveform recording", cmd, false);
 
