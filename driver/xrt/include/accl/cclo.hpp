@@ -185,5 +185,11 @@ public:
    * @return deviceType Whether this is a sim device, xrt device or coyote device.
    */
   virtual deviceType get_device_type() = 0;
+
+  /**
+   * printDebug.
+   *
+   */
+  virtual void printDebug() = 0;
 };
 } // namespace ACCL

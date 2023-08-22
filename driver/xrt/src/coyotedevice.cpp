@@ -88,19 +88,35 @@ void CoyoteRequest::wait_kernel() {
   }
 }
 
-CoyoteDevice::CoyoteDevice(): coyote_proc(targetRegion, getpid()), num_qp(0) {
-	std::cerr << "ACLL DEBUG: aquiring cProc: targetRegion: " << targetRegion << ", cPid: " << coyote_proc.getCpid() << std::endl;
+CoyoteDevice::CoyoteDevice(): num_qp(0) {
+  this->coyote_proc = new fpga::cProcess(targetRegion, getpid());
+	std::cerr << "ACLL DEBUG: aquiring cProc: targetRegion: " << targetRegion << ", cPid: " << coyote_proc->getCpid() << std::endl;
 }
 
-CoyoteDevice::CoyoteDevice(unsigned int num_qp): coyote_proc(targetRegion, getpid()), num_qp(num_qp) {
-	std::cerr << "ACLL DEBUG: aquiring cProc: targetRegion: " << targetRegion << ", cPid: " << coyote_proc.getCpid() << std::endl;
+CoyoteDevice::CoyoteDevice(unsigned int num_qp): num_qp(num_qp) {
 
-  for (unsigned int i=0; i<num_qp; i++)
+  for (unsigned int i=0; i<(num_qp+1); i++)
   {
-    
     fpga::cProcess* cproc = new fpga::cProcess(targetRegion, getpid());
     coyote_qProc_vec.push_back(cproc);
-    std::cerr << "ACLL DEBUG: aquiring qProc: targetRegion: " << targetRegion << ", cPid: " <<  cproc->getCpid() << std::endl;
+  }
+
+  for (unsigned int i=0; i<coyote_qProc_vec.size(); i++){
+    if(coyote_qProc_vec[i]->getCpid() == 0){
+      this->coyote_proc = coyote_qProc_vec[i];
+      std::cerr << "ACLL DEBUG: aquiring cProc: targetRegion: " << targetRegion << ", cPid: " << coyote_proc->getCpid() << std::endl;
+      coyote_qProc_vec.erase(coyote_qProc_vec.begin() + i);
+      break;
+    }
+  }
+
+  if(coyote_proc == NULL || coyote_proc->getCpid() != 0){
+    std::cerr << "cProc initialization error!"<<std::endl;
+
+  }
+
+  for (unsigned int i=0; i<coyote_qProc_vec.size(); i++){
+    std::cerr << "ACLL DEBUG: aquiring qProc: targetRegion: " << targetRegion << ", cPid: " << coyote_qProc_vec[i]->getCpid() << std::endl;
   }
 
 }
@@ -149,7 +165,22 @@ CCLO::deviceType CoyoteDevice::get_device_type()
 }
 
 void CoyoteDevice::printDebug(){
-  coyote_proc.printDebug();
+  coyote_proc->printDebug();
+
+  std::ifstream inputFile("/sys/kernel/coyote_cnfg/cyt_attr_nstats_q0");  
+
+  if (!inputFile.is_open()) {
+      std::cerr << "Failed to open net sts file." << std::endl;
+  }
+
+  // Read and print the file line by line
+  std::string line;
+  while (std::getline(inputFile, line)) {
+      std::cout << line << std::endl;
+  }
+
+  // Close the file
+  inputFile.close();
 }
 
 ACCLRequest *CoyoteDevice::call(const Options &options) {
@@ -161,13 +192,13 @@ ACCLRequest *CoyoteDevice::call(const Options &options) {
 }
 
 val_t CoyoteDevice::read(addr_t offset) {
-	std::cerr << "CoyoteDevice read address: " << ((OFFSET_CCLO + offset)>>2) << std::endl;
-  return coyote_proc.getCSR((OFFSET_CCLO + offset)>>2);
+	// std::cerr << "CoyoteDevice read address: " << ((OFFSET_CCLO + offset)>>2) << std::endl;
+  return coyote_proc->getCSR((OFFSET_CCLO + offset)>>2);
 }
 
 void CoyoteDevice::write(addr_t offset, val_t val) {
-	std::cerr << "CoyoteDevice write address: " << ((OFFSET_CCLO + offset)>>2) << std::endl;
-  coyote_proc.setCSR(val, (OFFSET_CCLO + offset)>>2);
+	// std::cerr << "CoyoteDevice write address: " << ((OFFSET_CCLO + offset)>>2) << std::endl;
+  coyote_proc->setCSR(val, (OFFSET_CCLO + offset)>>2);
 }
 
 void CoyoteDevice::launch_request() {

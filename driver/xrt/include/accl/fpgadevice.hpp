@@ -113,6 +113,8 @@ public:
 
   deviceType get_device_type() override;
 
+  void printDebug() override { return; }
+
   xrt::device* get_device() {
     return &device;
   }

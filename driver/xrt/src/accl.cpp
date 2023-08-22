@@ -78,11 +78,18 @@ ACCL::~ACCL() {
 
 void ACCL::deinit() {
   debug("Removing CCLO object at " + debug_hex(cclo->get_base_addr()));
+
+  cclo->printDebug();
   
   CCLO::Options options{};
   options.scenario = operation::config;
   options.cfg_function = cfgFunc::reset_periph;
-  call_sync(options);
+  ACCLRequest *handle = call_async(options);
+  std::chrono::milliseconds timeout(100);
+  if(!wait(handle, timeout)){
+    throw std::runtime_error("CCLO failed to reset");
+  }
+  check_return_value("reset_periph", handle);
 
   for (auto &buf : rx_buffer_spares) {
     buf->free_buffer();
@@ -667,6 +674,7 @@ ACCLRequest *ACCL::allgather(BaseBuffer &sendbuf,
   options.scenario = operation::allgather;
   options.comm = communicator.communicators_addr();
   options.addr_0 = &sendbuf;
+  options.addr_1 = &recvbuf; // recvbuf is used with dm1 rd, needs to pass host infomation
   options.addr_2 = &recvbuf;
   options.count = count;
   options.compress_dtype = compress_dtype;
@@ -928,6 +936,7 @@ ACCLRequest *ACCL::allreduce(BaseBuffer &sendbuf,
   options.scenario = operation::allreduce;
   options.comm = communicator.communicators_addr();
   options.addr_0 = &sendbuf;
+  options.addr_1 = &recvbuf; // recvbuf is used with dm1 rd, needs to pass host infomation
   options.addr_2 = &recvbuf;
   options.count = count;
   options.reduce_function = func;

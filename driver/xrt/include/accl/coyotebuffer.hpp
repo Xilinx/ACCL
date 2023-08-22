@@ -59,7 +59,7 @@ template <typename dtype> class CoyoteBuffer : public Buffer<dtype> {
       this->n_pages = (buffer_size + page_size - 1) / page_size;
       std::cerr << "CoyoteBuffer contructor called! page_size:"<<page_size<<", buffer_size:"<<buffer_size<<",n_pages:"<<n_pages<< std::endl;
 
-      this->aligned_buffer = (dtype *)this->device->coyote_proc.getMem({fpga::CoyoteAlloc::HUGE_2M, n_pages});
+      this->aligned_buffer = (dtype *)this->device->coyote_proc->getMem({fpga::CoyoteAlloc::HUGE_2M, n_pages});
 
       this->update_buffer(this->aligned_buffer, (addr_t)this->aligned_buffer); 
 
@@ -114,7 +114,7 @@ template <typename dtype> class CoyoteBuffer : public Buffer<dtype> {
     {
       std::cerr << "calling sync: " << std::setbase(16) << (uint64_t)this->aligned_buffer << ", size: " << std::setbase(10) << this->size() << std::endl;
 
-      this->device->coyote_proc.invoke({fpga::CoyoteOper::SYNC, this->aligned_buffer, (uint32_t)this->_size, true, true, 0, false});
+      this->device->coyote_proc->invoke({fpga::CoyoteOper::SYNC, this->aligned_buffer, (uint32_t)this->_size, true, true, 0, false});
     
       this->host_flag = true;
     }
@@ -127,7 +127,7 @@ template <typename dtype> class CoyoteBuffer : public Buffer<dtype> {
     {
       std::cerr << "calling offload: " << std::setbase(16) << (uint64_t)this->aligned_buffer << ", size: " << std::setbase(10) << this->size() << std::endl;
 
-      this->device->coyote_proc.invoke({fpga::CoyoteOper::OFFLOAD, this->aligned_buffer, (uint32_t)this->_size, true, true, 0, false});
+      this->device->coyote_proc->invoke({fpga::CoyoteOper::OFFLOAD, this->aligned_buffer, (uint32_t)this->_size, true, true, 0, false});
     
       this->host_flag = false;
     }
@@ -144,8 +144,8 @@ template <typename dtype> class CoyoteBuffer : public Buffer<dtype> {
         }
       }
 
-      std::cerr << "Free user buffer from cProc cPid:"<< std::setbase(10)<<this->device->coyote_proc.getCpid()<<", buffer_size:"<<buffer_size<<","<<std::setbase(16) << (uint64_t)this->aligned_buffer<<std::endl;
-      this->device->coyote_proc.freeMem(this->aligned_buffer);
+      std::cerr << "Free user buffer from cProc cPid:"<< std::setbase(10)<<this->device->coyote_proc->getCpid()<<", buffer_size:"<<buffer_size<<","<<std::setbase(16) << (uint64_t)this->aligned_buffer<<std::endl;
+      this->device->coyote_proc->freeMem(this->aligned_buffer);
       return;
     }
 

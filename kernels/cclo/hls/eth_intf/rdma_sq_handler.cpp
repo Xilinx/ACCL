@@ -18,7 +18,7 @@
 
 using namespace std;
 
-
+#define UB_SQ_WORD 6
 
 void rdma_sq_handler(
 	STREAM<rdma_req_t> & rdma_sq,
@@ -41,8 +41,14 @@ void rdma_sq_handler(
 	static rdma_req_t rdma_req;
 	static eth_header cmd_in_word;
 	
-	enum fsmStateType {WAIT_CMD, RNDZVS_MSG_CMD, RNDZVS_DONE_CMD, EGR_MSG_CMD};
+	enum fsmStateType {WAIT_CMD, RNDZVS_INIT_CMD, RNDZVS_MSG_CMD, RNDZVS_DONE_CMD, EGR_MSG_CMD};
     static fsmStateType  fsmState = WAIT_CMD;
+
+	static ap_uint<32> ub_sq_cnt = 0;
+
+	static ap_uint<32> ub_sq_vec[UB_SQ_WORD];
+	#pragma HLS ARRAY_PARTITION variable=ub_sq_vec complete 
+
 
 
 	switch (fsmState)
@@ -57,25 +63,37 @@ void rdma_sq_handler(
 					fsmState = RNDZVS_MSG_CMD;
 				}
 			} else if (!STREAM_IS_EMPTY(ub_sq)){
-				//issue sq command
-				rdma_req.opcode = RDMA_SEND;
-				rdma_req.qpn = STREAM_READ(ub_sq).data;
-				rdma_req.host = 0;
-				rdma_req.len = bytes_per_word;//will send just a header
-				rdma_req.vaddr = 0;
-				STREAM_WRITE(rdma_sq, rdma_req);
-				//issue packetizer command
-				cmd_in_word.msg_type = RNDZVS_INIT;
-				cmd_in_word.src = 0;
-				cmd_in_word.seqn = 0;
-				cmd_in_word.strm = 0;
-				cmd_in_word.dst = rdma_req.qpn;
-				cmd_in_word.vaddr(31,0) = STREAM_READ(ub_sq).data;
-				cmd_in_word.vaddr(RDMA_VADDR_BITS-1,32) = STREAM_READ(ub_sq).data;
-				cmd_in_word.host = STREAM_READ(ub_sq).data;
-				cmd_in_word.count = STREAM_READ(ub_sq).data;
-				cmd_in_word.tag = STREAM_READ(ub_sq).data;
-				STREAM_WRITE(cmd_out, cmd_in_word);
+				fsmState = RNDZVS_INIT_CMD;
+			}
+			break;
+		case RNDZVS_INIT_CMD:
+			if (!STREAM_IS_EMPTY(ub_sq)){
+				ub_sq_vec[ub_sq_cnt] = STREAM_READ(ub_sq).data;
+				ub_sq_cnt++;
+				if (ub_sq_cnt == UB_SQ_WORD){
+					//issue sq command
+					rdma_req.opcode = RDMA_SEND;
+					rdma_req.qpn = ub_sq_vec[0];
+					rdma_req.host = 0;
+					rdma_req.len = bytes_per_word;//will send just a header
+					rdma_req.vaddr = 0;
+					STREAM_WRITE(rdma_sq, rdma_req);
+					//issue packetizer command
+					cmd_in_word.msg_type = RNDZVS_INIT;
+					cmd_in_word.src = 0;
+					cmd_in_word.seqn = 0;
+					cmd_in_word.strm = 0;
+					cmd_in_word.dst = rdma_req.qpn;
+					cmd_in_word.vaddr(31,0) = ub_sq_vec[1];
+					cmd_in_word.vaddr(RDMA_VADDR_BITS-1,32) = ub_sq_vec[2];
+					cmd_in_word.host = ub_sq_vec[3];
+					cmd_in_word.count = ub_sq_vec[4];
+					cmd_in_word.tag = ub_sq_vec[5];
+					STREAM_WRITE(cmd_out, cmd_in_word);
+					// clear cnt and move back to WAIT_CMD
+					ub_sq_cnt = 0;
+					fsmState = WAIT_CMD;
+				}
 			}
 			break;
 		case RNDZVS_MSG_CMD:

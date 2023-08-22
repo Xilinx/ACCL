@@ -24,6 +24,8 @@
 #include "ibvQpConn.hpp"
 #include "ibvStructs.hpp"
 #include <string>
+#include <iostream>
+#include <fstream>
 
 constexpr int targetRegion = 0;
 
@@ -104,13 +106,13 @@ public:
 
   deviceType get_device_type() override;
 
+  void printDebug() override;
+
   fpga::cProcess* get_device(){
-    return &coyote_proc;
+    return coyote_proc;
   }
-
-  void printDebug();
-
-  fpga::cProcess coyote_proc;
+  
+  fpga::cProcess* coyote_proc;
 
   // RDMA related 
   // RDMA requires multiple processes to establish queue pairs

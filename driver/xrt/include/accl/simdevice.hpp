@@ -103,6 +103,8 @@ public:
 
   addr_t get_base_addr() override { return 0x0; }
 
+  void printDebug() override { return; }
+
   /**
    * Get the zmq server used by the CCLO emulator or simulator.
    *
