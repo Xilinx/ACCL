@@ -48,6 +48,7 @@ void cyt_rdma_tx(
                 //advance to moving data
                 txFsmState = TX_DATA;
             }
+        break;
         case TX_DATA:
             if(!STREAM_IS_EMPTY(send_data) && !STREAM_IS_FULL(tx)){
                 //transmit in chunks of 4KB of data plus header

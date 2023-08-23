@@ -296,45 +296,43 @@ void sim_bd(zmq_intf_context *ctx, string comm_backend, unsigned int local_rank,
     Stream<stream_word > switch_m[10];
     Stream<segmenter_cmd> seg_cmd[13];
     Stream<ap_uint<32> > seg_sts[13];
-    Stream<stream_word > accl_to_krnl_seg;
-    Stream<stream_word > accl_to_krnl_ssc;
+    Stream<stream_word > accl_to_krnl_seg("accl_to_krnl_seg");
+    Stream<stream_word > accl_to_krnl_ssc("accl_to_krnl_ssc");
 
-    Stream<eth_header > eth_tx_cmd;
-    Stream<ap_uint<32> > eth_tx_sts;
-    Stream<eth_header > eth_rx_sts;
-    Stream<eth_header > eth_rx_sts_sess;
+    Stream<eth_header > eth_tx_cmd("eth_tx_cmd");
+    Stream<ap_uint<32> > eth_tx_sts("eth_tx_sts");
+    Stream<eth_header > eth_rx_sts("eth_rx_sts");
+    Stream<eth_header > eth_rx_sts_sess("eth_rx_sts_sess");
+    Stream<ap_uint<32>, 32> inflight_rxbuf("inflight_rxbuf");
+    Stream<ap_uint<32>, 32> inflight_rxbuf_sess("inflight_rxbuf_sess");
+    Stream<ap_axiu<104,0,0,DEST_WIDTH>, 32> enq2sess_dma_cmd("enq2sess_dma_cmd");
+    Stream<ap_uint<32>, 32> sess2deq_dma_sts("sess2deq_dma_sts");
 
-    Stream<ap_uint<32>, 32> inflight_rxbuf;
-    Stream<ap_uint<32>, 32> inflight_rxbuf_sess;
+    Stream<rxbuf_notification> eth_rx_notif("eth_rx_notif");
+    Stream<rxbuf_signature> eth_rx_seek_req("eth_rx_seek_req");
+    Stream<rxbuf_seek_result> eth_rx_seek_ack("eth_rx_seek_ack");
+    Stream<ap_uint<32> > rxbuf_release_req("rxbuf_release_req");
 
-    Stream<ap_axiu<104,0,0,DEST_WIDTH>, 32> enq2sess_dma_cmd;
-    Stream<ap_uint<32>, 32> sess2deq_dma_sts;
+    Stream<ap_uint<96> > cmd_txHandler("cmd_txHandler");
+    Stream<pkt32> eth_tx_meta("eth_tx_meta");
+    Stream<pkt64> eth_tx_status("eth_tx_status");
 
-    Stream<rxbuf_notification> eth_rx_notif;
-    Stream<rxbuf_signature> eth_rx_seek_req;
-    Stream<rxbuf_seek_result> eth_rx_seek_ack;
-    Stream<ap_uint<32> > rxbuf_release_req;
+    Stream<pkt128> eth_notif("eth_notif");
+    Stream<pkt32> eth_read_pkg("eth_read_pkg");
+    Stream<pkt16> eth_rx_meta("eth_rx_meta");
+    Stream<eth_notification> eth_notif_out("eth_notif_out");
+    Stream<eth_notification> eth_notif_out_dpkt("eth_notif_out_dpkt");
 
-    Stream<ap_uint<96> > cmd_txHandler;
-    Stream<pkt32> eth_tx_meta;
-    Stream<pkt64> eth_tx_status;
+    Stream<stream_word, 1024> eth_tx_data_int("eth_tx_data_int");
+    Stream<stream_word, 1024> eth_rx_data_int("eth_rx_data_int");
+    Stream<stream_word, 1024> eth_tx_data_stack("eth_tx_data_stack");
+    Stream<stream_word, 1024> eth_rx_data_stack("eth_rx_data_stack");
 
-    Stream<pkt128> eth_notif;
-    Stream<pkt32> eth_read_pkg;
-    Stream<pkt16> eth_rx_meta;
-    Stream<eth_notification> eth_notif_out;
-    Stream<eth_notification> eth_notif_out_dpkt;
-
-    Stream<stream_word, 1024> eth_tx_data_int;
-    Stream<stream_word, 1024> eth_rx_data_int;
-    Stream<stream_word> eth_tx_data_stack;
-    Stream<stream_word> eth_rx_data_stack;
-
-	Stream<rdma_req_t> rdma_sq;
-    Stream<eth_header > eth_tx_cmd_fwd;
-    Stream<stream_word, 64> rdma_wr_data;
-    Stream<ap_axiu<104,0,0,DEST_WIDTH>, 32> rdma_wr_cmd;
-    Stream<ap_uint<32>, 32> rdma_wr_sts;
+    Stream<rdma_req_t> rdma_sq("rdma_sq");
+    Stream<eth_header > eth_tx_cmd_fwd("eth_tx_cmd_fwd");
+    Stream<stream_word, 64> rdma_wr_data("rdma_wr_data");
+    Stream<ap_axiu<104,0,0,DEST_WIDTH>, 32> rdma_wr_cmd("rdma_wr_cmd");
+    Stream<ap_uint<32>, 32> rdma_wr_sts("rdma_wr_sts");
 
     Stream<command_word> callreq_fifos[NUM_CTRL_STREAMS];
     Stream<command_word> callack_fifos[NUM_CTRL_STREAMS];

@@ -1200,7 +1200,7 @@ int allreduce(
                 tmp_compression = (compression & OP0_COMPRESSED) | ((compression & ETH_COMPRESSED) >> 2) | ((compression & ETH_COMPRESSED) >> 1);
                 start_move(
                     MOVE_STRIDE, MOVE_ON_RECV, MOVE_IMMEDIATE,
-                    pack_flags(tmp_compression, RES_REMOTE, host & OP0_HOST),
+                    pack_flags(tmp_compression, RES_REMOTE, NO_HOST),
                     func,
                     curr_count,
                     comm_offset, arcfg_offset,
@@ -1213,7 +1213,7 @@ int allreduce(
                 tmp_compression = compression | ((compression & ETH_COMPRESSED) >> 2);
                 start_move(
                     MOVE_STRIDE, MOVE_ON_RECV, MOVE_STRIDE,
-                    pack_flags(tmp_compression, RES_LOCAL, host),
+                    pack_flags(tmp_compression, RES_LOCAL, host & RES_HOST),
                     func,
                     curr_count,
                     comm_offset, arcfg_offset,
@@ -1231,7 +1231,6 @@ int allreduce(
         err |= end_move();
 
         //next phase: allgather
-
         //send to next in ring, from seg_dst_buf_addr where we stored the scattered reduction result
         start_move(
             MOVE_IMMEDIATE, MOVE_NONE, MOVE_NONE,
@@ -1243,10 +1242,11 @@ int allreduce(
             0, 0, 0, 0
         );
         //send: keep all flags except RES_COMPRESSED, which should be replaced by ETH_COMPRESSED
+        //convert RES_HOST flag to OP0_HOST because we're sending from the destination buffer via Op0
         tmp_compression = (compression & ~RES_COMPRESSED) | ((compression & ETH_COMPRESSED) >> 1);
         start_move(
             MOVE_STRIDE, MOVE_NONE, MOVE_IMMEDIATE,
-            pack_flags(tmp_compression, RES_REMOTE, host & OP0_HOST),
+            pack_flags(tmp_compression, RES_REMOTE, (host & RES_HOST)>>2),
             0,
             (next_in_ring == world.size - 1) ? tail_count : bulk_count,
             comm_offset, arcfg_offset,
@@ -1293,10 +1293,11 @@ int allreduce(
                 //send
                 //we're re-sending from the result, so copy RES_COMPRESSED over OP1_COMPRESSED,
                 //and ETH_COMPRESSED over RES_COMPRESSED
+                //we convert RES_HOST flag to OP1_HOST since we're sending from the result buffer via Op1
                 tmp_compression = ((compression & RES_COMPRESSED) >> 1) | ((compression & ETH_COMPRESSED) >> 1);
                 start_move(
                     MOVE_NONE, MOVE_STRIDE, MOVE_IMMEDIATE,
-                    pack_flags(tmp_compression, RES_REMOTE, ((host & RES_COMPRESSED) >> 1)),
+                    pack_flags(tmp_compression, RES_REMOTE, (host & RES_HOST) >> 1),
                     0,
                     curr_count,
                     comm_offset, arcfg_offset,
