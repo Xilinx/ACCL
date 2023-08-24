@@ -107,7 +107,10 @@ void rdma_depacketizer(
 			ub_notif.data = hdr.msg_type;
 			ub_notif.last = 0;
 			STREAM_WRITE(ub_notif_out, ub_notif);
-			ub_notif.data = notif.session_id;
+			ub_notif.data = hdr.src;
+			ub_notif.last = 0;
+			STREAM_WRITE(ub_notif_out, ub_notif);
+			ub_notif.data = hdr.tag;
 			ub_notif.last = 0;
 			STREAM_WRITE(ub_notif_out, ub_notif);
 			ub_notif.data = hdr.vaddr(31,0);
@@ -120,9 +123,6 @@ void rdma_depacketizer(
 			ub_notif.last = 0;
 			STREAM_WRITE(ub_notif_out, ub_notif);
 			ub_notif.data = hdr.count;
-			ub_notif.last = 0;
-			STREAM_WRITE(ub_notif_out, ub_notif);
-			ub_notif.data = hdr.tag;
 			ub_notif.last = 1;
 			STREAM_WRITE(ub_notif_out, ub_notif);
 		} else if (hdr.msg_type == EGR_MSG) {

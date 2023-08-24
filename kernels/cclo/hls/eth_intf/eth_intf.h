@@ -114,7 +114,7 @@ struct rdma_req_t {
 struct eth_header {
     ap_uint<32> count;
     ap_uint<32> tag;
-    ap_uint<32> src;
+    ap_uint<32> src; // source rank number
     ap_uint<32> seqn;
     ap_uint<32> strm;
     ap_uint<16> dst; // encode either session or qpn; // provided by DMP
