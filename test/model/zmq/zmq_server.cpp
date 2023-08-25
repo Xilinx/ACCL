@@ -676,7 +676,7 @@ void zmq_cmd_server(zmq_intf_context *ctx,
                 Stream<ap_uint<64> > &aximm_rd_addr, Stream<ap_uint<512> > &aximm_rd_data,
                 Stream<ap_uint<64> > &aximm_wr_addr, Stream<ap_uint<512> > &aximm_wr_data, Stream<ap_uint<64> > &aximm_wr_strb,
                 Stream<unsigned int> &callreq, Stream<unsigned int> &callack){
-    (*logger)("Starting ZMQ server\n", log_level::info);
+    (*logger)("Starting ZMQ server\n", log_level::verbose);
     while(!ctx->stop){
         serve_zmq(ctx,
             axilite_rd_addr, axilite_rd_data,
@@ -687,41 +687,41 @@ void zmq_cmd_server(zmq_intf_context *ctx,
         );
         this_thread::sleep_for(chrono::milliseconds(10));
     }
-    (*logger)("Exiting ZMQ server\n", log_level::info);
+    (*logger)("Exiting ZMQ server\n", log_level::verbose);
 }
 
 void zmq_eth_egress_server(zmq_intf_context *ctx, Stream<stream_word > &in, unsigned int local_rank){
-    (*logger)("Starting ZMQ Eth Egress server\n", log_level::info);
+    (*logger)("Starting ZMQ Eth Egress server\n", log_level::verbose);
     while(!ctx->stop){
         eth_endpoint_egress_port(ctx, in, local_rank);
         this_thread::sleep_for(chrono::milliseconds(10));
     }
-    (*logger)("Exiting ZMQ Eth Egress server\n", log_level::info);
+    (*logger)("Exiting ZMQ Eth Egress server\n", log_level::verbose);
 }
 
 void zmq_eth_ingress_server(zmq_intf_context *ctx, Stream<stream_word > &out){
-    (*logger)("Starting ZMQ Eth Ingress server\n", log_level::info);
+    (*logger)("Starting ZMQ Eth Ingress server\n", log_level::verbose);
     while(!ctx->stop){
         eth_endpoint_ingress_port(ctx, out);
         this_thread::sleep_for(chrono::milliseconds(10));
     }
-    (*logger)("Exiting ZMQ Eth Ingress server\n", log_level::info);
+    (*logger)("Exiting ZMQ Eth Ingress server\n", log_level::verbose);
 }
 
 void zmq_krnl_egress_server(zmq_intf_context *ctx, Stream<stream_word > &in){
-    (*logger)("Starting ZMQ Streaming Kernel Egress server\n", log_level::info);
+    (*logger)("Starting ZMQ Streaming Kernel Egress server\n", log_level::verbose);
     while(!ctx->stop){
         krnl_endpoint_egress_port(ctx, in);
         this_thread::sleep_for(chrono::milliseconds(10));
     }
-    (*logger)("Exiting ZMQ Streaming Kernel Egress server\n", log_level::info);
+    (*logger)("Exiting ZMQ Streaming Kernel Egress server\n", log_level::verbose);
 }
 
 void zmq_krnl_ingress_server(zmq_intf_context *ctx, Stream<stream_word > &out){
-    (*logger)("Starting ZMQ Streaming Kernel Ingress server\n", log_level::info);
+    (*logger)("Starting ZMQ Streaming Kernel Ingress server\n", log_level::verbose);
     while(!ctx->stop){
         krnl_endpoint_ingress_port(ctx, out);
         this_thread::sleep_for(chrono::milliseconds(10));
     }
-    (*logger)("Exiting ZMQ Streaming Kernel Ingress server\n", log_level::info);
+    (*logger)("Exiting ZMQ Streaming Kernel Ingress server\n", log_level::verbose);
 }

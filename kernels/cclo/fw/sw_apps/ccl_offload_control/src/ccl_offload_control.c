@@ -716,19 +716,24 @@ int broadcast(  unsigned int count,
             uint64_t dst_addr;
             uint32_t dst_rank;
             bool dst_host;
+            unsigned int pending_moves = 0;
             //if root, wait for addresses then send
             while(current_step < (world.size-1)){
                 int status = rendezvous_get_any_addr(&dst_rank, &dst_addr, &dst_host, count, TAG_ANY);
                 if(status == NOT_READY_ERROR){
-                    //we're not yet ready to serve this send, queue it for retry
-                    return NOT_READY_ERROR;
+                    //we're not yet ready to serve this send, queue it for retry after flushing moves
+                    while(pending_moves > 0){
+                        err |= end_move();
+                        pending_moves--;
+                    }
+                    //if err was NO_ERROR, we'll retry, otherwise give up
+                    return (err | status);
                 }
-                current_step++;
                 if(dst_host){
                     host |= RES_HOST;
                 }
                 //do a RDMA write to the remote address 
-                err |= move(
+                start_move(
                     MOVE_IMMEDIATE,
                     MOVE_NONE,
                     MOVE_IMMEDIATE,
@@ -737,6 +742,16 @@ int broadcast(  unsigned int count,
                     buf_addr, 0, dst_addr, 0, 0, 0,
                     0, 0, dst_rank, TAG_ANY
                 );
+                pending_moves++;
+                current_step++;
+                if(pending_moves > 2){
+                    err |= end_move();
+                    pending_moves--;
+                }
+            }
+            while(pending_moves > 0){
+                err |= end_move();
+                pending_moves--;
             }
             return err;
         } else {
