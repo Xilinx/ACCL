@@ -63,6 +63,7 @@ void cyt_rdma_tx(
                     //data
                     unsigned int i;
                     for(i=0; i<4096 && tx_word.last==0; i+=64){
+#pragma HLS PIPELINE II=1
                         tx_word = STREAM_READ(send_data);
                         tx_word.dest = command.qpn;
                         tx_word.last |= (i == 4032);
@@ -88,7 +89,6 @@ void cyt_rdma_rx(
     STREAM<stream_word> & recv_data,
     STREAM<stream_word> & wr_data,
     STREAM<ap_axiu<104,0,0,DEST_WIDTH>> & wr_cmd,
-    STREAM<ap_uint<32> > & wr_sts,
     STREAM<stream_word> & rx
 ){
 #pragma HLS PIPELINE II=1 style=flp
@@ -117,19 +117,30 @@ void cyt_rdma_rx(
             STREAM_WRITE(wr_cmd, dma_cmd_word);
             //data to write
             do{
+#pragma HLS PIPELINE II=1
                 rx_word = STREAM_READ(rx);
                 STREAM_WRITE(wr_data, rx_word);
             } while(rx_word.last == 0); 
-            STREAM_READ(wr_sts);
         } else {
             //notify
             STREAM_WRITE(notif, current_notif);
             //data received
             do{
+#pragma HLS PIPELINE II=1
                 rx_word = STREAM_READ(rx);
                 STREAM_WRITE(recv_data, rx_word);
             } while(rx_word.last == 0);
         }
+    }
+}
+
+void cyt_rdma_wr_sts(
+    STREAM<ap_uint<32> > & wr_sts
+){
+#pragma HLS PIPELINE II=1 style=flp
+#pragma HLS INLINE off
+    if(!STREAM_IS_EMPTY(wr_sts)){
+        STREAM_READ(wr_sts);
     }
 }
 
@@ -159,6 +170,7 @@ void cyt_rdma(
 #pragma HLS aggregate variable=rdma_sq compact=bit
 
 cyt_rdma_tx(rdma_sq, send_data, tx);
-cyt_rdma_rx(notif, recv_data, wr_data, wr_cmd, wr_sts, rx);
+cyt_rdma_rx(notif, recv_data, wr_data, wr_cmd, rx);
+cyt_rdma_wr_sts(wr_sts);
 
 }

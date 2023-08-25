@@ -850,46 +850,122 @@ int scatter(unsigned int count,
 
     int err = NO_ERROR;
 
-    //determine if we're sending or receiving
-    if(src_rank == world.local_rank){
-        //on the root we only care about ETH_COMPRESSED and OP0_COMPRESSED
-        //so replace RES_COMPRESSED with ETH_COMPRESSED
-        compression = compression | ((compression & ETH_COMPRESSED) >> 1);
 
-        for(int i=0; i < world.size; i++){
-            start_move(
-                (i==0) ? MOVE_IMMEDIATE : MOVE_INCREMENT,
+    unsigned int bytes_count = Xil_In32(arcfg_offset)*count;
+    if((bytes_count > max_eager_size) && (compression == NO_COMPRESSION) && (stream == NO_STREAM)){
+        if(src_rank == world.local_rank){
+            //get remote address
+            uint64_t dst_addr;
+            uint64_t buf_addr;
+            uint32_t dst_rank;
+            bool dst_host;
+            unsigned int pending_moves = 0;
+            //first copy to ourselves while we're waiting for addresses
+            if(current_step == 0){
+                buf_addr = src_buf_addr + src_rank*bytes_count;
+                start_move(
+                    MOVE_IMMEDIATE,
+                    MOVE_NONE,
+                    MOVE_IMMEDIATE,
+                    pack_flags(compression, RES_LOCAL, host),
+                    0, count, comm_offset, arcfg_offset, 
+                    buf_addr, 0, dst_buf_addr, 0, 0, 0,
+                    0, 0, 0, TAG_ANY
+                );
+                current_step++;
+                pending_moves++;
+            }
+            //if root, wait for addresses then send
+            while(current_step < world.size){
+                int status = rendezvous_get_any_addr(&dst_rank, &dst_addr, &dst_host, count, TAG_ANY);
+                if(status == NOT_READY_ERROR){
+                    //we're not yet ready to serve this send, queue it for retry after flushing moves
+                    while(pending_moves > 0){
+                        err |= end_move();
+                        pending_moves--;
+                    }
+                    //if err was NO_ERROR, we'll retry, otherwise give up
+                    return (err | status);
+                }
+                if(dst_host){
+                    host |= RES_HOST;
+                }
+                //compute address (striding doesnt work here because order of sends is random)
+                buf_addr = src_buf_addr + dst_rank*bytes_count;
+                //do a RDMA write to the remote address 
+                start_move(
+                    MOVE_IMMEDIATE,
+                    MOVE_NONE,
+                    MOVE_IMMEDIATE,
+                    pack_flags_rendezvous(host),
+                    0, count, comm_offset, arcfg_offset, 
+                    buf_addr, 0, dst_addr, 0, 0, 0,
+                    0, 0, dst_rank, TAG_ANY
+                );
+                pending_moves++;
+                current_step++;
+                if(pending_moves > 2){
+                    err |= end_move();
+                    pending_moves--;
+                }
+            }
+            while(pending_moves > 0){
+                err |= end_move();
+                pending_moves--;
+            }
+            return err;
+        } else {
+            //if not root, send address then wait completion
+            bool res_is_host = ((host & RES_HOST) != 0);
+            if(current_step == 0){
+                rendezvous_send_addr(src_rank, dst_buf_addr, res_is_host, count, TAG_ANY);
+                current_step++;
+            }
+            return rendezvous_get_completion(src_rank, dst_buf_addr, res_is_host, count, TAG_ANY);
+        }
+    } else {
+
+        //determine if we're sending or receiving
+        if(src_rank == world.local_rank){
+            //on the root we only care about ETH_COMPRESSED and OP0_COMPRESSED
+            //so replace RES_COMPRESSED with ETH_COMPRESSED
+            compression = compression | ((compression & ETH_COMPRESSED) >> 1);
+
+            for(int i=0; i < world.size; i++){
+                start_move(
+                    (i==0) ? MOVE_IMMEDIATE : MOVE_INCREMENT,
+                    MOVE_NONE,
+                    MOVE_IMMEDIATE,
+                    pack_flags(compression, (i==src_rank) ? RES_LOCAL : RES_REMOTE, host & (OP0_HOST | RES_HOST)),
+                    0,
+                    count,
+                    comm_offset, arcfg_offset,
+                    src_buf_addr, 0, dst_buf_addr, 0, 0, 0,
+                    0, 0, i, TAG_ANY
+                );
+            }
+            for(int i=0; i < world.size; i++){
+                err |= end_move();
+            }
+        } else{
+            //on non-root odes we only care about ETH_COMPRESSED and RES_COMPRESSED
+            //so replace OP0_COMPRESSED with the value of ETH_COMPRESSED
+            compression = compression | ((compression & ETH_COMPRESSED) >> 2);
+            err |= move(
                 MOVE_NONE,
+                MOVE_ON_RECV,
                 MOVE_IMMEDIATE,
-                pack_flags(compression, (i==src_rank) ? RES_LOCAL : RES_REMOTE, host & (OP0_HOST | RES_HOST)),
+                pack_flags(compression, RES_LOCAL, host & RES_HOST),
                 0,
                 count,
                 comm_offset, arcfg_offset,
-                src_buf_addr, 0, dst_buf_addr, 0, 0, 0,
-                0, 0, i, TAG_ANY
+                0, 0, dst_buf_addr, 0, 0, 0,
+                src_rank, TAG_ANY, 0, 0
             );
         }
-        for(int i=0; i < world.size; i++){
-            err |= end_move();
-        }
-    } else{
-        //on non-root odes we only care about ETH_COMPRESSED and RES_COMPRESSED
-        //so replace OP0_COMPRESSED with the value of ETH_COMPRESSED
-        compression = compression | ((compression & ETH_COMPRESSED) >> 2);
-        err |= move(
-            MOVE_NONE,
-            MOVE_ON_RECV,
-            MOVE_IMMEDIATE,
-            pack_flags(compression, RES_LOCAL, host & RES_HOST),
-            0,
-            count,
-            comm_offset, arcfg_offset,
-            0, 0, dst_buf_addr, 0, 0, 0,
-            src_rank, TAG_ANY, 0, 0
-        );
-    }
 
-    return err;
+        return err;
+    }
 }
 
 //ring gather: non root relay data to the root. root copies segments in dst buffer as they come.
