@@ -27,7 +27,9 @@ static unsigned int timeout = 1 << 28;
 static unsigned int max_eager_size = (1<<15);
 static unsigned int max_segment_size = DMA_MAX_BTT;
 static unsigned int num_rndzv_pending = 0;
+static unsigned int num_retry_pending = 0;
 static bool new_call = true;
+static bool flush_retries = false;
 static unsigned int current_step;
 
 static datapath_arith_config arcfg;
@@ -1610,8 +1612,9 @@ int barrier(
     unsigned int comm_offset,
     unsigned int arcfg_offset
 ){
-    unsigned int count = 1;
-    int i, next_in_ring, prev_in_ring;
+    uint64_t addr;
+    bool host;
+    unsigned int i;
     int err = NO_ERROR;
 
     if(world.size == 1){
@@ -1619,51 +1622,31 @@ int barrier(
         return NO_ERROR;
     }
 
-    next_in_ring = (world.local_rank + 1) % world.size;
-    prev_in_ring = (world.local_rank + world.size - 1) % world.size;
-
-    //send local chunk to next in ring
-    start_move(
-        MOVE_IMMEDIATE, MOVE_NONE, MOVE_IMMEDIATE,
-        pack_flags(NO_COMPRESSION, RES_REMOTE, NO_HOST),
-        0,
-        count,
-        comm_offset, arcfg_offset,
-        src_buf_addr, 0, 0, 0, 0, 0,
-        0, 0, next_in_ring, TAG_ANY
-    );
-
-    //receive and forward from all other members of the communicator
-    for(i=0; i<world.size-1; i++){
-        //simultaneous receive, and send for the received chunk,
-        //unless it is the last step, in which case we copy back to the source buffer
-        if(i < world.size-2){
-            start_move(
-                MOVE_NONE, MOVE_ON_RECV, MOVE_IMMEDIATE,
-                pack_flags(NO_COMPRESSION, RES_REMOTE, NO_HOST),
-                0,
-                count,
-                comm_offset, arcfg_offset,
-                0, 0, 0, 0, 0, 0,
-                prev_in_ring, TAG_ANY, next_in_ring, TAG_ANY
-            );
-        } else {
-            start_move(
-                MOVE_NONE, MOVE_ON_RECV, MOVE_IMMEDIATE,
-                pack_flags(NO_COMPRESSION, RES_LOCAL, NO_HOST),
-                0,
-                count,
-                comm_offset, arcfg_offset,
-                0, 0, src_buf_addr, 0, 0, 0,
-                prev_in_ring, TAG_ANY, 0, 0
-            );
-        }
-        //pop one result here to keep the result FIFO not full
-        err |= end_move();
+    //flush retry queue
+    flush_retries = true;
+    if(num_retry_pending > 0){
+        return NOT_READY_ERROR;
     }
 
-    //pop final result
-    err |= end_move();
+    //gather notifications to rank 0
+    if(world.local_rank == 0){
+        for(i=1; i<world.size; i++){
+            while(rendezvous_get_addr(i, &addr, &host, 0, TAG_ANY) == NOT_READY_ERROR);
+        }
+    } else {
+        rendezvous_send_addr(0, 0, false, 0, TAG_ANY);
+    }
+
+    //scatter notifications from rank 0
+    if(world.local_rank == 0){
+        for(i=1; i<world.size; i++){
+            rendezvous_send_addr(i, 0, false, 0, TAG_ANY);
+        }
+    } else {
+        rendezvous_get_addr(0, &addr, &host, 0, TAG_ANY);
+    }
+
+    flush_retries = false;
 
     return err;
 }
@@ -1706,20 +1689,21 @@ void encore_soft_reset(void){
 }
 
 //poll for a call from the host
-static inline bool wait_for_call(void) {
-    // Poll the host cmd queue
+static inline void wait_for_call(void) {
+    // Poll the cmd queues
     unsigned int invalid;
+    bool rr_sel = !new_call;
     do {
         invalid = 0;
-        if(new_call){
-            invalid += tngetd(CMD_CALL);
-        } else {
+        if(rr_sel || flush_retries){
             invalid += tngetd(STS_CALL_RETRY);
+            rr_sel = false;
+        } else {
+            invalid += tngetd(CMD_CALL);
+            rr_sel = true;
         }
-        new_call = !new_call;
     } while (invalid);
-    //return true if this a new call
-    return !new_call;
+    new_call = rr_sel;
 }
 
 //signal finish to the host and write ret value in exchange mem
@@ -1739,7 +1723,8 @@ void run() {
     init();
 
     while (1) {
-        if(wait_for_call()){
+        wait_for_call();
+        if(new_call){
             //read parameters from host command queue
             scenario            = getd(CMD_CALL);
             count               = getd(CMD_CALL);
@@ -1775,6 +1760,7 @@ void run() {
             res_addrl           = getd(STS_CALL_RETRY);
             res_addrh           = getd(STS_CALL_RETRY);
             current_step        = getd(STS_CALL_RETRY);
+            num_retry_pending--;
         }
 
         op0_addr = ((uint64_t) op0_addrh << 32) | op0_addrl;
@@ -1883,6 +1869,7 @@ void run() {
             putd(CMD_CALL_RETRY,res_addrl);
             putd(CMD_CALL_RETRY,res_addrh);
             cputd(CMD_CALL_RETRY,current_step);
+            num_retry_pending++;
         } else {
             finalize_call(retval);
         }
