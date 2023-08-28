@@ -183,6 +183,33 @@ void CoyoteDevice::printDebug(){
   inputFile.close();
 }
 
+bool CoyoteDevice::test(ACCLRequest *request) {
+  auto fpga_handle = request_map.find(*request);
+
+  if (fpga_handle == request_map.end())
+    return true;
+
+  return fpga_handle->second->get_status() == operationStatus::COMPLETED;
+}
+
+void CoyoteDevice::free_request(ACCLRequest *request) {
+  auto fpga_handle = request_map.find(*request);
+
+  if (fpga_handle != request_map.end()) {
+    delete fpga_handle->second;
+    request_map.erase(fpga_handle);
+  }
+}
+
+val_t CoyoteDevice::get_retcode(ACCLRequest *request) {
+  auto fpga_handle = request_map.find(*request);
+
+  if (fpga_handle != request_map.end())
+    return 0;
+  
+  return fpga_handle->second->get_retcode();
+}
+
 ACCLRequest *CoyoteDevice::call(const Options &options) {
   ACCLRequest *req = start(options);
   wait(req);

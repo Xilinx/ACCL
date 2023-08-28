@@ -111,7 +111,13 @@ public:
   fpga::cProcess* get_device(){
     return coyote_proc;
   }
+
+  bool test(ACCLRequest *request) override;
   
+  void free_request(ACCLRequest *request) override;
+
+  val_t get_retcode(ACCLRequest *request) override;
+
   fpga::cProcess* coyote_proc;
 
   // RDMA related 

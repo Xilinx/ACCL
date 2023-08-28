@@ -733,8 +733,10 @@ void test_reduce(ACCL::ACCL &accl, options_t &options, int root,
 	auto op_buf = accl.create_coyotebuffer<float>(count, dataType::float32);
 	auto res_buf = accl.create_coyotebuffer<float>(count, dataType::float32);
 	for (int i = 0; i < count; i++) op_buf.get()->buffer()[i] = i;
+	for (int i = 0; i < count; i++) res_buf.get()->buffer()[i] = 0;
 
 	if (options.host == 0){ op_buf->sync_to_device(); }
+	if (options.host == 0){ res_buf->sync_to_device(); }
 
 	test_debug("Reduce data to " + std::to_string(root) + "...", options);
 
@@ -745,6 +747,10 @@ void test_reduce(ACCL::ACCL &accl, options_t &options, int root,
 
 	auto end = std::chrono::high_resolution_clock::now();
 	durationUs = (std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() / 1000.0);
+
+	if (mpi_rank == root){
+		if (options.host == 0){ res_buf->sync_from_device(); }
+	}
 
 	accl_log(mpi_rank, format_log("reduce", options, durationUs, 0));
 
@@ -782,9 +788,13 @@ void test_allreduce(ACCL::ACCL &accl, options_t &options,
 					std::to_string(static_cast<int>(function)) + "..."
 				<< std::endl;
 	unsigned int count = options.count;
-	auto op_buf = accl.create_coyotebuffer<float>(count, dataType::float32);
-	auto res_buf = accl.create_coyotebuffer<float>(count, dataType::float32);
+	auto op_buf = accl.create_coyotebuffer<int>(count, dataType::int32);
+	auto res_buf = accl.create_coyotebuffer<int>(count, dataType::int32);
 	for (int i = 0; i < count; i++) op_buf.get()->buffer()[i] = i;
+	for (int i = 0; i < count; i++) res_buf.get()->buffer()[i] = 0;
+
+	if (options.host == 0){ op_buf->sync_to_device(); }
+	if (options.host == 0){ res_buf->sync_to_device(); }
 
 	test_debug("Reducing data...", options);
 
@@ -796,6 +806,9 @@ void test_allreduce(ACCL::ACCL &accl, options_t &options,
 	auto end = std::chrono::high_resolution_clock::now();
 	durationUs = (std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() / 1000.0);
 
+	if (options.host == 0){ op_buf->sync_from_device(); }
+	if (options.host == 0){ res_buf->sync_from_device(); }
+
 	accl_log(mpi_rank, format_log("allreduce", options, durationUs, 0));
 
 	int errors = 0;
@@ -805,9 +818,9 @@ void test_allreduce(ACCL::ACCL &accl, options_t &options,
 		float ref = op_buf.get()->buffer()[i] * mpi_size;
 
 		if (res != ref) {
-		// std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
-		//                  std::to_string(res) + " != " + std::to_string(ref) + ")"
-		//           << std::endl;
+		std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
+		                 std::to_string(res) + " != " + std::to_string(ref) + ")"
+		          << std::endl;
 		errors += 1;
 		}
 	}
@@ -897,7 +910,7 @@ void test_accl_base(options_t options)
 
 		accl = std::make_unique<ACCL::ACCL>(device,
 			ranks, mpi_rank,
-			mpi_size, options.rxbuf_size, options.seg_size);
+			mpi_size+1, options.rxbuf_size, options.seg_size);
 
 		if (options.tcp)
 		{

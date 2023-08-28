@@ -1200,7 +1200,7 @@ int allreduce(
                 tmp_compression = (compression & OP0_COMPRESSED) | ((compression & ETH_COMPRESSED) >> 2) | ((compression & ETH_COMPRESSED) >> 1);
                 start_move(
                     MOVE_STRIDE, MOVE_ON_RECV, MOVE_IMMEDIATE,
-                    pack_flags(tmp_compression, RES_REMOTE, NO_HOST),
+                    pack_flags(tmp_compression, RES_REMOTE, host & OP0_HOST),
                     func,
                     curr_count,
                     comm_offset, arcfg_offset,
@@ -1213,7 +1213,7 @@ int allreduce(
                 tmp_compression = compression | ((compression & ETH_COMPRESSED) >> 2);
                 start_move(
                     MOVE_STRIDE, MOVE_ON_RECV, MOVE_STRIDE,
-                    pack_flags(tmp_compression, RES_LOCAL, host & RES_HOST),
+                    pack_flags(tmp_compression, RES_LOCAL, host & (OP0_HOST | RES_HOST)),
                     func,
                     curr_count,
                     comm_offset, arcfg_offset,

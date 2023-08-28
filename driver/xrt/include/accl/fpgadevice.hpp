@@ -21,6 +21,7 @@
 #include "cclo.hpp"
 #include "constants.hpp"
 #include <experimental/xrt_ip.h>
+#include <unordered_map>
 #include <string>
 #include <xrt/xrt_kernel.h>
 
