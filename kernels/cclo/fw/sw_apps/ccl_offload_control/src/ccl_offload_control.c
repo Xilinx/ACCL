@@ -23,11 +23,12 @@
 #include "mb_interface.h"
 #endif
 
-static volatile unsigned int timeout = 1 << 28;
-static volatile unsigned int max_eager_size = (1<<15);
-static volatile	unsigned int max_segment_size = DMA_MAX_BTT;
-static volatile	unsigned int num_rndzv_pending = 0;
-static volatile bool new_call = true;
+static unsigned int timeout = 1 << 28;
+static unsigned int max_eager_size = (1<<15);
+static unsigned int max_segment_size = DMA_MAX_BTT;
+static unsigned int num_rndzv_pending = 0;
+static bool new_call = true;
+static unsigned int current_step;
 
 static datapath_arith_config arcfg;
 static communicator world;
@@ -112,33 +113,35 @@ static inline uint32_t pack_flags_rendezvous(uint32_t host_flags){
 
 //sends a buffer address to a remote peer,
 //enabling them to perform a RDMA WRITE to our buffer
-void rendezvous_send_addr(uint32_t qpn, uint64_t addr, bool host, uint32_t count, uint32_t tag){
-    //if this is a retry call, skip
-    if(new_call) return;
-    putd(CMD_RNDZV, qpn);
+void rendezvous_send_addr(uint32_t target_rank, uint64_t addr, bool host, uint32_t count, uint32_t tag){
+    putd(CMD_RNDZV, world.ranks[target_rank].session);
     putd(CMD_RNDZV, (uint32_t)addr);
     putd(CMD_RNDZV, (uint32_t)(addr>>32));
     putd(CMD_RNDZV, host);
     putd(CMD_RNDZV, count);
-    cputd(CMD_RNDZV, tag);
+    putd(CMD_RNDZV, tag);
+    cputd(CMD_RNDZV, world.local_rank);
 }
 
 //receive a buffer address from a remote peer,
 //enabling us to perform a RDMA WRITE to their buffer
-int rendezvous_get_addr(unsigned int target_qpn, uint64_t *target_addr, bool *target_host, uint32_t target_count, uint32_t target_tag){
-    unsigned int type, qpn;
+int rendezvous_get_addr(uint32_t target_rank, uint64_t *target_addr, bool *target_host, uint32_t target_count, uint32_t target_tag){
+    uint32_t type, rank, tag;
     uint64_t addr;
+    bool match;
     // Check if there are pending notifications in STS_RNDZV_PENDING,
     // otherwise pull from STS_RNDZV
     unsigned int i;
     for(i = 0; i<num_rndzv_pending; i++){
         type = getd(STS_RNDZV_PENDING);
-        qpn = getd(STS_RNDZV_PENDING);
-        if((type != 2) || (qpn != target_qpn)){
+        rank = getd(STS_RNDZV_PENDING);
+        tag = getd(STS_RNDZV_PENDING);
+        match = (type == 2) && (rank == target_rank) && ((tag == target_tag) || (tag == TAG_ANY));
+        if(!match){
             //copy from STS_RNDZV to STS_RNDZV_PENDING
             putd(CMD_RNDZV_PENDING, type);
-            putd(CMD_RNDZV_PENDING, qpn);
-            putd(CMD_RNDZV_PENDING, getd(STS_RNDZV_PENDING));
+            putd(CMD_RNDZV_PENDING, rank);
+            putd(CMD_RNDZV_PENDING, tag);
             putd(CMD_RNDZV_PENDING, getd(STS_RNDZV_PENDING));
             putd(CMD_RNDZV_PENDING, getd(STS_RNDZV_PENDING));
             putd(CMD_RNDZV_PENDING, getd(STS_RNDZV_PENDING));
@@ -149,7 +152,6 @@ int rendezvous_get_addr(unsigned int target_qpn, uint64_t *target_addr, bool *ta
             *target_addr = addr;
             *target_host = getd(STS_RNDZV_PENDING);
             getd(STS_RNDZV_PENDING);//count
-            getd(STS_RNDZV_PENDING);//tag
             num_rndzv_pending--;
             return NO_ERROR;
         }
@@ -157,12 +159,14 @@ int rendezvous_get_addr(unsigned int target_qpn, uint64_t *target_addr, bool *ta
     //if we're still executing, no match in RNDZV_PENDING, check STS_RNDZV
     while(!tngetd(STS_RNDZV)){
         type = getd(STS_RNDZV);
-        qpn = getd(STS_RNDZV);
-        if((type != 2) || (qpn != target_qpn)){
+        rank = getd(STS_RNDZV);
+        tag = getd(STS_RNDZV);
+        match = (type == 2) && (rank == target_rank) && ((tag == target_tag) || (tag == TAG_ANY));
+        if(!match){
             //copy from STS_RNDZV to STS_RNDZV_PENDING
             putd(CMD_RNDZV_PENDING, type);
-            putd(CMD_RNDZV_PENDING, qpn);
-            putd(CMD_RNDZV_PENDING, getd(STS_RNDZV));
+            putd(CMD_RNDZV_PENDING, rank);
+            putd(CMD_RNDZV_PENDING, tag);
             putd(CMD_RNDZV_PENDING, getd(STS_RNDZV));
             putd(CMD_RNDZV_PENDING, getd(STS_RNDZV));
             putd(CMD_RNDZV_PENDING, getd(STS_RNDZV));
@@ -174,7 +178,70 @@ int rendezvous_get_addr(unsigned int target_qpn, uint64_t *target_addr, bool *ta
             *target_addr = addr;
             *target_host = getd(STS_RNDZV);
             getd(STS_RNDZV);//count
-            getd(STS_RNDZV);//tag
+            return NO_ERROR;
+        }
+    }
+    //we found nothing, signal this up to caller
+    return NOT_READY_ERROR;
+}
+
+//receive a buffer address from a remote peer,
+//enabling us to perform a RDMA WRITE to their buffer
+int rendezvous_get_any_addr(uint32_t *target_rank, uint64_t *target_addr, bool *target_host, uint32_t target_count, uint32_t target_tag){
+    uint32_t type, rank, tag;
+    uint64_t addr;
+    bool match;
+    // Check if there are pending notifications in STS_RNDZV_PENDING,
+    // otherwise pull from STS_RNDZV
+    unsigned int i;
+    for(i = 0; i<num_rndzv_pending; i++){
+        type = getd(STS_RNDZV_PENDING);
+        rank = getd(STS_RNDZV_PENDING);
+        tag = getd(STS_RNDZV_PENDING);
+        match = (type == 2) && ((tag == target_tag) || (tag == TAG_ANY));
+        if(!match){
+            //copy from STS_RNDZV to STS_RNDZV_PENDING
+            putd(CMD_RNDZV_PENDING, type);
+            putd(CMD_RNDZV_PENDING, rank);
+            putd(CMD_RNDZV_PENDING, tag);
+            putd(CMD_RNDZV_PENDING, getd(STS_RNDZV_PENDING));
+            putd(CMD_RNDZV_PENDING, getd(STS_RNDZV_PENDING));
+            putd(CMD_RNDZV_PENDING, getd(STS_RNDZV_PENDING));
+            putd(CMD_RNDZV_PENDING, getd(STS_RNDZV_PENDING));
+        } else {
+            *target_rank = rank;
+            addr = (uint64_t)getd(STS_RNDZV_PENDING);
+            addr |= (uint64_t)getd(STS_RNDZV_PENDING) << 32;
+            *target_addr = addr;
+            *target_host = getd(STS_RNDZV_PENDING);
+            getd(STS_RNDZV_PENDING);//count
+            num_rndzv_pending--;
+            return NO_ERROR;
+        }
+    }
+    //if we're still executing, no match in RNDZV_PENDING, check STS_RNDZV
+    while(!tngetd(STS_RNDZV)){
+        type = getd(STS_RNDZV);
+        rank = getd(STS_RNDZV);
+        tag = getd(STS_RNDZV);
+        match = (type == 2) && ((tag == target_tag) || (tag == TAG_ANY));
+        if(!match){
+            //copy from STS_RNDZV to STS_RNDZV_PENDING
+            putd(CMD_RNDZV_PENDING, type);
+            putd(CMD_RNDZV_PENDING, rank);
+            putd(CMD_RNDZV_PENDING, tag);
+            putd(CMD_RNDZV_PENDING, getd(STS_RNDZV));
+            putd(CMD_RNDZV_PENDING, getd(STS_RNDZV));
+            putd(CMD_RNDZV_PENDING, getd(STS_RNDZV));
+            putd(CMD_RNDZV_PENDING, getd(STS_RNDZV));
+            num_rndzv_pending++;
+        } else {
+            *target_rank = rank;
+            addr = (uint64_t)getd(STS_RNDZV);
+            addr |= (uint64_t)getd(STS_RNDZV) << 32;
+            *target_addr = addr;
+            *target_host = getd(STS_RNDZV);
+            getd(STS_RNDZV);//count
             return NO_ERROR;
         }
     }
@@ -184,31 +251,34 @@ int rendezvous_get_addr(unsigned int target_qpn, uint64_t *target_addr, bool *ta
 
 //receives an acknowledgement that a RDMA WRITE to 
 //our buffer has completed
-int rendezvous_get_completion(unsigned int target_qpn, uint64_t target_addr, bool target_host, uint32_t target_count, uint32_t target_tag){
-    unsigned int type, qpn;
+int rendezvous_get_completion(unsigned int target_rank, uint64_t target_addr, bool target_host, uint32_t target_count, uint32_t target_tag){
+    uint32_t type, rank, tag;
     uint64_t addr;
+    uint64_t addrl, addrh;
+    bool match;
     // Check if there are pending notifications in STS_RNDZV_PENDING,
     // otherwise pull from STS_RNDZV
     unsigned int i;
     for(i = 0; i<num_rndzv_pending; i++){
         type = getd(STS_RNDZV_PENDING);
-        qpn = getd(STS_RNDZV_PENDING);
-        if((type != 3) || (qpn != target_qpn)){
+        rank = getd(STS_RNDZV_PENDING);
+        tag = getd(STS_RNDZV_PENDING);
+        addrl = getd(STS_RNDZV_PENDING);
+        addrh = getd(STS_RNDZV_PENDING);
+        addr = ((uint64_t)addrh << 32) | (uint64_t)addrl;
+        match = (type == 3) && (rank == target_rank) && ((tag == target_tag) || (tag == TAG_ANY)) && (addr == target_addr);
+        if(!match){
             //copy from STS_RNDZV to STS_RNDZV_PENDING
             putd(CMD_RNDZV_PENDING, type);
-            putd(CMD_RNDZV_PENDING, qpn);
-            putd(CMD_RNDZV_PENDING, getd(STS_RNDZV_PENDING));
-            putd(CMD_RNDZV_PENDING, getd(STS_RNDZV_PENDING));
-            putd(CMD_RNDZV_PENDING, getd(STS_RNDZV_PENDING));
+            putd(CMD_RNDZV_PENDING, rank);
+            putd(CMD_RNDZV_PENDING, tag);
+            putd(CMD_RNDZV_PENDING, addrl);
+            putd(CMD_RNDZV_PENDING, addrh);
             putd(CMD_RNDZV_PENDING, getd(STS_RNDZV_PENDING));
             putd(CMD_RNDZV_PENDING, getd(STS_RNDZV_PENDING));
         } else {
-            addr = (uint64_t)getd(STS_RNDZV_PENDING);
-            addr |= (uint64_t)getd(STS_RNDZV_PENDING) << 32;
-            //TODO check addr
             getd(STS_RNDZV_PENDING);//TODO check host
             getd(STS_RNDZV_PENDING);//count
-            getd(STS_RNDZV_PENDING);//tag
             num_rndzv_pending--;
             return NO_ERROR;
         }
@@ -216,24 +286,25 @@ int rendezvous_get_completion(unsigned int target_qpn, uint64_t target_addr, boo
     //if we're still executing, no match in RNDZV_PENDING, check STS_RNDZV
     while(!tngetd(STS_RNDZV)){
         type = getd(STS_RNDZV);
-        qpn = getd(STS_RNDZV);
-        if((type != 3) || (qpn != target_qpn)){
+        rank = getd(STS_RNDZV);
+        tag = getd(STS_RNDZV);
+        addrl = getd(STS_RNDZV);
+        addrh = getd(STS_RNDZV);
+        addr = ((uint64_t)addrh << 32) | (uint64_t)addrl;
+        match = (type == 3) && (rank == target_rank) && ((tag == target_tag) || (tag == TAG_ANY)) && (addr == target_addr);
+        if(!match){
             //copy from STS_RNDZV to STS_RNDZV_PENDING
             putd(CMD_RNDZV_PENDING, type);
-            putd(CMD_RNDZV_PENDING, qpn);
-            putd(CMD_RNDZV_PENDING, getd(STS_RNDZV));
-            putd(CMD_RNDZV_PENDING, getd(STS_RNDZV));
-            putd(CMD_RNDZV_PENDING, getd(STS_RNDZV));
+            putd(CMD_RNDZV_PENDING, rank);
+            putd(CMD_RNDZV_PENDING, tag);
+            putd(CMD_RNDZV_PENDING, addrl);
+            putd(CMD_RNDZV_PENDING, addrh);
             putd(CMD_RNDZV_PENDING, getd(STS_RNDZV));
             putd(CMD_RNDZV_PENDING, getd(STS_RNDZV));
             num_rndzv_pending++;
         } else {
-            addr = (uint64_t)getd(STS_RNDZV);
-            addr |= (uint64_t)getd(STS_RNDZV) << 32;
-            //TODO check addr
             getd(STS_RNDZV);//TODO check host
             getd(STS_RNDZV);//count
-            getd(STS_RNDZV);//tag
             return NO_ERROR;
         }
     }
@@ -423,7 +494,8 @@ int send(
         //get remote address
         uint64_t dst_addr;
         bool dst_host;
-        int status = rendezvous_get_addr(world.ranks[dst_rank].session, &dst_addr, &dst_host, count, dst_tag);
+        //no need to use current_step here, because there is only one place where we can retry
+        int status = rendezvous_get_addr(dst_rank, &dst_addr, &dst_host, count, dst_tag);
         if(status == NOT_READY_ERROR){
             //we're not yet ready to serve this send, queue it for retry
             return NOT_READY_ERROR;
@@ -500,8 +572,12 @@ int recv(
     if((bytes_count > max_eager_size) && (compression == NO_COMPRESSION) && (stream == NO_STREAM)){
         //rendezvous without segmentation
         bool is_host = ((host & RES_HOST) != 0);
-        rendezvous_send_addr(world.ranks[src_rank].session, dst_addr, is_host, count, src_tag);
-        return rendezvous_get_completion(world.ranks[src_rank].session, dst_addr, is_host, count, src_tag);
+        //send address only if we haven't sent it before
+        if(current_step == 0){
+            rendezvous_send_addr(src_rank, dst_addr, is_host, count, src_tag);
+            current_step++;
+        }
+        return rendezvous_get_completion(src_rank, dst_addr, is_host, count, src_tag);
     } else {
         //Eager with segmentation
         //if ETH_COMPRESSED is set, also set OP1_COMPRESSED
@@ -632,71 +708,128 @@ int broadcast(  unsigned int count,
     unsigned int stream = buftype & 0xff;
     unsigned int host = (buftype >> 8) & 0xff;
     int err = NO_ERROR;
-    unsigned int max_seg_count;
-    int elems_remaining = count;
-    //convert max segment size to max segment count
-    //if pulling from a stream, segment size is irrelevant and we use the
-    //count directly because streams can't be read losslessly
-    if(stream & OP0_STREAM){
-        max_seg_count = count;
-    } else{
-        //compute count from uncompressed elem bytes in aright config
-        //instead of Xil_In32 we could use:
-        //(datapath_arith_config*)(arcfg_offset)->uncompressed_elem_bytes;
-        max_seg_count = max_segment_size / Xil_In32(arcfg_offset);
-    }
 
-    int expected_ack_count = 0;
-    while(elems_remaining > 0){
-        //determine if we're sending or receiving
+    unsigned int bytes_count = Xil_In32(arcfg_offset)*count;
+    if((bytes_count > max_eager_size) && (compression == NO_COMPRESSION) && (stream == NO_STREAM)){
         if(src_rank == world.local_rank){
-            //on the root we only care about ETH_COMPRESSED and OP0_COMPRESSED
-            //so replace RES_COMPRESSED with ETH_COMPRESSED
-            compression = compression | ((compression & ETH_COMPRESSED) >> 1);
-
-            //send a segment to each of the ranks (excluding self)
-            for(int i=0; i < world.size; i++){
+            //get remote address
+            uint64_t dst_addr;
+            uint32_t dst_rank;
+            bool dst_host;
+            unsigned int pending_moves = 0;
+            //if root, wait for addresses then send
+            while(current_step < (world.size-1)){
+                int status = rendezvous_get_any_addr(&dst_rank, &dst_addr, &dst_host, count, TAG_ANY);
+                if(status == NOT_READY_ERROR){
+                    //we're not yet ready to serve this send, queue it for retry after flushing moves
+                    while(pending_moves > 0){
+                        err |= end_move();
+                        pending_moves--;
+                    }
+                    //if err was NO_ERROR, we'll retry, otherwise give up
+                    return (err | status);
+                }
+                if(dst_host){
+                    host |= RES_HOST;
+                }
+                //do a RDMA write to the remote address 
                 start_move(
-                    (i==0) ? ((elems_remaining == count) ? MOVE_IMMEDIATE : MOVE_INCREMENT) : MOVE_REPEAT,
+                    MOVE_IMMEDIATE,
                     MOVE_NONE,
                     MOVE_IMMEDIATE,
-                    pack_flags(compression, RES_REMOTE, host & OP0_HOST),
-                    0, 
-                    (i == src_rank) ? 0 : min(max_seg_count, elems_remaining),
-                    comm_offset, arcfg_offset,
-                    buf_addr, 0, 0, 0, 0, 0,
-                    0, 0, i, TAG_ANY
+                    pack_flags_rendezvous(host),
+                    0, count, comm_offset, arcfg_offset, 
+                    buf_addr, 0, dst_addr, 0, 0, 0,
+                    0, 0, dst_rank, TAG_ANY
                 );
-                expected_ack_count++;
-                //start flushing out ACKs so our pipes don't fill up
-                if(expected_ack_count > 8){
+                pending_moves++;
+                current_step++;
+                if(pending_moves > 2){
                     err |= end_move();
-                    expected_ack_count--;
+                    pending_moves--;
                 }
             }
-        } else{
-            //on non-root nodes we only care about ETH_COMPRESSED and RES_COMPRESSED
-            //so replace OP1_COMPRESSED with the value of ETH_COMPRESSED
-            compression = compression | ((compression & ETH_COMPRESSED) >> 2);
-            err |= move(
-                MOVE_NONE,
-                MOVE_ON_RECV,
-                (elems_remaining == count) ? MOVE_IMMEDIATE : MOVE_INCREMENT,
-                pack_flags(compression, RES_LOCAL, host & RES_HOST),
-                0,
-                min(max_seg_count, elems_remaining),
-                comm_offset, arcfg_offset,
-                0, 0, buf_addr, 0, 0, 0,
-                src_rank, TAG_ANY, 0, 0
-            );
+            while(pending_moves > 0){
+                err |= end_move();
+                pending_moves--;
+            }
+            return err;
+        } else {
+            //if not root, send address then wait completion
+            bool res_is_host = ((host & RES_HOST) != 0);
+            if(current_step == 0){
+                rendezvous_send_addr(src_rank, buf_addr, res_is_host, count, TAG_ANY);
+                current_step++;
+            }
+            return rendezvous_get_completion(src_rank, buf_addr, res_is_host, count, TAG_ANY);
         }
-        elems_remaining -= max_seg_count;
+    } else {
+        unsigned int max_seg_count;
+        int elems_remaining = count;
+        //convert max segment size to max segment count
+        //if pulling from a stream, segment size is irrelevant and we use the
+        //count directly because streams can't be read losslessly
+        if(stream & OP0_STREAM){
+            max_seg_count = count;
+        } else{
+            //compute count from uncompressed elem bytes in aright config
+            //instead of Xil_In32 we could use:
+            //(datapath_arith_config*)(arcfg_offset)->uncompressed_elem_bytes;
+            max_seg_count = max_segment_size / Xil_In32(arcfg_offset);
+        }
+
+        int expected_ack_count = 0;
+        while(elems_remaining > 0){
+            //determine if we're sending or receiving
+            if(src_rank == world.local_rank){
+                //on the root we only care about ETH_COMPRESSED and OP0_COMPRESSED
+                //so replace RES_COMPRESSED with ETH_COMPRESSED
+                compression = compression | ((compression & ETH_COMPRESSED) >> 1);
+
+                //send a segment to each of the ranks (excluding self)
+                for(int i=0; i < world.size; i++){
+                    start_move(
+                        (i==0) ? ((elems_remaining == count) ? MOVE_IMMEDIATE : MOVE_INCREMENT) : MOVE_REPEAT,
+                        MOVE_NONE,
+                        MOVE_IMMEDIATE,
+                        pack_flags(compression, RES_REMOTE, host & OP0_HOST),
+                        0, 
+                        (i == src_rank) ? 0 : min(max_seg_count, elems_remaining),
+                        comm_offset, arcfg_offset,
+                        buf_addr, 0, 0, 0, 0, 0,
+                        0, 0, i, TAG_ANY
+                    );
+                    expected_ack_count++;
+                    //start flushing out ACKs so our pipes don't fill up
+                    if(expected_ack_count > 8){
+                        err |= end_move();
+                        expected_ack_count--;
+                    }
+                }
+            } else{
+                //on non-root nodes we only care about ETH_COMPRESSED and RES_COMPRESSED
+                //so replace OP1_COMPRESSED with the value of ETH_COMPRESSED
+                compression = compression | ((compression & ETH_COMPRESSED) >> 2);
+                err |= move(
+                    MOVE_NONE,
+                    MOVE_ON_RECV,
+                    (elems_remaining == count) ? MOVE_IMMEDIATE : MOVE_INCREMENT,
+                    pack_flags(compression, RES_LOCAL, host & RES_HOST),
+                    0,
+                    min(max_seg_count, elems_remaining),
+                    comm_offset, arcfg_offset,
+                    0, 0, buf_addr, 0, 0, 0,
+                    src_rank, TAG_ANY, 0, 0
+                );
+            }
+            elems_remaining -= max_seg_count;
+        }
+        //flush remaining ACKs 
+        for(int i=0; i < expected_ack_count; i++){
+            err |= end_move();
+        }
+        return err;
     }
-    //flush remaining ACKs 
-    for(int i=0; i < expected_ack_count; i++){
-        err |= end_move();
-    }
-    return err;
 }
 
 //scatter segment at a time. root sends each rank a segment in a round robin fashion
@@ -717,46 +850,121 @@ int scatter(unsigned int count,
 
     int err = NO_ERROR;
 
-    //determine if we're sending or receiving
-    if(src_rank == world.local_rank){
-        //on the root we only care about ETH_COMPRESSED and OP0_COMPRESSED
-        //so replace RES_COMPRESSED with ETH_COMPRESSED
-        compression = compression | ((compression & ETH_COMPRESSED) >> 1);
+    unsigned int bytes_count = Xil_In32(arcfg_offset)*count;
+    if((bytes_count > max_eager_size) && (compression == NO_COMPRESSION) && (stream == NO_STREAM)){
+        if(src_rank == world.local_rank){
+            //get remote address
+            uint64_t dst_addr;
+            uint64_t buf_addr;
+            uint32_t dst_rank;
+            bool dst_host;
+            unsigned int pending_moves = 0;
+            //first copy to ourselves while we're waiting for addresses
+            if(current_step == 0){
+                buf_addr = src_buf_addr + src_rank*bytes_count;
+                start_move(
+                    MOVE_IMMEDIATE,
+                    MOVE_NONE,
+                    MOVE_IMMEDIATE,
+                    pack_flags(compression, RES_LOCAL, host),
+                    0, count, comm_offset, arcfg_offset, 
+                    buf_addr, 0, dst_buf_addr, 0, 0, 0,
+                    0, 0, 0, TAG_ANY
+                );
+                current_step++;
+                pending_moves++;
+            }
+            //if root, wait for addresses then send
+            while(current_step < world.size){
+                int status = rendezvous_get_any_addr(&dst_rank, &dst_addr, &dst_host, count, TAG_ANY);
+                if(status == NOT_READY_ERROR){
+                    //we're not yet ready to serve this send, queue it for retry after flushing moves
+                    while(pending_moves > 0){
+                        err |= end_move();
+                        pending_moves--;
+                    }
+                    //if err was NO_ERROR, we'll retry, otherwise give up
+                    return (err | status);
+                }
+                if(dst_host){
+                    host |= RES_HOST;
+                }
+                //compute address (striding doesnt work here because order of sends is random)
+                buf_addr = src_buf_addr + dst_rank*bytes_count;
+                //do a RDMA write to the remote address 
+                start_move(
+                    MOVE_IMMEDIATE,
+                    MOVE_NONE,
+                    MOVE_IMMEDIATE,
+                    pack_flags_rendezvous(host),
+                    0, count, comm_offset, arcfg_offset, 
+                    buf_addr, 0, dst_addr, 0, 0, 0,
+                    0, 0, dst_rank, TAG_ANY
+                );
+                pending_moves++;
+                current_step++;
+                if(pending_moves > 2){
+                    err |= end_move();
+                    pending_moves--;
+                }
+            }
+            while(pending_moves > 0){
+                err |= end_move();
+                pending_moves--;
+            }
+            return err;
+        } else {
+            //if not root, send address then wait completion
+            bool res_is_host = ((host & RES_HOST) != 0);
+            if(current_step == 0){
+                rendezvous_send_addr(src_rank, dst_buf_addr, res_is_host, count, TAG_ANY);
+                current_step++;
+            }
+            return rendezvous_get_completion(src_rank, dst_buf_addr, res_is_host, count, TAG_ANY);
+        }
+    } else {
 
-        for(int i=0; i < world.size; i++){
-            start_move(
-                (i==0) ? MOVE_IMMEDIATE : MOVE_INCREMENT,
+        //determine if we're sending or receiving
+        if(src_rank == world.local_rank){
+            //on the root we only care about ETH_COMPRESSED and OP0_COMPRESSED
+            //so replace RES_COMPRESSED with ETH_COMPRESSED
+            compression = compression | ((compression & ETH_COMPRESSED) >> 1);
+
+            for(int i=0; i < world.size; i++){
+                start_move(
+                    (i==0) ? MOVE_IMMEDIATE : MOVE_INCREMENT,
+                    MOVE_NONE,
+                    MOVE_IMMEDIATE,
+                    pack_flags(compression, (i==src_rank) ? RES_LOCAL : RES_REMOTE, host & (OP0_HOST | RES_HOST)),
+                    0,
+                    count,
+                    comm_offset, arcfg_offset,
+                    src_buf_addr, 0, dst_buf_addr, 0, 0, 0,
+                    0, 0, i, TAG_ANY
+                );
+            }
+            for(int i=0; i < world.size; i++){
+                err |= end_move();
+            }
+        } else{
+            //on non-root odes we only care about ETH_COMPRESSED and RES_COMPRESSED
+            //so replace OP0_COMPRESSED with the value of ETH_COMPRESSED
+            compression = compression | ((compression & ETH_COMPRESSED) >> 2);
+            err |= move(
                 MOVE_NONE,
+                MOVE_ON_RECV,
                 MOVE_IMMEDIATE,
-                pack_flags(compression, (i==src_rank) ? RES_LOCAL : RES_REMOTE, host & (OP0_HOST | RES_HOST)),
+                pack_flags(compression, RES_LOCAL, host & RES_HOST),
                 0,
                 count,
                 comm_offset, arcfg_offset,
-                src_buf_addr, 0, dst_buf_addr, 0, 0, 0,
-                0, 0, i, TAG_ANY
+                0, 0, dst_buf_addr, 0, 0, 0,
+                src_rank, TAG_ANY, 0, 0
             );
         }
-        for(int i=0; i < world.size; i++){
-            err |= end_move();
-        }
-    } else{
-        //on non-root odes we only care about ETH_COMPRESSED and RES_COMPRESSED
-        //so replace OP0_COMPRESSED with the value of ETH_COMPRESSED
-        compression = compression | ((compression & ETH_COMPRESSED) >> 2);
-        err |= move(
-            MOVE_NONE,
-            MOVE_ON_RECV,
-            MOVE_IMMEDIATE,
-            pack_flags(compression, RES_LOCAL, host & RES_HOST),
-            0,
-            count,
-            comm_offset, arcfg_offset,
-            0, 0, dst_buf_addr, 0, 0, 0,
-            src_rank, TAG_ANY, 0, 0
-        );
-    }
 
-    return err;
+        return err;
+    }
 }
 
 //ring gather: non root relay data to the root. root copies segments in dst buffer as they come.
@@ -776,92 +984,166 @@ int gather( unsigned int count,
     unsigned int i, curr_pos, next_in_ring, prev_in_ring, number_of_shift;
     int err = NO_ERROR;
 
-    next_in_ring = (world.local_rank + 1) % world.size;
-    prev_in_ring = (world.local_rank + world.size - 1) % world.size;
-
-    if(root_rank == world.local_rank){ //root ranks mainly receives
-
-        //we need to compute correct compression schemes from the input compression flags
-        //copy to self: keep all flags except ETH_COMPRESSED, which should be reset for safety
-        //recv: keep RES_COMPRESSED and replace OP0_COMPRESSED with value of ETH_COMPRESSED
-        unsigned int copy_compression = compression & ~ETH_COMPRESSED;
-        unsigned int recv_compression = compression | ((compression & ETH_COMPRESSED) >> 2);
-
-        //initialize destination address in offload core
-        start_move(
-            MOVE_NONE,
-            MOVE_NONE,
-            MOVE_IMMEDIATE,
-            pack_flags(NO_COMPRESSION, RES_LOCAL, NO_HOST),
-            0,
-            0,
-            comm_offset, arcfg_offset,
-            0, 0, dst_buf_addr, 0, 0, 0,
-            0, 0, 0, 0
-        );
-
-        //receive from all members of the communicator
-        curr_pos = world.local_rank;
-        for(i=0; i<world.size; i++){
-            start_move(
-                (i==0) ? MOVE_IMMEDIATE : MOVE_NONE,
-                (i==0) ? MOVE_NONE : MOVE_ON_RECV,
-                MOVE_STRIDE,
-                pack_flags((i==0) ? copy_compression : recv_compression, RES_LOCAL, host),
-                0,
-                count,
-                comm_offset, arcfg_offset,
-                src_buf_addr, 0, 0, 0, 0, count*((i==0) ? curr_pos : ((curr_pos==(world.size-1)) ? (world.size-1) : -1)),
-                prev_in_ring, TAG_ANY, 0, 0
+    unsigned int bytes_count = Xil_In32(arcfg_offset)*count;
+    if((bytes_count > max_eager_size) && (compression == NO_COMPRESSION) && (stream == NO_STREAM)){
+        bool dst_host;
+        int status;
+        uint64_t buf_addr;
+        if(root_rank == world.local_rank){
+            uint32_t src_rank;
+            dst_host = (host & RES_HOST) != 0;
+            if(current_step == 0){
+                //start copy to ourselves while we're sending addresses
+                buf_addr = dst_buf_addr + root_rank*bytes_count;
+                start_move(
+                    MOVE_IMMEDIATE,
+                    MOVE_NONE,
+                    MOVE_IMMEDIATE,
+                    pack_flags(compression, RES_LOCAL, host),
+                    0, count, comm_offset, arcfg_offset, 
+                    src_buf_addr, 0, buf_addr, 0, 0, 0,
+                    0, 0, 0, TAG_ANY
+                );
+                //send addresses
+                for(src_rank=0; src_rank < world.size; src_rank++){
+                    //skip sending address for ourselves
+                    if(src_rank == world.local_rank){
+                        continue;
+                    }
+                    //compute address (striding doesnt work here because order of sends is random)
+                    buf_addr = dst_buf_addr + src_rank*bytes_count;
+                    rendezvous_send_addr(src_rank, buf_addr, dst_host, count, TAG_ANY);
+                }
+                //finalize copy to ourselves
+                err |= end_move();
+                current_step++;
+            }
+            //wait for completions
+            while(current_step < world.size+1){
+                src_rank = current_step - 1;
+                //skip completion for ourselves
+                if(src_rank == world.local_rank){
+                    current_step++;
+                    continue;
+                }
+                buf_addr = dst_buf_addr + src_rank*bytes_count;
+                status = rendezvous_get_completion(src_rank, buf_addr, dst_host, count, TAG_ANY);
+                if(status == NOT_READY_ERROR){
+                    //if err was NO_ERROR, we'll retry, otherwise give up
+                    return (err | status);
+                }
+                current_step++;
+            }
+            return err;
+        } else {
+            status = rendezvous_get_addr(root_rank, &buf_addr, &dst_host, count, TAG_ANY);
+            if(status == NOT_READY_ERROR){
+                //we're not yet ready to serve this send, queue it for retry
+                return NOT_READY_ERROR;
+            }
+            if(dst_host){
+                host |= RES_HOST;
+            }
+            //do a RDMA write to the remote address 
+            return move(
+                MOVE_IMMEDIATE,
+                MOVE_NONE,
+                MOVE_IMMEDIATE,
+                pack_flags_rendezvous(host),
+                0, count, comm_offset, arcfg_offset, 
+                src_buf_addr, 0, buf_addr, 0, 0, 0,
+                0, 0, root_rank, TAG_ANY
             );
-            //update current position
-            curr_pos = (curr_pos + world.size - 1) % world.size;
         }
-        for(i=0; i<=world.size; i++){
-            err |= end_move();
-        }
-    }else{
-        //non root ranks sends their data + relay others data to the next rank in sequence
-        // as a daisy chain
+    } else {
+        //ring-based eager gather 
+        next_in_ring = (world.local_rank + 1) % world.size;
+        prev_in_ring = (world.local_rank + world.size - 1) % world.size;
 
-        //we need to compute correct compression schemes from the input compression flags
-        //send: keep all flags except RES_COMPRESSED, which should be replaced by ETH_COMPRESSED
-        //relay: keep ETH_COMPRESSED, reset everything else
-        unsigned int send_compression = (compression & ~RES_COMPRESSED) | ((compression & ETH_COMPRESSED) >> 1);
-        unsigned int relay_compression = ((compression & ETH_COMPRESSED) >> 1) | ((compression & ETH_COMPRESSED) >> 2);
+        if(root_rank == world.local_rank){ //root ranks mainly receives
 
-        //first send our own data
-        start_move(
-            MOVE_IMMEDIATE,
-            MOVE_NONE,
-            MOVE_IMMEDIATE,
-            pack_flags(send_compression, RES_REMOTE, host),
-            0,
-            count,
-            comm_offset, arcfg_offset,
-            src_buf_addr, 0, 0, 0, 0, 0,
-            0, 0, next_in_ring, TAG_ANY
-        );
-        //next relay a number of times depending on our position in the ring
-        number_of_shift = ((world.size+world.local_rank-root_rank)%world.size) - 1 ; //distance to the root
-        for (i=0; i<number_of_shift; i++){
+            //we need to compute correct compression schemes from the input compression flags
+            //copy to self: keep all flags except ETH_COMPRESSED, which should be reset for safety
+            //recv: keep RES_COMPRESSED and replace OP0_COMPRESSED with value of ETH_COMPRESSED
+            unsigned int copy_compression = compression & ~ETH_COMPRESSED;
+            unsigned int recv_compression = compression | ((compression & ETH_COMPRESSED) >> 2);
+
+            //initialize destination address in offload core
             start_move(
                 MOVE_NONE,
-                MOVE_ON_RECV,
+                MOVE_NONE,
                 MOVE_IMMEDIATE,
-                pack_flags(relay_compression, RES_REMOTE, NO_HOST),
+                pack_flags(NO_COMPRESSION, RES_LOCAL, NO_HOST),
+                0,
+                0,
+                comm_offset, arcfg_offset,
+                0, 0, dst_buf_addr, 0, 0, 0,
+                0, 0, 0, 0
+            );
+
+            //receive from all members of the communicator
+            curr_pos = world.local_rank;
+            for(i=0; i<world.size; i++){
+                start_move(
+                    (i==0) ? MOVE_IMMEDIATE : MOVE_NONE,
+                    (i==0) ? MOVE_NONE : MOVE_ON_RECV,
+                    MOVE_STRIDE,
+                    pack_flags((i==0) ? copy_compression : recv_compression, RES_LOCAL, host),
+                    0,
+                    count,
+                    comm_offset, arcfg_offset,
+                    src_buf_addr, 0, 0, 0, 0, count*((i==0) ? curr_pos : ((curr_pos==(world.size-1)) ? (world.size-1) : -1)),
+                    prev_in_ring, TAG_ANY, 0, 0
+                );
+                //update current position
+                curr_pos = (curr_pos + world.size - 1) % world.size;
+            }
+            for(i=0; i<=world.size; i++){
+                err |= end_move();
+            }
+        }else{
+            //non root ranks sends their data + relay others data to the next rank in sequence
+            // as a daisy chain
+
+            //we need to compute correct compression schemes from the input compression flags
+            //send: keep all flags except RES_COMPRESSED, which should be replaced by ETH_COMPRESSED
+            //relay: keep ETH_COMPRESSED, reset everything else
+            unsigned int send_compression = (compression & ~RES_COMPRESSED) | ((compression & ETH_COMPRESSED) >> 1);
+            unsigned int relay_compression = ((compression & ETH_COMPRESSED) >> 1) | ((compression & ETH_COMPRESSED) >> 2);
+
+            //first send our own data
+            start_move(
+                MOVE_IMMEDIATE,
+                MOVE_NONE,
+                MOVE_IMMEDIATE,
+                pack_flags(send_compression, RES_REMOTE, host),
                 0,
                 count,
                 comm_offset, arcfg_offset,
-                0, 0, 0, 0, 0, 0,
-                prev_in_ring, TAG_ANY, next_in_ring, TAG_ANY
+                src_buf_addr, 0, 0, 0, 0, 0,
+                0, 0, next_in_ring, TAG_ANY
             );
+            //next relay a number of times depending on our position in the ring
+            number_of_shift = ((world.size+world.local_rank-root_rank)%world.size) - 1 ; //distance to the root
+            for (i=0; i<number_of_shift; i++){
+                start_move(
+                    MOVE_NONE,
+                    MOVE_ON_RECV,
+                    MOVE_IMMEDIATE,
+                    pack_flags(relay_compression, RES_REMOTE, NO_HOST),
+                    0,
+                    count,
+                    comm_offset, arcfg_offset,
+                    0, 0, 0, 0, 0, 0,
+                    prev_in_ring, TAG_ANY, next_in_ring, TAG_ANY
+                );
+            }
+            for(i=0; i<=number_of_shift; i++){
+                err |= end_move();
+            }
         }
-        for(i=0; i<=number_of_shift; i++){
-            err |= end_move();
-        }
+        return err;
     }
-    return err;
 }
 
 //naive fused: 1) receive a segment 2) move in the dest buffer 3) relay to next rank
@@ -1474,6 +1756,7 @@ void run() {
             op1_addrh           = getd(CMD_CALL);
             res_addrl           = getd(CMD_CALL);
             res_addrh           = getd(CMD_CALL);
+            current_step        = 0;
         } else {
             //read parameters from command retry queue
             scenario            = getd(STS_CALL_RETRY);
@@ -1491,6 +1774,7 @@ void run() {
             op1_addrh           = getd(STS_CALL_RETRY);
             res_addrl           = getd(STS_CALL_RETRY);
             res_addrh           = getd(STS_CALL_RETRY);
+            current_step        = getd(STS_CALL_RETRY);
         }
 
         op0_addr = ((uint64_t) op0_addrh << 32) | op0_addrl;
@@ -1597,7 +1881,8 @@ void run() {
             putd(CMD_CALL_RETRY,op1_addrl);
             putd(CMD_CALL_RETRY,op1_addrh);
             putd(CMD_CALL_RETRY,res_addrl);
-            cputd(CMD_CALL_RETRY,res_addrh);
+            putd(CMD_CALL_RETRY,res_addrh);
+            cputd(CMD_CALL_RETRY,current_step);
         } else {
             finalize_call(retval);
         }

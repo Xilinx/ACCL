@@ -425,7 +425,7 @@ void interface_handler(XSI_DUT *dut, Stream<unsigned int> &axilite_rd_addr, Stre
                         Stream<unsigned int> &callreq, Stream<unsigned int> &callack,
                         Stream<stream_word> &eth_tx_data, Stream<stream_word> &eth_rx_data,
                         Stream<stream_word> &cclo_to_krnl_data, Stream<stream_word> &krnl_to_cclo_data){
-    logger << log_level::info << "Starting XSI interface server" << endl;
+    logger << log_level::verbose << "Starting XSI interface server" << endl;
     while(!stop){
         dut->run_ncycles(1);
         control_read_fsm(dut, axilite_rd_addr, axilite_rd_data);
@@ -439,7 +439,7 @@ void interface_handler(XSI_DUT *dut, Stream<unsigned int> &axilite_rd_addr, Stre
         krnl_ingress_fsm(dut, krnl_to_cclo_data);
         krnl_egress_fsm(dut, cclo_to_krnl_data);
     }
-    logger << log_level::info << "Exiting XSI interface server" << endl;
+    logger << log_level::verbose << "Exiting XSI interface server" << endl;
 }
 
 //this function copies from the global var stop

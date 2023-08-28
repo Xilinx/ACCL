@@ -18,7 +18,7 @@
 
 using namespace std;
 
-#define UB_SQ_WORD 6
+#define UB_SQ_WORD 7
 
 void rdma_sq_handler(
 	STREAM<rdma_req_t> & rdma_sq,
@@ -80,7 +80,7 @@ void rdma_sq_handler(
 					STREAM_WRITE(rdma_sq, rdma_req);
 					//issue packetizer command
 					cmd_in_word.msg_type = RNDZVS_INIT;
-					cmd_in_word.src = 0;
+					cmd_in_word.src = ub_sq_vec[6];
 					cmd_in_word.seqn = 0;
 					cmd_in_word.strm = 0;
 					cmd_in_word.dst = rdma_req.qpn;

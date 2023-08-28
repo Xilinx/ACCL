@@ -507,13 +507,6 @@ ACCLRequest *ACCL::scatter(BaseBuffer &sendbuf,
   CCLO::Options options{};
 
   unsigned count_bytes = count * (dataTypeSize.at(sendbuf.type()) / 8);
-  if (count_bytes > segment_size) {
-    std::cerr << "[ACCL] Warning: Scatter is too large! (" << count_bytes
-              << " B > " << segment_size << " B). "
-              << "Scatter does not currently support segmentation; "
-              << "the operation might get stuck or data may be corrupted. "
-              << std::endl;
-  }
 
   const Communicator &communicator = communicators[comm_id];
 
@@ -567,13 +560,6 @@ ACCLRequest *ACCL::gather(BaseBuffer &sendbuf,
   CCLO::Options options{};
 
   unsigned count_bytes = count * (dataTypeSize.at(sendbuf.type()) / 8);
-  if (count_bytes > segment_size) {
-    std::cerr << "[ACCL] Warning: Gather is too large! (" << count_bytes
-              << " B > " << segment_size << " B). "
-              << "Gather does not currently support segmentation; "
-              << "the operation might get stuck or data may be corrupted. "
-              << std::endl;
-  }
 
   const Communicator &communicator = communicators[comm_id];
 
@@ -636,13 +622,6 @@ ACCLRequest *ACCL::allgather(BaseBuffer &sendbuf,
   CCLO::Options options{};
 
   unsigned count_bytes = count * (dataTypeSize.at(sendbuf.type()) / 8);
-  if (count_bytes > segment_size) {
-    std::cerr << "[ACCL] Warning: Allgather is too large! (" << count_bytes
-              << " B > " << segment_size << " B). "
-              << "Allgather does not currently support segmentation; "
-              << "the operation might get stuck or data may be corrupted. "
-              << std::endl;
-  }
 
   const Communicator &communicator = communicators[comm_id];
 
@@ -703,13 +682,6 @@ ACCLRequest *ACCL::reduce(BaseBuffer &sendbuf,
   CCLO::Options options{};
 
   unsigned count_bytes = count * (dataTypeSize.at(sendbuf.type()) / 8);
-  if (count_bytes > segment_size) {
-    std::cerr << "[ACCL] Warning: Reduce is too large! (" << count_bytes
-              << " B > " << segment_size << " B). "
-              << "Reduce does not currently support segmentation; "
-              << "the operation might get stuck or data may be corrupted. "
-              << std::endl;
-  }
 
   const Communicator &communicator = communicators[comm_id];
 
@@ -764,13 +736,6 @@ ACCLRequest *ACCL::reduce(dataType src_data_type,
   CCLO::Options options{};
 
   unsigned count_bytes = count * (dataTypeSize.at(src_data_type) / 8);
-  if (count_bytes > segment_size) {
-    std::cerr << "[ACCL] Warning: Reduce is too large! (" << count_bytes
-              << " B > " << segment_size << " B). "
-              << "Reduce does not currently support segmentation; "
-              << "the operation might get stuck or data may be corrupted. "
-              << std::endl;
-  }
 
   const Communicator &communicator = communicators[comm_id];
 
@@ -821,13 +786,6 @@ ACCLRequest *ACCL::reduce(BaseBuffer &sendbuf, dataType dst_data_type,
   CCLO::Options options{};
 
   unsigned count_bytes = count * (dataTypeSize.at(sendbuf.type()) / 8);
-  if (count_bytes > segment_size) {
-    std::cerr << "[ACCL] Warning: Reduce is too large! (" << count_bytes
-              << " B > " << segment_size << " B). "
-              << "Reduce does not currently support segmentation; "
-              << "the operation might get stuck or data may be corrupted. "
-              << std::endl;
-  }
 
   const Communicator &communicator = communicators[comm_id];
 
@@ -871,13 +829,6 @@ ACCLRequest *ACCL::reduce(dataType src_data_type, dataType dst_data_type,
   CCLO::Options options{};
 
   unsigned count_bytes = count * (dataTypeSize.at(src_data_type) / 8);
-  if (count_bytes > segment_size) {
-    std::cerr << "[ACCL] Warning: Reduce is too large! (" << count_bytes
-              << " B > " << segment_size << " B). "
-              << "Reduce does not currently support segmentation; "
-              << "the operation might get stuck or data may be corrupted. "
-              << std::endl;
-  }
 
   const Communicator &communicator = communicators[comm_id];
 
@@ -967,13 +918,6 @@ ACCLRequest *ACCL::reduce_scatter(BaseBuffer &sendbuf,
   CCLO::Options options{};
 
   unsigned count_bytes = count * (dataTypeSize.at(sendbuf.type()) / 8);
-  if (count_bytes > segment_size) {
-    std::cerr << "[ACCL] Warning: Reduce scatter is too large! (" << count_bytes
-              << " B > " << segment_size << " B). "
-              << "Reduce scatter does not currently support segmentation; "
-              << "the operation might get stuck or data may be corrupted. "
-              << std::endl;
-  }
 
   const Communicator &communicator = communicators[comm_id];
 
