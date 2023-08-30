@@ -1160,106 +1160,198 @@ int allgather(
 ){
     unsigned int stream = buftype & 0xff;
     unsigned int host = (buftype >> 8) & 0xff;
-    int i, curr_pos, rel_stride, abs_stride, next_in_ring, prev_in_ring;
+    int i;
     int err = NO_ERROR;
+    int next_in_ring = (world.local_rank + 1) % world.size;
+    int prev_in_ring = (world.local_rank + world.size - 1) % world.size;
 
-    //compression is tricky for the relay: we've already received into the destination buffer
-    //with associated flag RES_COMPRESSED; this buffer becomes the source for a send
-    //so if RES_COMPRESSED is set, OP0_COMPRESSED must be set for the send, and RES_COMPRESSED reset
-    unsigned int relay_compression = (compression & RES_COMPRESSED) ? (compression | OP0_COMPRESSED) : compression;
-    relay_compression &= ~(RES_COMPRESSED);
+    unsigned int bytes_count = Xil_In32(arcfg_offset)*count;
+    if((bytes_count > max_eager_size) && (compression == NO_COMPRESSION) && (stream == NO_STREAM)){
+        //rendezvous ring allgather with P segments
+        //TODO: each rank pulls from next_in_ring into a segment, pushes a segment to prev_in_ring
+        //we do this for P-1 steps (such that each rank gathers the P-1 segments it's missing)
+        //at each step: send a addr notif to neighbour and wait for an address notif from neighbour + transfer
+        bool dst_buf_host = (host & RES_HOST) != 0;
+        bool upstream_host, downstream_host;
+        uint64_t downstream_addr, upstream_addr;
+        int status;
+        //start copy to ourselves while we're sending/receiving addresses
+        if(current_step == 0){
+            start_move(
+                MOVE_IMMEDIATE,
+                MOVE_NONE,
+                MOVE_IMMEDIATE,
+                pack_flags(compression, RES_LOCAL, host),
+                0, count, comm_offset, arcfg_offset, 
+                src_buf_addr, 0, dst_buf_addr + world.local_rank*bytes_count,
+                0, 0, 0,
+                0, 0, 0, TAG_ANY
+            );
+            //we're sending the address to prev_in_ring, who will write to us 
+            rendezvous_send_addr(prev_in_ring, dst_buf_addr, dst_buf_host, count, TAG_ANY);
+            current_step++;
+        }
+        //get address of buffer in next_in_ring - where we'll write
+        //this step has retries
+        if(current_step == 1){
+            status = rendezvous_get_addr(next_in_ring, &downstream_addr, &downstream_host, count, TAG_ANY);
+            if(status == NOT_READY_ERROR){
+                //if err was NO_ERROR, we'll retry, otherwise give up
+                return status;
+            } else {
+                err |= end_move();
+                current_step++;
+            }
+        }
+        //wait-and-forward loop
+        int pending_moves = 0;
+        //forward own segment downstream first
+        if(downstream_host){
+            host |= RES_HOST;
+        }
+        if(dst_buf_host){
+            host |= OP0_HOST;
+        }
+        start_move(
+            MOVE_IMMEDIATE,
+            MOVE_NONE,
+            MOVE_IMMEDIATE,
+            pack_flags_rendezvous(host),
+            0, count, comm_offset, arcfg_offset, 
+            dst_buf_addr + world.local_rank*bytes_count, 0, downstream_addr + world.local_rank*bytes_count,
+            0, 0, 0,
+            0, 0, next_in_ring, TAG_ANY
+        );
+        pending_moves++;
+        i=prev_in_ring;
+        while(i != world.local_rank){
+            //get completion for a segment 
+            upstream_addr = dst_buf_addr + i*bytes_count;
+            while(rendezvous_get_completion(prev_in_ring, upstream_addr, dst_buf_host, count, TAG_ANY) == NOT_READY_ERROR);
+            if(i != next_in_ring) {
+                //send from the received segment
+                start_move(
+                    MOVE_IMMEDIATE,
+                    MOVE_NONE,
+                    MOVE_IMMEDIATE,
+                    pack_flags_rendezvous(host),
+                    0, count, comm_offset, arcfg_offset, 
+                    upstream_addr, 0, downstream_addr + i*bytes_count,
+                    0, 0, 0,
+                    0, 0, next_in_ring, TAG_ANY
+                );
+                pending_moves++;
+                if(pending_moves > 2){
+                    err |= end_move();
+                    pending_moves--;
+                }
+                current_step++;
+            }
+            i = (i + world.size - 1) % world.size;
+        }
+        //flush move statuses
+        while(pending_moves > 0){
+            err |= end_move();
+            pending_moves--;
+        }
+    } else {
+        int curr_pos, rel_stride, abs_stride;
 
-    next_in_ring = (world.local_rank + 1) % world.size;
-    prev_in_ring = (world.local_rank + world.size - 1) % world.size;
+        //compression is tricky for the relay: we've already received into the destination buffer
+        //with associated flag RES_COMPRESSED; this buffer becomes the source for a send
+        //so if RES_COMPRESSED is set, OP0_COMPRESSED must be set for the send, and RES_COMPRESSED reset
+        unsigned int relay_compression = (compression & RES_COMPRESSED) ? (compression | OP0_COMPRESSED) : compression;
+        relay_compression &= ~(RES_COMPRESSED);
 
-    //prime the address slot for the destination, so we can subsequently stride against it
-    start_move(
-        MOVE_NONE, MOVE_NONE, MOVE_IMMEDIATE,
-        pack_flags(NO_COMPRESSION, RES_LOCAL, NO_HOST),
-        0,
-        0,
-        0, arcfg_offset,
-        src_buf_addr, 0, dst_buf_addr, 0, 0, 0,
-        0, 0, 0, 0
-    );
+        //prime the address slot for the destination, so we can subsequently stride against it
+        start_move(
+            MOVE_NONE, MOVE_NONE, MOVE_IMMEDIATE,
+            pack_flags(NO_COMPRESSION, RES_LOCAL, NO_HOST),
+            0,
+            0,
+            0, arcfg_offset,
+            src_buf_addr, 0, dst_buf_addr, 0, 0, 0,
+            0, 0, 0, 0
+        );
 
-    //copy our local data into the appropriate destination slot
-    start_move(
-        MOVE_IMMEDIATE, MOVE_NONE, MOVE_STRIDE,
-        pack_flags(compression, RES_LOCAL, host),
-        0,
-        count,
-        0, arcfg_offset,
-        src_buf_addr, 0, 0, 0, 0, count*world.local_rank,
-        0, 0, 0, 0
-    );
+        //copy our local data into the appropriate destination slot
+        start_move(
+            MOVE_IMMEDIATE, MOVE_NONE, MOVE_STRIDE,
+            pack_flags(compression, RES_LOCAL, host),
+            0,
+            count,
+            0, arcfg_offset,
+            src_buf_addr, 0, 0, 0, 0, count*world.local_rank,
+            0, 0, 0, 0
+        );
 
-    //send to next in ring
-    //ETH_COMPRESSED flag overwrites RES_COMPRESSED
-    start_move(
-        MOVE_IMMEDIATE, MOVE_NONE, MOVE_IMMEDIATE,
-        pack_flags(compression | ((compression & ETH_COMPRESSED) >> 1), RES_REMOTE, host),
-        0,
-        count,
-        comm_offset, arcfg_offset,
-        src_buf_addr, 0, 0, 0, 0, 0,
-        0, 0, next_in_ring, TAG_ANY
-    );
-
-    err |= end_move();
-    err |= end_move();
-    err |= end_move();
-
-    //receive and forward from all other members of the communicator
-    curr_pos = world.local_rank;
-    for(i=0; i<world.size-1; i++){
-        rel_stride = count*((curr_pos == 0) ? (world.size-1) : -1);
-        abs_stride = count*((curr_pos == 0) ? (world.size-1) : curr_pos-1);
-
-        //we use a blocking move here, because we want to avoid a race condition with the relay below
-        //TODO: avoid this; we either need to solve the RAW dependency in hardware (the generic approach),
-        //or a way to reuse a rx buffer (solves this problem in particular but does not extend to e.g. reduces)
-        //e.g. MOVE_ON_RECV_KEEP which would keep the RX buffer in the pending state
-        // on compression: ETH_COMPRESSED flag overwrites OP1_COMPRESSED
-        err |= move(
-            MOVE_NONE, MOVE_ON_RECV, MOVE_STRIDE,
-            pack_flags(compression | ((compression & ETH_COMPRESSED) >> 2), RES_LOCAL, host & RES_HOST),
+        //send to next in ring
+        //ETH_COMPRESSED flag overwrites RES_COMPRESSED
+        start_move(
+            MOVE_IMMEDIATE, MOVE_NONE, MOVE_IMMEDIATE,
+            pack_flags(compression | ((compression & ETH_COMPRESSED) >> 1), RES_REMOTE, host),
             0,
             count,
             comm_offset, arcfg_offset,
-            0, 0, 0, 0, 0, rel_stride,
-            prev_in_ring, TAG_ANY, 0, 0
+            src_buf_addr, 0, 0, 0, 0, 0,
+            0, 0, next_in_ring, TAG_ANY
         );
 
-        if(i < world.size-2){ //if not the last data, relay to the next in ring
-            //first prime the address
-            start_move(
-                MOVE_NONE, MOVE_IMMEDIATE, MOVE_NONE,
-                pack_flags(NO_COMPRESSION, RES_REMOTE, NO_HOST),
-                0,
-                0,
-                comm_offset, arcfg_offset,
-                0, dst_buf_addr, 0, 0, 0, 0,
-                0, 0, next_in_ring, TAG_ANY
-            );
-            //send
-            //here we're copying from the result buffer back into the network, so
-            //RES_COMPRESSED flag overwrites OP0_COMPRESSED, and
-            //ETH_COMPRESSED flag overwrites RES_COMPRESSED
-            start_move(
-                MOVE_NONE, MOVE_STRIDE, MOVE_IMMEDIATE,
-                pack_flags(((compression & RES_COMPRESSED) >> 2) | ((compression & ETH_COMPRESSED) >> 1), RES_REMOTE, host),
+        err |= end_move();
+        err |= end_move();
+        err |= end_move();
+
+        //receive and forward from all other members of the communicator
+        curr_pos = world.local_rank;
+        for(i=0; i<world.size-1; i++){
+            rel_stride = count*((curr_pos == 0) ? (world.size-1) : -1);
+            abs_stride = count*((curr_pos == 0) ? (world.size-1) : curr_pos-1);
+
+            //we use a blocking move here, because we want to avoid a race condition with the relay below
+            //TODO: avoid this; we either need to solve the RAW dependency in hardware (the generic approach),
+            //or a way to reuse a rx buffer (solves this problem in particular but does not extend to e.g. reduces)
+            //e.g. MOVE_ON_RECV_KEEP which would keep the RX buffer in the pending state
+            // on compression: ETH_COMPRESSED flag overwrites OP1_COMPRESSED
+            err |= move(
+                MOVE_NONE, MOVE_ON_RECV, MOVE_STRIDE,
+                pack_flags(compression | ((compression & ETH_COMPRESSED) >> 2), RES_LOCAL, host & RES_HOST),
                 0,
                 count,
                 comm_offset, arcfg_offset,
-                0, 0, 0, 0, abs_stride, 0,
-                0, 0, next_in_ring, TAG_ANY
+                0, 0, 0, 0, 0, rel_stride,
+                prev_in_ring, TAG_ANY, 0, 0
             );
 
-            err |= end_move();
-            err |= end_move();
+            if(i < world.size-2){ //if not the last data, relay to the next in ring
+                //first prime the address
+                start_move(
+                    MOVE_NONE, MOVE_IMMEDIATE, MOVE_NONE,
+                    pack_flags(NO_COMPRESSION, RES_REMOTE, NO_HOST),
+                    0,
+                    0,
+                    comm_offset, arcfg_offset,
+                    0, dst_buf_addr, 0, 0, 0, 0,
+                    0, 0, next_in_ring, TAG_ANY
+                );
+                //send
+                //here we're copying from the result buffer back into the network, so
+                //RES_COMPRESSED flag overwrites OP0_COMPRESSED, and
+                //ETH_COMPRESSED flag overwrites RES_COMPRESSED
+                start_move(
+                    MOVE_NONE, MOVE_STRIDE, MOVE_IMMEDIATE,
+                    pack_flags(((compression & RES_COMPRESSED) >> 2) | ((compression & ETH_COMPRESSED) >> 1), RES_REMOTE, host),
+                    0,
+                    count,
+                    comm_offset, arcfg_offset,
+                    0, 0, 0, 0, abs_stride, 0,
+                    0, 0, next_in_ring, TAG_ANY
+                );
+
+                err |= end_move();
+                err |= end_move();
+            }
+            curr_pos = (curr_pos + world.size - 1) % world.size;
         }
-        curr_pos = (curr_pos + world.size - 1) % world.size;
     }
 
     return err;
