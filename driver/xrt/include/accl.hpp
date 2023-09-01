@@ -55,14 +55,14 @@ public:
    * @param hostctrl_ip   The hostctrl kernel on the FPGA
    * @param devicemem     Memory bank of device memory
    * @param rxbufmem      Memory banks of rxbuf memory
-   * @param nbufs         Amount of buffers to use
-   * @param bufsize       Size of buffers
+   * @param n_egr_rx_bufs         Amount of buffers to use
+   * @param egr_rx_buf_size       Size of buffers
    * @param arith_config  Arithmetic configuration to use
    */
   ACCL(const std::vector<rank_t> &ranks, int local_rank, xrt::device &device,
        xrt::ip &cclo_ip, xrt::kernel &hostctrl_ip, int devicemem,
-       const std::vector<int> &rxbufmem, int nbufs = 16,
-       addr_t bufsize = 1024, addr_t segsize = 1024,
+       const std::vector<int> &rxbufmem, int n_egr_rx_bufs = 16,
+       addr_t egr_rx_buf_size = 1024, addr_t max_egr_size = 1024, addr_t max_rndzv_size = 32*1024,
        const arithConfigMap &arith_config = DEFAULT_ARITH_CONFIG);
 
   /**
@@ -72,13 +72,14 @@ public:
    * @param local_rank    Rank of this process
    * @param start_port    First port to use to connect to the ACCL emulator/
    *                      simulator
-   * @param nbufs         Amount of buffers to use
-   * @param bufsize       Size of buffers
+   * @param n_egr_rx_bufs         Amount of buffers to use
+   * @param egr_rx_buf_size       Size of buffers
    * @param arith_config  Arithmetic configuration to use
    */
   ACCL(const std::vector<rank_t> &ranks, int local_rank,
        unsigned int start_port,
-       int nbufs = 16, addr_t bufsize = 1024, addr_t segsize = 1024,
+       int n_egr_rx_bufs = 16, addr_t egr_rx_buf_size = 1024,
+       addr_t max_egr_size = 1024, addr_t max_rndzv_size = 32*1024,
        const arithConfigMap &arith_config = DEFAULT_ARITH_CONFIG);
 
   /**
@@ -90,19 +91,20 @@ public:
    * @param start_port    First port to use to connect to the ACCL emulator/
    *                      simulator
    * @param device        Simulated FPGA device from the Vitis emulator
-   * @param nbufs         Amount of buffers to use
-   * @param bufsize       Size of buffers
+   * @param n_egr_rx_bufs         Amount of buffers to use
+   * @param egr_rx_buf_size       Size of buffers
    * @param arith_config  Arithmetic configuration to use
 
    */
   ACCL(const std::vector<rank_t> &ranks, int local_rank,
-       unsigned int start_port, xrt::device &device, int nbufs = 16,
-       addr_t bufsize = 1024, addr_t segsize = 1024,
+       unsigned int start_port, xrt::device &device, int n_egr_rx_bufs = 16,
+       addr_t egr_rx_buf_size = 1024, addr_t max_egr_size = 1024, addr_t max_rndzv_size = 32*1024,
        const arithConfigMap &arith_config = DEFAULT_ARITH_CONFIG);
 
   // constructor for coyote fpga device
   ACCL(CoyoteDevice *dev, const std::vector<rank_t> &ranks, int local_rank,
-       int nbufs = 16, addr_t bufsize = 1024, addr_t segsize = 1024,
+       int n_egr_rx_bufs = 16, addr_t egr_rx_buf_size = 1024,
+       addr_t max_egr_size = 1024, addr_t max_rndzv_size = 32*1024,
        const arithConfigMap &arith_config = DEFAULT_ARITH_CONFIG);
   
   /**
@@ -982,24 +984,24 @@ public:
   std::string dump_exchange_memory();
 
   /**
-   * Dump the content of the RX buffers to a string for the first nbufs buffers.
+   * Dump the content of the Eager-mode RX buffers to a string for the first n_egr_rx_bufs buffers.
    *
-   * @param nbufs        Amount of buffers to dump the content of.
+   * @param n_egr_rx_bufs        Amount of buffers to dump the content of.
    * @param dump_data    Dump buffer contents along with metadata.
-   * @return std::string Content of the RX buffers.
+   * @return std::string Content of the Eager-mode RX buffers.
    */
-  std::string dump_rx_buffers(size_t nbufs, bool dump_data=true);
+  std::string dump_eager_rx_buffers(size_t n_egr_rx_bufs, bool dump_data=true);
 
   /**
-   * Dump the content of all RX buffers to a string.
+   * Dump the content of all Eager-mode RX buffers to a string.
    *
-   * @return std::string Content of all RX buffers.
+   * @return std::string Content of all Eager-mode RX buffers.
    */
-  std::string dump_rx_buffers(bool dump_data=true) {
-    if (cclo->read(rx_buffers_adr) != rx_buffer_spares.size()) {
+  std::string dump_eager_rx_buffers(bool dump_data=true) {
+    if (cclo->read(CCLO_ADDR::NUM_EGR_RX_BUFS_OFFSET) != eager_rx_buffers.size()) {
       throw std::runtime_error("CCLO inconsistent");
     }
-    return dump_rx_buffers(rx_buffer_spares.size(), dump_data);
+    return dump_eager_rx_buffers(eager_rx_buffers.size(), dump_data);
   }
 
   /**
@@ -1060,19 +1062,19 @@ private:
   // Address to put new configurations like arithmetic configs
   // and communicators
   addr_t current_config_address{};
-  // RX spare buffers
-  std::vector<Buffer<int8_t> *> rx_buffer_spares;
-  addr_t rx_buffer_size{};
-  addr_t rx_buffers_adr{};
-  // Spare buffer for general use
-  Buffer<int8_t> *utility_spare{};
+  // RX spare buffers for eager mode
+  addr_t max_eager_msg_size{};
+  std::vector<Buffer<int8_t> *> eager_rx_buffers;
+  addr_t eager_rx_buffer_size{};
+  // Spare buffers for use in rendezvous reduces
+  addr_t max_rndzv_msg_size{};
+  std::vector<Buffer<int8_t> *> utility_spares;
   // List of communicators, to which users will add
   std::vector<Communicator> communicators;
   // safety checks
   bool check_return_value_flag{};
   bool ignore_safety_checks{};
   // TODO: use description to gather info about where to allocate spare buffers
-  addr_t segment_size{};
   // flag to indicate whether we've finished config
   bool config_rdy{};
   // flag to indicate whether we're simulating
@@ -1088,15 +1090,22 @@ private:
                  std::vector<ACCLRequest *> waitfor);
 
   void initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
-                       int nbufs, addr_t bufsize, addr_t segsize);
+                           int n_egr_rx_bufs, addr_t egr_rx_buf_size, 
+                           addr_t max_egr_size, addr_t max_rndzv_size);
 
   void configure_arithmetic();
 
-  void setup_rx_buffers(size_t nbufs, addr_t bufsize,
+  void setup_eager_rx_buffers(size_t n_egr_rx_bufs, addr_t egr_rx_buf_size,
                         const std::vector<int> &devicemem);
-  void setup_rx_buffers(size_t nbufs, addr_t bufsize, int devicemem) {
+  void setup_eager_rx_buffers(size_t n_egr_rx_bufs, addr_t egr_rx_buf_size, int devicemem) {
     std::vector<int> mems = {devicemem};
-    return setup_rx_buffers(nbufs, bufsize, mems);
+    return setup_eager_rx_buffers(n_egr_rx_bufs, egr_rx_buf_size, mems);
+  }
+
+  void setup_rendezvous_spare_buffers(addr_t rndzv_spare_buf_size, const std::vector<int> &devicemem);
+  void setup_rendezvous_spare_buffers(addr_t rndzv_spare_buf_size, int devicemem) {
+    std::vector<int> mems = {devicemem};
+    return setup_rendezvous_spare_buffers(rndzv_spare_buf_size, mems);
   }
 
   void check_return_value(const std::string function_name, ACCLRequest *handle);
@@ -1107,7 +1116,9 @@ private:
 
   ACCLRequest *call_sync(CCLO::Options &options);
 
-  void set_max_segment_size(unsigned int value = 0);
+  void set_max_eager_msg_size(unsigned int value);
+
+  void set_max_rendezvous_msg_size(unsigned int value);
 
   void configure_communicator(const std::vector<rank_t> &ranks, int local_rank);
 };

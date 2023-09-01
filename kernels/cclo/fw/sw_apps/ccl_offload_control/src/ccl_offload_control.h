@@ -82,9 +82,11 @@
 #define HOUSEKEEP_PKTEN                1
 #define HOUSEKEEP_TIMEOUT              2
 #define HOUSEKEEP_EAGER_MAX_SIZE       3
-#define HOUSEKEEP_SET_MAX_SEGMENT_SIZE 6
+#define HOUSEKEEP_RENDEZVOUS_MAX_SIZE  4
 
 //AXI MMAP address
+#define TMP1_OFFSET       0x1FE4    //address of first spare buffer in device memory
+#define TMP2_OFFSET       0x1FEC    //address of second spare buffer in device memory
 #define CFGRDY_OFFSET     0x1FF4
 #define HWID_OFFSET       0x1FF8
 #define RETVAL_OFFSET     0x1FFC
@@ -139,8 +141,8 @@
 #define DEQUEUE_BUFFER_SPARE_BUFFER_INDEX_ERROR       (1<<13)
 #define COLLECTIVE_NOT_IMPLEMENTED                    (1<<14)
 #define RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID       (1<<15)
-#define OPEN_PORT_NOT_SUCCEEDED                       (1<<16)
-#define OPEN_CON_NOT_SUCCEEDED                        (1<<17)
+#define EAGER_THRESHOLD_INVALID                       (1<<16)
+#define RENDEZVOUS_THRESHOLD_INVALID                  (1<<17)
 #define DMA_SIZE_ERROR                                (1<<18)
 #define ARITH_ERROR                                   (1<<19) 
 #define PACK_TIMEOUT_STS_ERROR                        (1<<20)
@@ -150,8 +152,7 @@
 #define KRNL_STS_COUNT_ERROR                          (1<<24)
 #define SEGMENTER_EXPECTED_BTT_ERROR                  (1<<25)
 #define DMA_TAG_MISMATCH_ERROR                        (1<<26)
-#define CLOSE_CON_NOT_SUCCEEDED                       (1<<27)
-#define NOT_READY_ERROR                               (1<<28)
+#define NOT_READY_ERROR                               (1<<31)
 
 //define opcodes for move offload
 //each address parameter (op0, op1, res) should carry one of these opcodes
@@ -261,13 +262,11 @@ typedef struct {
 #define STATUS_OFFSET           0
 #define ADDRL_OFFSET            1
 #define ADDRH_OFFSET            2
-#define MAX_LEN_OFFSET          3
-#define RX_TAG_OFFSET           4
-#define RX_LEN_OFFSET           5
-#define RX_SRC_OFFSET           6
-#define SEQUENCE_NUMBER_OFFSET  7   
-#define SPARE_BUFFER_SIZE       32
-#define SPARE_BUFFER_FIELDS     8       
+#define RX_TAG_OFFSET           3
+#define RX_LEN_OFFSET           4
+#define RX_SRC_OFFSET           5
+#define SEQUENCE_NUMBER_OFFSET  6   
+#define SPARE_BUFFER_FIELDS     7       
 
 #define STATUS_IDLE     0x00
 #define STATUS_ENQUEUED 0x01
@@ -275,7 +274,9 @@ typedef struct {
 #define STATUS_ERROR    0x04
 
 #define RX_BUFFER_COUNT_OFFSET 0x0
-#define COMM_OFFSET (RX_BUFFER_COUNT_OFFSET+4*(1 + Xil_In32(RX_BUFFER_COUNT_OFFSET)*SPARE_BUFFER_FIELDS))
+#define RX_BUFFER_MAX_LEN_OFFSET 0x4
+#define RX_BUFFER_METADATA_OFFSET 0x8
+#define COMM_OFFSET (RX_BUFFER_METADATA_OFFSET+4*Xil_In32(RX_BUFFER_COUNT_OFFSET)*SPARE_BUFFER_FIELDS)
 
 typedef struct {
     unsigned int ip;

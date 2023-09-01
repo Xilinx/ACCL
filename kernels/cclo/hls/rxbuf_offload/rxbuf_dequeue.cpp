@@ -37,10 +37,10 @@ void rxbuf_dequeue(
 	//get rx_buffer pointer from inflight queue
 	ap_uint<32> spare_idx = STREAM_READ(inflight_queue), btt, new_status;
 	eth_header header = STREAM_READ(eth_hdr);
-	rx_buffers[1 + spare_idx * SPARE_BUFFER_FIELDS + RX_TAG_OFFSET] = header.tag;
-	rx_buffers[1 + spare_idx * SPARE_BUFFER_FIELDS + RX_LEN_OFFSET] = header.count;
-	rx_buffers[1 + spare_idx * SPARE_BUFFER_FIELDS + RX_SRC_OFFSET] = header.src;
-	rx_buffers[1 + spare_idx * SPARE_BUFFER_FIELDS + SEQUENCE_NUMBER_OFFSET] = header.seqn;
+	rx_buffers[(RX_BUFFER_METADATA_OFFSET/4) + spare_idx * SPARE_BUFFER_FIELDS + RX_TAG_OFFSET] = header.tag;
+	rx_buffers[(RX_BUFFER_METADATA_OFFSET/4) + spare_idx * SPARE_BUFFER_FIELDS + RX_LEN_OFFSET] = header.count;
+	rx_buffers[(RX_BUFFER_METADATA_OFFSET/4) + spare_idx * SPARE_BUFFER_FIELDS + RX_SRC_OFFSET] = header.src;
+	rx_buffers[(RX_BUFFER_METADATA_OFFSET/4) + spare_idx * SPARE_BUFFER_FIELDS + SEQUENCE_NUMBER_OFFSET] = header.seqn;
 	hlslib::axi::Status dma_status = hlslib::axi::Status(STREAM_READ(dma_sts));
 	//interpret dma sts and write new spare_sts
 	// 3-0 TAG 
@@ -53,11 +53,11 @@ void rxbuf_dequeue(
 	}else{
 		new_status = STATUS_RESERVED;
 	}
-	rx_buffers[1 + spare_idx * SPARE_BUFFER_FIELDS + STATUS_OFFSET] = new_status;
+	rx_buffers[(RX_BUFFER_METADATA_OFFSET/4) + spare_idx * SPARE_BUFFER_FIELDS + STATUS_OFFSET] = new_status;
 	//send to the DMA mover data required to identify/resolve a receive: tag, src, count, address
 	rxbuf_notification s;
-	// s.addr(31, 0) = rx_buffers[1 + spare_idx * SPARE_BUFFER_FIELDS + ADDRL_OFFSET];
-	// s.addr(63,32) = rx_buffers[1 + spare_idx * SPARE_BUFFER_FIELDS + ADDRH_OFFSET];
+	// s.addr(31, 0) = rx_buffers[(RX_BUFFER_METADATA_OFFSET/4) + spare_idx * SPARE_BUFFER_FIELDS + ADDRL_OFFSET];
+	// s.addr(63,32) = rx_buffers[(RX_BUFFER_METADATA_OFFSET/4) + spare_idx * SPARE_BUFFER_FIELDS + ADDRH_OFFSET];
 	s.index = spare_idx;
 	s.signature.tag = header.tag;
 	s.signature.src = header.src;

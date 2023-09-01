@@ -32,6 +32,7 @@ void rxbuf_enqueue(
 #pragma HLS PIPELINE II=4
 
 	unsigned int nbufs = 0;
+	unsigned int max_len = 0;
 	//poll nbuffers (base of rx buffers space) until it is non-zero
 	//NOTE: software should write nbuffers *after* writing all the rest of the configuration
 	if(nbufs == 0){
@@ -39,7 +40,8 @@ void rxbuf_enqueue(
 		if(nbufs == 0){
 			return;
 		}
-		rx_buffers++;
+		max_len = rx_buffers[1];
+		rx_buffers += 2;
 	}
 	ap_uint<4> tag = 0;
 	ap_axiu<104,0,0,DEST_WIDTH> cmd_word;
@@ -47,12 +49,11 @@ void rxbuf_enqueue(
 	#pragma HLS data_pack variable=dma_cmd struct_level
 	//iterate until you run out of spare buffers
 	for(int i=0; i < nbufs; i++){
-		ap_uint<32> status, max_len;
+		ap_uint<32> status;
 		ap_uint<64> addr;
 		status = rx_buffers[(i * SPARE_BUFFER_FIELDS) + STATUS_OFFSET];
 		addr(31,  0) = rx_buffers[(i * SPARE_BUFFER_FIELDS) + ADDRL_OFFSET];
 		addr(63, 32) = rx_buffers[(i * SPARE_BUFFER_FIELDS) + ADDRH_OFFSET];
-		max_len = rx_buffers[(i * SPARE_BUFFER_FIELDS) + MAX_LEN_OFFSET];
 
 		//look for IDLE spare buffers
 		//can't be pipelined fully because of this test.
