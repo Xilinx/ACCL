@@ -25,7 +25,8 @@
 
 static unsigned int timeout = 1 << 28;
 static unsigned int max_eager_size = (1<<15);
-static unsigned int max_segment_size = DMA_MAX_BTT;
+static unsigned int max_rendezvous_size = (1<<15);
+static unsigned int eager_rx_buf_size = DMA_MAX_BTT;
 static unsigned int num_rndzv_pending = 0;
 static unsigned int num_retry_pending = 0;
 static bool new_call = true;
@@ -524,7 +525,7 @@ int send(
         //destination compression == Ethernet compression
         //(since data can't be decompressed on remote side)
         //calculate max segment size in elements, from element size 
-        unsigned int max_seg_count = max_segment_size / Xil_In32(arcfg_offset);
+        unsigned int max_seg_count = eager_rx_buf_size / Xil_In32(arcfg_offset);
         //calculate number of segments required for this send
         unsigned int nseg = (count+max_seg_count-1)/max_seg_count;
         int i;
@@ -585,7 +586,7 @@ int recv(
         //if ETH_COMPRESSED is set, also set OP1_COMPRESSED
         compression |= (compression & ETH_COMPRESSED) >> 2;
         //calculate max segment size in elements, from element size 
-        unsigned int max_seg_count = max_segment_size / Xil_In32(arcfg_offset);
+        unsigned int max_seg_count = eager_rx_buf_size / Xil_In32(arcfg_offset);
         //calculate number of segments required for this send
         unsigned int nseg = (count+max_seg_count-1)/max_seg_count;
         int i;
@@ -777,7 +778,7 @@ int broadcast(  unsigned int count,
             //compute count from uncompressed elem bytes in aright config
             //instead of Xil_In32 we could use:
             //(datapath_arith_config*)(arcfg_offset)->uncompressed_elem_bytes;
-            max_seg_count = max_segment_size / Xil_In32(arcfg_offset);
+            max_seg_count = eager_rx_buf_size / Xil_In32(arcfg_offset);
         }
 
         int expected_ack_count = 0;
@@ -1370,21 +1371,149 @@ int reduce( unsigned int count,
             unsigned int buftype){
     unsigned int stream = buftype & 0xff;
     unsigned int host = (buftype >> 8) & 0xff;
-    unsigned int next_in_ring = (world.local_rank + 1) % world.size;
-    unsigned int prev_in_ring = (world.local_rank + world.size-1) % world.size;
+    unsigned int bytes_count = Xil_In32(arcfg_offset)*count;
 
     if(world.size == 1){
         //corner-case copy for when running a single-node reduction
         return copy(count, src_addr, dst_addr, arcfg_offset, compression, buftype);
-    }else if( prev_in_ring == root_rank){
-        //non root ranks immediately after the root sends; only OP0_STREAM and OP0_HOST flags are relevant here
-        return send(next_in_ring, count, src_addr, comm_offset, arcfg_offset, TAG_ANY, compression, ((host & OP0_HOST) << 8) | (stream & OP0_STREAM));
-    }else if (world.local_rank != root_rank){
-        //non root ranks sends their data + data received from previous rank to the next rank in sequence as a daisy chain; only OP0_STREAM flag is relevant here
-        return fused_recv_reduce_send(prev_in_ring, next_in_ring, count, func, src_addr, comm_offset, arcfg_offset, TAG_ANY, compression, ((host & OP0_HOST) << 8) | (stream & OP0_STREAM));
-    }else{
-        //root only receive from previous node in the ring, add its local buffer and save in destination buffer
-        return fused_recv_reduce(prev_in_ring, count, func, src_addr, dst_addr, comm_offset, arcfg_offset, TAG_ANY, compression, buftype);
+    }else if((bytes_count > max_eager_size) && (compression == NO_COMPRESSION) && (stream == NO_STREAM)){
+        //get scratchpad buffers from exchmem
+        uint64_t tmp1_addr = ((uint64_t)Xil_In32(TMP1_OFFSET+4) << 32) | (uint64_t)Xil_In32(TMP1_OFFSET);
+        uint64_t tmp2_addr = ((uint64_t)Xil_In32(TMP2_OFFSET+4) << 32) | (uint64_t)Xil_In32(TMP2_OFFSET);
+        //rendezvous tree reduce using tmp_addr as a scratchpad (preferably in device memory)
+        unsigned int local_tree_leaf, local_tree_root;
+        unsigned int err = NO_ERROR;
+        //tree reduce:
+        //at each step, each rank can do one or more of 3 actions: send (S), receive (R), and sum (+)
+        //for rendezvous, R involves an address send and completion check and does not involve the DMP
+        //for rendezvous, S involves an address get and a DMP move
+        //+ involves a DMP move from src_addr/dst_addr and tmp_addr to dst_addr
+        //send and sum can be fused into a single action denoted +S
+        //
+        //we denote N as the step number
+        //the action distance D = 2^N is the distance (in ranks) over which we communicate
+        //L is the normalized local rank, obtained by subtracting root rank number from local rank, mod size
+        //at each step, we calculate whether we perform any of the actions:
+        //S(N,L) = (L%2D != 0) && (L != 0) = (L%(1<<(N+1)) != 0) && (L != 0)
+        //R(N,L) = !S(N,L) && ((L+D)<size) = !S(N,L) && ((L+1<<N)<size)
+        //+(N,L) = R(N-1,L)
+        //
+        //we have available two scratchpad buffers in device memory and the dst buffer in host or device memory
+        //at each time step we optionally receive into one scratchpad, alternating
+        //we accumulate in the dst buffer from previously received data
+        //
+        //we make sure that we operate from src_addr instead of dst_addr the very first time
+        //
+        //execution completed on root if !R or on non-root if S
+        //
+        //note: the implementation is more complex because we want to be stateless
+        //everything should be computed from the current step such that we can swap the reduce in and out of execution
+        unsigned int l = (world.local_rank + world.size - root_rank) % world.size;
+        unsigned int d, n = 0;
+        bool s = false;
+        bool r = false;
+        bool plus = false;
+        bool is_root = (l==0);
+        uint64_t remote_addr;
+        bool remote_host;
+        unsigned int receiving_rank, sending_rank;
+        bool scratchpad_sel = false;
+        uint64_t current_scratchpad_addr;
+        uint64_t previous_scratchpad_addr;
+        bool first_move = true; //TODO: implement without this state bit
+        while(1){
+            d = 1<<n;
+            s = (l%(2*d) != 0) && !is_root;
+            r = !s && ((l+d)<world.size);
+            plus = !((l%d != 0) && !is_root) && ((l+d/2)<world.size) && (n>0);
+            scratchpad_sel = (n % 2);
+            current_scratchpad_addr = scratchpad_sel ? tmp2_addr : tmp1_addr;
+            previous_scratchpad_addr = scratchpad_sel ? tmp1_addr : tmp2_addr;
+            receiving_rank = (l+world.size-d+root_rank)%world.size;
+            sending_rank = (l+d+root_rank)%world.size;
+            //TODO instead of just-in-time distributing addresses, we could do one run through this loop ahead
+            //of time just for address distribution, then do address resolution just-in-time
+            if(r){
+                rendezvous_send_addr(sending_rank, current_scratchpad_addr, false, count, TAG_ANY);
+            }
+            //address resolution in case we need to send
+            if(s){
+                while(rendezvous_get_addr(receiving_rank, &remote_addr, &remote_host, count, TAG_ANY) == NOT_READY_ERROR);
+                //adjust host flags and addresses in case we're sending from dst and scratchpad
+                if(n > 1){
+                    if((host & RES_HOST) != 1){
+                        host |= OP0_HOST;
+                    }
+                    if((n > 1) && remote_host){
+                        host |= RES_HOST;
+                    }
+                }
+            }
+            //DMP ops for sending/combining
+            if(s && plus){
+                //fused combine+send
+                err |= move(
+                    MOVE_IMMEDIATE,
+                    MOVE_IMMEDIATE,
+                    MOVE_IMMEDIATE,
+                    pack_flags_rendezvous(host),
+                    func, count,
+                    comm_offset, arcfg_offset,
+                    first_move ? src_addr : dst_addr, previous_scratchpad_addr, remote_addr, 0, 0, 0,
+                    0, 0, receiving_rank, TAG_ANY
+                );
+            } else if(s) {
+                //send
+                err |= move(
+                    MOVE_IMMEDIATE,
+                    MOVE_NONE,
+                    MOVE_IMMEDIATE,
+                    pack_flags_rendezvous(host),
+                    func, count,
+                    comm_offset, arcfg_offset,
+                    first_move ? src_addr : dst_addr, 0, remote_addr, 0, 0, 0,
+                    0, 0, receiving_rank, TAG_ANY
+                );
+            } else if(plus) {
+                //combine
+                err |= move(
+                    MOVE_IMMEDIATE,
+                    MOVE_IMMEDIATE,
+                    MOVE_IMMEDIATE,
+                    pack_flags(NO_COMPRESSION, RES_LOCAL, host),
+                    func, count,
+                    comm_offset, arcfg_offset,
+                    first_move ? src_addr : dst_addr, previous_scratchpad_addr, dst_addr, 0, 0, 0,
+                    0, 0, 0, 0
+                );
+            }
+            //wait for completion on receives
+            if(r){
+                while(rendezvous_get_completion(sending_rank, current_scratchpad_addr, false, count, TAG_ANY) == NOT_READY_ERROR);
+            }
+            //end conditions
+            if((!r && is_root) || (s && !is_root)) return err;
+            //update first move
+            if(s || plus){
+                first_move = false;
+            }
+            //increment step
+            n++;
+        }
+
+    } else {
+        unsigned int next_in_ring = (world.local_rank + 1) % world.size;
+        unsigned int prev_in_ring = (world.local_rank + world.size-1) % world.size;
+        if( prev_in_ring == root_rank){
+            //non root ranks immediately after the root sends; only OP0_STREAM and OP0_HOST flags are relevant here
+            return send(next_in_ring, count, src_addr, comm_offset, arcfg_offset, TAG_ANY, compression, ((host & OP0_HOST) << 8) | (stream & OP0_STREAM));
+        }else if (world.local_rank != root_rank){
+            //non root ranks sends their data + data received from previous rank to the next rank in sequence as a daisy chain; only OP0_STREAM flag is relevant here
+            return fused_recv_reduce_send(prev_in_ring, next_in_ring, count, func, src_addr, comm_offset, arcfg_offset, TAG_ANY, compression, ((host & OP0_HOST) << 8) | (stream & OP0_STREAM));
+        }else{
+            //root only receive from previous node in the ring, add its local buffer and save in destination buffer
+            return fused_recv_reduce(prev_in_ring, count, func, src_addr, dst_addr, comm_offset, arcfg_offset, TAG_ANY, compression, buftype);
+        }
     }
 }
 
@@ -1516,7 +1645,7 @@ int allreduce(
         //compute count from uncompressed elem bytes in aright config
         //instead of Xil_In32 we could use:
         //(datapath_arith_config*)(arcfg_offset)->uncompressed_elem_bytes;
-        max_seg_count = max_segment_size / Xil_In32(arcfg_offset);
+        max_seg_count = eager_rx_buf_size / Xil_In32(arcfg_offset);
         // Round max segment size down to align with world size
         max_seg_count -= max_seg_count % world.size;
     }
@@ -1926,14 +2055,21 @@ void run() {
                         timeout = count;
                         break;
                     case HOUSEKEEP_EAGER_MAX_SIZE:
-                        max_eager_size = count;
-                        break;
-                    case HOUSEKEEP_SET_MAX_SEGMENT_SIZE:
-                        retval = DMA_NOT_EXPECTED_BTT_ERROR;
-                        if(count < DMA_MAX_BTT){
-                            max_segment_size = count;
-                            retval = NO_ERROR;
+                        //get size of RX buffers from the RX buffer spec in memory
+                        eager_rx_buf_size = Xil_In32(RX_BUFFER_MAX_LEN_OFFSET);
+                        if(count < eager_rx_buf_size){
+                            finalize_call(EAGER_THRESHOLD_INVALID);
+                            continue;
                         }
+                        max_eager_size = count;
+
+                        break;
+                    case HOUSEKEEP_RENDEZVOUS_MAX_SIZE:
+                        if(count <= max_eager_size){
+                            finalize_call(RENDEZVOUS_THRESHOLD_INVALID);
+                            continue;
+                        }
+                        max_rendezvous_size = count;
                         break;
                     default:
                         break;

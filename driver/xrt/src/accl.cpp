@@ -30,44 +30,48 @@ namespace ACCL {
 ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
            xrt::device &device, xrt::ip &cclo_ip, xrt::kernel &hostctrl_ip,
            int devicemem, const std::vector<int> &rxbufmem,
-           int nbufs, addr_t bufsize, addr_t segsize,
+           int n_egr_rx_bufs, addr_t egr_rx_buf_size,
+           addr_t max_egr_size, addr_t max_rndzv_size,
            const arithConfigMap &arith_config)
     : arith_config(arith_config), sim_mode(false),
       _devicemem(devicemem), rxbufmem(rxbufmem) {
   cclo = new FPGADevice(cclo_ip, hostctrl_ip, device);
-  initialize_accl(ranks, local_rank, nbufs, bufsize, segsize);
+  initialize_accl(ranks, local_rank, n_egr_rx_bufs, egr_rx_buf_size, max_egr_size, max_rndzv_size);
 }
 
 // Simulation constructor
 ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
-           unsigned int sim_start_port, int nbufs,
-           addr_t bufsize, addr_t segsize, const arithConfigMap &arith_config)
+           unsigned int sim_start_port, int n_egr_rx_bufs,
+           addr_t egr_rx_buf_size, addr_t max_egr_size,
+           addr_t max_rndzv_size, const arithConfigMap &arith_config)
     : arith_config(arith_config), sim_mode(true),
       _devicemem(0), rxbufmem({}) {
   cclo = new SimDevice(sim_start_port, local_rank);
   debug("initialize_accl");
-  initialize_accl(ranks, local_rank, nbufs, bufsize, segsize);
+  initialize_accl(ranks, local_rank, n_egr_rx_bufs, egr_rx_buf_size, max_egr_size, max_rndzv_size);
 }
 
 ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
            unsigned int sim_start_port, xrt::device &device,
-           int nbufs, addr_t bufsize, addr_t segsize,
+           int n_egr_rx_bufs, addr_t egr_rx_buf_size,
+           addr_t max_egr_size, addr_t max_rndzv_size,
            const arithConfigMap &arith_config)
     : arith_config(arith_config), sim_mode(true),
       _devicemem(0), rxbufmem({}) {
   cclo = new SimDevice(sim_start_port, local_rank);
-  initialize_accl(ranks, local_rank, nbufs, bufsize, segsize);
+  initialize_accl(ranks, local_rank, n_egr_rx_bufs, egr_rx_buf_size, max_egr_size, max_rndzv_size);
 }
 
 // constructor for coyote fpga device
 ACCL::ACCL(CoyoteDevice *dev, const std::vector<rank_t> &ranks, int local_rank,
-        int nbufs, addr_t bufsize, addr_t segsize,
+        int n_egr_rx_bufs, addr_t egr_rx_buf_size,
+        addr_t max_egr_size, addr_t max_rndzv_size,
         const arithConfigMap &arith_config)
   : arith_config(arith_config), sim_mode(false),
     _devicemem(0), rxbufmem(0)
 {
   cclo = dev;
-  initialize_accl(ranks, local_rank, nbufs, bufsize, segsize);
+  initialize_accl(ranks, local_rank, n_egr_rx_bufs, egr_rx_buf_size, max_egr_size, max_rndzv_size);
   std::cout << "Coyote ACCL initialized!" << std::endl;
 }
 
@@ -91,17 +95,17 @@ void ACCL::deinit() {
   }
   check_return_value("reset_periph", handle);
 
-  for (auto &buf : rx_buffer_spares) {
+  for (auto &buf : eager_rx_buffers) {
     buf->free_buffer();
     delete buf;
   }
-  rx_buffer_spares.clear();
+  eager_rx_buffers.clear();
 
-  if (utility_spare != nullptr) {
-    utility_spare->free_buffer();
-    delete utility_spare;
-    utility_spare = nullptr;
+  for (auto &buf : utility_spares) {
+    buf->free_buffer();
+    delete buf;
   }
+  utility_spares.clear();
 }
 
 ACCLRequest *ACCL::set_timeout(unsigned int value, bool run_async,
@@ -127,14 +131,14 @@ ACCLRequest *ACCL::set_rendezvous_threshold(unsigned int value, bool run_async,
   CCLO::Options options{};
   options.scenario = operation::config;
   options.count = value;
-  options.cfg_function = cfgFunc::set_rendezvous_threshold;
+  options.cfg_function = cfgFunc::set_max_eager_msg_size;
   ACCLRequest *handle = call_async(options);
 
   if (run_async) {
     return handle;
   } else {
     wait(handle);
-    check_return_value("set_timeout", handle);
+    check_return_value("set_max_eager_msg_size", handle);
   }
 
   return nullptr;
@@ -577,9 +581,9 @@ ACCLRequest *ACCL::gather(BaseBuffer &sendbuf,
   }
 
   if (ignore_safety_checks == false &&
-      (count + segment_size - 1) / segment_size *
+      (count + eager_rx_buffer_size - 1) / eager_rx_buffer_size *
               communicator.get_ranks()->size() >
-          rx_buffer_spares.size()) {
+          eager_rx_buffers.size()) {
     std::cerr << "ACCL: gather can't be executed safely with this number of "
                  "spare buffers"
               << std::endl;
@@ -637,9 +641,9 @@ ACCLRequest *ACCL::allgather(BaseBuffer &sendbuf,
   }
 
   if (ignore_safety_checks == false &&
-      (count + segment_size - 1) / segment_size *
+      (count + eager_rx_buffer_size - 1) / eager_rx_buffer_size *
               communicator.get_ranks()->size() >
-          rx_buffer_spares.size()) {
+          eager_rx_buffers.size()) {
     std::cerr << "ACCL: gather can't be executed safely with this number of "
                  "spare buffers"
               << std::endl;
@@ -968,7 +972,6 @@ void ACCL::barrier(communicatorId comm_id,
   const Communicator &communicator = communicators[comm_id];
   options.scenario = operation::barrier;
   options.comm = communicator.communicators_addr();
-  options.addr_0 = utility_spare;
   options.waitfor = waitfor;
   ACCLRequest *handle = call_async(options);
 
@@ -1014,14 +1017,14 @@ std::string ACCL::dump_exchange_memory() {
   return stream.str();
 }
 
-std::string ACCL::dump_rx_buffers(size_t nbufs, bool dump_data) {
+std::string ACCL::dump_eager_rx_buffers(size_t n_egr_rx_bufs, bool dump_data) {
   std::stringstream stream;
   stream << "CCLO address: " << std::hex << cclo->get_base_addr() << std::endl;
-  nbufs = std::min(nbufs, rx_buffer_spares.size());
+  n_egr_rx_bufs = std::min(n_egr_rx_bufs, eager_rx_buffers.size());
 
-  addr_t address = rx_buffers_adr;
+  addr_t address = CCLO_ADDR::NUM_EGR_RX_BUFS_OFFSET;
   stream << "rx address: " << address << std::dec << std::endl;
-  for (size_t i = 0; i < nbufs; ++i) {
+  for (size_t i = 0; i < n_egr_rx_bufs; ++i) {
     address += 4;
     std::string status;
     switch (cclo->read(address)) {
@@ -1054,7 +1057,7 @@ std::string ACCL::dump_rx_buffers(size_t nbufs, bool dump_data) {
     address += 4;
     val_t seq = cclo->read(address);
 
-    rx_buffer_spares[i]->sync_from_device();
+    eager_rx_buffers[i]->sync_from_device();
 
     stream << "Spare RX Buffer " << i << ":\t address: 0x" << std::hex
            << addrh * (1UL << 32) + addrl << std::dec
@@ -1064,11 +1067,11 @@ std::string ACCL::dump_rx_buffers(size_t nbufs, bool dump_data) {
 
     if(dump_data) {
       stream << " \t data: " << std::hex << "[";
-      for (size_t j = 0; j < rx_buffer_spares[i]->size(); ++j) {
+      for (size_t j = 0; j < eager_rx_buffers[i]->size(); ++j) {
         stream << "0x"
               << static_cast<uint16_t>(static_cast<uint8_t *>(
-                      rx_buffer_spares[i]->byte_array())[j]);
-        if (j != rx_buffer_spares[i]->size() - 1) {
+                      eager_rx_buffers[i]->byte_array())[j]);
+        if (j != eager_rx_buffers[i]->size() - 1) {
           stream << ", ";
         }
       }
@@ -1083,7 +1086,8 @@ std::string ACCL::dump_rx_buffers(size_t nbufs, bool dump_data) {
 }
 
 void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
-                           int nbufs, addr_t bufsize , addr_t segsize) {
+                           int n_egr_rx_bufs, addr_t egr_rx_buf_size, 
+                           addr_t max_egr_size, addr_t max_rndzv_size) {
   // reset_log();
   debug("CCLO HWID: " + std::to_string(get_hwid()) + " at 0x" +
         debug_hex(cclo->get_base_addr()));
@@ -1093,8 +1097,11 @@ void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
                              "reset the CCLO and retry");
   }
 
-  debug("Configuring RX Buffers");
-  setup_rx_buffers(nbufs, bufsize, rxbufmem);
+  debug("Configuring Eager RX Buffers");
+  setup_eager_rx_buffers(n_egr_rx_bufs, egr_rx_buf_size, rxbufmem);
+
+  debug("Configuring Rendezvous Spare Buffers");
+  setup_rendezvous_spare_buffers(max_rndzv_size, rxbufmem);
 
   debug("Configuring a communicator");
   configure_communicator(ranks, local_rank);
@@ -1110,13 +1117,15 @@ void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
   debug("Set timeout");
   set_timeout(1000000);
 
+  debug("Set max eager size: " + std::to_string(max_egr_size));
+  set_max_eager_msg_size(max_egr_size);
+  debug("Set max rendezvous reduce size: " + std::to_string(max_rndzv_size));
+  set_max_rendezvous_msg_size(max_rndzv_size);
+
   CCLO::Options options{};
   options.scenario = operation::config;
   options.cfg_function = cfgFunc::enable_pkt;
   call_sync(options);
-
-  debug("Set max segment size: " + std::to_string(segsize));
-  set_max_segment_size(segsize);
 
   debug("Accelerator ready!");
 }
@@ -1136,25 +1145,25 @@ addr_t ACCL::get_arithmetic_config_addr(std::pair<dataType, dataType> id) {
   return arith_config.at(id).addr();
 }
 
-void ACCL::setup_rx_buffers(size_t nbufs, addr_t bufsize,
+void ACCL::setup_eager_rx_buffers(size_t n_egr_rx_bufs, addr_t egr_rx_buf_size,
                             const std::vector<int> &devicemem) {
-  addr_t address = rx_buffers_adr;
-  rx_buffer_size = bufsize;
-  for (size_t i = 0; i < nbufs; ++i) {
+  addr_t address = CCLO_ADDR::NUM_EGR_RX_BUFS_OFFSET;
+  eager_rx_buffer_size = egr_rx_buf_size;
+  for (size_t i = 0; i < n_egr_rx_bufs; ++i) {
     // create, clear and sync buffers to device
     Buffer<int8_t> *buf;
 
     if (sim_mode) {
-      buf = new SimBuffer(new int8_t[bufsize](), bufsize, dataType::int8,
+      buf = new SimBuffer(new int8_t[eager_rx_buffer_size](), eager_rx_buffer_size, dataType::int8,
                           static_cast<SimDevice *>(cclo)->get_context());
     } else if(cclo->get_device_type() == CCLO::xrt_device ){
-      buf = new FPGABuffer<int8_t>(bufsize, dataType::int8, *(static_cast<FPGADevice *>(cclo)->get_device()), devicemem[i % devicemem.size()]);
+      buf = new FPGABuffer<int8_t>(eager_rx_buffer_size, dataType::int8, *(static_cast<FPGADevice *>(cclo)->get_device()), devicemem[i % devicemem.size()]);
     } else if(cclo->get_device_type() == CCLO::coyote_device){
-      buf = new CoyoteBuffer<int8_t>(bufsize, dataType::int8, static_cast<CoyoteDevice *>(cclo));
+      buf = new CoyoteBuffer<int8_t>(eager_rx_buffer_size, dataType::int8, static_cast<CoyoteDevice *>(cclo));
     }
 
     buf->sync_to_device();
-    rx_buffer_spares.emplace_back(buf);
+    eager_rx_buffers.emplace_back(buf);
     // program this buffer into the accelerator
     address += 4;
     cclo->write(address, 0);
@@ -1162,31 +1171,43 @@ void ACCL::setup_rx_buffers(size_t nbufs, addr_t bufsize,
     cclo->write(address, buf->address() & 0xffffffff);
     address += 4;
     cclo->write(address, (buf->address() >> 32) & 0xffffffff);
-    address += 4;
-    cclo->write(address, bufsize);
-
-    // clear remaining fields
-    for (size_t j = 4; j < 8; ++j) {
+    // clear remaining 4 fields
+    for (size_t j = 0; j < 4; ++j) {
       address += 4;
       cclo->write(address, 0);
     }
   }
 
+  //write buffer len
+  cclo->write(CCLO_ADDR::EGR_RX_BUF_SIZE_OFFSET, eager_rx_buffer_size);
+
   // NOTE: the buffer count HAS to be written last (offload checks for this)
-  cclo->write(rx_buffers_adr, nbufs);
+  cclo->write(CCLO_ADDR::NUM_EGR_RX_BUFS_OFFSET, n_egr_rx_bufs);
 
   current_config_address = address + 4;
-  if (sim_mode) {
-    utility_spare =
-        new SimBuffer(new int8_t[bufsize](), bufsize, dataType::int8,
-                      static_cast<SimDevice *>(cclo)->get_context());
-  } else if(cclo->get_device_type() == CCLO::xrt_device ){
-    utility_spare =
-        new FPGABuffer<int8_t>(bufsize, dataType::int8, *(static_cast<FPGADevice *>(cclo)->get_device()), devicemem[0]);
-  } else if(cclo->get_device_type() == CCLO::coyote_device){
-    utility_spare =
-        new CoyoteBuffer<int8_t>(bufsize, dataType::int8, static_cast<CoyoteDevice *>(cclo));
+
+}
+
+void ACCL::setup_rendezvous_spare_buffers(addr_t rndzv_spare_buf_size, const std::vector<int> &devicemem){
+  max_rndzv_msg_size = rndzv_spare_buf_size;
+  for(int i=0; i<2; i++){
+    Buffer<int8_t> *buf;
+    if (sim_mode) {
+      buf = new SimBuffer(new int8_t[max_rndzv_msg_size](), max_rndzv_msg_size, dataType::int8,
+                        static_cast<SimDevice *>(cclo)->get_context());
+    } else if(cclo->get_device_type() == CCLO::xrt_device ){
+      buf = new FPGABuffer<int8_t>(max_rndzv_msg_size, dataType::int8, 
+                        *(static_cast<FPGADevice *>(cclo)->get_device()), devicemem[i % devicemem.size()]);
+    } else if(cclo->get_device_type() == CCLO::coyote_device){
+      buf = new CoyoteBuffer<int8_t>(max_rndzv_msg_size, dataType::int8, static_cast<CoyoteDevice *>(cclo));
+    }
+    buf->sync_to_device();
+    utility_spares.emplace_back(buf);
   }
+  cclo->write(CCLO_ADDR::SPARE1_OFFSET, utility_spares.at(0)->address() & 0xffffffff);
+  cclo->write(CCLO_ADDR::SPARE1_OFFSET+4, (utility_spares.at(0)->address() >> 32) & 0xffffffff);
+  cclo->write(CCLO_ADDR::SPARE2_OFFSET, utility_spares.at(1)->address() & 0xffffffff);
+  cclo->write(CCLO_ADDR::SPARE2_OFFSET+4, (utility_spares.at(1)->address() >> 32) & 0xffffffff);
 }
 
 
@@ -1376,32 +1397,44 @@ ACCLRequest *ACCL::call_sync(CCLO::Options &options) {
   return req;
 }
 
-void ACCL::set_max_segment_size(unsigned int value) {
+void ACCL::set_max_eager_msg_size(unsigned int value) {
   if (value % 8 != 0) {
     std::cerr << "ACCL: dma transaction must be divisible by 8 to use reduce "
                  "collectives."
               << std::endl;
   }
 
-  if (value > rx_buffer_size) {
-    throw std::runtime_error("Transaction size should be less or equal "
-                             "to configured buffer size.");
+  CCLO::Options options{};
+  options.scenario = operation::config;
+  options.cfg_function = cfgFunc::set_max_eager_msg_size;
+  options.count = value;
+  ACCLRequest *handle = call_sync(options);
+  max_eager_msg_size = value;
+  check_return_value("set_max_eager_msg_size", handle);
+}
+
+void ACCL::set_max_rendezvous_msg_size(unsigned int value) {
+  if (value % 8 != 0) {
+    std::cerr << "ACCL: dma transaction must be divisible by 8 to use reduce "
+                 "collectives."
+              << std::endl;
   }
 
   CCLO::Options options{};
   options.scenario = operation::config;
-  options.cfg_function = cfgFunc::set_max_segment_size;
+  options.cfg_function = cfgFunc::set_max_rendezvous_msg_size;
   options.count = value;
   ACCLRequest *handle = call_sync(options);
-  segment_size = value;
-  check_return_value("set_max_segment_size", handle);
+  max_eager_msg_size = value;
+  check_return_value("set_max_rendezvous_msg_size", handle);
 }
+
 
 void ACCL::configure_communicator(const std::vector<rank_t> &ranks,
                                             int local_rank) {
-  if (rx_buffer_spares.empty()) {
+  if (eager_rx_buffers.empty()) {
     throw std::runtime_error(
-        "RX buffers unconfigured, please call setup_rx_buffers() first.");
+        "RX buffers unconfigured, please call setup_eager_rx_buffers() first.");
   }
   communicators.emplace_back(
       Communicator(cclo, ranks, local_rank, &current_config_address));

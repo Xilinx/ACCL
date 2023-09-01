@@ -20,6 +20,8 @@
 #include <fixture.hpp>
 #include <tclap/CmdLine.h>
 
+#define FLOAT32RTOL 0.001
+#define FLOAT32ATOL 0.005
 // Set the tolerance for compressed datatypes high enough, since we do currently
 // not replicate the float32 -> float16 conversion for our reference results
 #define FLOAT16RTOL 0.005
@@ -688,7 +690,7 @@ TEST_P(ACCLRootFuncTest, test_reduce) {
     for (unsigned int i = 0; i < count; ++i) {
       res = (*res_buf)[i];
       ref = (function == reduceFunction::MAX) ? (*op_buf)[i] : (*op_buf)[i] *::size;
-      EXPECT_EQ(res, ref);
+      EXPECT_TRUE(is_close(res, ref, FLOAT32RTOL, FLOAT32ATOL));
     }
   } else {
     EXPECT_TRUE(true);

@@ -143,12 +143,13 @@ constexpr auto const ADDRC_1           = 0x74;
  * 
  */
 namespace CCLO_ADDR {
-  constexpr auto const GIE                    = 0x04;
-  constexpr auto const IER                    = 0x08;
-  constexpr auto const ISR                    = 0x0c;
   constexpr auto const RETCODE_OFFSET         = 0x1FFC;
   constexpr auto const IDCODE_OFFSET          = 0x1FF8;
   constexpr auto const CFGRDY_OFFSET          = 0x1FF4;
+  constexpr auto const SPARE1_OFFSET          = 0x1FEC;
+  constexpr auto const SPARE2_OFFSET          = 0x1FE4;
+  constexpr auto const EGR_RX_BUF_SIZE_OFFSET = 0x4;
+  constexpr auto const NUM_EGR_RX_BUFS_OFFSET = 0x0;
 }
 
 
@@ -160,9 +161,8 @@ enum class cfgFunc {
   reset_periph = 0,
   enable_pkt = 1,
   set_timeout = 2,
-  set_rendezvous_threshold = 3,
-  set_max_segment_size = 6,
-  close_con = 7
+  set_max_eager_msg_size = 3,
+  set_max_rendezvous_msg_size = 4
 };
 
 /**
@@ -351,8 +351,8 @@ enum class errorCode {
   DEQUEUE_BUFFER_SPARE_BUFFER_INDEX_ERROR = 1 << 13,
   COLLECTIVE_NOT_IMPLEMENTED = 1 << 14,
   RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID = 1 << 15,
-  OPEN_PORT_NOT_SUCCEEDED = 1 << 16,
-  OPEN_CON_NOT_SUCCEEDED = 1 << 17,
+  EAGER_THRESHOLD_INVALID = 1 << 16,
+  RENDEZVOUS_THRESHOLD_INVALID = 1 << 17,
   DMA_SIZE_ERROR = 1 << 18,
   ARITH_ERROR = 1 << 19,
   PACK_TIMEOUT_STS_ERROR = 1 << 20,
@@ -361,8 +361,7 @@ enum class errorCode {
   KRNL_TIMEOUT_STS_ERROR = 1 << 23,
   KRNL_STS_COUNT_ERROR = 1 << 24,
   SEGMENTER_EXPECTED_BTT_ERROR = 1 << 25,
-  DMA_TAG_MISMATCH_ERROR = 1 << 26,
-  CLOSE_CON_NOT_SUCCEEDED = 1 << 27
+  DMA_TAG_MISMATCH_ERROR = 1 << 26
 };
 
 /** Amount of bits used for error codes. */
