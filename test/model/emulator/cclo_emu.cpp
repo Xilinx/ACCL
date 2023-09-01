@@ -169,7 +169,7 @@ void axis_switch( Stream<stream_word> s[NSLAVES], Stream<stream_word> m[NMASTERS
                 active[i] = true;
             }
             m[destination[i]].Push(word);
-            logger << log_level::verbose << "Switch arbitrate: S" << i << " -> M" << destination[i] << "(" << (unsigned int)word.dest << ")" << endl;
+            logger << log_level::debug << "Switch arbitrate: S" << i << " -> M" << destination[i] << "(" << (unsigned int)word.dest << ")" << endl;
             if(word.last != 0){
                 active[i] = false;
             }
@@ -184,14 +184,14 @@ void axis_mux(Stream<stream_word> &s0, Stream<stream_word> &s1, Stream<stream_wo
         do{
             word = s0.Pop();
             m.Push(word);
-            logger << log_level::verbose << "Switch mux: S0 -> M (" << (unsigned int)word.dest << ")" << endl;
+            logger << log_level::debug << "Switch mux: S0 -> M (" << (unsigned int)word.dest << ")" << endl;
         } while(word.last == 0);
     }
     if(!s1.IsEmpty()){
         do{
             word = s1.Pop();
             m.Push(word);
-            logger << log_level::verbose << "Switch mux: S1 -> M (" << (unsigned int)word.dest << ")" << endl;
+            logger << log_level::debug << "Switch mux: S1 -> M (" << (unsigned int)word.dest << ")" << endl;
         } while(word.last == 0);
     }
 }
