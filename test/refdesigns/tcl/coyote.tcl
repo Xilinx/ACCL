@@ -1,9 +1,10 @@
 set nettype [lindex $::argv 0]
-open_project Coyote/hw/build/lynx/lynx.xpr
+set build_dir [lindex $::argv 1]
+open_project "$build_dir/lynx/lynx.xpr"
 update_compile_order -fileset sources_1
 create_bd_design "accl_bd"
 update_compile_order -fileset sources_1
-set_property  ip_repo_paths  {./Coyote/hw/build ../../kernels} [current_project]
+set_property  ip_repo_paths  "$build_dir ../../kernels" [current_project]
 update_ip_catalog
 
 create_bd_cell -type ip -vlnv Xilinx:ACCL:ccl_offload:1.0 ccl_offload_0
@@ -62,15 +63,10 @@ switch $nettype {
     "TCP" {
         # externalize TCP streams
         make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/s_axis_eth_rx_data]
-        make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/m_axis_eth_listen_port]
         make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/m_axis_eth_tx_data]
-        make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/s_axis_eth_port_status]
         make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/s_axis_eth_tx_status]
-        make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/m_axis_eth_close_connection]
-        make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/s_axis_eth_open_status]
         make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/m_axis_eth_read_pkg]
         make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/s_axis_eth_rx_meta]
-        make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/m_axis_eth_open_connection]
         make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/s_axis_eth_notification]
         make_bd_intf_pins_external [get_bd_intf_pins ccl_offload_0/m_axis_eth_tx_meta]
     }
@@ -232,7 +228,7 @@ set_property -dict [list CONFIG.HAS_BURST {0} CONFIG.HAS_CACHE {0} CONFIG.HAS_LO
 validate_bd_design
 save_bd_design
 
-make_wrapper -files [get_files Coyote/hw/build/lynx/lynx.srcs/sources_1/bd/accl_bd/accl_bd.bd] -top
-add_files -norecurse Coyote/hw/build/lynx/lynx.gen/sources_1/bd/accl_bd/hdl/accl_bd_wrapper.v
+make_wrapper -files [get_files "$build_dir/lynx/lynx.srcs/sources_1/bd/accl_bd/accl_bd.bd"] -top
+add_files -norecurse "$build_dir/lynx/lynx.gen/sources_1/bd/accl_bd/hdl/accl_bd_wrapper.v"
 update_compile_order -fileset sources_1
 exit

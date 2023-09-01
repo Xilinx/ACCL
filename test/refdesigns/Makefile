@@ -54,7 +54,7 @@ CMAC_TCP_XO=Vitis_with_100Gbps_TCP-IP/_x.hw.$(XSA)/cmac_krnl.xo
 EXTERNAL_DMA_XO=../../kernels/plugins/external_dma/external_dma.xo
 ROCE_XO=HiveNet/network/roce_v2/hw/HiveNet/build/HiveNet_kernel_$(ETH_IF).xo
 ROCE_HBM_BANK=0
-CYT_BIT=Coyote/hw/build/bitstreams/cyt_top.bit
+CYT_BIT=Coyote/hw/build_$(CCLO_STACK_TYPE)/bitstreams/cyt_top.bit
 
 HOSTCTRL_XO=../../kernels/plugins/hostctrl/hostctrl.xo
 CLIENT_ARB_XO=../../kernels/plugins/client_arbiter/client_arbiter.xo
@@ -214,18 +214,18 @@ $(TCP_DUMMY_XO):
 	$(MAKE) -C ../../kernels/plugins/dummy_tcp_stack DEVICE=$(FPGAPART) all
 
 .PHONY: coyote_shell
-coyote_shell: Coyote/hw/build/lynx/lynx.xpr
+coyote_shell: Coyote/hw/build_$(CCLO_STACK_TYPE)/lynx/lynx.xpr
 
-Coyote/hw/build/lynx/lynx.xpr:
-	cd Coyote/hw && mkdir build && cd build && cmake .. $(COYOTE_CONFIG)
-	$(MAKE) -C Coyote/hw/build/ shell
+Coyote/hw/build_$(CCLO_STACK_TYPE)/lynx/lynx.xpr:
+	cd Coyote/hw && mkdir build_$(CCLO_STACK_TYPE) && cd build_$(CCLO_STACK_TYPE) && cmake .. $(COYOTE_CONFIG)
+	$(MAKE) -C Coyote/hw/build_$(CCLO_STACK_TYPE)/ shell
 
 $(CYT_BIT): coyote_shell
 	$(MAKE) -C ../../kernels/cclo PLATFORM=$(PLATFORM) STACK_TYPE=$(CCLO_STACK_TYPE) MB_DEBUG_LEVEL=$(CCLO_MB_DEBUG_LEVEL) EN_DMA=0 EN_EXT_DMA=1
 	$(MAKE) -C ../../kernels/plugins PLATFORM=$(PLATFORM) DEBUG=$(DEBUG) STACK_TYPE=$(CCLO_STACK_TYPE)
-	vivado -mode tcl -source tcl/coyote.tcl -tclargs $(CCLO_STACK_TYPE)
-	cp hdl/$(MODE)_top.sv Coyote/hw/build/lynx/hdl/config_0/user_logic_c0_0.sv
-	$(MAKE) -C Coyote/hw/build/ compile
+	vivado -mode tcl -source tcl/coyote.tcl -tclargs $(CCLO_STACK_TYPE) Coyote/hw/build_$(CCLO_STACK_TYPE)
+	cp hdl/$(MODE)_top.sv Coyote/hw/build_$(CCLO_STACK_TYPE)/lynx/hdl/config_0/user_logic_c0_0.sv
+	$(MAKE) -C Coyote/hw/build_$(CCLO_STACK_TYPE)/ compile
 
 .PHONY: tcp_stack
 tcp_stack: $(TCP_XO)

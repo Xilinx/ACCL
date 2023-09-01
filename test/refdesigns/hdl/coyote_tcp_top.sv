@@ -32,11 +32,6 @@ module design_user_logic_c0_0 (
     AXI4SR.m                    axis_card_1_src,
     
     // TCP/IP QSFP0 CMD
-    metaIntf.m			        tcp_0_listen_req,
-    metaIntf.s			        tcp_0_listen_rsp,
-    metaIntf.m			        tcp_0_open_req,
-    metaIntf.s			        tcp_0_open_rsp,
-    metaIntf.m			        tcp_0_close_req,
     metaIntf.s			        tcp_0_notify,
     metaIntf.m			        tcp_0_rd_pkg,
     metaIntf.s			        tcp_0_rx_meta,
@@ -162,26 +157,6 @@ accl_bd_wrapper accl_system(
     .m_axis_card_1_tvalid(axis_card_1_src_s.tvalid),
     .m_axis_card_1_tdest(),
 
-    .m_axis_eth_close_connection_0_tdata(tcp_0_close_req.data),
-    .m_axis_eth_close_connection_0_tkeep(),
-    .m_axis_eth_close_connection_0_tlast(),
-    .m_axis_eth_close_connection_0_tready(tcp_0_close_req.ready),
-    .m_axis_eth_close_connection_0_tstrb(),
-    .m_axis_eth_close_connection_0_tvalid(tcp_0_close_req.valid),
-
-    .m_axis_eth_listen_port_0_tdata(tcp_0_listen_req.data),
-    .m_axis_eth_listen_port_0_tkeep(),
-    .m_axis_eth_listen_port_0_tlast(),
-    .m_axis_eth_listen_port_0_tready(tcp_0_listen_req.ready),
-    .m_axis_eth_listen_port_0_tstrb(),
-    .m_axis_eth_listen_port_0_tvalid(tcp_0_listen_req.valid),
-
-    .m_axis_eth_open_connection_0_tdata(tcp_0_open_req.data),
-    .m_axis_eth_open_connection_0_tkeep(),
-    .m_axis_eth_open_connection_0_tlast(),
-    .m_axis_eth_open_connection_0_tready(tcp_0_open_req.ready),
-    .m_axis_eth_open_connection_0_tstrb(),
-    .m_axis_eth_open_connection_0_tvalid(tcp_0_open_req.valid),
 
     .m_axis_eth_read_pkg_0_tdata(tcp_0_rd_pkg.data),
     .m_axis_eth_read_pkg_0_tkeep(),
@@ -234,20 +209,6 @@ accl_bd_wrapper accl_system(
     .s_axis_eth_notification_0_tready(tcp_0_notify.ready),
     .s_axis_eth_notification_0_tstrb(),
     .s_axis_eth_notification_0_tvalid(tcp_0_notify.valid),
-
-    .s_axis_eth_open_status_0_tdata(tcp_0_open_rsp.data),
-    .s_axis_eth_open_status_0_tkeep(),
-    .s_axis_eth_open_status_0_tlast(),
-    .s_axis_eth_open_status_0_tready(tcp_0_open_rsp.ready),
-    .s_axis_eth_open_status_0_tstrb(),
-    .s_axis_eth_open_status_0_tvalid(tcp_0_open_rsp.valid),
-
-    .s_axis_eth_port_status_0_tdata(tcp_0_listen_rsp.data),
-    .s_axis_eth_port_status_0_tkeep(),
-    .s_axis_eth_port_status_0_tlast(),
-    .s_axis_eth_port_status_0_tready(tcp_0_listen_rsp.ready),
-    .s_axis_eth_port_status_0_tstrb(),
-    .s_axis_eth_port_status_0_tvalid(tcp_0_listen_rsp.valid),
 
     .s_axis_eth_rx_data_0_tdata(axis_tcp_0_sink.tdata),
     .s_axis_eth_rx_data_0_tdest(axis_tcp_0_sink.tid), // not parsed within CCLO

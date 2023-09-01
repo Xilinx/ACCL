@@ -443,6 +443,41 @@ void configure_cyt_rdma(std::vector<rank_t> &ranks, int local_rank, ACCL::Coyote
 	}
 }
 
+void configure_cyt_tcp(std::vector<rank_t> &ranks, int local_rank, ACCL::CoyoteDevice* device)
+{
+	std::cout<<"Configuring Coyote TCP..."<<std::endl;
+	// arp lookup
+    for(int i=0; i<ranks.size(); i++){
+        if(local_rank != i){
+            device->get_device()->doArpLookup(_ip_encode(ranks[i].ip));
+        }
+    }
+
+	//open port 
+    for (int i=0; i<ranks.size(); i++)
+    {
+        uint32_t dstPort = ranks[i].port;
+        bool open_port_status = device->get_device()->tcpOpenPort(dstPort);
+    }
+
+	std::this_thread::sleep_for(10ms);
+
+	//open con
+    for (int i=0; i<ranks.size(); i++)
+    {
+        uint32_t dstPort = ranks[i].port;
+        uint32_t dstIp = _ip_encode(ranks[i].ip);
+        uint32_t dstRank = i;
+		uint32_t session = 0;
+        if (local_rank != dstRank)
+        {
+            bool success = device->get_device()->tcpOpenCon(dstIp, dstPort, &session);
+			ranks[i].session_id = session;
+        }
+    }
+
+}
+
 
 void test_sendrcv(ACCL::ACCL &accl, options_t &options) {
   	std::cout << "Start send recv test..." << std::endl<<std::flush;
@@ -686,10 +721,10 @@ void test_gather(ACCL::ACCL &accl, options_t &options, int root) {
 					float res = res_buf.get()->buffer()[j*count+i];
 					float ref = j*count+i;
 					if (res != ref) {
-						// std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
-						// 				std::to_string(res) + " != " + std::to_string(ref) +
-						// 				")"
-						// 		<< std::endl;
+						std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
+										std::to_string(res) + " != " + std::to_string(ref) +
+										")"
+								<< std::endl;
 						errors += 1;
 					}
 				}
@@ -944,8 +979,11 @@ void test_accl_base(options_t options)
 	// before the ACCL instance exists.
 	ACCL::CoyoteDevice* device;
 	
+	MPI_Barrier(MPI_COMM_WORLD);
+
 	if (options.tcp){
 		device = new ACCL::CoyoteDevice();
+		configure_cyt_tcp(ranks, local_rank, device);
 	} else if (options.rdma){
 		device = new ACCL::CoyoteDevice(mpi_size);
 		configure_cyt_rdma(ranks, local_rank, device);
