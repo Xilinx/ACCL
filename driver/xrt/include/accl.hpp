@@ -18,7 +18,6 @@
 
 #pragma once
 
-#include "accl/acclrequest.hpp"
 #include "accl/arithconfig.hpp"
 #include "accl/buffer.hpp"
 #include "accl/cclo.hpp"
@@ -122,7 +121,6 @@ public:
    *
    * @return val_t The return code
    */
-  [[ deprecated ]]
   val_t get_retcode() { return this->cclo->read(RETCODE_OFFSET); }
 
   /**
@@ -135,15 +133,15 @@ public:
   /**
    * Set the timeout of ACCL calls.
    *
-   * @param value          Timeout in miliseconds
-   * @param run_async      Run the ACCL call asynchronously.
-   * @param waitfor        ACCL call will wait for these operations before it will
-   *                       start. Currently not implemented.
-   * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   * @param value      Timeout in miliseconds
+   * @param run_async  Run the ACCL call asynchronously.
+   * @param waitfor    ACCL call will wait for these operations before it will
+   *                   start. Currently not implemented.
+   * @return CCLO*     CCLO object that can be waited on and passed to waitfor;
+   *                   nullptr if run_async is false.
    */
-  ACCLRequest *set_timeout(unsigned int value, bool run_async = false,
-                           std::vector<ACCLRequest *> waitfor = {});
+  CCLO *set_timeout(unsigned int value, bool run_async = false,
+                    std::vector<CCLO *> waitfor = {});
 
   /**
    * Set the threshold for eager/rendezvous decision.
@@ -155,19 +153,19 @@ public:
    * @return CCLO*     CCLO object that can be waited on and passed to waitfor;
    *                   nullptr if run_async is false.
    */
-  ACCLRequest *set_rendezvous_threshold(unsigned int value, bool run_async = false,
-                    std::vector<ACCLRequest *> waitfor = {});
+  CCLO *set_rendezvous_threshold(unsigned int value, bool run_async = false,
+                    std::vector<CCLO *> waitfor = {});
 
   /**
    * Performs the nop operation on the FPGA.
    *
-   * @param run_async      Run the ACCL call asynchronously.
-   * @param waitfor        ACCL call will wait for these operations before it will
-   *                       start.
-   * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   * @param run_async  Run the ACCL call asynchronously.
+   * @param waitfor    ACCL call will wait for these operations before it will
+   *                   start.
+   * @return CCLO*     CCLO object that can be waited on and passed to waitfor;
+   *                   nullptr if run_async is false.
    */
-  ACCLRequest *nop(bool run_async = false, std::vector<ACCLRequest *> waitfor = {});
+  CCLO *nop(bool run_async = false, std::vector<CCLO *> waitfor = {});
 
   /**
    * Performs the send operation on the FPGA.
@@ -184,14 +182,14 @@ public:
    * @param run_async      Run the ACCL call asynchronously.
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
-   * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
    */
-  ACCLRequest *send(BaseBuffer &srcbuf, unsigned int count, unsigned int dst,
-                    unsigned int tag = TAG_ANY, communicatorId comm_id = GLOBAL_COMM,
-                    bool from_fpga = false,
-                    dataType compress_dtype = dataType::none, bool run_async = false,
-                    std::vector<ACCLRequest *> waitfor = {});
+  CCLO *send(BaseBuffer &srcbuf, unsigned int count, unsigned int dst,
+             unsigned int tag = TAG_ANY, communicatorId comm_id = GLOBAL_COMM,
+             bool from_fpga = false,
+             dataType compress_dtype = dataType::none, bool run_async = false,
+             std::vector<CCLO *> waitfor = {});
 
   /**
    * Performs the send operation on the FPGA using the data stream of the CCLO as input.
@@ -205,13 +203,13 @@ public:
    * @param run_async      Run the ACCL call asynchronously.
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
-   * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
    */
-  ACCLRequest *send(dataType src_data_type, unsigned int count, unsigned int dst,
-                    unsigned int tag = TAG_ANY, communicatorId comm_id = GLOBAL_COMM,
-                    dataType compress_dtype = dataType::none, bool run_async = false,
-                    std::vector<ACCLRequest *> waitfor = {});
+  CCLO *send(dataType src_data_type, unsigned int count, unsigned int dst,
+             unsigned int tag = TAG_ANY, communicatorId comm_id = GLOBAL_COMM,
+             dataType compress_dtype = dataType::none, bool run_async = false,
+             std::vector<CCLO *> waitfor = {});
 
   /**
    * Performs a one-sided put to a stream on a remote FPGA.
@@ -228,13 +226,13 @@ public:
    * @param run_async      Run the ACCL call asynchronously.
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
-   * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
    */
-  ACCLRequest *stream_put(BaseBuffer &srcbuf, unsigned int count,
-                          unsigned int dst, unsigned int stream_id, communicatorId comm_id = GLOBAL_COMM,
-                          bool from_fpga = false, dataType compress_dtype = dataType::none,
-                          bool run_async = false, std::vector<ACCLRequest *> waitfor = {});
+  CCLO *stream_put(BaseBuffer &srcbuf, unsigned int count,
+                   unsigned int dst, unsigned int stream_id, communicatorId comm_id = GLOBAL_COMM,
+                   bool from_fpga = false, dataType compress_dtype = dataType::none,
+                   bool run_async = false, std::vector<CCLO *> waitfor = {});
 
     /**
    * Performs a one-sided put to a stream on a remote FPGA using the data stream of the CCLO as input.
@@ -248,13 +246,13 @@ public:
    * @param run_async      Run the ACCL call asynchronously.
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
-   * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
    */
-  ACCLRequest *stream_put(dataType src_data_type, unsigned int count,
-                          unsigned int dst, unsigned int stream_id, communicatorId comm_id = GLOBAL_COMM,
-                          dataType compress_dtype = dataType::none, bool run_async = false,
-                          std::vector<ACCLRequest *> waitfor = {});
+  CCLO *stream_put(dataType src_data_type, unsigned int count,
+                   unsigned int dst, unsigned int stream_id, communicatorId comm_id = GLOBAL_COMM,
+                   dataType compress_dtype = dataType::none, bool run_async = false,
+                   std::vector<CCLO *> waitfor = {});
 
   /**
    * Performs the receive operation on the FPGA.
@@ -271,14 +269,14 @@ public:
    * @param run_async      Run the ACCL call asynchronously.
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
-   * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
    */
-  ACCLRequest *recv(BaseBuffer &dstbuf, unsigned int count, unsigned int src,
-                    unsigned int tag = TAG_ANY, communicatorId comm_id = GLOBAL_COMM,
-                    bool to_fpga = false,
-                    dataType compress_dtype = dataType::none, bool run_async = false,
-                    std::vector<ACCLRequest *> waitfor = {});
+  CCLO *recv(BaseBuffer &dstbuf, unsigned int count, unsigned int src,
+             unsigned int tag = TAG_ANY, communicatorId comm_id = GLOBAL_COMM,
+             bool to_fpga = false,
+             dataType compress_dtype = dataType::none, bool run_async = false,
+             std::vector<CCLO *> waitfor = {});
 
     /**
    * Performs the receive operation on the FPGA and directs the received data to
@@ -293,13 +291,13 @@ public:
    * @param run_async      Run the ACCL call asynchronously.
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
-   * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
    */
-  ACCLRequest *recv(dataType dst_data_type, unsigned int count, unsigned int src,
-                    unsigned int tag = TAG_ANY, communicatorId comm_id = GLOBAL_COMM,
-                    dataType compress_dtype = dataType::none, bool run_async = false,
-                    std::vector<ACCLRequest *> waitfor = {});
+  CCLO *recv(dataType dst_data_type, unsigned int count, unsigned int src,
+             unsigned int tag = TAG_ANY, communicatorId comm_id = GLOBAL_COMM,
+             dataType compress_dtype = dataType::none, bool run_async = false,
+             std::vector<CCLO *> waitfor = {});
 
   /**
    * Copy a buffer on the FPGA.
@@ -315,12 +313,12 @@ public:
    * @param run_async      Run the ACCL call asynchronously.
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
-   * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
    */
-  ACCLRequest *copy(BaseBuffer &srcbuf, BaseBuffer &dstbuf, unsigned int count,
-                    bool from_fpga = false, bool to_fpga = false,
-                    bool run_async = false, std::vector<ACCLRequest *> waitfor = {});
+  CCLO *copy(BaseBuffer &srcbuf, BaseBuffer &dstbuf, unsigned int count,
+             bool from_fpga = false, bool to_fpga = false,
+             bool run_async = false, std::vector<CCLO *> waitfor = {});
 
   /**
    * Copy a buffer on the FPGA.
@@ -332,12 +330,12 @@ public:
    * @param run_async      Run the ACCL call asynchronously.
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
-   * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
    */
-  ACCLRequest *copy_from_stream(BaseBuffer &dstbuf, unsigned int count,
-                    bool to_fpga = false,
-                    bool run_async = false, std::vector<ACCLRequest *> waitfor = {});
+  CCLO *copy_from_stream(BaseBuffer &dstbuf, unsigned int count,
+             bool to_fpga = false,
+             bool run_async = false, std::vector<CCLO *> waitfor = {});
 
   /**
    * Copy a buffer on the FPGA.
@@ -349,12 +347,12 @@ public:
    * @param run_async      Run the ACCL call asynchronously.
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
-   * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
    */
-  ACCLRequest *copy_to_stream(BaseBuffer &srcbuf, unsigned int count,
-                    bool from_fpga = false,
-                    bool run_async = false, std::vector<ACCLRequest *> waitfor = {});
+  CCLO *copy_to_stream(BaseBuffer &srcbuf, unsigned int count,
+             bool from_fpga = false,
+             bool run_async = false, std::vector<CCLO *> waitfor = {});
 
   /**
    * Copy a buffer on the FPGA.
@@ -364,11 +362,11 @@ public:
    * @param run_async      Run the ACCL call asynchronously.
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
-   * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
    */
-  ACCLRequest *copy_from_to_stream(dataType dst_data_type, unsigned int count,
-                    bool run_async = false, std::vector<ACCLRequest *> waitfor = {});
+  CCLO *copy_from_to_stream(dataType dst_data_type, unsigned int count,
+             bool run_async = false, std::vector<CCLO *> waitfor = {});
 
   /**
    * Perform reduce operation on two buffers on the FPGA.
@@ -392,14 +390,14 @@ public:
    * @param run_async       Run the ACCL call asynchronously.
    * @param waitfor         ACCL call will wait for these operations before it
    *                        will start. Currently not implemented.
-   * @return ACCLRequest*   Request object used for waiting and checking for operation
-   *                        status; nullptr if run_async is false.
+   * @return CCLO*          CCLO object that can be waited on and passed to
+   *                        waitfor; nullptr if run_async is false.
    */
-  ACCLRequest *combine(unsigned int count, reduceFunction function, BaseBuffer &val1,
-                      BaseBuffer &val2, BaseBuffer &result,
-                      bool val1_from_fpga = false, bool val2_from_fpga = false,
-                      bool to_fpga = false, bool run_async = false,
-                      std::vector<ACCLRequest *> waitfor = {});
+  CCLO *combine(unsigned int count, reduceFunction function, BaseBuffer &val1,
+                BaseBuffer &val2, BaseBuffer &result,
+                bool val1_from_fpga = false, bool val2_from_fpga = false,
+                bool to_fpga = false, bool run_async = false,
+                std::vector<CCLO *> waitfor = {});
 
   /**
    * Performs the broadcast operation on the FPGA.
@@ -417,13 +415,13 @@ public:
    * @param run_async      Run the ACCL call asynchronously.
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
-   * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
    */
-  ACCLRequest *bcast(BaseBuffer &buf, unsigned int count, unsigned int root,
-                     communicatorId comm_id = GLOBAL_COMM, bool from_fpga = false,
-                     bool to_fpga = false, dataType compress_dtype = dataType::none,
-                     bool run_async = false, std::vector<ACCLRequest *> waitfor = {});
+  CCLO *bcast(BaseBuffer &buf, unsigned int count, unsigned int root,
+              communicatorId comm_id = GLOBAL_COMM, bool from_fpga = false,
+              bool to_fpga = false, dataType compress_dtype = dataType::none,
+              bool run_async = false, std::vector<CCLO *> waitfor = {});
 
   /**
    * Performs the scatter operation on the FPGA.
@@ -445,14 +443,14 @@ public:
    * @param run_async      Run the ACCL call asynchronously.
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
-   * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
    */
-  ACCLRequest *scatter(BaseBuffer &sendbuf, BaseBuffer &recvbuf, unsigned int count,
-                       unsigned int root, communicatorId comm_id = GLOBAL_COMM,
-                       bool from_fpga = false, bool to_fpga = false,
-                       dataType compress_dtype = dataType::none,
-                       bool run_async = false, std::vector<ACCLRequest *> waitfor = {});
+  CCLO *scatter(BaseBuffer &sendbuf, BaseBuffer &recvbuf, unsigned int count,
+                unsigned int root, communicatorId comm_id = GLOBAL_COMM,
+                bool from_fpga = false, bool to_fpga = false,
+                dataType compress_dtype = dataType::none,
+                bool run_async = false, std::vector<CCLO *> waitfor = {});
 
   /**
    * Performs the gather operation on the FPGA.
@@ -474,14 +472,14 @@ public:
    * @param run_async      Run the ACCL call asynchronously.
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
-   * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
    */
-  ACCLRequest *gather(BaseBuffer &sendbuf, BaseBuffer &recvbuf, unsigned int count,
-                      unsigned int root, communicatorId comm_id = GLOBAL_COMM,
-                      bool from_fpga = false, bool to_fpga = false,
-                      dataType compress_dtype = dataType::none, bool run_async = false,
-                      std::vector<ACCLRequest *> waitfor = {});
+  CCLO *gather(BaseBuffer &sendbuf, BaseBuffer &recvbuf, unsigned int count,
+               unsigned int root, communicatorId comm_id = GLOBAL_COMM,
+               bool from_fpga = false, bool to_fpga = false,
+               dataType compress_dtype = dataType::none, bool run_async = false,
+               std::vector<CCLO *> waitfor = {});
 
   /**
    * Performs the allgather operation on the FPGA.
@@ -501,14 +499,14 @@ public:
    * @param run_async      Run the ACCL call asynchronously.
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
-   * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
    */
-  ACCLRequest *allgather(BaseBuffer &sendbuf, BaseBuffer &recvbuf, unsigned int count,
-                         communicatorId comm_id = GLOBAL_COMM, bool from_fpga = false,
-                         bool to_fpga = false,
-                         dataType compress_dtype = dataType::none,
-                         bool run_async = false, std::vector<ACCLRequest *> waitfor = {});
+  CCLO *allgather(BaseBuffer &sendbuf, BaseBuffer &recvbuf, unsigned int count,
+                  communicatorId comm_id = GLOBAL_COMM, bool from_fpga = false,
+                  bool to_fpga = false,
+                  dataType compress_dtype = dataType::none,
+                  bool run_async = false, std::vector<CCLO *> waitfor = {});
 
   /**
    * Performs the reduce operation on the FPGA.
@@ -529,14 +527,14 @@ public:
    * @param run_async      Run the ACCL call asynchronously.
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
-   * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
    */
-  ACCLRequest *reduce(BaseBuffer &sendbuf, BaseBuffer &recvbuf, unsigned int count,
-                      unsigned int root, reduceFunction func,
-                      communicatorId comm_id = GLOBAL_COMM, bool from_fpga = false,
-                      bool to_fpga = false, dataType compress_dtype = dataType::none,
-                      bool run_async = false, std::vector<ACCLRequest *> waitfor = {});
+  CCLO *reduce(BaseBuffer &sendbuf, BaseBuffer &recvbuf, unsigned int count,
+               unsigned int root, reduceFunction func,
+               communicatorId comm_id = GLOBAL_COMM, bool from_fpga = false,
+               bool to_fpga = false, dataType compress_dtype = dataType::none,
+               bool run_async = false, std::vector<CCLO *> waitfor = {});
 
   /**
    * Performs the reduce operation on the FPGA from data in local stream
@@ -555,14 +553,14 @@ public:
    * @param run_async      Run the ACCL call asynchronously.
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
-   * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
    */
-  ACCLRequest *reduce(dataType src_data_type, BaseBuffer &recvbuf, unsigned int count, 
-                      unsigned int root, reduceFunction func, 
-                      communicatorId comm_id = GLOBAL_COMM,
-                      bool to_fpga = false, dataType compress_dtype = dataType::none,
-                      bool run_async = false, std::vector<ACCLRequest *> waitfor = {});
+  CCLO *reduce(dataType src_data_type, BaseBuffer &recvbuf, unsigned int count, 
+                unsigned int root, reduceFunction func, 
+                communicatorId comm_id = GLOBAL_COMM,
+                bool to_fpga = false, dataType compress_dtype = dataType::none,
+                bool run_async = false, std::vector<CCLO *> waitfor = {});
 
   /**
    * Performs the memory to stream reduce operation on the FPGA
@@ -581,14 +579,14 @@ public:
    * @param run_async      Run the ACCL call asynchronously.
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
-   * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
    */
-  ACCLRequest *reduce(BaseBuffer &sendbuf, dataType dst_data_type, unsigned int count,
-                      unsigned int root, reduceFunction func,
-                      communicatorId comm_id = GLOBAL_COMM, bool from_fpga = false,
-                      dataType compress_dtype = dataType::none,
-                      bool run_async = false, std::vector<ACCLRequest *> waitfor = {});
+  CCLO *reduce(BaseBuffer &sendbuf, dataType dst_data_type, unsigned int count,
+               unsigned int root, reduceFunction func,
+               communicatorId comm_id = GLOBAL_COMM, bool from_fpga = false,
+               dataType compress_dtype = dataType::none,
+               bool run_async = false, std::vector<CCLO *> waitfor = {});
 
   /**
    * Performs the stream to stream reduce operation on the FPGA 
@@ -605,14 +603,14 @@ public:
    * @param run_async      Run the ACCL call asynchronously.
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
-   * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
    */
-  ACCLRequest *reduce(dataType src_data_type, dataType dst_data_type, unsigned int count, 
-                      unsigned int root, reduceFunction func, 
-                      communicatorId comm_id = GLOBAL_COMM,
-                      dataType compress_dtype = dataType::none,
-                      bool run_async = false, std::vector<ACCLRequest *> waitfor = {});
+  CCLO *reduce(dataType src_data_type, dataType dst_data_type, unsigned int count, 
+                unsigned int root, reduceFunction func, 
+                communicatorId comm_id = GLOBAL_COMM,
+                dataType compress_dtype = dataType::none,
+                bool run_async = false, std::vector<CCLO *> waitfor = {});
 
   /**
    * Performs the allreduce operation on the FPGA.
@@ -631,14 +629,14 @@ public:
    * @param run_async      Run the ACCL call asynchronously.
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
-   * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
    */
-  ACCLRequest *allreduce(BaseBuffer &sendbuf, BaseBuffer &recvbuf, unsigned int count,
-                         reduceFunction func, communicatorId comm_id = GLOBAL_COMM,
-                         bool from_fpga = false, bool to_fpga = false,
-                         dataType compress_dtype = dataType::none,
-                         bool run_async = false, std::vector<ACCLRequest *> waitfor = {});
+  CCLO *allreduce(BaseBuffer &sendbuf, BaseBuffer &recvbuf, unsigned int count,
+                  reduceFunction func, communicatorId comm_id = GLOBAL_COMM,
+                  bool from_fpga = false, bool to_fpga = false,
+                  dataType compress_dtype = dataType::none,
+                  bool run_async = false, std::vector<CCLO *> waitfor = {});
 
   /**
    * Performs the reduce_scatter operation on the FPGA.
@@ -658,16 +656,16 @@ public:
    * @param run_async      Run the ACCL call asynchronously.
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
-   * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   * @return CCLO*         CCLO object that can be waited on and passed to
+   *                       waitfor; nullptr if run_async is false.
    */
-  ACCLRequest *reduce_scatter(BaseBuffer &sendbuf, BaseBuffer &recvbuf,
-                              unsigned int count, reduceFunction func,
-                              communicatorId comm_id = GLOBAL_COMM,
-                              bool from_fpga = false, bool to_fpga = false,
-                              dataType compress_dtype = dataType::none,
-                              bool run_async = false,
-                              std::vector<ACCLRequest *> waitfor = {});
+  CCLO *reduce_scatter(BaseBuffer &sendbuf, BaseBuffer &recvbuf,
+                       unsigned int count, reduceFunction func,
+                       communicatorId comm_id = GLOBAL_COMM,
+                       bool from_fpga = false, bool to_fpga = false,
+                       dataType compress_dtype = dataType::none,
+                       bool run_async = false,
+                       std::vector<CCLO *> waitfor = {});
 
   /**
    * Performs a barrier on the FPGA.
@@ -678,42 +676,7 @@ public:
    *
    */
   void barrier(communicatorId comm_id = GLOBAL_COMM,
-               std::vector<ACCLRequest *> waitfor = {});
-
-  /**
-   * Wait for an ACCLRequest. Waits (blocking) the caller while the
-   * request completes
-   * 
-   * @param request Reference to the ACCLRequest to wait for
-   */
-  void wait(ACCLRequest *request);
-
-  /**
-   * Wait for an ACCLRequest. Waits (blocking) the caller while the
-   * request completes, or until time out
-   * 
-   * @param request Reference to the ACCLRequest to wait for
-   * @param timeout Time in milli seconds to wait for
-   * @return true   If the request complete
-   * @return false  If the request did not complete
-   */
-  bool wait(ACCLRequest *request, std::chrono::milliseconds timeout);
-
-  /**
-   * Check if given request is completed
-   * 
-   * @param request Reference to the ACCLRequest to test
-   * @return true   If the request complete
-   * @return false  If the request did not complete
-   */
-  bool test(ACCLRequest *request);
-
-  /**
-   * Check if given request is completed
-   * 
-   * @param request Reference to the ACCLRequest to free
-   */
-  void free_request(ACCLRequest *request);
+                std::vector<CCLO *> waitfor = {});
 
   /**
    * Check if ACCL is being run in simulated mode or not.
@@ -772,9 +735,6 @@ public:
     } else if (cclo->get_device_type() == CCLO::xrt_device) {
       return std::unique_ptr<Buffer<dtype>>(new FPGABuffer<dtype>(
           length, type, *(static_cast<FPGADevice *>(cclo)->get_device()), (xrt::memory_group)mem_grp));
-    } else {
-      return std::unique_ptr<Buffer<dtype>>(new CoyoteBuffer<dtype>(
-          length, type, cclo));
     }
   }
 
@@ -920,9 +880,6 @@ public:
     } else if(cclo->get_device_type() == CCLO::xrt_device ){
       return std::unique_ptr<Buffer<dtype>>(new FPGABufferP2P<dtype>(
           length, type, *(static_cast<FPGADevice *>(cclo)->get_device()), (xrt::memory_group)mem_grp));
-    } else {
-      //for Coyote there's no concept of a p2p buffer
-      throw std::runtime_error("p2p buffers not supported in Coyote");
     }
   }
 
@@ -963,12 +920,14 @@ public:
    * @tparam dtype              Datatype of the buffer.
    * @param length              Amount of elements to allocate for.
    * @param type                ACCL datatype of the buffer.
+   * @param mem_grp             Memory bank to allocate buffer on.
    * @return std::unique_ptr<Buffer<dtype>> The allocated buffer.
    */
   template <typename dtype>
   std::unique_ptr<Buffer<dtype>> create_coyotebuffer(size_t length, dataType type) {
     if (sim_mode) {
-      throw std::runtime_error("create_coyotebuffer sim_mode unsupported!!!");
+      debug("create_coyotebuffer sim_mode unsupported!!!");
+      exit(3);
     } else {
       return std::unique_ptr<Buffer<dtype>>(new CoyoteBuffer<dtype>(length, type, static_cast<CoyoteDevice *>(cclo)));
     }
@@ -1082,10 +1041,15 @@ private:
   const std::vector<int> rxbufmem;
   // xrt::device device;
 
-  ACCLRequest *copy(BaseBuffer *srcbuf, BaseBuffer *dstbuf, unsigned int count,
+
+  // TCP safety flags
+  bool port_open{};
+  bool con_open{};
+
+  CCLO *copy(BaseBuffer *srcbuf, BaseBuffer *dstbuf, unsigned int count,
                  bool from_fpga, bool to_fpga, streamFlags stream_flags,
                  dataType data_type, bool run_async,
-                 std::vector<ACCLRequest *> waitfor);
+                 std::vector<CCLO *> waitfor);
 
   void initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
                        int nbufs, addr_t bufsize, addr_t segsize);
@@ -1099,13 +1063,19 @@ private:
     return setup_rx_buffers(nbufs, bufsize, mems);
   }
 
-  void check_return_value(const std::string function_name, ACCLRequest *handle);
+  void check_return_value(const std::string function_name);
 
   void prepare_call(CCLO::Options &options);
 
-  ACCLRequest *call_async(CCLO::Options &options);
+  CCLO *call_async(CCLO::Options &options);
 
-  ACCLRequest *call_sync(CCLO::Options &options);
+  CCLO *call_sync(CCLO::Options &options);
+
+  void use_udp(communicatorId comm_id = GLOBAL_COMM);
+
+  void use_tcp(communicatorId comm_id = GLOBAL_COMM);
+
+  void use_rdma(communicatorId comm_id = GLOBAL_COMM);
 
   void set_max_segment_size(unsigned int value = 0);
 

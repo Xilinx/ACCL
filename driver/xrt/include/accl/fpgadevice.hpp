@@ -17,7 +17,6 @@
 *******************************************************************************/
 
 #pragma once
-#include "acclrequest.hpp"
 #include "cclo.hpp"
 #include "constants.hpp"
 #include <experimental/xrt_ip.h>
@@ -28,38 +27,6 @@
 /** @file fpgadevice.hpp */
 
 namespace ACCL {
-/**
- * Implementation of the request derived class for FPGA devices
- *
- */
-class FPGARequest : public BaseRequest {
-private:
-  xrt::run run;
-
-public:
-  const CCLO::Options &options;
-
-public:
-  /**
-   * Construct a new FPGA request object
-   *
-   * @param cclo   Opaque reference to the main CCLO object
-   * @param kernel Hostctrl kernel to be used in the request
-   */
-  FPGARequest(void *cclo, xrt::kernel &kernel, const CCLO::Options &options)
-      : BaseRequest(cclo), run(xrt::run(kernel)), options(options) {}
-
-  /**
-   * Effectively starts the call
-   * 
-   */
-  void start();
-
-  void wait_kernel() {
-    run.wait();
-  }
-};
-
 /**
  * Implementation of CCLO that uses a CCLO kernel on a FPGA.
  *
@@ -81,36 +48,22 @@ public:
    */
   virtual ~FPGADevice() {}
 
-  ACCLRequest *call(const Options &options) override;
+  void call(const Options &options) override;
 
-  ACCLRequest *start(const Options &options) override;
+  void start(const Options &options) override;
 
   val_t read(addr_t offset) override;
 
   void write(addr_t offset, val_t val) override;
 
-  void wait(ACCLRequest *request) override;
+  void wait() override;
 
-  timeoutStatus wait(ACCLRequest *request,
-                     std::chrono::milliseconds timeout) override;
-  
-  bool test(ACCLRequest *request) override;
-  
-  void free_request(ACCLRequest *request) override;
-
-  val_t get_retcode(ACCLRequest *request) override;
+  timeoutStatus wait(std::chrono::milliseconds timeout) override;
 
   addr_t get_base_addr() override {
     // TODO: Find way to retrieve CCLO base address on FPGA
     return 0x0;
   }
-
-  /**
-   * Internally completes the request.
-   * 
-   * @param request Associated request to be completed
-   */
-  void complete_request(FPGARequest *request);
 
   deviceType get_device_type() override;
 
@@ -124,16 +77,6 @@ private:
   xrt::ip cclo;
   xrt::kernel hostctrl;
   xrt::device device;
-
-  FPGAQueue<FPGARequest *> queue;
-  std::unordered_map<ACCLRequest, FPGARequest *> request_map;
-
-  /**
-   * Starts the execution of the first request in the queue. To keep queue
-   * going, this function is called every time a operation is issue and
-   * everytime an ongoing operation finishes
-   *
-   */
-  void launch_request();
+  xrt::run run{};
 };
 } // namespace ACCL

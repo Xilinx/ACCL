@@ -18,146 +18,70 @@
 
 #include "accl/fpgadevice.hpp"
 #include "accl/common.hpp"
-#include <future>
-#include <cassert>
 
-static void finish_fpga_request(ACCL::FPGARequest *req) {
-  req->wait_kernel();
-  ACCL::FPGADevice *cclo = reinterpret_cast<ACCL::FPGADevice *>(req->cclo());
-  // get ret code before notifying waiting theads
-  req->set_retcode(cclo->read(ACCL::RETCODE_OFFSET));
-  req->set_status(ACCL::operationStatus::COMPLETED);
-  req->notify();
-  cclo->complete_request(req);
-}
 
 namespace ACCL {
-void FPGARequest::start() {
-  assert(this->get_status() ==  operationStatus::EXECUTING);
+FPGADevice::FPGADevice(xrt::ip &cclo_ip, xrt::kernel &hostctrl_ip, xrt::device &device)
+    : cclo(cclo_ip), hostctrl(hostctrl_ip), device(device) {}
 
-  int function, arg_id = 0;
-
+void FPGADevice::start(const Options &options) {
+  if (run) {
+    throw std::runtime_error(
+        "Error, collective is already running, wait for previous to complete!");
+  }
+  int function;
   if (options.scenario == operation::config) {
     function = static_cast<int>(options.cfg_function);
   } else {
     function = static_cast<int>(options.reduce_function);
   }
-  run.set_arg(arg_id++, static_cast<uint32_t>(options.scenario));
-  run.set_arg(arg_id++, static_cast<uint32_t>(options.count));
-  run.set_arg(arg_id++, static_cast<uint32_t>(options.comm));
-  run.set_arg(arg_id++, static_cast<uint32_t>(options.root_src_dst));
-  run.set_arg(arg_id++, static_cast<uint32_t>(function));
-  run.set_arg(arg_id++, static_cast<uint32_t>(options.tag));
-  run.set_arg(arg_id++, static_cast<uint32_t>(options.arithcfg_addr));
-  run.set_arg(arg_id++, static_cast<uint32_t>(options.compression_flags));
-  run.set_arg(arg_id++, static_cast<uint32_t>(options.stream_flags));
-  run.set_arg(arg_id++, static_cast<uint64_t>(options.addr_0->address()));
-  run.set_arg(arg_id++, static_cast<uint64_t>(options.addr_1->address()));
-  run.set_arg(arg_id++, static_cast<uint64_t>(options.addr_2->address()));
-  
-  auto f = std::async(std::launch::async, finish_fpga_request, this);
-
-  run.start();  
+  run = hostctrl(static_cast<uint32_t>(options.scenario),
+                 static_cast<uint32_t>(options.count),
+                 static_cast<uint32_t>(options.comm),
+                 static_cast<uint32_t>(options.root_src_dst),
+                 static_cast<uint32_t>(function),
+                 static_cast<uint32_t>(options.tag),
+                 static_cast<uint32_t>(options.arithcfg_addr),
+                 static_cast<uint32_t>(options.compression_flags),
+                 static_cast<uint32_t>(options.host_flags) << 8 | static_cast<uint32_t>(options.stream_flags),
+                 static_cast<uint64_t>(options.addr_0->address()),
+                 static_cast<uint64_t>(options.addr_1->address()),
+                 static_cast<uint64_t>(options.addr_2->address()));
 }
 
-ACCLRequest *FPGADevice::start(const Options &options) {
-  ACCLRequest *request = new ACCLRequest;
-
-  if (options.waitfor.size() != 0) {
-    throw std::runtime_error("FPGADevice does not support chaining");
-  }
-
-  FPGARequest *fpga_handle =
-      new FPGARequest(reinterpret_cast<void *>(this), hostctrl, options);
-
-  *request = queue.push(fpga_handle);
-  fpga_handle->set_status(operationStatus::QUEUED);
-
-  request_map.emplace(std::make_pair(*request, fpga_handle));
-
-  launch_request();
-
-  return request;
-}
-
-FPGADevice::FPGADevice(xrt::ip &cclo_ip, xrt::kernel &hostctrl_ip, xrt::device &device)
-    : cclo(cclo_ip), hostctrl(hostctrl_ip), device(device) {}
-
-void FPGADevice::wait(ACCLRequest *request) { 
-  auto fpga_handle = request_map.find(*request);
-  if (fpga_handle != request_map.end())
-    fpga_handle->second->wait(); 
-}
-
-timeoutStatus FPGADevice::wait(ACCLRequest *request,
-                               std::chrono::milliseconds timeout) {
-  auto fpga_handle = request_map.find(*request);
-
-  if (fpga_handle == request_map.end() || fpga_handle->second->wait(timeout))
-    return timeoutStatus::no_timeout;
-
-  return timeoutStatus::timeout;
-}
-
-bool FPGADevice::test(ACCLRequest *request) {
-  auto fpga_handle = request_map.find(*request);
-
-  if (fpga_handle == request_map.end())
-    return true;
-
-  return fpga_handle->second->get_status() == operationStatus::COMPLETED;
-}
-
-void FPGADevice::free_request(ACCLRequest *request) {
-  auto fpga_handle = request_map.find(*request);
-
-  if (fpga_handle != request_map.end()) {
-    delete fpga_handle->second;
-    request_map.erase(fpga_handle);
+void FPGADevice::wait() {
+  if (run) {
+    run.wait();
+    run = xrt::run();
   }
 }
 
-ACCLRequest *FPGADevice::call(const Options &options) {
-  ACCLRequest *req = start(options);
-  wait(req);
-  
-  // internal use only
-  return req;
+CCLO::timeoutStatus FPGADevice::wait(std::chrono::milliseconds timeout) {
+  if (run) {
+    auto status = run.wait(timeout);
+    if (status == ert_cmd_state::ERT_CMD_STATE_TIMEOUT) {
+      return CCLO::timeout;
+    }
+    run = xrt::run();
+  }
+
+  return CCLO::no_timeout;
 }
 
-CCLO::deviceType FPGADevice::get_device_type() {
+CCLO::deviceType FPGADevice::get_device_type()
+{
+  std::cout<<"get_device_type: xrt_device"<<std::endl;
   return CCLO::xrt_device;
 }
 
-val_t FPGADevice::get_retcode(ACCLRequest *request) {
-  auto fpga_handle = request_map.find(*request);
-
-  if (fpga_handle != request_map.end())
-    return 0;
-  
-  return fpga_handle->second->get_retcode();
+void FPGADevice::call(const Options &options) {
+  start(options);
+  wait();
 }
 
 val_t FPGADevice::read(addr_t offset) { return cclo.read_register(offset); }
 
 void FPGADevice::write(addr_t offset, val_t val) {
   return cclo.write_register(offset, val);
-}
-
-void FPGADevice::launch_request() {
-  // This guarantees permission to only one thread trying to start an operation
-  if (queue.run()) {
-    FPGARequest *req = queue.front();
-    assert(req->get_status() == operationStatus::QUEUED);
-    req->set_status(operationStatus::EXECUTING);
-    req->start();
-  }
-}
-
-void FPGADevice::complete_request(FPGARequest *request) {
-  if (request->get_status() == operationStatus::COMPLETED) {
-    queue.pop();
-    launch_request();
-  }
 }
 } // namespace ACCL
