@@ -1534,80 +1534,94 @@ int reduce_scatter(
     int i, curr_pos, rel_stride, abs_stride, next_in_ring, prev_in_ring;
     int err = NO_ERROR;
     unsigned int tmp_compression = NO_COMPRESSION;
+    unsigned int bytes_count = Xil_In32(arcfg_offset)*count;
 
     if(world.size == 1){
         //corner-case copy for when running a single-node reduction
         return copy(count, src_buf_addr, dst_buf_addr, arcfg_offset, compression, buftype);
-    }
+    } else if((bytes_count > max_eager_size) && (compression == NO_COMPRESSION) && (stream == NO_STREAM)){
+        //reduce-scatter via reduction+scatter
+        //copy the OP0_HOST flag over RES_HOST 
+        //because we're broadcasting from the allreduce result buffer
+        unsigned int r_host = (host & OP0_HOST) | ((host & OP0_HOST) << 2);
+        unsigned int r_buftype = (buftype & 0xFFFFFF00) | (r_host & 0xFF);
+        //reduce step - we reduce back into src_buf_addr
+        while(reduce(count*world.size, func, 0, src_buf_addr, src_buf_addr, comm_offset, arcfg_offset, compression, r_buftype) == NOT_READY_ERROR);
+        //copy the RES_HOST flag over OP0_HOST 
+        //because we're broadcasting from the allreduce result buffer
+        host = (host & RES_HOST) | ((host & RES_HOST) >> 2);
+        buftype = (buftype & 0xFFFFFF00) | (host & 0xFF);
+        //broadcast step
+        while(scatter(count, 0, src_buf_addr, dst_buf_addr, comm_offset, arcfg_offset, compression, buftype) == NOT_READY_ERROR);
+    } else {
+        next_in_ring = (world.local_rank + 1) % world.size;
+        prev_in_ring = (world.local_rank + world.size - 1) % world.size;
 
-    next_in_ring = (world.local_rank + 1) % world.size;
-    prev_in_ring = (world.local_rank + world.size - 1) % world.size;
+        //preamble: send our data to next in ring
+        //prime the address slot for the source, so we can subsequently stride against it
+        start_move(
+            MOVE_IMMEDIATE, MOVE_NONE, MOVE_NONE,
+            pack_flags(NO_COMPRESSION, RES_LOCAL, NO_HOST),
+            0,
+            0,
+            0, arcfg_offset,
+            src_buf_addr, 0, 0, 0, 0, 0,
+            0, 0, 0, 0
+        );
 
-    //preamble: send our data to next in ring
-    //prime the address slot for the source, so we can subsequently stride against it
-    start_move(
-        MOVE_IMMEDIATE, MOVE_NONE, MOVE_NONE,
-        pack_flags(NO_COMPRESSION, RES_LOCAL, NO_HOST),
-        0,
-        0,
-        0, arcfg_offset,
-        src_buf_addr, 0, 0, 0, 0, 0,
-        0, 0, 0, 0
-    );
+        curr_pos = prev_in_ring;
 
-    curr_pos = prev_in_ring;
+        //send local chunk to next in ring
+        //send: keep OP0_COMPRESSED, replace RES_COMPRESSED by ETH_COMPRESSED
+        tmp_compression = (compression & OP0_COMPRESSED) | ((compression & ETH_COMPRESSED) >> 1);
+        start_move(
+            MOVE_STRIDE, MOVE_NONE, MOVE_IMMEDIATE,
+            pack_flags(tmp_compression, RES_REMOTE, host & OP0_HOST),
+            0,
+            count,
+            comm_offset, arcfg_offset,
+            0, 0, 0, count*curr_pos, 0, 0,
+            0, 0, next_in_ring, TAG_ANY
+        );
 
-    //send local chunk to next in ring
-    //send: keep OP0_COMPRESSED, replace RES_COMPRESSED by ETH_COMPRESSED
-    tmp_compression = (compression & OP0_COMPRESSED) | ((compression & ETH_COMPRESSED) >> 1);
-    start_move(
-        MOVE_STRIDE, MOVE_NONE, MOVE_IMMEDIATE,
-        pack_flags(tmp_compression, RES_REMOTE, host & OP0_HOST),
-        0,
-        count,
-        comm_offset, arcfg_offset,
-        0, 0, 0, count*curr_pos, 0, 0,
-        0, 0, next_in_ring, TAG_ANY
-    );
+        //receive and reduce+forward from all other members of the communicator
+        for(i=0; i<world.size-1; i++){
+            rel_stride = count*((curr_pos == 0) ? (world.size-1) : -1);
 
-    //receive and reduce+forward from all other members of the communicator
-    for(i=0; i<world.size-1; i++){
-        rel_stride = count*((curr_pos == 0) ? (world.size-1) : -1);
-
-        //simultaneous receive, reduce and send for the received chunk,
-        //unless it is the last step, in which case we don't send, but save locally
-        if(i < world.size-2){
-            tmp_compression = (compression & OP0_COMPRESSED) | ((compression & ETH_COMPRESSED) >> 2) | ((compression & ETH_COMPRESSED) >> 1);
-            start_move(
-                MOVE_STRIDE, MOVE_ON_RECV, MOVE_IMMEDIATE,
-                pack_flags(tmp_compression, RES_REMOTE, host & OP0_HOST),
-                func,
-                count,
-                comm_offset, arcfg_offset,
-                0, 0, 0, rel_stride, 0, 0,
-                prev_in_ring, TAG_ANY, next_in_ring, TAG_ANY
-            );
-        } else{
-            tmp_compression = compression | ((compression & ETH_COMPRESSED) >> 2);
-            start_move(
-                MOVE_STRIDE, MOVE_ON_RECV, MOVE_IMMEDIATE,
-                pack_flags(tmp_compression, RES_LOCAL, host),
-                func,
-                count,
-                comm_offset, arcfg_offset,
-                0, 0, dst_buf_addr, rel_stride, 0, 0,
-                prev_in_ring, TAG_ANY, 0, 0
-            );
+            //simultaneous receive, reduce and send for the received chunk,
+            //unless it is the last step, in which case we don't send, but save locally
+            if(i < world.size-2){
+                tmp_compression = (compression & OP0_COMPRESSED) | ((compression & ETH_COMPRESSED) >> 2) | ((compression & ETH_COMPRESSED) >> 1);
+                start_move(
+                    MOVE_STRIDE, MOVE_ON_RECV, MOVE_IMMEDIATE,
+                    pack_flags(tmp_compression, RES_REMOTE, host & OP0_HOST),
+                    func,
+                    count,
+                    comm_offset, arcfg_offset,
+                    0, 0, 0, rel_stride, 0, 0,
+                    prev_in_ring, TAG_ANY, next_in_ring, TAG_ANY
+                );
+            } else{
+                tmp_compression = compression | ((compression & ETH_COMPRESSED) >> 2);
+                start_move(
+                    MOVE_STRIDE, MOVE_ON_RECV, MOVE_IMMEDIATE,
+                    pack_flags(tmp_compression, RES_LOCAL, host),
+                    func,
+                    count,
+                    comm_offset, arcfg_offset,
+                    0, 0, dst_buf_addr, rel_stride, 0, 0,
+                    prev_in_ring, TAG_ANY, 0, 0
+                );
+            }
+            curr_pos = (curr_pos + world.size - 1) % world.size;
+            //pop one result here to keep the result FIFO not full
+            err |= end_move();
         }
-        curr_pos = (curr_pos + world.size - 1) % world.size;
-        //pop one result here to keep the result FIFO not full
+
+        //pop final two results
+        err |= end_move();
         err |= end_move();
     }
-
-    //pop final two results
-    err |= end_move();
-    err |= end_move();
-
     return err;
 }
 
@@ -1630,194 +1644,205 @@ int allreduce(
     unsigned int tmp_compression = NO_COMPRESSION;
     uint64_t seg_src_buf_addr = src_buf_addr;
     uint64_t seg_dst_buf_addr = dst_buf_addr;
+    unsigned int bulk_bytes_count, tail_bytes_count, bytes_count = Xil_In32(arcfg_offset)*count;
 
     if(world.size == 1){
         //corner-case copy for when running a single-node reduction
         return copy(count, src_buf_addr, dst_buf_addr, arcfg_offset, compression, stream);
-    }
-
-    //convert max segment size to max segment count
-    //if pulling from a stream, segment size is irrelevant and we use the
-    //count directly because streams can't be read losslessly
-    if (stream & OP0_STREAM) {
-        max_seg_count = count;
+    } else if((bytes_count > max_eager_size) && (compression == NO_COMPRESSION) && (stream == NO_STREAM)){
+        //allreduce via reduction+broadcast
+        //reduce step
+        while(reduce(count, func, 0, src_buf_addr, dst_buf_addr, comm_offset, arcfg_offset, compression, buftype) == NOT_READY_ERROR);
+        //copy the RES_HOST flag over OP0_HOST 
+        //because we're broadcasting from the allreduce result buffer
+        host = (host & RES_HOST) | ((host & RES_HOST) >> 2);
+        buftype = (buftype & 0xFFFFFF00) | (host & 0xFF);
+        //broadcast step
+        while(broadcast(count, 0, dst_buf_addr, comm_offset, arcfg_offset, compression, buftype) == NOT_READY_ERROR);
     } else {
-        //compute count from uncompressed elem bytes in aright config
-        //instead of Xil_In32 we could use:
-        //(datapath_arith_config*)(arcfg_offset)->uncompressed_elem_bytes;
-        max_seg_count = eager_rx_buf_size / Xil_In32(arcfg_offset);
-        // Round max segment size down to align with world size
-        max_seg_count -= max_seg_count % world.size;
-    }
+        //convert max segment size to max segment count
+        //if pulling from a stream, segment size is irrelevant and we use the
+        //count directly because streams can't be read losslessly
+        if (stream & OP0_STREAM) {
+            max_seg_count = count;
+        } else {
+            //compute count from uncompressed elem bytes in aright config
+            //instead of Xil_In32 we could use:
+            //(datapath_arith_config*)(arcfg_offset)->uncompressed_elem_bytes;
+            max_seg_count = eager_rx_buf_size / Xil_In32(arcfg_offset);
+            // Round max segment size down to align with world size
+            max_seg_count -= max_seg_count % world.size;
+        }
 
-    next_in_ring = (world.local_rank + 1) % world.size;
-    prev_in_ring = (world.local_rank + world.size - 1) % world.size;
+        next_in_ring = (world.local_rank + 1) % world.size;
+        prev_in_ring = (world.local_rank + world.size - 1) % world.size;
 
-    for (elems_remaining = count; elems_remaining > 0; elems_remaining -= elems) {
-        elems = min(max_seg_count, elems_remaining);
+        for (elems_remaining = count; elems_remaining > 0; elems_remaining -= elems) {
+            elems = min(max_seg_count, elems_remaining);
 
-        //we need to break the input into world.size chunks of equal size
-        //if count does not divide by world.size, the chunk with the largest index (tail) will be smaller
-        bulk_count = (elems + world.size - 1) / world.size;//equivalent to ceil(elems/world.size)
-        tail_count = elems - bulk_count * (world.size - 1);
+            //we need to break the input into world.size chunks of equal size
+            //if count does not divide by world.size, the chunk with the largest index (tail) will be smaller
+            bulk_count = (elems + world.size - 1) / world.size;//equivalent to ceil(elems/world.size)
+            tail_count = elems - bulk_count * (world.size - 1);
 
-        //preamble: send our data to next in ring
-        //prime the address slots for the source and destination,
-        //so we can subsequently stride against them
-        start_move(
-            MOVE_IMMEDIATE, MOVE_NONE, MOVE_IMMEDIATE,
-            pack_flags(NO_COMPRESSION, RES_LOCAL, NO_HOST),
-            0,
-            0,
-            0, arcfg_offset,
-            seg_src_buf_addr, 0, seg_dst_buf_addr, 0, 0, 0,
-            0, 0, 0, 0
-        );
+            //preamble: send our data to next in ring
+            //prime the address slots for the source and destination,
+            //so we can subsequently stride against them
+            start_move(
+                MOVE_IMMEDIATE, MOVE_NONE, MOVE_IMMEDIATE,
+                pack_flags(NO_COMPRESSION, RES_LOCAL, NO_HOST),
+                0,
+                0,
+                0, arcfg_offset,
+                seg_src_buf_addr, 0, seg_dst_buf_addr, 0, 0, 0,
+                0, 0, 0, 0
+            );
 
-        //send local chunk to next in ring
-        //send: keep OP0_COMPRESSED, replace RES_COMPRESSED by ETH_COMPRESSED
-        tmp_compression = (compression & OP0_COMPRESSED) | ((compression & ETH_COMPRESSED) >> 1);
-        start_move(
-            MOVE_STRIDE, MOVE_NONE, MOVE_IMMEDIATE,
-            pack_flags(tmp_compression, RES_REMOTE, host & OP0_HOST),
-            0,
-            (world.local_rank == world.size - 1) ? tail_count: bulk_count,
-            comm_offset, arcfg_offset,
-            0, 0, 0, bulk_count * world.local_rank, 0, 0,
-            0, 0, next_in_ring, TAG_ANY
-        );
+            //send local chunk to next in ring
+            //send: keep OP0_COMPRESSED, replace RES_COMPRESSED by ETH_COMPRESSED
+            tmp_compression = (compression & OP0_COMPRESSED) | ((compression & ETH_COMPRESSED) >> 1);
+            start_move(
+                MOVE_STRIDE, MOVE_NONE, MOVE_IMMEDIATE,
+                pack_flags(tmp_compression, RES_REMOTE, host & OP0_HOST),
+                0,
+                (world.local_rank == world.size - 1) ? tail_count: bulk_count,
+                comm_offset, arcfg_offset,
+                0, 0, 0, bulk_count * world.local_rank, 0, 0,
+                0, 0, next_in_ring, TAG_ANY
+            );
 
-        //receive and reduce+forward from all other members of the communicator
-        curr_pos = world.local_rank;
-        for (i = 0; i < world.size - 1; i++) {
-            rel_stride = bulk_count*((curr_pos == 0) ? (world.size-1) : -1);
-            curr_count = (curr_pos == 0) ? tail_count : bulk_count;
+            //receive and reduce+forward from all other members of the communicator
+            curr_pos = world.local_rank;
+            for (i = 0; i < world.size - 1; i++) {
+                rel_stride = bulk_count*((curr_pos == 0) ? (world.size-1) : -1);
+                curr_count = (curr_pos == 0) ? tail_count : bulk_count;
 
-            //simultaneous receive, reduce and send for the received chunk,
-            //unless it is the last step, in which case we don't send, but save locally
-            //unlike normal reduce-scatter, we don't save at offset 0 in the destination buffer
-            //but at the appropriate offset for the data being saved
-            if(i < world.size-2){
-                //compression: if ETH_COMPRESSED is set then we receive compressed data over the network,
-                //so we must set OP1_COMPRESSED here. Also keep OP0_COMPRESSED the same since we're reading from
-                //initial data. RES_COMPRESSED must be replaced by ETH_COMPRESSED since the result
-                //goes out to network
-                tmp_compression = (compression & OP0_COMPRESSED) | ((compression & ETH_COMPRESSED) >> 2) | ((compression & ETH_COMPRESSED) >> 1);
-                start_move(
-                    MOVE_STRIDE, MOVE_ON_RECV, MOVE_IMMEDIATE,
-                    pack_flags(tmp_compression, RES_REMOTE, host & OP0_HOST),
-                    func,
+                //simultaneous receive, reduce and send for the received chunk,
+                //unless it is the last step, in which case we don't send, but save locally
+                //unlike normal reduce-scatter, we don't save at offset 0 in the destination buffer
+                //but at the appropriate offset for the data being saved
+                if(i < world.size-2){
+                    //compression: if ETH_COMPRESSED is set then we receive compressed data over the network,
+                    //so we must set OP1_COMPRESSED here. Also keep OP0_COMPRESSED the same since we're reading from
+                    //initial data. RES_COMPRESSED must be replaced by ETH_COMPRESSED since the result
+                    //goes out to network
+                    tmp_compression = (compression & OP0_COMPRESSED) | ((compression & ETH_COMPRESSED) >> 2) | ((compression & ETH_COMPRESSED) >> 1);
+                    start_move(
+                        MOVE_STRIDE, MOVE_ON_RECV, MOVE_IMMEDIATE,
+                        pack_flags(tmp_compression, RES_REMOTE, host & OP0_HOST),
+                        func,
+                        curr_count,
+                        comm_offset, arcfg_offset,
+                        0, 0, 0, rel_stride, 0, 0,
+                        prev_in_ring, TAG_ANY, next_in_ring, TAG_ANY
+                    );
+                } else {
+                    //compression: if ETH_COMPRESSED is set then we receive compressed data over the network,
+                    //so we must set OP1_COMPRESSED here. Also keep RES_COMPRESSED and OP0_COMPRESSED the same.
+                    tmp_compression = compression | ((compression & ETH_COMPRESSED) >> 2);
+                    start_move(
+                        MOVE_STRIDE, MOVE_ON_RECV, MOVE_STRIDE,
+                        pack_flags(tmp_compression, RES_LOCAL, host & (OP0_HOST | RES_HOST)),
+                        func,
+                        curr_count,
+                        comm_offset, arcfg_offset,
+                        0, 0, 0, rel_stride, 0, bulk_count * next_in_ring,
+                        prev_in_ring, TAG_ANY, 0, 0
+                    );
+                }
+                curr_pos = (curr_pos + world.size - 1) % world.size;
+                //pop one result here to keep the result FIFO not full
+                err |= end_move();
+            }
+
+            //pop final two results for reduce-scatter
+            err |= end_move();
+            err |= end_move();
+
+            //next phase: allgather
+            //send to next in ring, from seg_dst_buf_addr where we stored the scattered reduction result
+            start_move(
+                MOVE_IMMEDIATE, MOVE_NONE, MOVE_NONE,
+                pack_flags(NO_COMPRESSION, RES_LOCAL, NO_HOST),
+                0,
+                0,
+                0, arcfg_offset,
+                seg_dst_buf_addr, 0, 0, 0, 0, 0,
+                0, 0, 0, 0
+            );
+            //send: keep all flags except RES_COMPRESSED, which should be replaced by ETH_COMPRESSED
+            //convert RES_HOST flag to OP0_HOST because we're sending from the destination buffer via Op0
+            tmp_compression = (compression & ~RES_COMPRESSED) | ((compression & ETH_COMPRESSED) >> 1);
+            start_move(
+                MOVE_STRIDE, MOVE_NONE, MOVE_IMMEDIATE,
+                pack_flags(tmp_compression, RES_REMOTE, (host & RES_HOST)>>2),
+                0,
+                (next_in_ring == world.size - 1) ? tail_count : bulk_count,
+                comm_offset, arcfg_offset,
+                0, 0, 0, bulk_count * next_in_ring, 0, 0,
+                0, 0, next_in_ring, TAG_ANY
+            );
+
+            err |= end_move();
+            err |= end_move();
+
+            //receive and forward from all other members of the communicator
+            curr_pos = next_in_ring;
+            for (i = 0; i < world.size - 1; i++) {
+                rel_stride = bulk_count * ((curr_pos == 0) ? (world.size - 1) : -1);
+                curr_count = (curr_pos == 0) ? tail_count : bulk_count;
+
+                //we use a blocking move here, because we want to avoid a race condition with the relay below
+                //TODO: avoid this; we either need to solve the RAW dependency in hardware (the generic approach),
+                //or a way to reuse a rx buffer (solves this problem in particular but does not extend to e.g. reduces)
+                //e.g. MOVE_ON_RECV_KEEP which would keep the RX buffer in the pending state
+                tmp_compression = (compression & RES_COMPRESSED) | ((compression & ETH_COMPRESSED) >> 2);
+                err |= move(
+                    MOVE_NONE, MOVE_ON_RECV, MOVE_STRIDE,
+                    pack_flags(tmp_compression, RES_LOCAL, host & RES_HOST),
+                    0,
                     curr_count,
                     comm_offset, arcfg_offset,
-                    0, 0, 0, rel_stride, 0, 0,
-                    prev_in_ring, TAG_ANY, next_in_ring, TAG_ANY
-                );
-            } else {
-                //compression: if ETH_COMPRESSED is set then we receive compressed data over the network,
-                //so we must set OP1_COMPRESSED here. Also keep RES_COMPRESSED and OP0_COMPRESSED the same.
-                tmp_compression = compression | ((compression & ETH_COMPRESSED) >> 2);
-                start_move(
-                    MOVE_STRIDE, MOVE_ON_RECV, MOVE_STRIDE,
-                    pack_flags(tmp_compression, RES_LOCAL, host & (OP0_HOST | RES_HOST)),
-                    func,
-                    curr_count,
-                    comm_offset, arcfg_offset,
-                    0, 0, 0, rel_stride, 0, bulk_count * next_in_ring,
+                    0, 0, 0, 0, 0, rel_stride,
                     prev_in_ring, TAG_ANY, 0, 0
                 );
+                curr_pos = (curr_pos + world.size - 1) % world.size;
+                curr_count = (curr_pos == (world.size - 1)) ? tail_count : bulk_count;
+                if (i < world.size - 2) { //if not the last data, relay to the next in ring
+                    //first prime the address
+                    start_move(
+                        MOVE_NONE, MOVE_IMMEDIATE, MOVE_NONE,
+                        pack_flags(NO_COMPRESSION, RES_REMOTE, NO_HOST),
+                        0,
+                        0,
+                        0, arcfg_offset,
+                        0, seg_dst_buf_addr, 0, 0, 0, 0,
+                        0, 0, 0, 0
+                    );
+                    //send
+                    //we're re-sending from the result, so copy RES_COMPRESSED over OP1_COMPRESSED,
+                    //and ETH_COMPRESSED over RES_COMPRESSED
+                    //we convert RES_HOST flag to OP1_HOST since we're sending from the result buffer via Op1
+                    tmp_compression = ((compression & RES_COMPRESSED) >> 1) | ((compression & ETH_COMPRESSED) >> 1);
+                    start_move(
+                        MOVE_NONE, MOVE_STRIDE, MOVE_IMMEDIATE,
+                        pack_flags(tmp_compression, RES_REMOTE, (host & RES_HOST) >> 1),
+                        0,
+                        curr_count,
+                        comm_offset, arcfg_offset,
+                        0, 0, 0, 0, bulk_count * curr_pos, 0,
+                        0, 0, next_in_ring, TAG_ANY
+                    );
+
+                    err |= end_move();
+                    err |= end_move();
+                }
             }
-            curr_pos = (curr_pos + world.size - 1) % world.size;
-            //pop one result here to keep the result FIFO not full
-            err |= end_move();
+
+            moved_bytes = elems * Xil_In32(arcfg_offset);
+            seg_src_buf_addr += moved_bytes;
+            seg_dst_buf_addr += moved_bytes;
         }
-
-        //pop final two results for reduce-scatter
-        err |= end_move();
-        err |= end_move();
-
-        //next phase: allgather
-        //send to next in ring, from seg_dst_buf_addr where we stored the scattered reduction result
-        start_move(
-            MOVE_IMMEDIATE, MOVE_NONE, MOVE_NONE,
-            pack_flags(NO_COMPRESSION, RES_LOCAL, NO_HOST),
-            0,
-            0,
-            0, arcfg_offset,
-            seg_dst_buf_addr, 0, 0, 0, 0, 0,
-            0, 0, 0, 0
-        );
-        //send: keep all flags except RES_COMPRESSED, which should be replaced by ETH_COMPRESSED
-        //convert RES_HOST flag to OP0_HOST because we're sending from the destination buffer via Op0
-        tmp_compression = (compression & ~RES_COMPRESSED) | ((compression & ETH_COMPRESSED) >> 1);
-        start_move(
-            MOVE_STRIDE, MOVE_NONE, MOVE_IMMEDIATE,
-            pack_flags(tmp_compression, RES_REMOTE, (host & RES_HOST)>>2),
-            0,
-            (next_in_ring == world.size - 1) ? tail_count : bulk_count,
-            comm_offset, arcfg_offset,
-            0, 0, 0, bulk_count * next_in_ring, 0, 0,
-            0, 0, next_in_ring, TAG_ANY
-        );
-
-        err |= end_move();
-        err |= end_move();
-
-        //receive and forward from all other members of the communicator
-        curr_pos = next_in_ring;
-        for (i = 0; i < world.size - 1; i++) {
-            rel_stride = bulk_count * ((curr_pos == 0) ? (world.size - 1) : -1);
-            curr_count = (curr_pos == 0) ? tail_count : bulk_count;
-
-            //we use a blocking move here, because we want to avoid a race condition with the relay below
-            //TODO: avoid this; we either need to solve the RAW dependency in hardware (the generic approach),
-            //or a way to reuse a rx buffer (solves this problem in particular but does not extend to e.g. reduces)
-            //e.g. MOVE_ON_RECV_KEEP which would keep the RX buffer in the pending state
-            tmp_compression = (compression & RES_COMPRESSED) | ((compression & ETH_COMPRESSED) >> 2);
-            err |= move(
-                MOVE_NONE, MOVE_ON_RECV, MOVE_STRIDE,
-                pack_flags(tmp_compression, RES_LOCAL, host & RES_HOST),
-                0,
-                curr_count,
-                comm_offset, arcfg_offset,
-                0, 0, 0, 0, 0, rel_stride,
-                prev_in_ring, TAG_ANY, 0, 0
-            );
-            curr_pos = (curr_pos + world.size - 1) % world.size;
-            curr_count = (curr_pos == (world.size - 1)) ? tail_count : bulk_count;
-            if (i < world.size - 2) { //if not the last data, relay to the next in ring
-                //first prime the address
-                start_move(
-                    MOVE_NONE, MOVE_IMMEDIATE, MOVE_NONE,
-                    pack_flags(NO_COMPRESSION, RES_REMOTE, NO_HOST),
-                    0,
-                    0,
-                    0, arcfg_offset,
-                    0, seg_dst_buf_addr, 0, 0, 0, 0,
-                    0, 0, 0, 0
-                );
-                //send
-                //we're re-sending from the result, so copy RES_COMPRESSED over OP1_COMPRESSED,
-                //and ETH_COMPRESSED over RES_COMPRESSED
-                //we convert RES_HOST flag to OP1_HOST since we're sending from the result buffer via Op1
-                tmp_compression = ((compression & RES_COMPRESSED) >> 1) | ((compression & ETH_COMPRESSED) >> 1);
-                start_move(
-                    MOVE_NONE, MOVE_STRIDE, MOVE_IMMEDIATE,
-                    pack_flags(tmp_compression, RES_REMOTE, (host & RES_HOST) >> 1),
-                    0,
-                    curr_count,
-                    comm_offset, arcfg_offset,
-                    0, 0, 0, 0, bulk_count * curr_pos, 0,
-                    0, 0, next_in_ring, TAG_ANY
-                );
-
-                err |= end_move();
-                err |= end_move();
-            }
-        }
-
-        moved_bytes = elems * Xil_In32(arcfg_offset);
-        seg_src_buf_addr += moved_bytes;
-        seg_dst_buf_addr += moved_bytes;
     }
 
     return err;
