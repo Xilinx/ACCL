@@ -76,6 +76,7 @@
 #define ACCL_REDUCE_SCATTER 11
 #define ACCL_BARRIER        12
 #define ACCL_ALLTOALL       13
+#define ACCL_NOP            255
 
 //ACCL_CONFIG SUBFUNCTIONS
 #define HOUSEKEEP_SWRST                0
@@ -85,6 +86,7 @@
 #define HOUSEKEEP_RENDEZVOUS_MAX_SIZE  4
 
 //AXI MMAP address
+#define PERFCTR_OFFSET    0x1FE0
 #define TMP1_OFFSET       0x1FE4    //address of first spare buffer in device memory
 #define TMP2_OFFSET       0x1FEC    //address of second spare buffer in device memory
 #define CFGRDY_OFFSET     0x1FF4
@@ -100,6 +102,7 @@
 #define RX_ENQUEUE_BASEADDR   0x60000
 #define RX_SEEK_BASEADDR      0x70000
 #define GPIO_BASEADDR         0x40000000
+#define PERFCTR_BASEADDR      0x40001000
 #else       
 #define EXCHMEM_BASEADDR      0x0000
 #define NET_RXPKT_BASEADDR    0x3000
@@ -108,7 +111,7 @@
 #define RX_ENQUEUE_BASEADDR   0x6000
 #define RX_SEEK_BASEADDR      0x7000
 #define GPIO_BASEADDR         0x8000
-
+#define PERFCTR_BASEADDR      0x9000
 #endif
 
 //https://www.xilinx.com/html_docs/xilinx2020_2/vitis_doc/managing_interface_synthesis.html#tzw1539734223235
@@ -118,10 +121,16 @@
 #define CONTROL_READY_MASK      0x00000001 << 3
 #define CONTROL_REPEAT_MASK     0x00000001 << 7
 
-#define GPIO_DATA_REG      GPIO_BASEADDR + 0x0000
-#define GPIO2_DATA_REG     GPIO_BASEADDR + 0x0008
-#define GPIO_READY_MASK       0x00000001
-#define GPIO_SWRST_MASK       0x00000002
+#define GPIO_DATA_REG           GPIO_BASEADDR + 0x0000
+#define GPIO_TRI_REG            GPIO_BASEADDR + 0x0004
+#define GPIO2_DATA_REG          GPIO_BASEADDR + 0x0008
+#define GPIO2_TRI_REG           GPIO_BASEADDR + 0x000C
+#define PERFCTR_CONTROL_REG     PERFCTR_BASEADDR +0x0000
+#define PERFCTR_DATA_REG        PERFCTR_BASEADDR +0x0008
+#define GPIO_READY_MASK         0x00000001
+#define GPIO_SWRST_MASK         0x00000002
+#define PERFCTR_SCLR_MASK       0x00000001
+#define PERFCTR_CE_MASK         0x00000002
 
 //EXCEPTIONS
 #define NO_ERROR                                      0   
@@ -214,7 +223,11 @@ typedef struct{
 } dm_config;
 
 //utility functions for register mapped accesses
+#ifdef MB_FW_EMULATION
 extern uint32_t *cfgmem;
+#else
+extern uint32_t volatile *cfgmem;
+#endif
 #define Xil_Out32(offset, value) {cfgmem[(offset)/4] = (value);}
 #define Xil_In32(offset) ({uint32_t value = cfgmem[(offset)/4]; value; })
 

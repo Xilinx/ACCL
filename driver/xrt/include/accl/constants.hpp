@@ -37,12 +37,6 @@ const unsigned int TAG_ANY = 0xFFFFFFFF;
 const addr_t EXCHANGE_MEM_OFFSET_ADDRESS = 0x0;
 /** Exchange mem address range */
 const addr_t EXCHANGE_MEM_ADDRESS_RANGE = 0x2000;
-/** Return code offset */
-const addr_t RETCODE_OFFSET = 0x1FFC;
-/** hardware id offset */
-const addr_t IDCODE_OFFSET = 0x1FF8;
-/** Configuration ready offset */
-const addr_t CFGRDY_OFFSET = 0x1FF4;
 /** Global Communicator */
 const communicatorId GLOBAL_COMM = 0x0;
 
@@ -148,6 +142,7 @@ namespace CCLO_ADDR {
   constexpr auto const CFGRDY_OFFSET          = 0x1FF4;
   constexpr auto const SPARE1_OFFSET          = 0x1FEC;
   constexpr auto const SPARE2_OFFSET          = 0x1FE4;
+  constexpr auto const PERFCNT_OFFSET         = 0x1FE0;
   constexpr auto const EGR_RX_BUF_SIZE_OFFSET = 0x4;
   constexpr auto const NUM_EGR_RX_BUFS_OFFSET = 0x0;
 }

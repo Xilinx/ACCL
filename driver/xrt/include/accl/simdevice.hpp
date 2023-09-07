@@ -97,6 +97,8 @@ public:
   
   bool test(ACCLRequest *request) override;
   
+  uint64_t get_duration(ACCLRequest *request) override;
+
   void free_request(ACCLRequest *request) override;
 
   val_t get_retcode(ACCLRequest *request) override;

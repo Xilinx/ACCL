@@ -32,6 +32,7 @@ static unsigned int num_retry_pending = 0;
 static bool new_call = true;
 static bool flush_retries = false;
 static unsigned int current_step;
+static unsigned int datatype_nbytes;
 
 static datapath_arith_config arcfg;
 static communicator world;
@@ -45,7 +46,7 @@ uint32_t *cfgmem = sim_cfgmem;
 hlslib::Stream<ap_axiu<32,0,0,0>, 512> cmd_fifos[5];
 hlslib::Stream<ap_axiu<32,0,0,0>, 512> sts_fifos[5];
 #else
-uint32_t *cfgmem = (uint32_t *)(EXCHMEM_BASEADDR);
+uint32_t volatile *cfgmem = (uint32_t volatile *)(EXCHMEM_BASEADDR);
 #endif
 
 //utility functions
@@ -491,7 +492,7 @@ int send(
     unsigned int host = (buftype >> 8) & 0xff;
     unsigned int stream = buftype & 0xff;
     //get count in bytes
-    unsigned int bytes_count = Xil_In32(arcfg_offset)*count;
+    unsigned int bytes_count = datatype_nbytes*count;
     if((bytes_count > max_eager_size) && (compression == NO_COMPRESSION) && (stream == NO_STREAM)){
         //Rendezvous without segmentation
         //get remote address
@@ -525,7 +526,7 @@ int send(
         //destination compression == Ethernet compression
         //(since data can't be decompressed on remote side)
         //calculate max segment size in elements, from element size 
-        unsigned int max_seg_count = eager_rx_buf_size / Xil_In32(arcfg_offset);
+        unsigned int max_seg_count = eager_rx_buf_size / datatype_nbytes;
         //calculate number of segments required for this send
         unsigned int nseg = (count+max_seg_count-1)/max_seg_count;
         int i;
@@ -571,7 +572,7 @@ int recv(
     unsigned int stream = buftype & 0xff;
     unsigned int host = (buftype >> 8) & 0xff;
     //get count in bytes
-    unsigned int bytes_count = Xil_In32(arcfg_offset)*count;
+    unsigned int bytes_count = datatype_nbytes*count;
     if((bytes_count > max_eager_size) && (compression == NO_COMPRESSION) && (stream == NO_STREAM)){
         //rendezvous without segmentation
         bool is_host = ((host & RES_HOST) != 0);
@@ -586,7 +587,7 @@ int recv(
         //if ETH_COMPRESSED is set, also set OP1_COMPRESSED
         compression |= (compression & ETH_COMPRESSED) >> 2;
         //calculate max segment size in elements, from element size 
-        unsigned int max_seg_count = eager_rx_buf_size / Xil_In32(arcfg_offset);
+        unsigned int max_seg_count = eager_rx_buf_size / datatype_nbytes;
         //calculate number of segments required for this send
         unsigned int nseg = (count+max_seg_count-1)/max_seg_count;
         int i;
@@ -712,7 +713,7 @@ int broadcast(  unsigned int count,
     unsigned int host = (buftype >> 8) & 0xff;
     int err = NO_ERROR;
 
-    unsigned int bytes_count = Xil_In32(arcfg_offset)*count;
+    unsigned int bytes_count = datatype_nbytes*count;
     if((bytes_count > max_eager_size) && (compression == NO_COMPRESSION) && (stream == NO_STREAM)){
         if(src_rank == world.local_rank){
             //get remote address
@@ -778,7 +779,7 @@ int broadcast(  unsigned int count,
             //compute count from uncompressed elem bytes in aright config
             //instead of Xil_In32 we could use:
             //(datapath_arith_config*)(arcfg_offset)->uncompressed_elem_bytes;
-            max_seg_count = eager_rx_buf_size / Xil_In32(arcfg_offset);
+            max_seg_count = eager_rx_buf_size / datatype_nbytes;
         }
 
         int expected_ack_count = 0;
@@ -853,7 +854,7 @@ int scatter(unsigned int count,
 
     int err = NO_ERROR;
 
-    unsigned int bytes_count = Xil_In32(arcfg_offset)*count;
+    unsigned int bytes_count = datatype_nbytes*count;
     if((bytes_count > max_eager_size) && (compression == NO_COMPRESSION) && (stream == NO_STREAM)){
         if(src_rank == world.local_rank){
             //get remote address
@@ -983,11 +984,10 @@ int gather( unsigned int count,
             unsigned int buftype){
     unsigned int stream = buftype & 0xff;
     unsigned int host = (buftype >> 8) & 0xff;
-    uint64_t tmp_buf_addr;
     unsigned int i, curr_pos, next_in_ring, prev_in_ring, number_of_shift;
     int err = NO_ERROR;
 
-    unsigned int bytes_count = Xil_In32(arcfg_offset)*count;
+    unsigned int bytes_count = datatype_nbytes*count;
     if((bytes_count > max_eager_size) && (compression == NO_COMPRESSION) && (stream == NO_STREAM)){
         bool dst_host;
         int status;
@@ -1166,14 +1166,14 @@ int allgather(
     int next_in_ring = (world.local_rank + 1) % world.size;
     int prev_in_ring = (world.local_rank + world.size - 1) % world.size;
 
-    unsigned int bytes_count = Xil_In32(arcfg_offset)*count;
+    unsigned int bytes_count = datatype_nbytes*count;
     if((bytes_count > max_eager_size) && (compression == NO_COMPRESSION) && (stream == NO_STREAM)){
         //rendezvous ring allgather with P segments
         //TODO: each rank pulls from next_in_ring into a segment, pushes a segment to prev_in_ring
         //we do this for P-1 steps (such that each rank gathers the P-1 segments it's missing)
         //at each step: send a addr notif to neighbour and wait for an address notif from neighbour + transfer
         bool dst_buf_host = (host & RES_HOST) != 0;
-        bool upstream_host, downstream_host;
+        bool downstream_host;
         uint64_t downstream_addr, upstream_addr;
         int status;
         //start copy to ourselves while we're sending/receiving addresses
@@ -1371,7 +1371,7 @@ int reduce( unsigned int count,
             unsigned int buftype){
     unsigned int stream = buftype & 0xff;
     unsigned int host = (buftype >> 8) & 0xff;
-    unsigned int bytes_count = Xil_In32(arcfg_offset)*count;
+    unsigned int bytes_count = datatype_nbytes*count;
 
     if(world.size == 1){
         //corner-case copy for when running a single-node reduction
@@ -1381,7 +1381,6 @@ int reduce( unsigned int count,
         uint64_t tmp1_addr = ((uint64_t)Xil_In32(TMP1_OFFSET+4) << 32) | (uint64_t)Xil_In32(TMP1_OFFSET);
         uint64_t tmp2_addr = ((uint64_t)Xil_In32(TMP2_OFFSET+4) << 32) | (uint64_t)Xil_In32(TMP2_OFFSET);
         //rendezvous tree reduce using tmp_addr as a scratchpad (preferably in device memory)
-        unsigned int local_tree_leaf, local_tree_root;
         unsigned int err = NO_ERROR;
         //tree reduce:
         //at each step, each rank can do one or more of 3 actions: send (S), receive (R), and sum (+)
@@ -1531,10 +1530,10 @@ int reduce_scatter(
 ){
     unsigned int stream = buftype & 0xff;
     unsigned int host = (buftype >> 8) & 0xff;
-    int i, curr_pos, rel_stride, abs_stride, next_in_ring, prev_in_ring;
+    int i, curr_pos, rel_stride, next_in_ring, prev_in_ring;
     int err = NO_ERROR;
     unsigned int tmp_compression = NO_COMPRESSION;
-    unsigned int bytes_count = Xil_In32(arcfg_offset)*count;
+    unsigned int bytes_count = datatype_nbytes*count;
 
     if(world.size == 1){
         //corner-case copy for when running a single-node reduction
@@ -1638,13 +1637,13 @@ int allreduce(
 ){
     unsigned int stream = buftype & 0xff;
     unsigned int host = (buftype >> 8) & 0xff;
-    int i, curr_pos, curr_count, rel_stride, abs_stride, next_in_ring, prev_in_ring;
+    int i, curr_pos, curr_count, rel_stride, next_in_ring, prev_in_ring;
     unsigned int max_seg_count, elems_remaining, elems, bulk_count, tail_count, moved_bytes;
     int err = NO_ERROR;
     unsigned int tmp_compression = NO_COMPRESSION;
     uint64_t seg_src_buf_addr = src_buf_addr;
     uint64_t seg_dst_buf_addr = dst_buf_addr;
-    unsigned int bulk_bytes_count, tail_bytes_count, bytes_count = Xil_In32(arcfg_offset)*count;
+    unsigned int bytes_count = datatype_nbytes*count;
 
     if(world.size == 1){
         //corner-case copy for when running a single-node reduction
@@ -1669,7 +1668,7 @@ int allreduce(
             //compute count from uncompressed elem bytes in aright config
             //instead of Xil_In32 we could use:
             //(datapath_arith_config*)(arcfg_offset)->uncompressed_elem_bytes;
-            max_seg_count = eager_rx_buf_size / Xil_In32(arcfg_offset);
+            max_seg_count = eager_rx_buf_size / datatype_nbytes;
             // Round max segment size down to align with world size
             max_seg_count -= max_seg_count % world.size;
         }
@@ -1839,7 +1838,7 @@ int allreduce(
                 }
             }
 
-            moved_bytes = elems * Xil_In32(arcfg_offset);
+            moved_bytes = elems * datatype_nbytes;
             seg_src_buf_addr += moved_bytes;
             seg_dst_buf_addr += moved_bytes;
         }
@@ -1950,11 +1949,22 @@ static inline void wait_for_call(void) {
         }
     } while (invalid);
     new_call = rr_sel;
+    //clear performance counter then start it
+#ifndef MB_FW_EMULATION
+    SET(PERFCTR_CONTROL_REG, PERFCTR_CE_MASK);
+    CLR(PERFCTR_CONTROL_REG, PERFCTR_SCLR_MASK);
+#endif
 }
 
 //signal finish to the host and write ret value in exchange mem
 void finalize_call(unsigned int retval) {
     Xil_Out32(RETVAL_OFFSET, retval);
+    //stop performance counter, copy its value to exchmem
+#ifndef MB_FW_EMULATION
+    CLR(PERFCTR_CONTROL_REG, PERFCTR_CE_MASK);
+    Xil_Out32(PERFCTR_OFFSET, Xil_In32(PERFCTR_DATA_REG));
+    SET(PERFCTR_CONTROL_REG, PERFCTR_SCLR_MASK);
+#endif
     // Done: Set done and idle
     putd(STS_CALL, retval);
 }
@@ -2016,10 +2026,14 @@ void run() {
         //initialize arithmetic/compression config and communicator
         //NOTE: these are global because they're used in a lot of places but don't change during a call
         //TODO: determine if they can remain global in hierarchical collectives
-        if(!comm_cached || (comm != comm_cache_adr)){
-            world = find_comm(comm);
-            comm_cached = true;
-            comm_cache_adr = comm;
+        if(scenario != ACCL_CONFIG && scenario != ACCL_NOP){
+            if(!comm_cached || (comm != comm_cache_adr)){
+                world = find_comm(comm);
+                comm_cached = true;
+                comm_cache_adr = comm;
+            }
+            //get number of bytes of selected datatype
+            datatype_nbytes = Xil_In32(datapath_cfg);
         }
 
         switch (scenario)
@@ -2100,8 +2114,11 @@ void run() {
                         break;
                 }
                 break;
-            default:
+            case ACCL_NOP:
                 retval = NO_ERROR;
+                break;
+            default:
+                retval = COLLECTIVE_NOT_IMPLEMENTED;
                 break;
         }
         if(retval == NOT_READY_ERROR){

@@ -183,6 +183,7 @@ set axi_bram_ctrl_bypass [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_bram_
   set axi_crossbar_1 [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_crossbar:2.1 axi_crossbar_1 ]
   set_property -dict [ list \
    CONFIG.NUM_SI {1} \
+   CONFIG.NUM_MI {3} \
  ] $axi_crossbar_1
 
   # Create instance: axi_gpio_0, and set properties
@@ -221,6 +222,31 @@ set axi_bram_ctrl_bypass [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_bram_
    CONFIG.DOUT_WIDTH {1} \
  ] $xlslice_encore_rstn
 
+  # Create instances for performance counter
+  set axi_gpio_1 [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_gpio:2.0 axi_gpio_1 ]
+  set_property -dict [ list \
+   CONFIG.C_IS_DUAL {1} \
+   CONFIG.C_ALL_INPUTS {0} \
+   CONFIG.C_ALL_OUTPUTS {1} \
+   CONFIG.C_ALL_INPUTS_2 {1} \
+   CONFIG.C_GPIO2_WIDTH {32} \
+   CONFIG.C_GPIO_WIDTH {2} \
+   CONFIG.C_INTERRUPT_PRESENT {0} \
+ ] $axi_gpio_1
+
+  set perf_ctr [ create_bd_cell -type ip -vlnv xilinx.com:ip:c_counter_binary:12.0 perf_ctr ]
+  set_property -dict [list \
+   CONFIG.CE {true} \
+   CONFIG.Output_Width {32} \
+   CONFIG.SCLR {true} \
+   CONFIG.Final_Count_Value {FFFFFFFE} \
+   CONFIG.Restrict_Count {true} \
+  ] $perf_ctr
+
+  set perf_ctr_sclr [ create_bd_cell -type ip -vlnv xilinx.com:ip:xlslice:1.0 perf_ctr_sclr ]
+  set perf_ctr_ce [ create_bd_cell -type ip -vlnv xilinx.com:ip:xlslice:1.0 perf_ctr_ce ]
+  set_property -dict [list CONFIG.DIN_FROM {1} CONFIG.DIN_TO {1}] $perf_ctr_ce
+
   # Create interface connections
   connect_bd_intf_net -intf_net S00_AXI_1 [get_bd_intf_pins S_AXI_MB] [get_bd_intf_pins axi_crossbar_1/S00_AXI]
   connect_bd_intf_net -intf_net S_AXI_1 [get_bd_intf_pins S_AXI_HOST] [get_bd_intf_pins axi_register_slice_0/S_AXI]
@@ -228,16 +254,22 @@ set axi_bram_ctrl_bypass [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_bram_
   connect_bd_intf_net -intf_net axi_crossbar_0_M00_AXI [get_bd_intf_pins axi_bram_ctrl_0/S_AXI] [get_bd_intf_pins axi_crossbar_0/M00_AXI]
   connect_bd_intf_net -intf_net axi_crossbar_1_M00_AXI [get_bd_intf_pins axi_crossbar_0/S00_AXI] [get_bd_intf_pins axi_crossbar_1/M00_AXI]
   connect_bd_intf_net -intf_net axi_crossbar_1_M01_AXI [get_bd_intf_pins axi_crossbar_1/M01_AXI] [get_bd_intf_pins axi_gpio_0/S_AXI]
+  connect_bd_intf_net [get_bd_intf_pins axi_crossbar_1/M02_AXI] [get_bd_intf_pins axi_gpio_1/S_AXI]
   connect_bd_intf_net -intf_net axi_register_slice_0_M_AXI [get_bd_intf_pins axi_crossbar_0/S01_AXI] [get_bd_intf_pins axi_register_slice_0/M_AXI]
   connect_bd_intf_net [get_bd_intf_pins S_AXI_BYP] [get_bd_intf_pins axi_bram_ctrl_bypass/S_AXI]
   connect_bd_intf_net [get_bd_intf_pins axi_bram_ctrl_bypass/BRAM_PORTA] [get_bd_intf_pins axi_bram_ctrl_0_bram/BRAM_PORTB]
   # Create port connections
-  connect_bd_net [get_bd_pins ap_rst_n] [get_bd_pins axi_bram_ctrl_0/s_axi_aresetn] [get_bd_pins axi_register_slice_0/aresetn] [get_bd_pins axi_crossbar_0/aresetn] [get_bd_pins axi_crossbar_1/aresetn] [get_bd_pins axi_gpio_0/s_axi_aresetn]
+  connect_bd_net [get_bd_pins ap_rst_n] [get_bd_pins axi_bram_ctrl_0/s_axi_aresetn] [get_bd_pins axi_register_slice_0/aresetn] [get_bd_pins axi_crossbar_0/aresetn] [get_bd_pins axi_crossbar_1/aresetn] [get_bd_pins axi_gpio_0/s_axi_aresetn] [get_bd_pins axi_gpio_1/s_axi_aresetn]
   connect_bd_net [get_bd_pins encore_rst_n] [get_bd_pins axi_bram_ctrl_bypass/s_axi_aresetn]
   connect_bd_net -net axi_gpio_0_gpio_io_o [get_bd_pins axi_gpio_0/gpio_io_o] [get_bd_pins xlslice_encore_rstn/Din]
-  connect_bd_net -net s_axi_aclk_1 [get_bd_pins s_axi_aclk] [get_bd_pins axi_bram_ctrl_0/s_axi_aclk] [get_bd_pins axi_bram_ctrl_bypass/s_axi_aclk] [get_bd_pins axi_crossbar_0/aclk] [get_bd_pins axi_crossbar_1/aclk] [get_bd_pins axi_gpio_0/s_axi_aclk] [get_bd_pins axi_register_slice_0/aclk]
+  connect_bd_net -net s_axi_aclk_1 [get_bd_pins s_axi_aclk] [get_bd_pins axi_bram_ctrl_0/s_axi_aclk] [get_bd_pins axi_bram_ctrl_bypass/s_axi_aclk] [get_bd_pins axi_crossbar_0/aclk] [get_bd_pins axi_crossbar_1/aclk] [get_bd_pins axi_gpio_0/s_axi_aclk] [get_bd_pins axi_gpio_1/s_axi_aclk] [get_bd_pins axi_register_slice_0/aclk] [get_bd_pins perf_ctr/CLK]
   connect_bd_net -net xlslice_encore_rstn_Dout [get_bd_pins encore_aresetn] [get_bd_pins xlslice_encore_rstn/Dout]
   connect_bd_net -net hwid [get_bd_pins xlconstant_hwid/dout] [get_bd_pins axi_gpio_0/gpio2_io_i]
+  connect_bd_net [get_bd_pins perf_ctr/Q] [get_bd_pins axi_gpio_1/gpio2_io_i]
+  connect_bd_net [get_bd_pins axi_gpio_1/gpio_io_o] [get_bd_pins perf_ctr_sclr/Din]
+  connect_bd_net [get_bd_pins perf_ctr_sclr/Dout] [get_bd_pins perf_ctr/SCLR]
+  connect_bd_net [get_bd_pins axi_gpio_1/gpio_io_o] [get_bd_pins perf_ctr_ce/Din] 
+  connect_bd_net [get_bd_pins perf_ctr_ce/Dout] [get_bd_pins perf_ctr/CE]
 
   # Restore current instance
   current_bd_instance $oldCurInst

@@ -27,7 +27,8 @@ static void finish_sim_request(ACCL::SimRequest *req) {
   // wait on zmq context
   zmq_client_retcall(cclo->get_context());
   // get ret code before notifying waiting theads
-  req->set_retcode(cclo->read(ACCL::RETCODE_OFFSET));
+  req->set_retcode(cclo->read(ACCL::CCLO_ADDR::RETCODE_OFFSET));
+  req->set_duration(cclo->read(ACCL::CCLO_ADDR::PERFCNT_OFFSET));
   req->set_status(ACCL::operationStatus::COMPLETED);
   req->notify();
   cclo->complete_request(req);
@@ -111,6 +112,15 @@ bool SimDevice::test(ACCLRequest *request) {
     return true;
 
   return sim_handle->second->get_status() == operationStatus::COMPLETED;
+}
+
+uint64_t SimDevice::get_duration(ACCLRequest *request) {  
+  auto sim_handle = request_map.find(*request);
+
+  if (sim_handle == request_map.end())
+    return 0;
+
+  return sim_handle->second->get_duration() * 4;
 }
 
 void SimDevice::free_request(ACCLRequest *request) {

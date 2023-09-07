@@ -27,6 +27,7 @@ static void finish_coyote_request(ACCL::CoyoteRequest *req) {
   ACCL::CoyoteDevice *cclo = reinterpret_cast<ACCL::CoyoteDevice *>(req->cclo());
   // get ret code before notifying waiting threads
   req->set_retcode(cclo->read(ACCL::CCLO_ADDR::RETCODE_OFFSET));
+  req->set_retcode(cclo->read(ACCL::CCLO_ADDR::PERFCNT_OFFSET));
   req->set_status(ACCL::operationStatus::COMPLETED);
   req->notify();
   cclo->complete_request(req);
@@ -190,6 +191,15 @@ bool CoyoteDevice::test(ACCLRequest *request) {
     return true;
 
   return fpga_handle->second->get_status() == operationStatus::COMPLETED;
+}
+
+uint64_t CoyoteDevice::get_duration(ACCLRequest *request) {  
+  auto handle = request_map.find(*request);
+
+  if (handle == request_map.end())
+    return 0;
+
+  return handle->second->get_duration() * 4;
 }
 
 void CoyoteDevice::free_request(ACCLRequest *request) {

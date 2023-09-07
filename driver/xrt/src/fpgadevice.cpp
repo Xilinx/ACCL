@@ -25,7 +25,8 @@ static void finish_fpga_request(ACCL::FPGARequest *req) {
   req->wait_kernel();
   ACCL::FPGADevice *cclo = reinterpret_cast<ACCL::FPGADevice *>(req->cclo());
   // get ret code before notifying waiting theads
-  req->set_retcode(cclo->read(ACCL::RETCODE_OFFSET));
+  req->set_retcode(cclo->read(ACCL::CCLO_ADDR::RETCODE_OFFSET));
+  req->set_duration(cclo->read(ACCL::CCLO_ADDR::PERFCNT_OFFSET));
   req->set_status(ACCL::operationStatus::COMPLETED);
   req->notify();
   cclo->complete_request(req);
@@ -106,6 +107,15 @@ bool FPGADevice::test(ACCLRequest *request) {
     return true;
 
   return fpga_handle->second->get_status() == operationStatus::COMPLETED;
+}
+
+uint64_t FPGADevice::get_duration(ACCLRequest *request) {  
+  auto handle = request_map.find(*request);
+
+  if (handle == request_map.end())
+    return 0;
+
+  return handle->second->get_duration() * 4;
 }
 
 void FPGADevice::free_request(ACCLRequest *request) {

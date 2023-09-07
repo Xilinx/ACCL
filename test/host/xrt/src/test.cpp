@@ -921,6 +921,20 @@ TEST_F(ACCLTest, test_barrier) {
   accl->barrier();
 }
 
+TEST_F(ACCLTest, test_perf_counter) {
+  unsigned int count = options.count;
+  auto op_buf = accl->create_buffer<float>(count, dataType::float32);
+  auto res_buf = accl->create_buffer<float>(count, dataType::float32);
+  random_array(op_buf->buffer(), count);
+
+  test_debug("Reducing data...", options);
+  ACCL::ACCLRequest* req = accl->nop(true);
+  accl->wait(req);
+  //check NOP call duration is between 100ns and 1us 
+  bool cnt_in_range = (accl->get_duration(req) > 100) && (accl->get_duration(req) < 1000);
+  EXPECT_TRUE(cnt_in_range);
+}
+
 INSTANTIATE_TEST_SUITE_P(reduction_tests, ACCLFuncTest, testing::Values(reduceFunction::SUM, reduceFunction::MAX));
 INSTANTIATE_TEST_SUITE_P(rooted_tests, ACCLRootTest, testing::Range(0,::size));
 INSTANTIATE_TEST_SUITE_P(rooted_reduction_tests, ACCLRootFuncTest, 

@@ -147,6 +147,8 @@ ACCLRequest *ACCL::set_rendezvous_threshold(unsigned int value, bool run_async,
 ACCLRequest *ACCL::nop(bool run_async, std::vector<ACCLRequest *> waitfor) {
   CCLO::Options options{};
   options.scenario = operation::nop;
+  options.comm = communicators[GLOBAL_COMM].communicators_addr();
+  options.count = 0;
   options.waitfor = waitfor;
   ACCLRequest *handle = call_async(options);
   if (run_async) {
@@ -1092,7 +1094,7 @@ void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
   debug("CCLO HWID: " + std::to_string(get_hwid()) + " at 0x" +
         debug_hex(cclo->get_base_addr()));
 
-  if (cclo->read(CFGRDY_OFFSET) != 0) {
+  if (cclo->read(CCLO_ADDR::CFGRDY_OFFSET) != 0) {
     throw std::runtime_error("CCLO appears configured, might be in use. Please "
                              "reset the CCLO and retry");
   }
@@ -1111,7 +1113,7 @@ void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
 
   // Mark CCLO as configured
   debug("CCLO configured");
-  cclo->write(CFGRDY_OFFSET, 1);
+  cclo->write(CCLO_ADDR::CFGRDY_OFFSET, 1);
   config_rdy = true;
 
   debug("Set timeout");
@@ -1373,6 +1375,10 @@ bool ACCL::test(ACCLRequest *request) {
   return cclo->test(request);
 }
 
+uint64_t ACCL::get_duration(ACCLRequest *request) {
+  return cclo->get_duration(request);
+}
+
 void ACCL::free_request(ACCLRequest *request) {
   return cclo->free_request(request);
 }
@@ -1398,12 +1404,6 @@ ACCLRequest *ACCL::call_sync(CCLO::Options &options) {
 }
 
 void ACCL::set_max_eager_msg_size(unsigned int value) {
-  if (value % 8 != 0) {
-    std::cerr << "ACCL: dma transaction must be divisible by 8 to use reduce "
-                 "collectives."
-              << std::endl;
-  }
-
   CCLO::Options options{};
   options.scenario = operation::config;
   options.cfg_function = cfgFunc::set_max_eager_msg_size;
@@ -1414,12 +1414,6 @@ void ACCL::set_max_eager_msg_size(unsigned int value) {
 }
 
 void ACCL::set_max_rendezvous_msg_size(unsigned int value) {
-  if (value % 8 != 0) {
-    std::cerr << "ACCL: dma transaction must be divisible by 8 to use reduce "
-                 "collectives."
-              << std::endl;
-  }
-
   CCLO::Options options{};
   options.scenario = operation::config;
   options.cfg_function = cfgFunc::set_max_rendezvous_msg_size;

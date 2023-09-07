@@ -125,14 +125,14 @@ public:
    * @return val_t The return code
    */
   [[ deprecated ]]
-  val_t get_retcode() { return this->cclo->read(RETCODE_OFFSET); }
+  val_t get_retcode() { return this->cclo->read(CCLO_ADDR::RETCODE_OFFSET); }
 
   /**
    * Get the hardware id from the FPGA.
    *
    * @return val_t The hardware id
    */
-  val_t get_hwid() { return this->cclo->read(IDCODE_OFFSET); }
+  val_t get_hwid() { return this->cclo->read(CCLO_ADDR::IDCODE_OFFSET); }
 
   /**
    * Set the timeout of ACCL calls.
@@ -709,6 +709,14 @@ public:
    * @return false  If the request did not complete
    */
   bool test(ACCLRequest *request);
+
+  /**
+   * Get duration of call associated to request
+   * 
+   * @param request Reference to the ACCLRequest to test
+   * @return uint64_t  Call duration in nanoseconds
+   */
+  uint64_t get_duration(ACCLRequest *request);
 
   /**
    * Check if given request is completed

@@ -173,6 +173,14 @@ public:
   virtual val_t get_retcode(ACCLRequest *request) = 0;
 
   /**
+   * Gets the duration of a given request in nanoseconds
+   * 
+   * @param request Request to be look up
+   * @return uint64_t The duration in nanoseconds.
+   */
+  virtual uint64_t get_duration(ACCLRequest *request) = 0;
+
+  /**
    * Get the base address of the CCLO, this currently returns 0x0 on hardware.
    *
    * @return addr_t The base address of the CCLO.
