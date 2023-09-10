@@ -60,6 +60,27 @@ inline int max(int x, int y){
     return x - ((x - y) & ((x - y) >> 31));
 }
 
+/*Function to find log2 of uint32*/
+inline unsigned int fast_log2(unsigned int val){
+    unsigned int ret;
+    unsigned int s;
+
+    ret = (val > 0xFFFF) << 4;
+    val >>= ret;
+    s = (val > 0xFF) << 3;
+    val >>= s;
+    ret |= s;
+    s = (val > 0xF) << 2;
+    val >>= s;
+    ret |= s;
+    s = (val > 0x3) << 1;
+    val >>= s;
+    ret |= s;
+    ret |= (val >> 1);
+
+    return ret;
+}
+
 //retrieves all the communicator
 static inline communicator find_comm(unsigned int adr){
 	communicator ret;
@@ -703,7 +724,7 @@ int fused_recv_reduce_send(
 //moving to the next part of the buffer to be transmitted.
 //use MOVE_IMMEDIATE and MOVE_INCREMENTING and MOVE_REPEATING in sequence
 int broadcast(  unsigned int count,
-                unsigned int src_rank,
+                unsigned int root_rank,
                 uint64_t buf_addr,
                 unsigned int comm_offset,
                 unsigned int arcfg_offset,
@@ -715,57 +736,117 @@ int broadcast(  unsigned int count,
 
     unsigned int bytes_count = datatype_nbytes*count;
     if((bytes_count > max_eager_size) && (compression == NO_COMPRESSION) && (stream == NO_STREAM)){
-        if(src_rank == world.local_rank){
-            //get remote address
-            uint64_t dst_addr;
-            uint32_t dst_rank;
-            bool dst_host;
-            unsigned int pending_moves = 0;
-            //if root, wait for addresses then send
-            while(current_step < (world.size-1)){
-                int status = rendezvous_get_any_addr(&dst_rank, &dst_addr, &dst_host, count, TAG_ANY);
-                if(status == NOT_READY_ERROR){
-                    //we're not yet ready to serve this send, queue it for retry after flushing moves
-                    while(pending_moves > 0){
-                        err |= end_move();
-                        pending_moves--;
-                    }
-                    //if err was NO_ERROR, we'll retry, otherwise give up
-                    return (err | status);
-                }
-                if(dst_host){
-                    host |= RES_HOST;
-                }
-                //do a RDMA write to the remote address 
-                start_move(
-                    MOVE_IMMEDIATE,
-                    MOVE_NONE,
-                    MOVE_IMMEDIATE,
-                    pack_flags_rendezvous(host),
-                    0, count, comm_offset, arcfg_offset, 
-                    buf_addr, 0, dst_addr, 0, 0, 0,
-                    0, 0, dst_rank, TAG_ANY
-                );
-                pending_moves++;
-                current_step++;
-                if(pending_moves > 2){
+        uint64_t dst_addr;
+        uint32_t dst_rank;
+        bool dst_host = ((host & RES_HOST) != 0);
+        bool src_host = ((host & OP0_HOST) != 0);
+
+        if(world.size > 3){
+            //binary tree broadcast
+            //we double the number of broadcasting nodes in each round until we've broadcast to every rank
+            //starting broadcast is from root to the rank with the index equal to the largest power of 2
+            //which is strictly smaller than worldsize: 2^floor(log2(worldsize-1))
+            //D0(x) = 2^floor(log2(x-1))
+            //examples: D0(3) = 2^floor(log2(2)) = 2; D0(4) = 2^floor(log2(3)) = 2; D0(5) = 2^floor(log2(4)) = 4
+            //
+            //from the sender's point of view, we send in rounds, whereby in each round
+            //    we send to a rank at distance D from ourselves
+            //    from ranks of index divisible by 2D
+            //    we halve the distance
+            //from the receiver's point of view:
+            //    at each round if our local rank index is divisible by D, receive from distance -D (if that is >= 0)
+            //    if we've received once, we convert to sender for remaining rounds
+            //
+            //an example for worldsize = 9
+            //round 0: D = D0(9) = 8  where 16 divides local rank index: 0 -> 8
+            //round 1: D = 4          where  8 divides local rank index: 0 -> 4, 8 -> x
+            //round 2: D = 2          where  4 divides local rank index: 0 -> 2, 4 -> 6, 8 -> x
+            //round 3: D = 1          where  2 divides local rank index: 0 -> 1, 2 -> 3, 4 -> 5, 6 -> 7, 8 -> x
+            //round 4: D = 0 - DONE!
+            
+            unsigned int d = 1<<fast_log2(world.size-1);
+            bool sender = (root_rank == world.local_rank);
+
+            //calculate normalized rank l, where root is index 0
+            unsigned int l = (world.local_rank + world.size - root_rank) % world.size;
+            
+            while(d > 0){
+                if(sender && (l % (2*d) == 0) && (l+d < world.size)){
+                    unsigned int receiver_rank = (l + d + root_rank) % world.size;
+                    while(rendezvous_get_addr(receiver_rank, &dst_addr, &dst_host, count, TAG_ANY) == NOT_READY_ERROR);\
+                    start_move(
+                        MOVE_IMMEDIATE,
+                        MOVE_NONE,
+                        MOVE_IMMEDIATE,
+                        pack_flags_rendezvous((src_host << 2) | dst_host),
+                        0, count, comm_offset, arcfg_offset, 
+                        buf_addr, 0, dst_addr, 0, 0, 0,
+                        0, 0, receiver_rank, TAG_ANY
+                    );
                     err |= end_move();
-                    pending_moves--;
+                } else if(!sender && ((l % d) == 0) && ((l-d) >= 0)){
+                    unsigned int sender_rank = (l - d + root_rank + world.size) % world.size;
+                    rendezvous_send_addr(sender_rank, buf_addr, dst_host, count, TAG_ANY);
+                    while(rendezvous_get_completion(sender_rank, buf_addr, dst_host, count, TAG_ANY) == NOT_READY_ERROR);
+                    //we now become a sender
+                    sender = true;
+                    src_host = dst_host;
                 }
-            }
-            while(pending_moves > 0){
-                err |= end_move();
-                pending_moves--;
+                d >>= 1; //halve d
             }
             return err;
         } else {
-            //if not root, send address then wait completion
-            bool res_is_host = ((host & RES_HOST) != 0);
-            if(current_step == 0){
-                rendezvous_send_addr(src_rank, buf_addr, res_is_host, count, TAG_ANY);
-                current_step++;
+            //out-of-order high-fanout implementation
+            //better tolerance for rank skews, preferable for small world sizes
+            if(root_rank == world.local_rank){
+                //get remote address
+                unsigned int pending_moves = 0;
+                //if root, wait for addresses then send
+                while(current_step < (world.size-1)){
+                    int status = rendezvous_get_any_addr(&dst_rank, &dst_addr, &dst_host, count, TAG_ANY);
+                    if(status == NOT_READY_ERROR){
+                        //we're not yet ready to serve this send, queue it for retry after flushing moves
+                        while(pending_moves > 0){
+                            err |= end_move();
+                            pending_moves--;
+                        }
+                        //if err was NO_ERROR, we'll retry, otherwise give up
+                        return (err | status);
+                    }
+                    if(dst_host){
+                        host |= RES_HOST;
+                    }
+                    //do a RDMA write to the remote address 
+                    start_move(
+                        MOVE_IMMEDIATE,
+                        MOVE_NONE,
+                        MOVE_IMMEDIATE,
+                        pack_flags_rendezvous(host),
+                        0, count, comm_offset, arcfg_offset, 
+                        buf_addr, 0, dst_addr, 0, 0, 0,
+                        0, 0, dst_rank, TAG_ANY
+                    );
+                    pending_moves++;
+                    current_step++;
+                    if(pending_moves > 2){
+                        err |= end_move();
+                        pending_moves--;
+                    }
+                }
+                while(pending_moves > 0){
+                    err |= end_move();
+                    pending_moves--;
+                }
+                return err;
+            } else {
+                //if not root, send address then wait completion
+                bool res_is_host = ((host & RES_HOST) != 0);
+                if(current_step == 0){
+                    rendezvous_send_addr(root_rank, buf_addr, res_is_host, count, TAG_ANY);
+                    current_step++;
+                }
+                return rendezvous_get_completion(root_rank, buf_addr, res_is_host, count, TAG_ANY);
             }
-            return rendezvous_get_completion(src_rank, buf_addr, res_is_host, count, TAG_ANY);
         }
     } else {
         unsigned int max_seg_count;
@@ -785,7 +866,7 @@ int broadcast(  unsigned int count,
         int expected_ack_count = 0;
         while(elems_remaining > 0){
             //determine if we're sending or receiving
-            if(src_rank == world.local_rank){
+            if(root_rank == world.local_rank){
                 //on the root we only care about ETH_COMPRESSED and OP0_COMPRESSED
                 //so replace RES_COMPRESSED with ETH_COMPRESSED
                 compression = compression | ((compression & ETH_COMPRESSED) >> 1);
@@ -798,7 +879,7 @@ int broadcast(  unsigned int count,
                         MOVE_IMMEDIATE,
                         pack_flags(compression, RES_REMOTE, host & OP0_HOST),
                         0, 
-                        (i == src_rank) ? 0 : min(max_seg_count, elems_remaining),
+                        (i == root_rank) ? 0 : min(max_seg_count, elems_remaining),
                         comm_offset, arcfg_offset,
                         buf_addr, 0, 0, 0, 0, 0,
                         0, 0, i, TAG_ANY
@@ -823,7 +904,7 @@ int broadcast(  unsigned int count,
                     min(max_seg_count, elems_remaining),
                     comm_offset, arcfg_offset,
                     0, 0, buf_addr, 0, 0, 0,
-                    src_rank, TAG_ANY, 0, 0
+                    root_rank, TAG_ANY, 0, 0
                 );
             }
             elems_remaining -= max_seg_count;
