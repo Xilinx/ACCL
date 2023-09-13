@@ -2,7 +2,8 @@
 
 # parameters
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-FPGA_BIT_PATH=$SCRIPT_DIR/../../../refdesigns/Coyote/hw/build/lynx/lynx.runs/impl_1/cyt_top
+FPGA_BIT_PATH=$SCRIPT_DIR/../../../refdesigns/Coyote/hw/build_RDMA/lynx/lynx.runs/impl_1/cyt_top
+# FPGA_BIT_PATH=$SCRIPT_DIR/../../../refdesigns/Coyote/hw/build_TCP/lynx/lynx.runs/impl_1/cyt_top
 DRIVER_PATH=$SCRIPT_DIR/../../../refdesigns/Coyote/driver/
 
 
@@ -81,6 +82,7 @@ if [ $HOT_RESET -eq 1 ]; then
 		host="alveo-u55c-$(printf "%02d" $servid)"
 		ssh -q -tt $host "sudo insmod $DRIVER_PATH/coyote_drv.ko ip_addr_q0=${IPADDR[boardidx]} mac_addr_q0=${MACADDR[boardidx]}" &
 	done
+	wait
 	echo "Driver loaded."
 	echo "Getting permissions for fpga..."
 	parallel-ssh -H "$hostlist" -x '-tt' "sudo /opt/cli/program/fpga_chmod 0"

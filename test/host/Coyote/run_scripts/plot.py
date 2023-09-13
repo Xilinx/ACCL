@@ -17,6 +17,11 @@ def read_accl_log_files(log_dir):
     for filename in os.listdir(log_dir):
         if filename.endswith(".log"):
             filepath = os.path.join(log_dir, filename)
+
+            # Skip directories and only process regular files
+            if not os.path.isfile(filepath):
+                continue
+
             df = pd.read_csv(filepath, header=None)
             accl_dataframes.append(df)
     
@@ -69,8 +74,8 @@ def read_mpi_log_files(log_dir):
 # Generate plots
 def generate_plots(accl_dataframes, mpi_dataframes, output_dir):
     collective_values = accl_dataframes['collective'].unique()
-    line_styles = ['-', '--', '-.', ':']  # Different line styles for protoc values
-    markers = ['o', 's', '^', 'D']  # Different markers for host values
+    line_styles = ['-', '-.', ':']  # Different line styles for protoc values
+    markers = ['o', 's', 'D']  # Different markers for host values
     
     for collective in collective_values:
         accl_df = accl_dataframes[(accl_dataframes['collective'] == collective)]
@@ -85,13 +90,15 @@ def generate_plots(accl_dataframes, mpi_dataframes, output_dir):
                         accl_avg_tput = protoc_group.groupby('size')['throughput'].mean()
                         plt.plot(accl_avg_tput.index, accl_avg_tput,
                                 label=f'{host}-{protoc}-{stack}',
-                                linestyle=line_styles[protoc_idx % len(line_styles)],
-                                marker=markers[host_idx % len(markers)])
-            plt.xlabel('Size[B]')
-            plt.ylabel('Throughput[Gbps]')
+                                linestyle=line_styles[stack_idx % len(line_styles)],
+                                marker=markers[protoc_idx % len(markers)])
+            plt.xlabel('Size[B]',fontsize=15)
+            plt.ylabel('Throughput[Gbps]',fontsize=15)
             plt.xscale('log', base=2)  # Set x-axis to log2 scale
-            plt.title(f'Throughput vs Size for {collective}')
-            plt.legend()
+            plt.title(f'Throughput vs Size for {collective}',fontsize=15)
+            plt.legend(fontsize=14)
+            plt.xticks(rotation=0, fontsize=14)
+            plt.yticks(fontsize=14)
             plt.savefig(os.path.join(output_dir, f'{collective}_throughput.png'))
         
         # plot time-size for each collective and each node
@@ -100,8 +107,8 @@ def generate_plots(accl_dataframes, mpi_dataframes, output_dir):
             for nodes in number_of_nodes_values:
                 accl_filter_df = accl_df[accl_df['number_of_nodes'] == nodes]
                 mpi_filter_df = mpi_df.loc[(mpi_df.index.get_level_values("number_of_nodes") == nodes)]
-                # print(accl_filter_df)
-                # print(mpi_filter_df)  
+                print(accl_filter_df)
+                print(mpi_filter_df)  
 
                 # plot separate data for host and device
                 for host_idx, (host, host_group) in enumerate(accl_filter_df.groupby('host')):    
@@ -109,21 +116,21 @@ def generate_plots(accl_dataframes, mpi_dataframes, output_dir):
                     plt.figure()
                     # plot MPI RDMA lines with host data
                     if host == "host":
-                        mpi_avg_time = mpi_filter_df['host_to_host'].reset_index(drop=True)
+                        mpi_avg_time = mpi_filter_df[["host_to_host", "host_to_host_send"]].max(axis=1).reset_index(drop=True)
                         mpi_size = mpi_filter_df['size'].reset_index(drop=True) 
                         plt.plot(mpi_size, mpi_avg_time,
                                 label=f'mpi-host-rdma',
-                                linestyle=line_styles[0],
-                                marker=markers[0])
+                                linestyle='--',
+                                marker='^')
                     
                     # # plot MPI RDMA lines with device data
                     if host == "device":
-                        mpi_avg_time = (mpi_filter_df['host_to_host'] + mpi_filter_df['fpga_to_host'] + mpi_filter_df['host_to_fpga']).reset_index(drop=True)
+                        mpi_avg_time = (mpi_filter_df[["host_to_host", "host_to_host_send"]].max(axis=1) + mpi_filter_df['fpga_to_host'] + mpi_filter_df['host_to_fpga']).reset_index(drop=True)
                         mpi_size = mpi_filter_df['size'].reset_index(drop=True)
                         plt.plot(mpi_size, mpi_avg_time,
                                 label=f'mpi-device-rdma',
-                                linestyle=line_styles[1],
-                                marker=markers[0])
+                                linestyle='--',
+                                marker='^')
 
                     # plot ACCL line
                     for stack_idx, (stack, stack_group) in enumerate(host_group.groupby('stack')):   
@@ -131,16 +138,18 @@ def generate_plots(accl_dataframes, mpi_dataframes, output_dir):
                             accl_avg_time = protoc_group.groupby('size')['execution_time'].mean()
                             plt.plot(accl_avg_time.index, accl_avg_time,
                                     label=f'accl-{host}-{protoc}-{stack}',
-                                    linestyle=line_styles[protoc_idx % len(line_styles)],
-                                    marker=markers[host_idx % len(markers)])
+                                    linestyle=line_styles[stack_idx % len(line_styles)],
+                                    marker=markers[protoc_idx % len(markers)])
                             
                     # Process title/legend/fontsize
-                    plt.xlabel('Size[B]')
-                    plt.ylabel('Execution Time[us]')
+                    plt.xlabel('Size[B]',fontsize=15)
+                    plt.ylabel('Execution Time[us]',fontsize=15)
                     plt.xscale('log', base=2)  # Set x-axis to log2 scale
                     plt.yscale('log', base=2)  # Set y-axis to log2 scale
-                    plt.title(f'Execution Time vs Size for {collective} ({nodes} nodes, {host} data)')
-                    plt.legend()
+                    plt.title(f'Execution Time vs Size for {collective} ({nodes} nodes, {host} data)',fontsize=15)
+                    plt.legend(fontsize=14)
+                    plt.xticks(rotation=0, fontsize=14)
+                    plt.yticks(fontsize=14)
                     plt.savefig(os.path.join(output_dir, f'{collective}_rank_{nodes}_{host}_execution_time.png'))
 
 
