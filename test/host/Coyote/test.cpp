@@ -308,7 +308,7 @@ options_t parse_options(int argc, char *argv[])
 				{
 					throw std::runtime_error("When using hardware rdma mode, udp or tcp or axis3 can not be used.");
 				}
-				std::cout << "Hardware tcp mode" << std::endl;
+				std::cout << "Hardware rdma mode" << std::endl;
 			}
 			if ((axis3_arg.getValue() || udp_arg.getValue() || tcp_arg.getValue() || rdma_arg.getValue()) == false)
 			{
@@ -1007,18 +1007,7 @@ void test_accl_base(options_t options)
 
 		accl = std::make_unique<ACCL::ACCL>(device,
 			ranks, mpi_rank,
-			mpi_size+1, options.rxbuf_size, options.seg_size);
-
-		if (options.tcp)
-		{
-			// TODO:session management of TCP to software
-			// debug("Starting connections to communicator ranks");
-			// debug("Opening ports to communicator ranks");
-			// accl->open_port();
-			// MPI_Barrier(MPI_COMM_WORLD);
-			// debug("Starting session to communicator ranks");
-			// accl->open_con();
-		} 
+			mpi_size+1, options.rxbuf_size, options.seg_size, options.seg_size);
 
 		debug(accl->dump_communicator());
 
@@ -1037,20 +1026,18 @@ void test_accl_base(options_t options)
 		std::cout<<"Rendezvous Protocol"<<std::endl;
 	}
 	
-	
-	// accl->set_timeout(1e6); // the same as in the original
-	// std::cout << "set_timeout done." << std::endl;
-	
-	// MPI_Barrier(MPI_COMM_WORLD);
+	MPI_Barrier(MPI_COMM_WORLD);
 	
 	double durationUs = 0.0;
 	auto start = std::chrono::high_resolution_clock::now();
-	accl->nop();
+	ACCL::ACCLRequest* req = accl->nop(true);
+  	accl->wait(req);
 	auto end = std::chrono::high_resolution_clock::now();
 	durationUs = (std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() / 1000.0);
-	std::cout << "nop time [us]:"<<durationUs<< std::endl;
-	
-	
+	uint64_t durationNs = accl->get_duration(req);
+	std::cout << "sw nop time [us]:"<<durationUs<< std::endl;
+	std::cout << "hw nop time [ns]:"<< std::dec<< durationNs<< std::endl;
+
 	std::cerr << "Rank " << mpi_rank << " passed last barrier before test!" << std::endl << std::flush;
 
 	MPI_Barrier(MPI_COMM_WORLD);

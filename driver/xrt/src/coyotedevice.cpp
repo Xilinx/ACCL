@@ -27,7 +27,7 @@ static void finish_coyote_request(ACCL::CoyoteRequest *req) {
   ACCL::CoyoteDevice *cclo = reinterpret_cast<ACCL::CoyoteDevice *>(req->cclo());
   // get ret code before notifying waiting threads
   req->set_retcode(cclo->read(ACCL::CCLO_ADDR::RETCODE_OFFSET));
-  req->set_retcode(cclo->read(ACCL::CCLO_ADDR::PERFCNT_OFFSET));
+  req->set_duration(cclo->read(ACCL::CCLO_ADDR::PERFCNT_OFFSET));
   req->set_status(ACCL::operationStatus::COMPLETED);
   req->notify();
   cclo->complete_request(req);
