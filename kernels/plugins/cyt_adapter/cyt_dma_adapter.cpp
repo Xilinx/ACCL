@@ -53,7 +53,11 @@ void rdma_req_byp_cmd_converter(
 
 	if(!STREAM_IS_EMPTY(rdma_req)){
 		cyt_req_t req = STREAM_READ(rdma_req);
-		cyt_req_t cmd(req.rsrvd, req.vfid, req.pid, DMA_CHANNEL, 0, 1, 0, req.stream, req.len, req.vaddr);
+		// TODO:
+		// Better mechanism of buffer & proc mapping 
+		// Currently has to set the pid to 0, corresponding to coyote_proc instead of any coyote_qproc
+		// Every coyote_qproc has a unique physical address in device
+		cyt_req_t cmd(req.rsrvd, req.vfid, 0 /*req.pid*/, DMA_CHANNEL, 0, 1, 0, req.stream, req.len, req.vaddr);
 		STREAM_WRITE(byp_cmd, cmd);
 	}
 
