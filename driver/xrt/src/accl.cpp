@@ -1024,7 +1024,8 @@ std::string ACCL::dump_eager_rx_buffers(size_t n_egr_rx_bufs, bool dump_data) {
   stream << "CCLO address: " << std::hex << cclo->get_base_addr() << std::endl;
   n_egr_rx_bufs = std::min(n_egr_rx_bufs, eager_rx_buffers.size());
 
-  addr_t address = CCLO_ADDR::NUM_EGR_RX_BUFS_OFFSET;
+  addr_t address = CCLO_ADDR::EGR_RX_BUF_SIZE_OFFSET;
+  val_t maxsize = cclo->read(address);
   stream << "rx address: " << address << std::dec << std::endl;
   for (size_t i = 0; i < n_egr_rx_bufs; ++i) {
     address += 4;
@@ -1049,8 +1050,6 @@ std::string ACCL::dump_eager_rx_buffers(size_t n_egr_rx_bufs, bool dump_data) {
     address += 4;
     val_t addrh = cclo->read(address);
     address += 4;
-    val_t maxsize = cclo->read(address);
-    address += 4;
     val_t rxtag = cclo->read(address);
     address += 4;
     val_t rxlen = cclo->read(address);
@@ -1059,8 +1058,6 @@ std::string ACCL::dump_eager_rx_buffers(size_t n_egr_rx_bufs, bool dump_data) {
     address += 4;
     val_t seq = cclo->read(address);
 
-    eager_rx_buffers[i]->sync_from_device();
-
     stream << "Spare RX Buffer " << i << ":\t address: 0x" << std::hex
            << addrh * (1UL << 32) + addrl << std::dec
            << " \t status: " << status << " \t occupancy: " << rxlen << "/"
@@ -1068,6 +1065,8 @@ std::string ACCL::dump_eager_rx_buffers(size_t n_egr_rx_bufs, bool dump_data) {
            << " \t seq: " << seq << " \t src: " << rxsrc;
 
     if(dump_data) {
+      eager_rx_buffers[i]->sync_from_device();
+
       stream << " \t data: " << std::hex << "[";
       for (size_t j = 0; j < eager_rx_buffers[i]->size(); ++j) {
         stream << "0x"
@@ -1149,7 +1148,7 @@ addr_t ACCL::get_arithmetic_config_addr(std::pair<dataType, dataType> id) {
 
 void ACCL::setup_eager_rx_buffers(size_t n_egr_rx_bufs, addr_t egr_rx_buf_size,
                             const std::vector<int> &devicemem) {
-  addr_t address = CCLO_ADDR::NUM_EGR_RX_BUFS_OFFSET;
+  addr_t address = CCLO_ADDR::EGR_RX_BUF_SIZE_OFFSET;
   eager_rx_buffer_size = egr_rx_buf_size;
   for (size_t i = 0; i < n_egr_rx_bufs; ++i) {
     // create, clear and sync buffers to device
