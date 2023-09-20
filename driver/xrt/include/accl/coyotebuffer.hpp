@@ -69,13 +69,13 @@ template <typename dtype> class CoyoteBuffer : public Buffer<dtype> {
       
 
       // if Coyote device has multiple qProc, map the allocated buffer with all qProc
-      if(this->device->num_qp > 0 && this->device->coyote_qProc_vec.size()!=0){
-        for (unsigned int i=0; i<this->device->coyote_qProc_vec.size(); i++)
-        {
-          std::cerr << "Mapping coyote buffer to qProc cPid:"<<this->device->coyote_qProc_vec[i]->getCpid()<<", buffer_size:"<<buffer_size<<std::endl;
-          this->device->coyote_qProc_vec[i]->userMap(this->aligned_buffer, buffer_size);
-        }
-      }
+      // if(this->device->num_qp > 0 && this->device->coyote_qProc_vec.size()!=0){
+      //   for (unsigned int i=0; i<this->device->coyote_qProc_vec.size(); i++)
+      //   {
+      //     std::cerr << "Mapping coyote buffer to qProc cPid:"<<this->device->coyote_qProc_vec[i]->getCpid()<<", buffer_size:"<<buffer_size<<std::endl;
+      //     this->device->coyote_qProc_vec[i]->userMap(this->aligned_buffer, buffer_size);
+      //   }
+      // }
     }
 
     /**
@@ -102,7 +102,7 @@ template <typename dtype> class CoyoteBuffer : public Buffer<dtype> {
     */
     bool is_host_only() const override
     {
-      std::cerr << "check is_host_only: " << std::setbase(16) << (uint64_t)this->aligned_buffer << ", host_flag: " << std::setbase(10) << this->host_flag << std::endl;
+      // std::cerr << "check is_host_only: " << std::setbase(16) << (uint64_t)this->aligned_buffer << ", host_flag: " << std::setbase(10) << this->host_flag << std::endl;
       return this->host_flag;
     }
 
@@ -136,13 +136,13 @@ template <typename dtype> class CoyoteBuffer : public Buffer<dtype> {
     void free_buffer() override
     {
       // if Coyote device has multiple qProc, unmap the allocated buffer with all qProc
-      if(this->device->num_qp > 0 && this->device->coyote_qProc_vec.size()!=0){
-        for (unsigned int i=0; i<this->device->coyote_qProc_vec.size(); i++)
-        {
-          std::cerr << "Unmapping user buffer from qProc cPid:"<< std::setbase(10)<<this->device->coyote_qProc_vec[i]->getCpid()<<", buffer_size:"<<buffer_size<<","<<std::setbase(16) << (uint64_t)this->aligned_buffer<<std::endl;
-          this->device->coyote_qProc_vec[i]->userUnmap(this->aligned_buffer);
-        }
-      }
+      // if(this->device->num_qp > 0 && this->device->coyote_qProc_vec.size()!=0){
+      //   for (unsigned int i=0; i<this->device->coyote_qProc_vec.size(); i++)
+      //   {
+      //     std::cerr << "Unmapping user buffer from qProc cPid:"<< std::setbase(10)<<this->device->coyote_qProc_vec[i]->getCpid()<<", buffer_size:"<<buffer_size<<","<<std::setbase(16) << (uint64_t)this->aligned_buffer<<std::endl;
+      //     this->device->coyote_qProc_vec[i]->userUnmap(this->aligned_buffer);
+      //   }
+      // }
 
       std::cerr << "Free user buffer from cProc cPid:"<< std::setbase(10)<<this->device->coyote_proc->getCpid()<<", buffer_size:"<<buffer_size<<","<<std::setbase(16) << (uint64_t)this->aligned_buffer<<std::endl;
       this->device->coyote_proc->freeMem(this->aligned_buffer);
