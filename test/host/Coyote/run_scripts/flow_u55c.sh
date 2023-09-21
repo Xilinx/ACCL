@@ -6,11 +6,6 @@ FPGA_BIT_PATH=$SCRIPT_DIR/../../../refdesigns/Coyote/hw/build_RDMA/lynx/lynx.run
 # FPGA_BIT_PATH=$SCRIPT_DIR/../../../refdesigns/Coyote/hw/build_TCP/lynx/lynx.runs/impl_1/cyt_top
 DRIVER_PATH=$SCRIPT_DIR/../../../refdesigns/Coyote/driver/
 
-
-# server IDs (u55c)
-SERVID=(1 2 3 4 5 6 7 8 9 10)
-
-
 # args
 PROGRAM_FPGA=$1
 HOT_RESET=$2
@@ -34,6 +29,12 @@ if ! [ -x "$(command -v vivado)" ]; then
 	echo "Vivado does NOT exist in the system."
 	exit 1
 fi
+
+# server IDs (u55c)
+# SERVID=(1 2 3 4 5 6 7 8 9 10)
+# read server ids from user
+echo "Enter u55c machine ids (space separated):"
+read -a SERVID
 
 # generate host name list
 for servid in ${SERVID[@]}; do 
@@ -73,7 +74,7 @@ if [ $HOT_RESET -eq 1 ]; then
 	echo "Removing the driver..."
 	parallel-ssh -H "$hostlist" -x '-tt' "sudo rmmod coyote_drv"
 	echo "Hot resetting PCIe..."	
-	parallel-ssh -H "$hostlist" -x '-tt' 'upstream_port=$(/opt/cli/get/get_fpga_device_param 1 upstream_port) && root_port=$(/opt/cli/get/get_fpga_device_param 1 root_port) && LinkCtl=$(/opt/cli/get/get_fpga_device_param 1 LinkCtl) && sudo /opt/cli/program/pci_hot_plug 1 $upstream_port $root_port $LinkCtl'
+	parallel-ssh -H "$hostlist" -x '-tt' 'upstream_port=$(/opt/sgrt/cli/get/get_fpga_device_param 1 upstream_port) && root_port=$(/opt/sgrt/cli/get/get_fpga_device_param 1 root_port) && LinkCtl=$(/opt/sgrt/cli/get/get_fpga_device_param 1 LinkCtl) && sudo /opt/sgrt/cli/program/pci_hot_plug 1 $upstream_port $root_port $LinkCtl'
 	# read -p "Hot-reset done. Press enter to load the driver or Ctrl-C to exit."
 	echo "Hot-reset done."
 	echo "Loading driver..."
@@ -85,7 +86,7 @@ if [ $HOT_RESET -eq 1 ]; then
 	wait
 	echo "Driver loaded."
 	echo "Getting permissions for fpga..."
-	parallel-ssh -H "$hostlist" -x '-tt' "sudo /opt/cli/program/fpga_chmod 0"
+	parallel-ssh -H "$hostlist" -x '-tt' "sudo /opt/sgrt/cli/program/fpga_chmod 0"
 	echo "Done."
 fi
 
