@@ -1969,7 +1969,7 @@ int barrier(
             rendezvous_send_addr(i, 0, false, 0, TAG_ANY);
         }
     } else {
-        rendezvous_get_addr(0, &addr, &host, 0, TAG_ANY);
+        while(rendezvous_get_addr(0, &addr, &host, 0, TAG_ANY)== NOT_READY_ERROR);
     }
 
     flush_retries = false;

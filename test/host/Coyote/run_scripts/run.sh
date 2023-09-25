@@ -7,6 +7,7 @@ if [[ $(pwd) != */test/host/Coyote/run_scripts ]]; then
 fi
 
 # state variables
+mkdir -p "$(pwd)/accl_log"
 BUILD_DIR=../build
 EXEC=$BUILD_DIR/accl_on_coyote
 HOST_FILE=./accl_log/host
@@ -36,19 +37,20 @@ done
 #define ACCL_REDUCE         8
 #define ACCL_ALLGATHER      9
 #define ACCL_ALLREDUCE      10
+#define ACCL_BARRIER 		12
 
 ARG=" -d -f -r" # debug, hardware, and tcp/rdma flags
-TEST_MODE=(3) 
-N_ELEMENTS=(64) # 262144 524288 1048576
+TEST_MODE=(10) 
+N_ELEMENTS=(512) # 128 256 512 1024 2048 4096 8192 16384 32768 65536 131072 262144 524288 1048576
 NRUN=(1) # number of runs
 HOST=(1)
-PROTOC=(0) # eager=0, rendezevous=1
+PROTOC=(1) # eager=0, rendezevous=1
 
 echo "Run command: $EXEC $ARG -y $TEST_MODE -c 1024 -l $FPGA_FILE"
 
 rm -f $(pwd)/accl_log/rank*
 
-for NP in `seq $NUM_PROCESS $NUM_PROCESS`; do
+for NP in `seq 4 $NUM_PROCESS`; do
 	for MODE in ${TEST_MODE[@]}; do
 		for N_ELE in ${N_ELEMENTS[@]}; do
 			for H in ${HOST[@]}; do
@@ -56,7 +58,7 @@ for NP in `seq $NUM_PROCESS $NUM_PROCESS`; do
 					N=$N_ELE
 					echo "mpirun -n $NP -f $HOST_FILE --iface ens4 $EXEC $ARG -z $H -y $MODE -c $N -l $FPGA_FILE -p $P -n $NRUN &"
 					mpirun -n $NP -f $HOST_FILE --iface ens4f0 -outfile-pattern "./accl_log/rank_%r_M_${MODE}_N_${N}_H_${H}_P_${P}_stdout" -errfile-pattern "./accl_log/rank_%r_M_${MODE}_N_${N}_H_${H}_P_${P}_stdout" $EXEC $ARG -z $H -y $MODE -c $N -l $FPGA_FILE -p $P -n $NRUN &
-					SLEEPTIME=$((NP + 2))
+					SLEEPTIME=2
 					sleep $SLEEPTIME
 					parallel-ssh -H "$HOST_LIST" "kill -9 \$(ps -aux | grep accl_on_coyote | awk '{print \$2}')"
 					parallel-ssh -H "$HOST_LIST" "dmesg | grep "fpga_tlb_miss_isr" >$(pwd)/accl_log/tlb_miss.log"
@@ -66,7 +68,7 @@ for NP in `seq $NUM_PROCESS $NUM_PROCESS`; do
 	done
 done
 
-
+mkdir -p "$(pwd)/accl_results"
 # Loop through accl log files in the source directory and append to accl_results folder
 for source_log in "$(pwd)/accl"*.log; do
     # Extract the log number from the source log file name (assuming the format is acclX.log)

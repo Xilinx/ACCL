@@ -27,8 +27,11 @@ def read_accl_log_files(log_dir):
     
     accl_dataframes_con = pd.concat(accl_dataframes)
     accl_dataframes_con.columns = column_names
+    
+    accl_dataframes_filtered = accl_dataframes_con[~((accl_dataframes_con['collective'] == 'reduce') & (accl_dataframes_con['rank_id'] != 0))]
+    accl_dataframes_filtered = accl_dataframes_filtered[~((accl_dataframes_filtered['collective'] == 'gather') & (accl_dataframes_filtered['rank_id'] != 0))]
 
-    return accl_dataframes_con
+    return accl_dataframes_filtered
 
 def read_mpi_log_files(log_dir):
     
@@ -72,7 +75,7 @@ def read_mpi_log_files(log_dir):
     return grouped_df
     
 # Generate plots
-def generate_plots(accl_dataframes, mpi_dataframes, output_dir):
+def generate_time_size_plots(accl_dataframes, mpi_dataframes, output_dir):
     collective_values = accl_dataframes['collective'].unique()
     line_styles = ['-', '-.', ':']  # Different line styles for protoc values
     markers = ['o', 's', 'D']  # Different markers for host values
@@ -100,6 +103,7 @@ def generate_plots(accl_dataframes, mpi_dataframes, output_dir):
             plt.xticks(rotation=0, fontsize=14)
             plt.yticks(fontsize=14)
             plt.savefig(os.path.join(output_dir, f'{collective}_throughput.png'))
+            plt.close()
         
         # plot time-size for each collective and each node
         if collective != 'sendrecv':
@@ -151,8 +155,74 @@ def generate_plots(accl_dataframes, mpi_dataframes, output_dir):
                     plt.xticks(rotation=0, fontsize=14)
                     plt.yticks(fontsize=14)
                     plt.savefig(os.path.join(output_dir, f'{collective}_rank_{nodes}_{host}_execution_time.png'))
+                    plt.close()
 
 
+def generate_time_nodes_plots(accl_dataframes, mpi_dataframes, output_dir, size_kb):
+    collective_values = accl_dataframes['collective'].unique()
+    line_styles = ['-', '-.', ':']  # Different line styles for protoc values
+    markers = ['o', 's', 'D']  # Different markers for host values
+
+    for collective in collective_values:
+        accl_df = accl_dataframes[(accl_dataframes['collective'] == collective)]
+        mpi_df = mpi_dataframes.loc[(mpi_dataframes.index.get_level_values("collective") == collective)]
+
+        # Filter data for size
+        accl_filter_df = accl_df[accl_df['size'] == size_kb * 1024]
+        print(accl_filter_df)
+        mpi_filter_df = mpi_df[mpi_df['size'] == size_kb * 1024]
+        print(mpi_filter_df)
+
+        # plot separate data for host and device
+        for host_idx, (host, host_group) in enumerate(accl_filter_df.groupby('host')):    
+            
+            plt.figure()
+            # plot MPI RDMA lines with host data
+            if host == "host":
+                mpi_avg_time = mpi_filter_df["host_to_host"].reset_index(drop=True)
+                # print(mpi_avg_time)
+                number_of_nodes_values = mpi_filter_df.reset_index()['number_of_nodes']
+                # print(number_of_nodes_values)
+                plt.plot(number_of_nodes_values, mpi_avg_time,
+                        label=f'mpi-host-rdma',
+                        linestyle='--',
+                        marker='^')
+            
+            # # plot MPI RDMA lines with device data
+            if host == "device":
+                mpi_avg_time = (mpi_filter_df["host_to_host"] + mpi_filter_df['fpga_to_host'] + mpi_filter_df['host_to_fpga']).reset_index(drop=True)
+                # print(mpi_avg_time)
+                number_of_nodes_values = mpi_filter_df.reset_index()['number_of_nodes']
+                # print(number_of_nodes_values)
+                plt.plot(number_of_nodes_values, mpi_avg_time,
+                        label=f'mpi-device-rdma',
+                        linestyle='--',
+                        marker='^')
+
+            # plot ACCL line
+            for stack_idx, (stack, stack_group) in enumerate(host_group.groupby('stack')):   
+                for protoc_idx, (protoc, protoc_group) in enumerate(stack_group.groupby('protoc')):
+                    accl_avg_time = protoc_group.groupby('number_of_nodes')['execution_time'].mean()
+                    # print(accl_avg_time)
+                    plt.plot(accl_avg_time.index, accl_avg_time,
+                            label=f'accl-{host}-{protoc}-{stack}',
+                            linestyle=line_styles[stack_idx % len(line_styles)],
+                            marker=markers[protoc_idx % len(markers)])
+
+            # Set labels, title, and legend
+            plt.xlabel('Number of Nodes', fontsize=15)
+            plt.ylabel('Execution Time [us]', fontsize=15)
+            plt.title(f'Time vs. Nodes for {collective} (Size: {size_kb}KB, Data: {host})', fontsize=15)
+            plt.xlim(left=3, right=9)
+            plt.legend(fontsize=14)
+            plt.xticks(fontsize=14)
+            plt.yticks(fontsize=14)
+            plt.grid(True)
+
+            # Save the plot
+            plt.savefig(os.path.join(output_dir, f'{collective}_size_{size_kb}KB_{host}_execution_time.png'))
+            plt.close()
+            
 if __name__ == "__main__":
     log_dir = "./accl_results"  # Update this to the directory containing your log files
     output_dir = "./plots/"
@@ -163,6 +233,7 @@ if __name__ == "__main__":
 
     accl_dataframes = read_accl_log_files(log_dir)
     mpi_dataframes = read_mpi_log_files(mpi_log_dir)
-    # print(mpi_dataframes)
-    # print(accl_dataframes)
-    generate_plots(accl_dataframes, mpi_dataframes, output_dir)
+    print(mpi_dataframes)
+    print(accl_dataframes)
+    generate_time_size_plots(accl_dataframes, mpi_dataframes, output_dir)
+    generate_time_nodes_plots(accl_dataframes, mpi_dataframes, output_dir, 128)

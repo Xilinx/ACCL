@@ -510,12 +510,12 @@ void test_sendrcv(ACCL::ACCL &accl, options_t &options) {
 		if (mpi_rank == 0) {
 			// send
 			req = accl.send(*op_buf, bufsize, 1, TAG_ANY, GLOBAL_COMM, true, dataType::none, true); // most default send from 0 to 1
-			accl.wait(req);
+			accl.wait(req, 1000ms);
 
 		} else if (mpi_rank == 1) {
 			// receive
 			req = accl.recv(*op_buf, bufsize, 0, TAG_ANY, GLOBAL_COMM, true, dataType::none, true); // most default recv to 1 from 0
-			accl.wait(req);
+			accl.wait(req, 1000ms);
 		}
 		
 		auto end = std::chrono::high_resolution_clock::now();
@@ -596,9 +596,11 @@ void test_bcast(ACCL::ACCL &accl, options_t &options, int root) {
 		MPI_Barrier(MPI_COMM_WORLD);
 
 		double durationUs = 0.0;
+		accl.barrier();
+		std::cout<<"Pass accl barrier"<<std::endl;
 		auto start = std::chrono::high_resolution_clock::now();
 		ACCL::ACCLRequest* req = accl.bcast(*op_buf, count, root, GLOBAL_COMM, true, true, dataType::none, true);
-		accl.wait(req);
+		accl.wait(req, 1000ms);
 		auto end = std::chrono::high_resolution_clock::now();
 		durationUs = (std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() / 1000.0);
 		std::cout<<"host measured durationUs:"<<durationUs<<std::endl;
@@ -667,9 +669,11 @@ void test_scatter(ACCL::ACCL &accl, options_t &options, int root) {
 		
 		MPI_Barrier(MPI_COMM_WORLD);
 		double durationUs = 0.0;
+		accl.barrier();
+		std::cout<<"Pass accl barrier"<<std::endl;
 		auto start = std::chrono::high_resolution_clock::now();
 		ACCL::ACCLRequest* req = accl.scatter(*op_buf, *res_buf, count, root, GLOBAL_COMM, true, true, dataType::none, true);
-		accl.wait(req);
+		accl.wait(req, 1000ms);
 		auto end = std::chrono::high_resolution_clock::now();
 		durationUs = (std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() / 1000.0);
 		std::cout<<"host measured durationUs:"<<durationUs<<std::endl;
@@ -744,10 +748,11 @@ void test_gather(ACCL::ACCL &accl, options_t &options, int root) {
 
 		MPI_Barrier(MPI_COMM_WORLD);
 		double durationUs = 0.0;
+		accl.barrier();
+		std::cout<<"Pass accl barrier"<<std::endl;
 		auto start = std::chrono::high_resolution_clock::now();
-
 		ACCL::ACCLRequest* req = accl.gather(*op_buf, *res_buf, count, root, GLOBAL_COMM, true, true, dataType::none, true);
-		accl.wait(req);
+		accl.wait(req, 1000ms);
 
 		auto end = std::chrono::high_resolution_clock::now();
 		durationUs = (std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() / 1000.0);
@@ -823,11 +828,11 @@ void test_allgather(ACCL::ACCL &accl, options_t &options) {
 
 		MPI_Barrier(MPI_COMM_WORLD);
 		double durationUs = 0.0;
+		accl.barrier();
+		std::cout<<"Pass accl barrier"<<std::endl;
 		auto start = std::chrono::high_resolution_clock::now();
-
 		ACCL::ACCLRequest* req = accl.allgather(*op_buf, *res_buf, count, GLOBAL_COMM, true, true, dataType::none, true);
-		accl.wait(req);
-
+		accl.wait(req, 1000ms);
 		auto end = std::chrono::high_resolution_clock::now();
 		durationUs = (std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() / 1000.0);
 		std::cout<<"host measured durationUs:"<<durationUs<<std::endl;
@@ -851,10 +856,10 @@ void test_allgather(ACCL::ACCL &accl, options_t &options) {
 				float res = res_buf.get()->buffer()[j*count+i];
 				float ref = j*count+i;
 				if (res != ref) {
-					// std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
-					// 				std::to_string(res) + " != " + std::to_string(ref) +
-					// 				")"
-					// 		<< std::endl;
+					std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
+									std::to_string(res) + " != " + std::to_string(ref) +
+									")"
+							<< std::endl;
 					errors += 1;
 				}
 			}
@@ -902,10 +907,11 @@ void test_reduce(ACCL::ACCL &accl, options_t &options, int root,
 
 		MPI_Barrier(MPI_COMM_WORLD);
 		double durationUs = 0.0;
+		accl.barrier();
+		std::cout<<"Pass accl barrier"<<std::endl;
 		auto start = std::chrono::high_resolution_clock::now();
 		ACCL::ACCLRequest* req = accl.reduce(*op_buf, *res_buf, count, root, function, GLOBAL_COMM, true, true, dataType::none, true);
-		accl.wait(req);
-
+		accl.wait(req, 1000ms);
 		auto end = std::chrono::high_resolution_clock::now();
 		durationUs = (std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() / 1000.0);
 		std::cout<<"host measured durationUs:"<<durationUs<<std::endl;
@@ -927,10 +933,10 @@ void test_reduce(ACCL::ACCL &accl, options_t &options, int root,
 			float ref = i * mpi_size;
 
 			if (res != ref) {
-				// std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
-				//                  std::to_string(res) + " != " + std::to_string(ref) +
-				//                  ")"
-				//           << std::endl;
+				std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
+				                 std::to_string(res) + " != " + std::to_string(ref) +
+				                 ")"
+				          << std::endl;
 				errors += 1;
 			}
 			}
@@ -976,10 +982,11 @@ void test_allreduce(ACCL::ACCL &accl, options_t &options,
 
 		MPI_Barrier(MPI_COMM_WORLD);
 		double durationUs = 0.0;
+		accl.barrier();
+		std::cout<<"Pass accl barrier"<<std::endl;
 		auto start = std::chrono::high_resolution_clock::now();
 		ACCL::ACCLRequest* req = accl.allreduce(*op_buf, *res_buf, count, function, GLOBAL_COMM, true, true, dataType::none, true);
-		accl.wait(req);
-
+		accl.wait(req, 1000ms);
 		auto end = std::chrono::high_resolution_clock::now();
 		durationUs = (std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() / 1000.0);
 		std::cout<<"host measured durationUs:"<<durationUs<<std::endl;
@@ -1098,7 +1105,7 @@ void test_accl_base(options_t options)
 			std::cout<<"Eager Protocol"<<std::endl;
 			accl = std::make_unique<ACCL::ACCL>(device,
 				ranks, mpi_rank,
-				mpi_size+2, options.rxbuf_size, options.seg_size, options.seg_size);
+				mpi_size+2, options.rxbuf_size, options.seg_size, 4096*1024*2);
 		} else if (options.protoc == 1){
 			std::cout<<"Rendezvous Protocol"<<std::endl;
 			accl = std::make_unique<ACCL::ACCL>(device,
@@ -1183,6 +1190,21 @@ void test_accl_base(options_t options)
 		test_allreduce(*accl, options, reduceFunction::SUM);
 		debug(accl->dump_communicator());
 		debug(accl->dump_eager_rx_buffers(false));
+	}
+	if(options.test_mode == ACCL_BARRIER){
+		std::cout << "Start barrier test..."<< std::endl;
+		for (int n = 0; n < options.nruns; n++)
+		{
+			std::cout << "Repetition " <<n<< std::endl<<std::flush;
+
+			MPI_Barrier(MPI_COMM_WORLD);
+			double durationUs = 0.0;
+			auto start = std::chrono::high_resolution_clock::now();
+			accl->barrier();
+			auto end = std::chrono::high_resolution_clock::now();
+			durationUs = (std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() / 1000.0);
+			std::cout<<"barrier durationUs:"<<durationUs<<std::endl;
+		}
 	}
 
 	
