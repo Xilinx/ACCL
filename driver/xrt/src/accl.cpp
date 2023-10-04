@@ -1191,7 +1191,7 @@ void ACCL::setup_eager_rx_buffers(size_t n_egr_rx_bufs, addr_t egr_rx_buf_size,
 
 void ACCL::setup_rendezvous_spare_buffers(addr_t rndzv_spare_buf_size, const std::vector<int> &devicemem){
   max_rndzv_msg_size = rndzv_spare_buf_size;
-  for(int i=0; i<2; i++){
+  for(int i=0; i<3; i++){
     Buffer<int8_t> *buf;
     if (sim_mode) {
       buf = new SimBuffer(new int8_t[max_rndzv_msg_size](), max_rndzv_msg_size, dataType::int8,
@@ -1209,6 +1209,8 @@ void ACCL::setup_rendezvous_spare_buffers(addr_t rndzv_spare_buf_size, const std
   cclo->write(CCLO_ADDR::SPARE1_OFFSET+4, (utility_spares.at(0)->address() >> 32) & 0xffffffff);
   cclo->write(CCLO_ADDR::SPARE2_OFFSET, utility_spares.at(1)->address() & 0xffffffff);
   cclo->write(CCLO_ADDR::SPARE2_OFFSET+4, (utility_spares.at(1)->address() >> 32) & 0xffffffff);
+  cclo->write(CCLO_ADDR::SPARE3_OFFSET, utility_spares.at(2)->address() & 0xffffffff);
+  cclo->write(CCLO_ADDR::SPARE3_OFFSET+4, (utility_spares.at(2)->address() >> 32) & 0xffffffff);
 }
 
 

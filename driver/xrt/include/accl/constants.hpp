@@ -140,9 +140,10 @@ namespace CCLO_ADDR {
   constexpr auto const RETCODE_OFFSET         = 0x1FFC;
   constexpr auto const IDCODE_OFFSET          = 0x1FF8;
   constexpr auto const CFGRDY_OFFSET          = 0x1FF4;
-  constexpr auto const SPARE1_OFFSET          = 0x1FEC;
-  constexpr auto const SPARE2_OFFSET          = 0x1FE4;
-  constexpr auto const PERFCNT_OFFSET         = 0x1FE0;
+  constexpr auto const PERFCNT_OFFSET         = 0x1FF0;
+  constexpr auto const SPARE3_OFFSET          = 0x1FE8;
+  constexpr auto const SPARE2_OFFSET          = 0x1FE0;
+  constexpr auto const SPARE1_OFFSET          = 0x1FD8;
   constexpr auto const EGR_RX_BUF_SIZE_OFFSET = 0x4;
   constexpr auto const NUM_EGR_RX_BUFS_OFFSET = 0x0;
 }

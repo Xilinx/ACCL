@@ -1461,6 +1461,7 @@ int reduce( unsigned int count,
         //get scratchpad buffers from exchmem
         uint64_t tmp1_addr = ((uint64_t)Xil_In32(TMP1_OFFSET+4) << 32) | (uint64_t)Xil_In32(TMP1_OFFSET);
         uint64_t tmp2_addr = ((uint64_t)Xil_In32(TMP2_OFFSET+4) << 32) | (uint64_t)Xil_In32(TMP2_OFFSET);
+        uint64_t tmp3_addr = ((uint64_t)Xil_In32(TMP3_OFFSET+4) << 32) | (uint64_t)Xil_In32(TMP3_OFFSET);
         //rendezvous tree reduce using tmp_addr as a scratchpad (preferably in device memory)
         unsigned int err = NO_ERROR;
         //tree reduce:
@@ -1497,24 +1498,28 @@ int reduce( unsigned int count,
         uint64_t remote_addr;
         bool remote_host;
         unsigned int receiving_rank, sending_rank;
-        bool scratchpad_sel = false;
-        uint64_t current_scratchpad_addr;
-        uint64_t previous_scratchpad_addr;
+        unsigned int scratchpad_sel;
+        uint64_t current_accumulator_addr;
+        uint64_t previous_accumulator_addr; //TODO: implement without saving from current
+        uint64_t current_recv_addr;
+        uint64_t previous_recv_addr; //TODO: implement without saving from current
         bool first_move = true; //TODO: implement without this state bit
+        bool last_move = false; //TODO: implement without this state bit
         while(1){
             d = 1<<n;
             s = (l%(2*d) != 0) && !is_root;
             r = !s && ((l+d)<world.size);
             plus = !((l%d != 0) && !is_root) && ((l+d/2)<world.size) && (n>0);
-            scratchpad_sel = (n % 2);
-            current_scratchpad_addr = scratchpad_sel ? tmp2_addr : tmp1_addr;
-            previous_scratchpad_addr = scratchpad_sel ? tmp1_addr : tmp2_addr;
+            scratchpad_sel = (n % 3);
+            current_recv_addr = (scratchpad_sel == 0) ? tmp1_addr : (scratchpad_sel == 1) ? tmp2_addr : tmp3_addr;
+            current_accumulator_addr = (scratchpad_sel == 0) ? tmp2_addr : (scratchpad_sel == 1) ? tmp3_addr : tmp1_addr;
             receiving_rank = (l+world.size-d+root_rank)%world.size;
             sending_rank = (l+d+root_rank)%world.size;
+            last_move = is_root && (d > world.size);//last move if the next-largest distance is larger than world size
             //TODO instead of just-in-time distributing addresses, we could do one run through this loop ahead
             //of time just for address distribution, then do address resolution just-in-time
             if(r){
-                rendezvous_send_addr(sending_rank, current_scratchpad_addr, false, count, TAG_ANY);
+                rendezvous_send_addr(sending_rank, current_recv_addr, false, count, TAG_ANY);
             }
             //address resolution in case we need to send
             if(s){
@@ -1539,7 +1544,7 @@ int reduce( unsigned int count,
                     pack_flags_rendezvous(host),
                     func, count,
                     comm_offset, arcfg_offset,
-                    first_move ? src_addr : dst_addr, previous_scratchpad_addr, remote_addr, 0, 0, 0,
+                    first_move ? src_addr : previous_accumulator_addr, previous_recv_addr, remote_addr, 0, 0, 0,
                     0, 0, receiving_rank, TAG_ANY
                 );
             } else if(s) {
@@ -1551,7 +1556,7 @@ int reduce( unsigned int count,
                     pack_flags_rendezvous(host),
                     func, count,
                     comm_offset, arcfg_offset,
-                    first_move ? src_addr : dst_addr, 0, remote_addr, 0, 0, 0,
+                    first_move ? src_addr : previous_accumulator_addr, 0, remote_addr, 0, 0, 0,
                     0, 0, receiving_rank, TAG_ANY
                 );
             } else if(plus) {
@@ -1563,13 +1568,13 @@ int reduce( unsigned int count,
                     pack_flags(NO_COMPRESSION, RES_LOCAL, host),
                     func, count,
                     comm_offset, arcfg_offset,
-                    first_move ? src_addr : dst_addr, previous_scratchpad_addr, dst_addr, 0, 0, 0,
+                    first_move ? src_addr : previous_accumulator_addr, previous_recv_addr, last_move ? dst_addr : current_accumulator_addr, 0, 0, 0,
                     0, 0, 0, 0
                 );
             }
             //wait for completion on receives
             if(r){
-                while(rendezvous_get_completion(sending_rank, current_scratchpad_addr, false, count, TAG_ANY) == NOT_READY_ERROR);
+                while(rendezvous_get_completion(sending_rank, current_recv_addr, false, count, TAG_ANY) == NOT_READY_ERROR);
             }
             //end conditions
             if((!r && is_root) || (s && !is_root)) return err;
@@ -1579,6 +1584,9 @@ int reduce( unsigned int count,
             }
             //increment step
             n++;
+            //update scratchpads
+            previous_accumulator_addr = current_accumulator_addr;
+            previous_recv_addr = current_recv_addr;
         }
 
     } else {

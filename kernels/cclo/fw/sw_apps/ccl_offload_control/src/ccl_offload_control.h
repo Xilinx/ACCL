@@ -86,9 +86,10 @@
 #define HOUSEKEEP_RENDEZVOUS_MAX_SIZE  4
 
 //AXI MMAP address
-#define PERFCTR_OFFSET    0x1FE0
-#define TMP1_OFFSET       0x1FE4    //address of first spare buffer in device memory
-#define TMP2_OFFSET       0x1FEC    //address of second spare buffer in device memory
+#define TMP1_OFFSET       0x1FD8    //address of first spare buffer in device memory
+#define TMP2_OFFSET       0x1FE0    //address of second spare buffer in device memory
+#define TMP3_OFFSET       0x1FE8    //address of third spare buffer in device memory
+#define PERFCTR_OFFSET    0x1FF0
 #define CFGRDY_OFFSET     0x1FF4
 #define HWID_OFFSET       0x1FF8
 #define RETVAL_OFFSET     0x1FFC
