@@ -337,6 +337,77 @@ int rendezvous_get_completion(unsigned int target_rank, uint64_t target_addr, bo
     return NOT_READY_ERROR;
 }
 
+//receives an acknowledgement that a RDMA WRITE to 
+//our buffer has completed
+int rendezvous_get_any_completion(unsigned int *target_rank, uint64_t *target_addr, bool *target_host, uint32_t target_count, uint32_t target_tag){
+    uint32_t type, rank, tag, count, host;
+    uint64_t addr;
+    uint64_t addrl, addrh;
+    bool match;
+    // Check if there are pending notifications in STS_RNDZV_PENDING,
+    // otherwise pull from STS_RNDZV
+    unsigned int i;
+    for(i = 0; i<num_rndzv_pending; i++){
+        type = getd(STS_RNDZV_PENDING);
+        rank = getd(STS_RNDZV_PENDING);
+        tag = getd(STS_RNDZV_PENDING);
+        addrl = getd(STS_RNDZV_PENDING);
+        addrh = getd(STS_RNDZV_PENDING);
+        addr = ((uint64_t)addrh << 32) | (uint64_t)addrl;
+        host = getd(STS_RNDZV_PENDING);
+        count = getd(STS_RNDZV_PENDING);
+        match = (type == 3) && ((tag == target_tag) || (tag == TAG_ANY)) && (count == target_count);
+        if(!match){
+            //copy from STS_RNDZV to STS_RNDZV_PENDING
+            putd(CMD_RNDZV_PENDING, type);
+            putd(CMD_RNDZV_PENDING, rank);
+            putd(CMD_RNDZV_PENDING, tag);
+            putd(CMD_RNDZV_PENDING, addrl);
+            putd(CMD_RNDZV_PENDING, addrh);
+            putd(CMD_RNDZV_PENDING, host);
+            putd(CMD_RNDZV_PENDING, count);
+            putd(CMD_RNDZV_PENDING, host);
+            putd(CMD_RNDZV_PENDING, count);
+        } else {
+            num_rndzv_pending--;
+            *target_rank = rank;
+            *target_addr = addr;
+            *target_host = host;
+            return NO_ERROR;
+        }
+    }
+    //if we're still executing, no match in RNDZV_PENDING, check STS_RNDZV
+    while(!tngetd(STS_RNDZV)){
+        type = getd(STS_RNDZV);
+        rank = getd(STS_RNDZV);
+        tag = getd(STS_RNDZV);
+        addrl = getd(STS_RNDZV);
+        addrh = getd(STS_RNDZV);
+        addr = ((uint64_t)addrh << 32) | (uint64_t)addrl;
+        host = getd(STS_RNDZV);
+        count = getd(STS_RNDZV);
+        match = (type == 3) && ((tag == target_tag) || (tag == TAG_ANY)) && (count == target_count);
+        if(!match){
+            //copy from STS_RNDZV to STS_RNDZV_PENDING
+            putd(CMD_RNDZV_PENDING, type);
+            putd(CMD_RNDZV_PENDING, rank);
+            putd(CMD_RNDZV_PENDING, tag);
+            putd(CMD_RNDZV_PENDING, addrl);
+            putd(CMD_RNDZV_PENDING, addrh);
+            putd(CMD_RNDZV_PENDING, host);
+            putd(CMD_RNDZV_PENDING, count);
+            num_rndzv_pending++;
+        } else {
+            *target_rank = rank;
+            *target_addr = addr;
+            *target_host = host;
+            return NO_ERROR;
+        }
+    }
+    //we found nothing, signal this up to caller
+    return NOT_READY_ERROR;
+}
+
 //configure datapath before calling this method
 //instructs the data plane to move data
 //use MOVE_IMMEDIATE
@@ -1464,129 +1535,202 @@ int reduce( unsigned int count,
         uint64_t tmp3_addr = ((uint64_t)Xil_In32(TMP3_OFFSET+4) << 32) | (uint64_t)Xil_In32(TMP3_OFFSET);
         //rendezvous tree reduce using tmp_addr as a scratchpad (preferably in device memory)
         unsigned int err = NO_ERROR;
-        //tree reduce:
-        //at each step, each rank can do one or more of 3 actions: send (S), receive (R), and sum (+)
-        //for rendezvous, R involves an address send and completion check and does not involve the DMP
-        //for rendezvous, S involves an address get and a DMP move
-        //+ involves a DMP move from src_addr/dst_addr and tmp_addr to dst_addr
-        //send and sum can be fused into a single action denoted +S
-        //
-        //we denote N as the step number
-        //the action distance D = 2^N is the distance (in ranks) over which we communicate
-        //L is the normalized local rank, obtained by subtracting root rank number from local rank, mod size
-        //at each step, we calculate whether we perform any of the actions:
-        //S(N,L) = (L%2D != 0) && (L != 0) = (L%(1<<(N+1)) != 0) && (L != 0)
-        //R(N,L) = !S(N,L) && ((L+D)<size) = !S(N,L) && ((L+1<<N)<size)
-        //+(N,L) = R(N-1,L)
-        //
-        //we have available two scratchpad buffers in device memory and the dst buffer in host or device memory
-        //at each time step we optionally receive into one scratchpad, alternating
-        //we accumulate in the dst buffer from previously received data
-        //
-        //we make sure that we operate from src_addr instead of dst_addr the very first time
-        //
-        //execution completed on root if !R or on non-root if S
-        //
-        //note: the implementation is more complex because we want to be stateless
-        //everything should be computed from the current step such that we can swap the reduce in and out of execution
-        unsigned int l = (world.local_rank + world.size - root_rank) % world.size;
-        unsigned int d, n = 0;
-        bool s = false;
-        bool r = false;
-        bool plus = false;
-        bool is_root = (l==0);
-        uint64_t remote_addr;
-        bool remote_host;
-        unsigned int receiving_rank, sending_rank;
-        unsigned int scratchpad_sel;
-        uint64_t current_accumulator_addr;
-        uint64_t previous_accumulator_addr; //TODO: implement without saving from current
-        uint64_t current_recv_addr;
-        uint64_t previous_recv_addr; //TODO: implement without saving from current
-        bool first_move = true; //TODO: implement without this state bit
-        bool last_move = false; //TODO: implement without this state bit
-        while(1){
-            d = 1<<n;
-            s = (l%(2*d) != 0) && !is_root;
-            r = !s && ((l+d)<world.size);
-            plus = !((l%d != 0) && !is_root) && ((l+d/2)<world.size) && (n>0);
-            scratchpad_sel = (n % 3);
-            current_recv_addr = (scratchpad_sel == 0) ? tmp1_addr : (scratchpad_sel == 1) ? tmp2_addr : tmp3_addr;
-            current_accumulator_addr = (scratchpad_sel == 0) ? tmp2_addr : (scratchpad_sel == 1) ? tmp3_addr : tmp1_addr;
-            receiving_rank = (l+world.size-d+root_rank)%world.size;
-            sending_rank = (l+d+root_rank)%world.size;
-            last_move = is_root && (d > world.size);//last move if the next-largest distance is larger than world size
-            //TODO instead of just-in-time distributing addresses, we could do one run through this loop ahead
-            //of time just for address distribution, then do address resolution just-in-time
-            if(r){
-                rendezvous_send_addr(sending_rank, current_recv_addr, false, count, TAG_ANY);
-            }
-            //address resolution in case we need to send
-            if(s){
-                while(rendezvous_get_addr(receiving_rank, &remote_addr, &remote_host, count, TAG_ANY) == NOT_READY_ERROR);
-                //adjust host flags and addresses in case we're sending from dst and scratchpad
-                if(n > 1){
-                    if((host & RES_HOST) != 1){
-                        host |= OP0_HOST;
+
+        if(world.size <= Xil_In32(REDUCE_FLAT_TREE_MAX_RANKS_OFFSET) || bytes_count <= Xil_In32(REDUCE_FLAT_TREE_MAX_COUNT_OFFSET)){
+            //flat tree reduce:
+            //useful for small messages and small communicators, where the extra hops for binary tree are detrimental
+            //we effectively flat-tree gather all data from non-root into one of the rendezvous spare buffers
+            //we sum up the data as it comes in (assuming commutativity, user beware)
+            bool dst_host;
+            bool src_buf_host = (host & OP0_HOST) != 0;
+            bool dst_buf_host = (host & RES_HOST) != 0;
+            int status;
+            uint64_t buf_addr;
+            if(root_rank == world.local_rank){
+                uint32_t src_rank;
+                //send addresses
+                for(src_rank=0; src_rank < world.size; src_rank++){
+                    //skip sending address for ourselves
+                    if(src_rank == world.local_rank){
+                        continue;
                     }
-                    if((n > 1) && remote_host){
-                        host |= RES_HOST;
+                    //compute address into the first rendezvous spare buffer
+                    buf_addr = tmp1_addr + src_rank*bytes_count;
+                    rendezvous_send_addr(src_rank, buf_addr, false, count, TAG_ANY);
+                }
+                //wait for completions out-of-order
+                int i, pending_moves=0;
+                for(i=0; i < world.size-1; i++){
+                    while(rendezvous_get_any_completion(&src_rank, &buf_addr, &dst_host, bytes_count, TAG_ANY) == NOT_READY_ERROR);
+                    //start a reduction into either tmp2 or tmp3
+                    uint64_t accum_addr = (i % 2) ? tmp2_addr : tmp3_addr;
+                    uint64_t prev_accum_addr = (i % 2) ? tmp3_addr : tmp2_addr;
+                    //manipulate host flags such that on first iteration we set OP0_HOST
+                    //if src_addr is in host memory, and on last iteration we set RES_HOST
+                    //if dst_addr is in host memory
+                    host = ((i==0) && src_buf_host) | (((i==world.size-2) && dst_buf_host) << 2);
+                    start_move(
+                        MOVE_IMMEDIATE,
+                        MOVE_IMMEDIATE,
+                        MOVE_IMMEDIATE,
+                        pack_flags(NO_COMPRESSION, RES_LOCAL, host),
+                        func, count,
+                        comm_offset, arcfg_offset,
+                        (i==0) ? src_addr : prev_accum_addr, buf_addr, (i==world.size-2) ? dst_addr : accum_addr, 0, 0, 0,
+                        0, 0, 0, 0
+                    );
+                    pending_moves++;
+                    if(pending_moves > 2){
+                        err |= end_move();
+                        pending_moves--;
                     }
                 }
-            }
-            //DMP ops for sending/combining
-            if(s && plus){
-                //fused combine+send
-                err |= move(
-                    MOVE_IMMEDIATE,
-                    MOVE_IMMEDIATE,
-                    MOVE_IMMEDIATE,
-                    pack_flags_rendezvous(host),
-                    func, count,
-                    comm_offset, arcfg_offset,
-                    first_move ? src_addr : previous_accumulator_addr, previous_recv_addr, remote_addr, 0, 0, 0,
-                    0, 0, receiving_rank, TAG_ANY
-                );
-            } else if(s) {
-                //send
-                err |= move(
+                while(pending_moves > 0){
+                    err |= end_move();
+                    pending_moves--;
+                }
+                return err;
+            } else {
+                while(rendezvous_get_addr(root_rank, &buf_addr, &dst_host, count, TAG_ANY) == NOT_READY_ERROR);
+                if(dst_host){
+                    host |= RES_HOST;
+                }
+                //do a RDMA write to the remote address 
+                return move(
                     MOVE_IMMEDIATE,
                     MOVE_NONE,
                     MOVE_IMMEDIATE,
                     pack_flags_rendezvous(host),
-                    func, count,
-                    comm_offset, arcfg_offset,
-                    first_move ? src_addr : previous_accumulator_addr, 0, remote_addr, 0, 0, 0,
-                    0, 0, receiving_rank, TAG_ANY
-                );
-            } else if(plus) {
-                //combine
-                err |= move(
-                    MOVE_IMMEDIATE,
-                    MOVE_IMMEDIATE,
-                    MOVE_IMMEDIATE,
-                    pack_flags(NO_COMPRESSION, RES_LOCAL, host),
-                    func, count,
-                    comm_offset, arcfg_offset,
-                    first_move ? src_addr : previous_accumulator_addr, previous_recv_addr, last_move ? dst_addr : current_accumulator_addr, 0, 0, 0,
-                    0, 0, 0, 0
+                    0, count, comm_offset, arcfg_offset, 
+                    src_addr, 0, buf_addr, 0, 0, 0,
+                    0, 0, root_rank, TAG_ANY
                 );
             }
-            //wait for completion on receives
-            if(r){
-                while(rendezvous_get_completion(sending_rank, current_recv_addr, false, count, TAG_ANY) == NOT_READY_ERROR);
+        } else {
+            //binary tree reduce:
+            //at each step, each rank can do one or more of 3 actions: send (S), receive (R), and sum (+)
+            //for rendezvous, R involves an address send and completion check and does not involve the DMP
+            //for rendezvous, S involves an address get and a DMP move
+            //+ involves a DMP move from src_addr/dst_addr and tmp_addr to dst_addr
+            //send and sum can be fused into a single action denoted +S
+            //
+            //we denote N as the step number
+            //the action distance D = 2^N is the distance (in ranks) over which we communicate
+            //L is the normalized local rank, obtained by subtracting root rank number from local rank, mod size
+            //at each step, we calculate whether we perform any of the actions:
+            //S(N,L) = (L%2D != 0) && (L != 0) = (L%(1<<(N+1)) != 0) && (L != 0)
+            //R(N,L) = !S(N,L) && ((L+D)<size) = !S(N,L) && ((L+1<<N)<size)
+            //+(N,L) = R(N-1,L)
+            //
+            //we have available two scratchpad buffers in device memory and the dst buffer in host or device memory
+            //at each time step we optionally receive into one scratchpad, alternating
+            //we accumulate in the dst buffer from previously received data
+            //
+            //we make sure that we operate from src_addr instead of dst_addr the very first time
+            //
+            //execution completed on root if !R or on non-root if S
+            //
+            //note: the implementation is more complex because we want to be stateless
+            //everything should be computed from the current step such that we can swap the reduce in and out of execution
+            unsigned int l = (world.local_rank + world.size - root_rank) % world.size;
+            unsigned int d, n = 0;
+            bool s = false;
+            bool r = false;
+            bool plus = false;
+            bool is_root = (l==0);
+            uint64_t remote_addr;
+            bool remote_host;
+            unsigned int receiving_rank, sending_rank;
+            unsigned int scratchpad_sel;
+            uint64_t current_accumulator_addr;
+            uint64_t previous_accumulator_addr; //TODO: implement without saving from current
+            uint64_t current_recv_addr;
+            uint64_t previous_recv_addr; //TODO: implement without saving from current
+            bool first_move = true; //TODO: implement without this state bit
+            bool last_move = false; //TODO: implement without this state bit
+            while(1){
+                d = 1<<n;
+                s = (l%(2*d) != 0) && !is_root;
+                r = !s && ((l+d)<world.size);
+                plus = !((l%d != 0) && !is_root) && ((l+d/2)<world.size) && (n>0);
+                scratchpad_sel = (n % 3);
+                current_recv_addr = (scratchpad_sel == 0) ? tmp1_addr : (scratchpad_sel == 1) ? tmp2_addr : tmp3_addr;
+                current_accumulator_addr = (scratchpad_sel == 0) ? tmp2_addr : (scratchpad_sel == 1) ? tmp3_addr : tmp1_addr;
+                receiving_rank = (l+world.size-d+root_rank)%world.size;
+                sending_rank = (l+d+root_rank)%world.size;
+                last_move = is_root && (d > world.size);//last move if the next-largest distance is larger than world size
+                //TODO instead of just-in-time distributing addresses, we could do one run through this loop ahead
+                //of time just for address distribution, then do address resolution just-in-time
+                if(r){
+                    rendezvous_send_addr(sending_rank, current_recv_addr, false, count, TAG_ANY);
+                }
+                //address resolution in case we need to send
+                if(s){
+                    while(rendezvous_get_addr(receiving_rank, &remote_addr, &remote_host, count, TAG_ANY) == NOT_READY_ERROR);
+                    //adjust host flags and addresses in case we're sending from dst and scratchpad
+                    if(n > 1){
+                        if((host & RES_HOST) != 1){
+                            host |= OP0_HOST;
+                        }
+                        if((n > 1) && remote_host){
+                            host |= RES_HOST;
+                        }
+                    }
+                }
+                //DMP ops for sending/combining
+                if(s && plus){
+                    //fused combine+send
+                    err |= move(
+                        MOVE_IMMEDIATE,
+                        MOVE_IMMEDIATE,
+                        MOVE_IMMEDIATE,
+                        pack_flags_rendezvous(host),
+                        func, count,
+                        comm_offset, arcfg_offset,
+                        first_move ? src_addr : previous_accumulator_addr, previous_recv_addr, remote_addr, 0, 0, 0,
+                        0, 0, receiving_rank, TAG_ANY
+                    );
+                } else if(s) {
+                    //send
+                    err |= move(
+                        MOVE_IMMEDIATE,
+                        MOVE_NONE,
+                        MOVE_IMMEDIATE,
+                        pack_flags_rendezvous(host),
+                        func, count,
+                        comm_offset, arcfg_offset,
+                        first_move ? src_addr : previous_accumulator_addr, 0, remote_addr, 0, 0, 0,
+                        0, 0, receiving_rank, TAG_ANY
+                    );
+                } else if(plus) {
+                    //combine
+                    err |= move(
+                        MOVE_IMMEDIATE,
+                        MOVE_IMMEDIATE,
+                        MOVE_IMMEDIATE,
+                        pack_flags(NO_COMPRESSION, RES_LOCAL, host),
+                        func, count,
+                        comm_offset, arcfg_offset,
+                        first_move ? src_addr : previous_accumulator_addr, previous_recv_addr, last_move ? dst_addr : current_accumulator_addr, 0, 0, 0,
+                        0, 0, 0, 0
+                    );
+                }
+                //wait for completion on receives
+                if(r){
+                    while(rendezvous_get_completion(sending_rank, current_recv_addr, false, count, TAG_ANY) == NOT_READY_ERROR);
+                }
+                //end conditions
+                if((!r && is_root) || (s && !is_root)) return err;
+                //update first move
+                if(s || plus){
+                    first_move = false;
+                }
+                //increment step
+                n++;
+                //update scratchpads
+                previous_accumulator_addr = current_accumulator_addr;
+                previous_recv_addr = current_recv_addr;
             }
-            //end conditions
-            if((!r && is_root) || (s && !is_root)) return err;
-            //update first move
-            if(s || plus){
-                first_move = false;
-            }
-            //increment step
-            n++;
-            //update scratchpads
-            previous_accumulator_addr = current_accumulator_addr;
-            previous_recv_addr = current_recv_addr;
         }
 
     } else {

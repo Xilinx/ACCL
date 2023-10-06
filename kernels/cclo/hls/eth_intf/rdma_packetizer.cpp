@@ -43,7 +43,7 @@ void rdma_packetizer(
 	// RNDZVS_MSG doesn't have header
 	if (cmdword.msg_type == RNDZVS_MSG){
 		bytes_to_process = cmdword.count;
-	} else if (cmdword.msg_type == RNDZVS_INIT){
+	} else if (cmdword.msg_type == RNDZVS_INIT || cmdword.msg_type == RNDZVS_WR_DONE){
 		bytes_to_process = bytes_per_word;
 	} else {
 		bytes_to_process = cmdword.count + bytes_per_word;

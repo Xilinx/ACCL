@@ -119,7 +119,6 @@ void rdma_sq_handler(
 			STREAM_WRITE(rdma_sq, rdma_req);
 
 			// and issue the eth cmd to the rdma packetizer
-			cmd_in_word.count = 0; // no message payload, only the header
 			cmd_in_word.msg_type = RNDZVS_WR_DONE;
 			STREAM_WRITE(cmd_out, cmd_in_word);
 

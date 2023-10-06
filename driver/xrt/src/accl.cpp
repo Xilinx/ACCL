@@ -1110,6 +1110,9 @@ void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
   debug("Configuring arithmetic");
   configure_arithmetic();
 
+  debug("Configuring collective tuning parameters");
+  configure_tuning_parameters();
+
   // Mark CCLO as configured
   debug("CCLO configured");
   cclo->write(CCLO_ADDR::CFGRDY_OFFSET, 1);
@@ -1213,6 +1216,12 @@ void ACCL::setup_rendezvous_spare_buffers(addr_t rndzv_spare_buf_size, const std
   cclo->write(CCLO_ADDR::SPARE3_OFFSET+4, (utility_spares.at(2)->address() >> 32) & 0xffffffff);
 }
 
+void ACCL::configure_tuning_parameters(){
+  //tune reduce to execute flat tree up to 4 ranks or up to 32KB
+  unsigned int max_reduce_flat_tree_size = 4;
+  cclo->write(CCLO_ADDR::REDUCE_FLAT_TREE_MAX_RANKS_OFFSET, max_reduce_flat_tree_size);
+  cclo->write(CCLO_ADDR::REDUCE_FLAT_TREE_MAX_COUNT_OFFSET, std::min(max_rndzv_msg_size/max_reduce_flat_tree_size, (long unsigned int)32*1024));
+}
 
 void ACCL::check_return_value(const std::string function_name, ACCLRequest *request) {
   val_t retcode = cclo->get_retcode(request);

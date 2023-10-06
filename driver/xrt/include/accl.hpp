@@ -1116,6 +1116,8 @@ private:
     return setup_rendezvous_spare_buffers(rndzv_spare_buf_size, mems);
   }
 
+  void configure_tuning_parameters();
+
   void check_return_value(const std::string function_name, ACCLRequest *handle);
 
   void prepare_call(CCLO::Options &options);
