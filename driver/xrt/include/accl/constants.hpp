@@ -184,7 +184,7 @@ enum class operation : int {
   reduce_scatter = 11,  /**< Perform reduce operator on remote FPGA buffers
                              and scatter to all ranks */
   barrier = 12,         /**< barrier kernel */
-  all_to_all = 13,      /**< All-to-all kernel */
+  alltoall = 13,        /**< All-to-all kernel */
   nop = 255             /**< NOP operation */
 };
 

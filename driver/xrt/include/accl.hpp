@@ -672,6 +672,32 @@ public:
                               std::vector<ACCLRequest *> waitfor = {});
 
   /**
+   * Performs an alltoall shuffle operation on the FPGA.
+   *
+   * @param sendbuf        Buffer of count elements that contains the data to
+   *                       be shuffled. Create a buffer using ACCL::create_buffer.
+   * @param recvbuf        Buffer of count × world size elements to where the
+   *                       data should be gathered. Create a buffer using
+   *                       ACCL::create_buffer.
+   * @param count          Amount of elements to shuffle per rank.
+   * @param comm_id        Index of communicator to use.
+   * @param from_fpga      Set to true if the data is already on the FPGA.
+   * @param to_fpga        Set to true if the gathered data will be used on the
+   *                       FPGA only.
+   * @param compress_dtype Datatype to compress buffers to over ethernet.
+   * @param run_async      Run the ACCL call asynchronously.
+   * @param waitfor        ACCL call will wait for these operations before it
+   *                       will start. Currently not implemented.
+   * @return ACCLRequest*  Request object used for waiting and checking for operation
+   *                       status; nullptr if run_async is false.
+   */
+  ACCLRequest *alltoall(BaseBuffer &sendbuf, BaseBuffer &recvbuf, unsigned int count,
+                         communicatorId comm_id = GLOBAL_COMM, bool from_fpga = false,
+                         bool to_fpga = false,
+                         dataType compress_dtype = dataType::none,
+                         bool run_async = false, std::vector<ACCLRequest *> waitfor = {});
+
+  /**
    * Performs a barrier on the FPGA.
    *
    * @param comm_id        Index of communicator to use.

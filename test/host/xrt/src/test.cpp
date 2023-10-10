@@ -531,6 +531,24 @@ TEST_P(ACCLRootTest, test_gather_compressed) {
   }
 }
 
+TEST_F(ACCLTest, test_alltoall) {
+  unsigned int count = options.count;
+  unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
+
+  std::unique_ptr<float> host_op_buf = random_array<float>(count *::size *::size);
+  auto op_buf = accl->create_buffer(host_op_buf.get() + count *::size *::rank, count *::size, dataType::float32);
+  auto res_buf = accl->create_buffer<float>(count *::size, dataType::float32);
+
+  test_debug("Shuffling (all2all) data...", options);
+  accl->alltoall(*op_buf, *res_buf, count);
+
+  for (int i = 0; i < ::size; ++i) {
+    for (unsigned int j = 0; j < count; ++j) {
+      EXPECT_EQ((*res_buf)[i*count+j], host_op_buf.get()[i*::size*count+::rank*count+j]);
+    }
+  }
+}
+
 TEST_F(ACCLTest, test_allgather) {
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
