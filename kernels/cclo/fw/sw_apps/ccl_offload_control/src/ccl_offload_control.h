@@ -86,8 +86,11 @@
 #define HOUSEKEEP_RENDEZVOUS_MAX_SIZE  4
 
 //AXI MMAP address
-#define REDUCE_FLAT_TREE_MAX_RANKS_OFFSET       0x1FD0
-#define REDUCE_FLAT_TREE_MAX_COUNT_OFFSET       0x1FD4
+#define GATHER_FLAT_TREE_MAX_FANIN_OFFSET  0x1FC4
+#define GATHER_FLAT_TREE_MAX_COUNT_OFFSET  0x1FC8
+#define BCAST_FLAT_TREE_MAX_RANKS_OFFSET  0x1FCC
+#define REDUCE_FLAT_TREE_MAX_RANKS_OFFSET 0x1FD0
+#define REDUCE_FLAT_TREE_MAX_COUNT_OFFSET 0x1FD4
 #define TMP1_OFFSET       0x1FD8    //address of first spare buffer in device memory
 #define TMP2_OFFSET       0x1FE0    //address of second spare buffer in device memory
 #define TMP3_OFFSET       0x1FE8    //address of third spare buffer in device memory

@@ -812,7 +812,7 @@ int broadcast(  unsigned int count,
         bool dst_host = ((host & RES_HOST) != 0);
         bool src_host = ((host & OP0_HOST) != 0);
 
-        if(world.size > 3){
+        if(world.size > Xil_In32(BCAST_FLAT_TREE_MAX_RANKS_OFFSET)){
             //binary tree broadcast
             //we double the number of broadcasting nodes in each round until we've broadcast to every rank
             //starting broadcast is from root to the rank with the index equal to the largest power of 2
@@ -1145,50 +1145,43 @@ int gather( unsigned int count,
         int status;
         uint64_t buf_addr;
         if(root_rank == world.local_rank){
-            uint32_t src_rank;
             dst_host = (host & RES_HOST) != 0;
-            if(current_step == 0){
-                //start copy to ourselves while we're sending addresses
-                buf_addr = dst_buf_addr + root_rank*bytes_count;
-                start_move(
-                    MOVE_IMMEDIATE,
-                    MOVE_NONE,
-                    MOVE_IMMEDIATE,
-                    pack_flags(compression, RES_LOCAL, host),
-                    0, count, comm_offset, arcfg_offset, 
-                    src_buf_addr, 0, buf_addr, 0, 0, 0,
-                    0, 0, 0, TAG_ANY
-                );
-                //send addresses
-                for(src_rank=0; src_rank < world.size; src_rank++){
-                    //skip sending address for ourselves
+            //start copy to ourselves while we're sending addresses
+            buf_addr = dst_buf_addr + root_rank*bytes_count;
+            start_move(
+                MOVE_IMMEDIATE,
+                MOVE_NONE,
+                MOVE_IMMEDIATE,
+                pack_flags(compression, RES_LOCAL, host),
+                0, count, comm_offset, arcfg_offset, 
+                src_buf_addr, 0, buf_addr, 0, 0, 0,
+                0, 0, 0, TAG_ANY
+            );
+            //send addresses
+            unsigned int num_pending = 0, num_initiated = 0, num_completed = 0, src_rank=0;
+            unsigned int max_fanin = (bytes_count > Xil_In32(GATHER_FLAT_TREE_MAX_COUNT_OFFSET)) ? Xil_In32(GATHER_FLAT_TREE_MAX_FANIN_OFFSET) : world.size-1;
+            while(num_completed < world.size-1){
+                if(num_initiated < world.size-1){
                     if(src_rank == world.local_rank){
-                        continue;
+                        src_rank++;
+                    } else while(num_pending < max_fanin) {
+                        buf_addr = dst_buf_addr + src_rank*bytes_count;
+                        rendezvous_send_addr(src_rank, buf_addr, dst_host, count, TAG_ANY);
+                        num_initiated++;
+                        num_pending++;
+                        src_rank++;      
                     }
-                    //compute address (striding doesnt work here because order of sends is random)
-                    buf_addr = dst_buf_addr + src_rank*bytes_count;
-                    rendezvous_send_addr(src_rank, buf_addr, dst_host, count, TAG_ANY);
                 }
-                //finalize copy to ourselves
-                err |= end_move();
-                current_step++;
+                if(num_pending > 0){
+                    unsigned int dummy_rank;
+                    bool dummy_host;
+                    while(rendezvous_get_any_completion(&dummy_rank, &buf_addr, &dummy_host, bytes_count, TAG_ANY) == NOT_READY_ERROR);
+                    num_pending--;
+                    num_completed++;
+                }
             }
-            //wait for completions
-            while(current_step < world.size+1){
-                src_rank = current_step - 1;
-                //skip completion for ourselves
-                if(src_rank == world.local_rank){
-                    current_step++;
-                    continue;
-                }
-                buf_addr = dst_buf_addr + src_rank*bytes_count;
-                status = rendezvous_get_completion(src_rank, buf_addr, dst_host, count, TAG_ANY);
-                if(status == NOT_READY_ERROR){
-                    //if err was NO_ERROR, we'll retry, otherwise give up
-                    return (err | status);
-                }
-                current_step++;
-            }
+            //finalize copy to ourselves
+            err |= end_move();
             return err;
         } else {
             status = rendezvous_get_addr(root_rank, &buf_addr, &dst_host, count, TAG_ANY);

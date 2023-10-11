@@ -1277,6 +1277,11 @@ void ACCL::setup_rendezvous_spare_buffers(addr_t rndzv_spare_buf_size, const std
 }
 
 void ACCL::configure_tuning_parameters(){
+  //tune gather to reduce fan-in of flat tree above certain message sizes
+  cclo->write(CCLO_ADDR::GATHER_FLAT_TREE_MAX_FANIN_OFFSET, 2);
+  cclo->write(CCLO_ADDR::GATHER_FLAT_TREE_MAX_COUNT_OFFSET, 32*1024);
+  //tune bcast to execute flat tree up to 3 ranks
+  cclo->write(CCLO_ADDR::BCAST_FLAT_TREE_MAX_RANKS_OFFSET, 3);
   //tune reduce to execute flat tree up to 4 ranks or up to 32KB
   unsigned int max_reduce_flat_tree_size = 4;
   cclo->write(CCLO_ADDR::REDUCE_FLAT_TREE_MAX_RANKS_OFFSET, max_reduce_flat_tree_size);
