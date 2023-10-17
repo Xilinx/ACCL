@@ -20,3 +20,5 @@ ccl_offload_ex
 ccl_offload.xml
 ccl_offload.xo
 vitis_ws
+plugins/*/build_*
+plugins/*/*.xo
