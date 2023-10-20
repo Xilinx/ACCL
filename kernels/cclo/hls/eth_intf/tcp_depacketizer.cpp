@@ -92,6 +92,7 @@ void tcp_depacketizer(
 		message_rem = remaining[notif.session_id];
 	}
 	
+	downstream_notif.session_id = notif.session_id;
 	if(message_rem == 0){//if remaining bytes is zero, then this is the start of a new message
 		//get header and some important info from it
 		inword = STREAM_READ(in);
@@ -101,7 +102,6 @@ void tcp_depacketizer(
 		if(message_strm == 0){
 			//put notification, header in output streams
 			STREAM_WRITE(sts, hdr);
-			downstream_notif.session_id = notif.session_id;
 			downstream_notif.type = 0; //for SOM
 			downstream_notif.length = hdr.count;
 			STREAM_WRITE(notif_out, downstream_notif);

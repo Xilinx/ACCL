@@ -494,7 +494,7 @@ int main(int argc, char** argv){
     int world_size = worldsize.getValue(); // number of processes
     int local_rank = localrank.getValue(); // the rank of the process
 
-    logger = Log(static_cast<log_level>(loglevel.getValue()));
+    logger = Log(static_cast<log_level>(loglevel.getValue()), local_rank);
 
     zmq_intf_context ctx = zmq_server_intf(startport.getValue(), local_rank, world_size, loopback_arg.getValue(), logger);
     sim_bd(&ctx, backend_arg.getValue(), local_rank, world_size);

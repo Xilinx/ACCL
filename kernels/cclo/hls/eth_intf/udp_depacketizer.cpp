@@ -153,14 +153,17 @@ void udp_depacketizer(
 		STREAM_WRITE(notif_out, notif);
 	}
 	//copy data in -> out
-	do{
-		#pragma HLS PIPELINE II=1
-		inword = STREAM_READ(in);
-		inword.dest = message_strm;
-		STREAM_WRITE(out, inword);
-		current_bytes += (message_rem < bytes_per_word) ? message_rem : bytes_per_word;
-		message_rem = (message_rem < bytes_per_word) ? 0u : message_rem-bytes_per_word;//slight problem here if the message doesnt end on a 64B boundary...
-	} while(inword.last == 0 && message_rem > 0 && current_bytes < (max_dma_bytes-bytes_per_word));
+	//we need to check message_rem because for 64B fragments we've already copied everything
+	if(message_rem > 0){
+		do{
+			#pragma HLS PIPELINE II=1
+			inword = STREAM_READ(in);
+			inword.dest = message_strm;
+			STREAM_WRITE(out, inword);
+			current_bytes += (message_rem < bytes_per_word) ? message_rem : bytes_per_word;
+			message_rem = (message_rem < bytes_per_word) ? 0u : message_rem-bytes_per_word;//slight problem here if the message doesnt end on a 64B boundary...
+		} while(inword.last == 0 && message_rem > 0 && current_bytes < (max_dma_bytes-bytes_per_word));
+	}
 	//write out EOF
 	if(message_strm == 0){
 		notif.length = current_bytes;

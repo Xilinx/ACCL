@@ -59,7 +59,7 @@ void vadd_put(
         //read 16 floats into a 512b vector
         for(int i=0; (i<16) && (rd_count>0); i++){
             float inc = src[i+16*word_count]+1;
-            tmpword(i*32,(i+1)*32-1) = *reinterpret_cast<ap_uint<32>*>(&inc);
+            tmpword((i+1)*32-1, i*32) = *reinterpret_cast<ap_uint<32>*>(&inc);
             rd_count--;
         }
         //send the vector to cclo
@@ -78,7 +78,7 @@ void vadd_put(
         tmpword = data.pull().data;
         //read from the 512b vector into 16 floats
         for(int i=0; (i<16) && (wr_count>0); i++){
-            ap_uint<32> val = tmpword(i*32,(i+1)*32-1);
+            ap_uint<32> val = tmpword((i+1)*32-1, i*32);
             dst[i+16*word_count] = *reinterpret_cast<float*>(&val);
             wr_count--;
         }

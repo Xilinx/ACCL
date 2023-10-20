@@ -228,7 +228,7 @@ $(CYT_BIT): coyote_shell
 	$(MAKE) -C Coyote/hw/build_$(CCLO_STACK_TYPE)/ compile
 
 .PHONY: tcp_stack
-tcp_stack: $(TCP_XO)
+tcp_stack: $(TCP_XO) $(CMAC_TCP_XO)
 
 $(TCP_XO):
 	git submodule update --init --recursive Vitis_with_100Gbps_TCP-IP
