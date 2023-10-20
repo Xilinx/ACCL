@@ -163,7 +163,7 @@ $(TCP_DUMMY_XO):
 	$(MAKE) -C ../../kernels/plugins/dummy_tcp_stack DEVICE=$(FPGAPART) all
 
 .PHONY: tcp_stack
-tcp_stack: $(TCP_XO)
+tcp_stack: $(TCP_XO) $(CMAC_TCP_XO)
 
 $(TCP_XO): tcp_stack_ips
 	git submodule update --init --recursive Vitis_with_100Gbps_TCP-IP
