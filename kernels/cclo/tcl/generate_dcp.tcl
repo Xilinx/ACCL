@@ -21,6 +21,7 @@ set en_arith [lindex $::argv 2]
 set en_compress [lindex $::argv 3]
 set en_extkrnl [lindex $::argv 4]
 set mb_debug_level [lindex $::argv 5]
+set ext_dma [lindex $::argv 6]
 
 # open project
 open_project ./ccl_offload_ex/ccl_offload_ex.xpr
@@ -30,9 +31,14 @@ reset_run synth_1
 set extra_synth_options "-mode out_of_context -verilog_define AXILITE_ADR_BITS=13 "
 if { $en_arith == 1 } { set extra_synth_options "$extra_synth_options -verilog_define ARITH_ENABLE " }
 if { $en_compress == 1 } { set extra_synth_options "$extra_synth_options -verilog_define COMPRESSION_ENABLE " }
-if { $en_dma == 1 } { set extra_synth_options "$extra_synth_options -verilog_define DMA_ENABLE " }
+if { $en_dma == 1 } { 
+    set extra_synth_options "$extra_synth_options -verilog_define DMA_ENABLE " 
+} elseif { $ext_dma == 1 } { 
+    set extra_synth_options "$extra_synth_options -verilog_define DMA_EXTERNAL " 
+}
 if { $en_extkrnl == 1 } { set extra_synth_options "$extra_synth_options -verilog_define STREAM_ENABLE " }
 if { $stacktype == "TCP" } { set extra_synth_options "$extra_synth_options -verilog_define TCP_ENABLE " }
+if { $stacktype == "RDMA" } { set extra_synth_options "$extra_synth_options -verilog_define RDMA_ENABLE " }
 if { $mb_debug_level > 0 } { set extra_synth_options "$extra_synth_options -verilog_define MB_DEBUG_ENABLE " }
 set_property -name {STEPS.SYNTH_DESIGN.ARGS.MORE OPTIONS} -value $extra_synth_options -objects [get_runs synth_1]
 launch_runs synth_1 -jobs 6

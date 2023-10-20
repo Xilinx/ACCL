@@ -22,6 +22,8 @@
 #include "constants.hpp"
 #include <string>
 #include "zmq_client.h"
+#include <experimental/xrt_ip.h>
+#include <xrt/xrt_kernel.h>
 
 /** @file simdevice.hpp */
 
@@ -95,11 +97,15 @@ public:
   
   bool test(ACCLRequest *request) override;
   
+  uint64_t get_duration(ACCLRequest *request) override;
+
   void free_request(ACCLRequest *request) override;
 
   val_t get_retcode(ACCLRequest *request) override;
 
   addr_t get_base_addr() override { return 0x0; }
+
+  void printDebug() override { return; }
 
   /**
    * Get the zmq server used by the CCLO emulator or simulator.
@@ -115,7 +121,14 @@ public:
    */
   void complete_request(SimRequest *request);
 
+  deviceType get_device_type() override;
+
+  xrt::device* get_device() {
+    return &device;
+  }
+
 private:
+  xrt::device device;
   zmq_intf_context zmq_ctx;
   
   FPGAQueue<SimRequest *> queue;

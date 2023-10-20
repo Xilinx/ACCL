@@ -42,6 +42,7 @@ private:
   std::condition_variable cv;
   std::atomic<operationStatus> status;
   val_t retcode;
+  val_t duration_ncycles;
 
 protected:
   // opaque reference to cclo
@@ -121,7 +122,25 @@ public:
   void set_retcode(val_t retcode) {
     this->retcode = retcode;
   }
-  
+
+  /**
+   * Sets the duration of the operation; used for profiling.
+   * 
+   * @param retcode 
+   */
+  void set_duration(val_t duration) {
+    this->duration_ncycles = duration;
+  }
+
+  /**
+   * Gets the duration of the operation, in CCLO cycles.
+   * 
+   * @return val_t Return code of the operation
+   */
+  val_t get_duration() const {
+    return duration_ncycles;
+  }
+
   void *cclo() {
     return cclo_ptr;
   }

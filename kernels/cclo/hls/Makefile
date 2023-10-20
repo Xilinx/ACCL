@@ -15,7 +15,7 @@
 #
 # *******************************************************************************/
 
-DEVICE=xcu250-figd2104-2L-e
+DEVICE=xcu55c-fsvh2892-2L-e
 
 all:
 	$(MAKE) -C eth_intf DEVICE=$(DEVICE)

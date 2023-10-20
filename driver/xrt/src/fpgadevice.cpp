@@ -25,7 +25,8 @@ static void finish_fpga_request(ACCL::FPGARequest *req) {
   req->wait_kernel();
   ACCL::FPGADevice *cclo = reinterpret_cast<ACCL::FPGADevice *>(req->cclo());
   // get ret code before notifying waiting theads
-  req->set_retcode(cclo->read(ACCL::RETCODE_OFFSET));
+  req->set_retcode(cclo->read(ACCL::CCLO_ADDR::RETCODE_OFFSET));
+  req->set_duration(cclo->read(ACCL::CCLO_ADDR::PERFCNT_OFFSET));
   req->set_status(ACCL::operationStatus::COMPLETED);
   req->notify();
   cclo->complete_request(req);
@@ -51,9 +52,9 @@ void FPGARequest::start() {
   run.set_arg(arg_id++, static_cast<uint32_t>(options.arithcfg_addr));
   run.set_arg(arg_id++, static_cast<uint32_t>(options.compression_flags));
   run.set_arg(arg_id++, static_cast<uint32_t>(options.stream_flags));
-  run.set_arg(arg_id++, static_cast<uint64_t>(options.addr_0->physical_address()));
-  run.set_arg(arg_id++, static_cast<uint64_t>(options.addr_1->physical_address()));
-  run.set_arg(arg_id++, static_cast<uint64_t>(options.addr_2->physical_address()));
+  run.set_arg(arg_id++, static_cast<uint64_t>(options.addr_0->address()));
+  run.set_arg(arg_id++, static_cast<uint64_t>(options.addr_1->address()));
+  run.set_arg(arg_id++, static_cast<uint64_t>(options.addr_2->address()));
   
   auto f = std::async(std::launch::async, finish_fpga_request, this);
 
@@ -80,8 +81,8 @@ ACCLRequest *FPGADevice::start(const Options &options) {
   return request;
 }
 
-FPGADevice::FPGADevice(xrt::ip &cclo_ip, xrt::kernel &hostctrl_ip)
-    : cclo(cclo_ip), hostctrl(hostctrl_ip) {}
+FPGADevice::FPGADevice(xrt::ip &cclo_ip, xrt::kernel &hostctrl_ip, xrt::device &device)
+    : cclo(cclo_ip), hostctrl(hostctrl_ip), device(device) {}
 
 void FPGADevice::wait(ACCLRequest *request) { 
   auto fpga_handle = request_map.find(*request);
@@ -108,6 +109,15 @@ bool FPGADevice::test(ACCLRequest *request) {
   return fpga_handle->second->get_status() == operationStatus::COMPLETED;
 }
 
+uint64_t FPGADevice::get_duration(ACCLRequest *request) {  
+  auto handle = request_map.find(*request);
+
+  if (handle == request_map.end())
+    return 0;
+
+  return handle->second->get_duration() * 4;
+}
+
 void FPGADevice::free_request(ACCLRequest *request) {
   auto fpga_handle = request_map.find(*request);
 
@@ -120,9 +130,13 @@ void FPGADevice::free_request(ACCLRequest *request) {
 ACCLRequest *FPGADevice::call(const Options &options) {
   ACCLRequest *req = start(options);
   wait(req);
-
+  
   // internal use only
   return req;
+}
+
+CCLO::deviceType FPGADevice::get_device_type() {
+  return CCLO::xrt_device;
 }
 
 val_t FPGADevice::get_retcode(ACCLRequest *request) {

@@ -29,6 +29,7 @@ set(CCLO_HLS_ROOT ${ACCL_REPO_ROOT}/kernels/cclo/hls)
 set(REDUCTION_DIR ${ACCL_REPO_ROOT}/kernels/plugins/reduce_ops)
 set(COMPRESSOR_DIR ${ACCL_REPO_ROOT}/kernels/plugins/hp_compression)
 set(DUMMY_TCP_DIR ${ACCL_REPO_ROOT}/kernels/plugins/dummy_tcp_stack)
+set(DUMMY_CYT_RDMA_DIR ${ACCL_REPO_ROOT}/kernels/plugins/dummy_cyt_rdma_stack)
 set(HOSTCTRL_DIR ${ACCL_REPO_ROOT}/kernels/plugins/hostctrl)
 set(ARBITER_DIR ${ACCL_REPO_ROOT}/kernels/plugins/client_arbiter)
 set(CCLO_ETH_DIR ${CCLO_HLS_ROOT}/eth_intf)
@@ -63,11 +64,12 @@ endif (NOT EXISTS $ENV{XILINX_HLS})
 
 set_source_files_properties(${MB_FW_DIR}/ccl_offload_control.c PROPERTIES LANGUAGE CXX)
 
-set(EMU_INCLUDES ${HLS_INCLUDES} ${REDUCTION_DIR} ${COMPRESSOR_DIR} ${CCLO_ETH_DIR} ${SEGMENTER_DIR} ${MB_FW_DIR} ${CCLO_HLS_ROOT} ${DMA_MOVER_DIR} ${RXBUF_OFFLOAD_DIR} ${DUMMY_TCP_DIR} ${HOSTCTRL_DIR} ${ARBITER_DIR} ${ACCL_HLSDRV_DIR} ${ZMQ_INTF_DIR} ${LOG_DIR})
+set(EMU_INCLUDES ${HLS_INCLUDES} ${REDUCTION_DIR} ${COMPRESSOR_DIR} ${CCLO_ETH_DIR} ${SEGMENTER_DIR} ${MB_FW_DIR} ${CCLO_HLS_ROOT} ${DMA_MOVER_DIR} ${RXBUF_OFFLOAD_DIR} ${DUMMY_TCP_DIR} ${DUMMY_CYT_RDMA_DIR} ${HOSTCTRL_DIR} ${ARBITER_DIR} ${ACCL_HLSDRV_DIR} ${ZMQ_INTF_DIR} ${LOG_DIR})
 set(EMU_SOURCES cclo_emu.cpp ${MB_FW_DIR}/ccl_offload_control.c ${REDUCTION_DIR}/reduce_ops.cpp ${COMPRESSOR_DIR}/hp_compression.cpp
-                ${CCLO_ETH_DIR}/udp_depacketizer.cpp ${CCLO_ETH_DIR}/tcp_txHandler.cpp ${CCLO_ETH_DIR}/tcp_sessionHandler.cpp ${CCLO_ETH_DIR}/tcp_rxHandler.cpp ${CCLO_ETH_DIR}/udp_packetizer.cpp ${CCLO_ETH_DIR}/tcp_packetizer.cpp ${CCLO_ETH_DIR}/tcp_depacketizer.cpp
+                ${CCLO_ETH_DIR}/udp_depacketizer.cpp ${CCLO_ETH_DIR}/tcp_txHandler.cpp ${CCLO_ETH_DIR}/tcp_rxHandler.cpp ${CCLO_ETH_DIR}/udp_packetizer.cpp ${CCLO_ETH_DIR}/tcp_packetizer.cpp ${CCLO_ETH_DIR}/tcp_depacketizer.cpp
+                ${CCLO_ETH_DIR}/rdma_depacketizer.cpp ${CCLO_ETH_DIR}/rdma_packetizer.cpp ${CCLO_ETH_DIR}/rdma_sq_handler.cpp
                 ${SEGMENTER_DIR}/stream_segmenter.cpp ${RXBUF_OFFLOAD_DIR}/rxbuf_dequeue.cpp ${RXBUF_OFFLOAD_DIR}/rxbuf_enqueue.cpp ${RXBUF_OFFLOAD_DIR}/rxbuf_seek.cpp ${RXBUF_OFFLOAD_DIR}/rxbuf_session.cpp
-                ${DMA_MOVER_DIR}/dma_mover.cpp ${DUMMY_TCP_DIR}/dummy_tcp_stack.cpp ${HOSTCTRL_DIR}/hostctrl.cpp ${ARBITER_DIR}/client_arbiter.cpp ${ZMQ_INTF_DIR}/zmq_server.cpp)
+                ${DMA_MOVER_DIR}/dma_mover.cpp ${DUMMY_TCP_DIR}/dummy_tcp_stack.cpp ${DUMMY_CYT_RDMA_DIR}/dummy_cyt_rdma_stack.cpp ${HOSTCTRL_DIR}/hostctrl.cpp ${ARBITER_DIR}/client_arbiter.cpp ${ZMQ_INTF_DIR}/zmq_server.cpp)
 
 add_executable(cclo_emu ${EMU_SOURCES})
 

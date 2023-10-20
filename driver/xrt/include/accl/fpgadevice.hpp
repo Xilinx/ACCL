@@ -71,8 +71,9 @@ public:
    *
    * @param cclo_ip      The CCLO kernel to use.
    * @param hostctrl_ip  The hostctrl kernel to use.
+   * @param device       Xrt device;
    */
-  FPGADevice(xrt::ip &cclo_ip, xrt::kernel &hostctrl_ip);
+  FPGADevice(xrt::ip &cclo_ip, xrt::kernel &hostctrl_ip, xrt::device &device);
 
   /**
    * Destroy the FPGADevice object
@@ -95,6 +96,8 @@ public:
   
   bool test(ACCLRequest *request) override;
   
+  uint64_t get_duration(ACCLRequest *request);
+
   void free_request(ACCLRequest *request) override;
 
   val_t get_retcode(ACCLRequest *request) override;
@@ -111,9 +114,18 @@ public:
    */
   void complete_request(FPGARequest *request);
 
+  deviceType get_device_type() override;
+
+  void printDebug() override { return; }
+
+  xrt::device* get_device() {
+    return &device;
+  }
+
 private:
   xrt::ip cclo;
   xrt::kernel hostctrl;
+  xrt::device device;
 
   FPGAQueue<FPGARequest *> queue;
   std::unordered_map<ACCLRequest, FPGARequest *> request_map;

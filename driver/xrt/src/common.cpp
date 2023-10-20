@@ -27,6 +27,8 @@
 
 #define ACCL_SEND_LOG_FILE(i)                                                  \
   (std::string("accl_send") + i + std::string(".log"))
+#define ACCL_LOG_FILE(i)                                                       \
+  (std::string("accl") + i + std::string(".log"))
 
 namespace {
 inline void swap_endianness(uint32_t *ip) {
@@ -110,6 +112,15 @@ void reset_log() {
   std::string filename = ACCL_SEND_LOG_FILE(rank);
   std::ofstream outfile;
   outfile.open(filename, std::ios::out);
+  outfile.close();
+}
+
+void accl_log(int rank, const std::string &message) {
+  std::string str_rank = std::to_string(rank);
+  std::string filename = ACCL_LOG_FILE(str_rank);
+  std::ofstream outfile;
+  outfile.open(filename, std::ios::out | std::ios_base::app);
+  outfile << message << std::endl;
   outfile.close();
 }
 

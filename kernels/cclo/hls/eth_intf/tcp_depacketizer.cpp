@@ -118,7 +118,7 @@ void tcp_depacketizer(
 	//only notify for the part up to the end of the current message
 	if(message_strm == 0){
 		downstream_notif.type = 1; //for SOF
-		downstream_notif.length = max_dma_bytes;
+		downstream_notif.length = notif.length;
 		STREAM_WRITE(notif_out, downstream_notif);
 	}
 	//copy data in -> out

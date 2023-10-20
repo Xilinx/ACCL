@@ -20,6 +20,8 @@
 #include <fixture.hpp>
 #include <tclap/CmdLine.h>
 
+#define FLOAT32RTOL 0.001
+#define FLOAT32ATOL 0.005
 // Set the tolerance for compressed datatypes high enough, since we do currently
 // not replicate the float32 -> float16 conversion for our reference results
 #define FLOAT16RTOL 0.005
@@ -100,6 +102,49 @@ TEST_P(ACCLFuncTest, test_combine) {
   }
 }
 
+TEST_F(ACCLTest, test_sendrcv_basic) {
+  unsigned int count = options.count;
+  unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
+
+  auto op_buf = accl->create_buffer<float>(count, dataType::float32);
+  auto res_buf = accl->create_buffer<float>(count, dataType::float32);
+  random_array(op_buf->buffer(), count);
+  int next_rank = ::rank + 1;
+  int prev_rank = ::rank - 1;
+
+  if(::rank % 2 == 0){
+    if(next_rank < ::size){
+      test_debug("Sending data on " + std::to_string(::rank) + " to " +
+                    std::to_string(next_rank) + "...", options);
+      accl->send(*op_buf, count, next_rank, 0);
+    }
+  } else {
+      test_debug("Receiving data on " + std::to_string(::rank) + " from " +
+                    std::to_string(prev_rank) + "...", options);
+      accl->recv(*res_buf, count, prev_rank, 0);
+  }
+
+  if(::rank % 2 == 1){
+    test_debug("Sending data on " + std::to_string(::rank) + " to " +
+                  std::to_string(prev_rank) + "...", options);
+    accl->send(*res_buf, count, prev_rank, 1);
+  } else {
+    if(next_rank < ::size){
+      test_debug("Receiving data on " + std::to_string(::rank) + " from " +
+                    std::to_string(next_rank) + "...", options);
+      accl->recv(*res_buf, count, next_rank, 1);
+    }
+  }
+
+  if(next_rank < ::size){
+    for (unsigned int i = 0; i < count; ++i) {
+      EXPECT_EQ((*res_buf)[i], (*op_buf)[i]);
+    }
+  } else {
+    SUCCEED();
+  }
+}
+
 TEST_F(ACCLTest, test_sendrcv_bo) {
 
   if(!options.test_xrt_simulator) {
@@ -112,38 +157,38 @@ TEST_F(ACCLTest, test_sendrcv_bo) {
 
   // Initialize bo
   float *data =
-      static_cast<float *>(std::aligned_alloc(4096, count * sizeof(float)));
+      static_cast<float *>(std::aligned_alloc(4096, count *sizeof(float)));
   float *validation_data =
-      static_cast<float *>(std::aligned_alloc(4096, count * sizeof(float)));
+      static_cast<float *>(std::aligned_alloc(4096, count *sizeof(float)));
   random_array(data, count);
 
-  xrt::bo send_bo(dev, data, count * sizeof(float), accl->devicemem());
-  xrt::bo recv_bo(dev, validation_data, count * sizeof(float),
+  xrt::bo send_bo(dev, data, count *sizeof(float), accl->devicemem());
+  xrt::bo recv_bo(dev, validation_data, count *sizeof(float),
                   accl->devicemem());
   auto op_buf = accl->create_buffer<float>(send_bo, count, dataType::float32);
   auto res_buf = accl->create_buffer<float>(recv_bo, count, dataType::float32);
-  int next_rank = (rank + 1) % size;
-  int prev_rank = (rank + size - 1) % size;
+  int next_rank = (::rank + 1) % ::size;
+  int prev_rank = (::rank + ::size - 1) % ::size;
 
   test_debug("Syncing buffers...", options);
   send_bo.sync(XCL_BO_SYNC_BO_TO_DEVICE);
 
-  test_debug("Sending data on " + std::to_string(rank) + " to " +
+  test_debug("Sending data on " + std::to_string(::rank) + " to " +
                  std::to_string(next_rank) + "...",
              options);
   accl->send(*op_buf, count, next_rank, 0, GLOBAL_COMM, true);
 
-  test_debug("Receiving data on " + std::to_string(rank) + " from " +
+  test_debug("Receiving data on " + std::to_string(::rank) + " from " +
                  std::to_string(prev_rank) + "...",
              options);
   accl->recv(*op_buf, count, prev_rank, 0, GLOBAL_COMM, true);
 
-  test_debug("Sending data on " + std::to_string(rank) + " to " +
+  test_debug("Sending data on " + std::to_string(::rank) + " to " +
                  std::to_string(prev_rank) + "...",
              options);
   accl->send(*op_buf, count, prev_rank, 1, GLOBAL_COMM, true);
 
-  test_debug("Receiving data on " + std::to_string(rank) + " from " +
+  test_debug("Receiving data on " + std::to_string(::rank) + " from " +
                  std::to_string(next_rank) + "...",
              options);
   accl->recv(*op_buf, count, next_rank, 1, GLOBAL_COMM, true);
@@ -167,25 +212,25 @@ TEST_F(ACCLTest, test_sendrcv) {
   auto op_buf = accl->create_buffer<float>(count, dataType::float32);
   auto res_buf = accl->create_buffer<float>(count, dataType::float32);
   random_array(op_buf->buffer(), count);
-  int next_rank = (rank + 1) % size;
-  int prev_rank = (rank + size - 1) % size;
+  int next_rank = (::rank + 1) % ::size;
+  int prev_rank = (::rank + ::size - 1) % ::size;
 
-  test_debug("Sending data on " + std::to_string(rank) + " to " +
+  test_debug("Sending data on " + std::to_string(::rank) + " to " +
                  std::to_string(next_rank) + "...",
              options);
   accl->send(*op_buf, count, next_rank, 0);
 
-  test_debug("Receiving data on " + std::to_string(rank) + " from " +
+  test_debug("Receiving data on " + std::to_string(::rank) + " from " +
                  std::to_string(prev_rank) + "...",
              options);
   accl->recv(*res_buf, count, prev_rank, 0);
 
-  test_debug("Sending data on " + std::to_string(rank) + " to " +
+  test_debug("Sending data on " + std::to_string(::rank) + " to " +
                  std::to_string(prev_rank) + "...",
              options);
   accl->send(*res_buf, count, prev_rank, 1);
 
-  test_debug("Receiving data on " + std::to_string(rank) + " from " +
+  test_debug("Receiving data on " + std::to_string(::rank) + " from " +
                  std::to_string(next_rank) + "...",
              options);
   accl->recv(*res_buf, count, next_rank, 1);
@@ -215,25 +260,25 @@ TEST_P(ACCLSegmentationTest, test_sendrcv_segmentation){
   auto op_buf = accl->create_buffer<float>(count, dataType::float32);
   auto res_buf = accl->create_buffer<float>(count, dataType::float32);
   random_array(op_buf->buffer(), count);
-  int next_rank = (rank + 1) % size;
-  int prev_rank = (rank + size - 1) % size;
+  int next_rank = (::rank + 1) % ::size;
+  int prev_rank = (::rank + ::size - 1) % ::size;
 
-  test_debug("Sending data on " + std::to_string(rank) + " to " +
+  test_debug("Sending data on " + std::to_string(::rank) + " to " +
                  std::to_string(next_rank) + "...",
              options);
   accl->send(*op_buf, count, next_rank, 0);
 
-  test_debug("Receiving data on " + std::to_string(rank) + " from " +
+  test_debug("Receiving data on " + std::to_string(::rank) + " from " +
                  std::to_string(prev_rank) + "...",
              options);
   accl->recv(*res_buf, count, prev_rank, 0);
 
-  test_debug("Sending data on " + std::to_string(rank) + " to " +
+  test_debug("Sending data on " + std::to_string(::rank) + " to " +
                  std::to_string(prev_rank) + "...",
              options);
   accl->send(*res_buf, count, prev_rank, 1);
 
-  test_debug("Receiving data on " + std::to_string(rank) + " from " +
+  test_debug("Receiving data on " + std::to_string(::rank) + " from " +
                  std::to_string(next_rank) + "...",
              options);
   accl->recv(*res_buf, count, next_rank, 1);
@@ -250,22 +295,22 @@ TEST_F(ACCLTest, test_sendrcv_stream) {
   auto op_buf = accl->create_buffer<float>(count, dataType::float32);
   auto res_buf = accl->create_buffer<float>(count, dataType::float32);
   random_array(op_buf->buffer(), count);
-  int next_rank = (rank + 1) % size;
-  int prev_rank = (rank + size - 1) % size;
+  int next_rank = (::rank + 1) % ::size;
+  int prev_rank = (::rank + ::size - 1) % ::size;
 
-  test_debug("Sending data on " + std::to_string(rank) + " to " +
+  test_debug("Sending data on " + std::to_string(::rank) + " to " +
              std::to_string(next_rank) + "...", options);
   accl->send(*op_buf, count, next_rank, 0);
 
-  test_debug("Receiving data on " + std::to_string(rank) + " from " +
+  test_debug("Receiving data on " + std::to_string(::rank) + " from " +
              std::to_string(prev_rank) + "...", options);
   accl->recv(dataType::float32, count, prev_rank, 0, GLOBAL_COMM);
 
-  test_debug("Sending data on " + std::to_string(rank) + " to " +
+  test_debug("Sending data on " + std::to_string(::rank) + " to " +
              std::to_string(prev_rank) + "...", options);
   accl->send(dataType::float32, count, prev_rank, 1, GLOBAL_COMM);
 
-  test_debug("Receiving data on " + std::to_string(rank) + " from " +
+  test_debug("Receiving data on " + std::to_string(::rank) + " from " +
              std::to_string(next_rank) + "...", options);
   accl->recv(*res_buf, count, next_rank, 1);
 
@@ -282,18 +327,18 @@ TEST_F(ACCLTest, test_stream_put) {
   auto op_buf = accl->create_buffer<float>(count, dataType::float32);
   auto res_buf = accl->create_buffer<float>(count, dataType::float32);
   random_array(op_buf->buffer(), count);
-  int next_rank = (rank + 1) % size;
-  int prev_rank = (rank + size - 1) % size;
+  int next_rank = (::rank + 1) % ::size;
+  int prev_rank = (::rank + ::size - 1) % ::size;
 
-  test_debug("Sending data on " + std::to_string(rank) + " to stream 0 on " +
+  test_debug("Sending data on " + std::to_string(::rank) + " to stream 0 on " +
              std::to_string(next_rank) + "...", options);
   accl->stream_put(*op_buf, count, next_rank, 9);
 
-  test_debug("Sending data on " + std::to_string(rank) + " from stream to " +
+  test_debug("Sending data on " + std::to_string(::rank) + " from stream to " +
              std::to_string(prev_rank) + "...", options);
   accl->send(dataType::float32, count, prev_rank, 1, GLOBAL_COMM);
 
-  test_debug("Receiving data on " + std::to_string(rank) + " from " +
+  test_debug("Receiving data on " + std::to_string(::rank) + " from " +
              std::to_string(next_rank) + "...", options);
   accl->recv(*res_buf, count, next_rank, 1);
 
@@ -311,16 +356,16 @@ TEST_F(ACCLTest, test_sendrcv_compressed) {
   auto op_buf = accl->create_buffer<float>(count, dataType::float32);
   auto res_buf = accl->create_buffer<float>(count, dataType::float32);
   random_array(op_buf->buffer(), count);
-  int next_rank = (rank + 1) % size;
-  int prev_rank = (rank + size - 1) % size;
+  int next_rank = (::rank + 1) % ::size;
+  int prev_rank = (::rank + ::size - 1) % ::size;
 
-  test_debug("Sending data on " + std::to_string(rank) + " to " +
+  test_debug("Sending data on " + std::to_string(::rank) + " to " +
                  std::to_string(next_rank) + "...",
              options);
   accl->send(*op_buf, count, next_rank, 0, GLOBAL_COMM, false,
             dataType::float16);
 
-  test_debug("Receiving data on " + std::to_string(rank) + " from " +
+  test_debug("Receiving data on " + std::to_string(::rank) + " from " +
                  std::to_string(prev_rank) + "...",
              options);
   accl->recv(*res_buf, count, prev_rank, 0, GLOBAL_COMM, false,
@@ -330,13 +375,13 @@ TEST_F(ACCLTest, test_sendrcv_compressed) {
     EXPECT_TRUE(is_close((*res_buf)[i], (*op_buf)[i], FLOAT16RTOL, FLOAT16ATOL));
   }
 
-  test_debug("Sending data on " + std::to_string(rank) + " to " +
+  test_debug("Sending data on " + std::to_string(::rank) + " to " +
                  std::to_string(prev_rank) + "...",
              options);
   accl->send(*op_buf, count, prev_rank, 1, GLOBAL_COMM, false,
             dataType::float16);
 
-  test_debug("Receiving data on " + std::to_string(rank) + " from " +
+  test_debug("Receiving data on " + std::to_string(::rank) + " from " +
                  std::to_string(next_rank) + "...",
              options);
   accl->recv(*res_buf, count, next_rank, 1, GLOBAL_COMM, false,
@@ -355,15 +400,15 @@ TEST_P(ACCLRootTest, test_bcast) {
   random_array(op_buf->buffer(), count);
 
   int root = GetParam();
-  if (rank == root) {
-    test_debug("Broadcasting data from " + std::to_string(rank) + "...", options);
+  if (::rank == root) {
+    test_debug("Broadcasting data from " + std::to_string(::rank) + "...", options);
     accl->bcast(*op_buf, count, root);
   } else {
     test_debug("Getting broadcast data from " + std::to_string(root) + "...", options);
     accl->bcast(*res_buf, count, root);
   }
 
-  if (rank != root) {
+  if (::rank != root) {
     for (unsigned int i = 0; i < count; ++i) {
       EXPECT_EQ((*res_buf)[i], (*op_buf)[i]);
     }
@@ -379,15 +424,15 @@ TEST_P(ACCLRootTest, test_bcast_compressed) {
   random_array(op_buf->buffer(), count);
 
   int root = GetParam();
-  if (rank == root) {
-    test_debug("Broadcasting data from " + std::to_string(rank) + "...", options);
+  if (::rank == root) {
+    test_debug("Broadcasting data from " + std::to_string(::rank) + "...", options);
     accl->bcast(*op_buf, count, root, GLOBAL_COMM, false, false, dataType::float16);
   } else {
     test_debug("Getting broadcast data from " + std::to_string(root) + "...", options);
     accl->bcast(*res_buf, count, root, GLOBAL_COMM, false, false, dataType::float16);
   }
 
-  if (rank != root) {
+  if (::rank != root) {
     for (unsigned int i = 0; i < count; ++i) {
       float res = (*res_buf)[i];
       float ref = (*op_buf)[i];
@@ -401,39 +446,33 @@ TEST_P(ACCLRootTest, test_bcast_compressed) {
 TEST_P(ACCLRootTest, test_scatter) {
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
-  if (count_bytes > options.segment_size) {
-    GTEST_SKIP() << "Scatter currently doesn't support segmentation. ";
-  }
 
-  auto op_buf = accl->create_buffer<float>(count * size, dataType::float32);
+  auto op_buf = accl->create_buffer<float>(count * ::size, dataType::float32);
   auto res_buf = accl->create_buffer<float>(count, dataType::float32);
-  random_array(op_buf->buffer(), count * size);
+  random_array(op_buf->buffer(), count * ::size);
   int root = GetParam();
-  test_debug("Scatter data from " + std::to_string(rank) + "...", options);
+  test_debug("Scatter data from " + std::to_string(::rank) + "...", options);
   accl->scatter(*op_buf, *res_buf, count, root);
 
   for (unsigned int i = 0; i < count; ++i) {
-    EXPECT_EQ((*res_buf)[i], (*op_buf)[i + rank * count]);
+    EXPECT_EQ((*res_buf)[i], (*op_buf)[i +::rank * count]);
   }
 }
 
 TEST_P(ACCLRootTest, test_scatter_compressed) {
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
-  if (count_bytes > options.segment_size) {
-    GTEST_SKIP() << "Scatter currently doesn't support segmentation. ";
-  }
 
-  auto op_buf = accl->create_buffer<float>(count * size, dataType::float32);
+  auto op_buf = accl->create_buffer<float>(count * ::size, dataType::float32);
   auto res_buf = accl->create_buffer<float>(count, dataType::float32);
-  random_array(op_buf->buffer(), count * size);
+  random_array(op_buf->buffer(), count * ::size);
   int root = GetParam();
-  test_debug("Scatter data from " + std::to_string(rank) + "...", options);
+  test_debug("Scatter data from " + std::to_string(::rank) + "...", options);
   accl->scatter(*op_buf, *res_buf, count, root, GLOBAL_COMM, false, false, dataType::float16);
 
   for (unsigned int i = 0; i < count; ++i) {
     float res = (*res_buf)[i];
-    float ref = (*op_buf)[i + rank * count];
+    float ref = (*op_buf)[i +::rank * count];
     EXPECT_TRUE(is_close(res, ref, FLOAT16RTOL, FLOAT16ATOL));
   }
 }
@@ -441,24 +480,22 @@ TEST_P(ACCLRootTest, test_scatter_compressed) {
 TEST_P(ACCLRootTest, test_gather) {
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
-  if (count_bytes > options.segment_size) {
-    GTEST_SKIP() << "Gather currently doesn't support segmentation. ";
-  }
+
   int root = GetParam();
-  std::unique_ptr<float> host_op_buf = random_array<float>(count * size);
-  auto op_buf = accl->create_buffer(host_op_buf.get() + count * rank, count, dataType::float32);
+  std::unique_ptr<float> host_op_buf = random_array<float>(count * ::size);
+  auto op_buf = accl->create_buffer(host_op_buf.get() + count *::rank, count, dataType::float32);
   std::unique_ptr<ACCL::Buffer<float>> res_buf;
-  if (rank == root) {
-    res_buf = accl->create_buffer<float>(count * size, dataType::float32);
+  if (::rank == root) {
+    res_buf = accl->create_buffer<float>(count *::size, dataType::float32);
   } else {
     res_buf = std::unique_ptr<ACCL::Buffer<float>>(nullptr);
   }
 
-  test_debug("Gather data from " + std::to_string(rank) + "...", options);
+  test_debug("Gather data from " + std::to_string(::rank) + "...", options);
   accl->gather(*op_buf, *res_buf, count, root);
 
-  if (rank == root) {
-    for (unsigned int i = 0; i < count * size; ++i) {
+  if (::rank == root) {
+    for (unsigned int i = 0; i < count *::size; ++i) {
       EXPECT_EQ((*res_buf)[i], host_op_buf.get()[i]);
     }
   } else {
@@ -469,24 +506,22 @@ TEST_P(ACCLRootTest, test_gather) {
 TEST_P(ACCLRootTest, test_gather_compressed) {
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
-  if (count_bytes > options.segment_size) {
-    GTEST_SKIP() << "Gather currently doesn't support segmentation. ";
-  }
+
   int root = GetParam();
-  std::unique_ptr<float> host_op_buf = random_array<float>(count * size);
-  auto op_buf = accl->create_buffer(host_op_buf.get() + count * rank, count, dataType::float32);
+  std::unique_ptr<float> host_op_buf = random_array<float>(count *::size);
+  auto op_buf = accl->create_buffer(host_op_buf.get() + count *::rank, count, dataType::float32);
   std::unique_ptr<ACCL::Buffer<float>> res_buf;
-  if (rank == root) {
-    res_buf = accl->create_buffer<float>(count * size, dataType::float32);
+  if (::rank == root) {
+    res_buf = accl->create_buffer<float>(count *::size, dataType::float32);
   } else {
     res_buf = std::unique_ptr<ACCL::Buffer<float>>(nullptr);
   }
 
-  test_debug("Gather data from " + std::to_string(rank) + "...", options);
+  test_debug("Gather data from " + std::to_string(::rank) + "...", options);
   accl->gather(*op_buf, *res_buf, count, root, GLOBAL_COMM, false, false, dataType::float16);
 
-  if (rank == root) {
-    for (unsigned int i = 0; i < count * size; ++i) {
+  if (::rank == root) {
+    for (unsigned int i = 0; i < count *::size; ++i) {
       float res = (*res_buf)[i];
       float ref = host_op_buf.get()[i];
       EXPECT_TRUE(is_close(res, ref, FLOAT16RTOL, FLOAT16ATOL));
@@ -496,21 +531,36 @@ TEST_P(ACCLRootTest, test_gather_compressed) {
   }
 }
 
+TEST_F(ACCLTest, test_alltoall) {
+  unsigned int count = options.count;
+  unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
+
+  std::unique_ptr<float> host_op_buf = random_array<float>(count *::size *::size);
+  auto op_buf = accl->create_buffer(host_op_buf.get() + count *::size *::rank, count *::size, dataType::float32);
+  auto res_buf = accl->create_buffer<float>(count *::size, dataType::float32);
+
+  test_debug("Shuffling (all2all) data...", options);
+  accl->alltoall(*op_buf, *res_buf, count);
+
+  for (int i = 0; i < ::size; ++i) {
+    for (unsigned int j = 0; j < count; ++j) {
+      EXPECT_EQ((*res_buf)[i*count+j], host_op_buf.get()[i*::size*count+::rank*count+j]);
+    }
+  }
+}
+
 TEST_F(ACCLTest, test_allgather) {
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
-  if (count_bytes > options.segment_size) {
-    GTEST_SKIP() << "Allgather currently doesn't support segmentation. ";
-  }
 
-  std::unique_ptr<float> host_op_buf = random_array<float>(count * size);
-  auto op_buf = accl->create_buffer(host_op_buf.get() + count * rank, count, dataType::float32);
-  auto res_buf = accl->create_buffer<float>(count * size, dataType::float32);
+  std::unique_ptr<float> host_op_buf = random_array<float>(count *::size);
+  auto op_buf = accl->create_buffer(host_op_buf.get() + count *::rank, count, dataType::float32);
+  auto res_buf = accl->create_buffer<float>(count *::size, dataType::float32);
 
   test_debug("Gathering data...", options);
   accl->allgather(*op_buf, *res_buf, count);
 
-  for (unsigned int i = 0; i < count * size; ++i) {
+  for (unsigned int i = 0; i < count *::size; ++i) {
     EXPECT_EQ((*res_buf)[i], host_op_buf.get()[i]);
   }
 }
@@ -518,20 +568,17 @@ TEST_F(ACCLTest, test_allgather) {
 TEST_F(ACCLTest, test_allgather_compressed) {
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
-  if (count_bytes > options.segment_size) {
-    GTEST_SKIP() << "Allgather currently doesn't support segmentation. ";
-  }
 
-  std::unique_ptr<float> host_op_buf = random_array<float>(count * size);
-  auto op_buf = accl->create_buffer(host_op_buf.get() + count * rank, count,
+  std::unique_ptr<float> host_op_buf = random_array<float>(count *::size);
+  auto op_buf = accl->create_buffer(host_op_buf.get() + count *::rank, count,
                                    dataType::float32);
-  auto res_buf = accl->create_buffer<float>(count * size, dataType::float32);
+  auto res_buf = accl->create_buffer<float>(count *::size, dataType::float32);
 
   test_debug("Gathering data...", options);
   accl->allgather(*op_buf, *res_buf, count, GLOBAL_COMM, false, false,
                  dataType::float16);
 
-  for (unsigned int i = 0; i < count * size; ++i) {
+  for (unsigned int i = 0; i < count *::size; ++i) {
     EXPECT_TRUE(is_close((*res_buf)[i], host_op_buf.get()[i], FLOAT16RTOL, FLOAT16ATOL));
   }
 }
@@ -539,18 +586,15 @@ TEST_F(ACCLTest, test_allgather_compressed) {
 TEST_F(ACCLTest, test_allgather_comms) {
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
-  if (count_bytes > options.segment_size) {
-    GTEST_SKIP() << "Allgather currently doesn't support segmentation. ";
-  }
 
-  std::unique_ptr<float> host_op_buf(new float[count * size]);
+  std::unique_ptr<float> host_op_buf(new float[count *::size]);
   auto op_buf = accl->create_buffer(host_op_buf.get(), count, dataType::float32);
-  auto res_buf = accl->create_buffer<float>(count * size, dataType::float32);
+  auto res_buf = accl->create_buffer<float>(count *::size, dataType::float32);
 
-  for (unsigned int i = 0; i < count * size; i++) {
-    host_op_buf.get()[i] = rank + i;
+  for (unsigned int i = 0; i < count *::size; i++) {
+    host_op_buf.get()[i] =::rank + i;
   }
-  std::fill(res_buf->buffer(), res_buf->buffer() + count * size, 0);
+  std::fill(res_buf->buffer(), res_buf->buffer() + count *::size, 0);
 
   test_debug("Setting up communicators...", options);
   auto group = accl->get_comm_group(GLOBAL_COMM);
@@ -579,9 +623,9 @@ TEST_F(ACCLTest, test_allgather_comms) {
   test_debug("Validate data...", options);
 
   unsigned int data_split =
-      is_in_lower_part ? count * split : count * size - count * split;
+      is_in_lower_part ? count * split : count *::size - count * split;
 
-  for (unsigned int i = 0; i < count * size; ++i) {
+  for (unsigned int i = 0; i < count *::size; ++i) {
     float res = (*res_buf)[i];
     float ref;
     if (i < data_split) {
@@ -597,15 +641,12 @@ TEST_F(ACCLTest, test_allgather_comms) {
 TEST_F(ACCLTest, test_multicomm) {
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
-  if (count_bytes > options.segment_size) {
-    GTEST_SKIP() << "Send currently doesn't support segmentation. ";
-  }
 
   auto group = accl->get_comm_group(GLOBAL_COMM);
   unsigned int own_rank = accl->get_comm_rank(GLOBAL_COMM);
   int errors = 0;
   if (group.size() < 4) {
-    GTEST_SKIP() << "Too few ranks. ";
+    GTEST_SKIP() << "Too few::ranks. ";
   }
   if (own_rank == 1 || own_rank > 3) {
     EXPECT_TRUE(true);
@@ -620,7 +661,7 @@ TEST_F(ACCLTest, test_multicomm) {
   std::unique_ptr<float> host_op_buf = random_array<float>(count);
   auto op_buf = accl->create_buffer(host_op_buf.get(), count, dataType::float32);
   auto res_buf = accl->create_buffer<float>(count, dataType::float32);
-  // start with a send/recv between ranks 0 and 2 (0 and 1 in the new
+  // start with a send/recv between::ranks 0 and 2 (0 and 1 in the new
   // communicator)
   if (new_rank == 0) {
     accl->send(*op_buf, count, 1, 0, new_comm);
@@ -654,9 +695,6 @@ TEST_P(ACCLRootFuncTest, test_reduce) {
 
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
-  if (count_bytes > options.segment_size) {
-    GTEST_SKIP() << "Reduce currently doesn't support segmentation. ";
-  }
 
   auto op_buf = accl->create_buffer<float>(count, dataType::float32);
   auto res_buf = accl->create_buffer<float>(count, dataType::float32);
@@ -666,11 +704,11 @@ TEST_P(ACCLRootFuncTest, test_reduce) {
   accl->reduce(*op_buf, *res_buf, count, root, function);
 
   float res, ref;
-  if (rank == root) {
+  if (::rank == root) {
     for (unsigned int i = 0; i < count; ++i) {
       res = (*res_buf)[i];
-      ref = (function == reduceFunction::MAX) ? (*op_buf)[i] : (*op_buf)[i] * size;
-      EXPECT_EQ(res, ref);
+      ref = (function == reduceFunction::MAX) ? (*op_buf)[i] : (*op_buf)[i] *::size;
+      EXPECT_TRUE(is_close(res, ref, FLOAT32RTOL, FLOAT32ATOL));
     }
   } else {
     EXPECT_TRUE(true);
@@ -686,9 +724,6 @@ TEST_P(ACCLRootFuncTest, test_reduce_compressed) {
 
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
-  if (count_bytes > options.segment_size) {
-    GTEST_SKIP() << "Reduce currently doesn't support segmentation. ";
-  }
 
   auto op_buf = accl->create_buffer<float>(count, dataType::float32);
   auto res_buf = accl->create_buffer<float>(count, dataType::float32);
@@ -699,10 +734,10 @@ TEST_P(ACCLRootFuncTest, test_reduce_compressed) {
               false, dataType::float16);
 
   float res, ref;
-  if (rank == root) {
+  if (::rank == root) {
     for (unsigned int i = 0; i < count; ++i) {
       res = (*res_buf)[i];
-      ref = (function == reduceFunction::MAX) ? (*op_buf)[i] : (*op_buf)[i] * size;
+      ref = (function == reduceFunction::MAX) ? (*op_buf)[i] : (*op_buf)[i] *::size;
       EXPECT_TRUE(is_close(res, ref, FLOAT16RTOL, FLOAT16ATOL));
     }
   } else {
@@ -719,24 +754,21 @@ TEST_P(ACCLRootFuncTest, test_reduce_stream2mem) {
 
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
-  if (count_bytes > options.segment_size) {
-    GTEST_SKIP() << "Reduce currently doesn't support segmentation. ";
-  }
 
   auto op_buf = accl->create_buffer<float>(count, dataType::float32);
   auto res_buf = accl->create_buffer<float>(count, dataType::float32);
   random_array(op_buf->buffer(), count);
 
-  test_debug("Loading stream on rank" + std::to_string(rank) + "...", options);
+  test_debug("Loading stream on::rank" + std::to_string(::rank) + "...", options);
   accl->copy_to_stream(*op_buf, count, false);
   test_debug("Reduce data to " + std::to_string(root) + "...", options);
   accl->reduce(dataType::float32, *res_buf, count, root, function);
 
   float res, ref;
-  if (rank == root) {
+  if (::rank == root) {
     for (unsigned int i = 0; i < count; ++i) {
       res = (*res_buf)[i];
-      ref = (function == reduceFunction::MAX) ? (*op_buf)[i] : (*op_buf)[i] * size;
+      ref = (function == reduceFunction::MAX) ? (*op_buf)[i] : (*op_buf)[i] *::size;
       EXPECT_EQ(res, ref);
     }
   } else {
@@ -753,9 +785,6 @@ TEST_P(ACCLRootFuncTest, test_reduce_mem2stream) {
 
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
-  if (count_bytes > options.segment_size) {
-    GTEST_SKIP() << "Reduce currently doesn't support segmentation. ";
-  }
 
   auto op_buf = accl->create_buffer<float>(count, dataType::float32);
   auto res_buf = accl->create_buffer<float>(count, dataType::float32);
@@ -767,12 +796,12 @@ TEST_P(ACCLRootFuncTest, test_reduce_mem2stream) {
   accl->reduce(*op_buf, dataType::float32, count, root, function);
 
   float res, ref;
-  if (rank == root) {
-    test_debug("Unloading stream on rank" + std::to_string(rank) + "...", options);
+  if (::rank == root) {
+    test_debug("Unloading stream on::rank" + std::to_string(::rank) + "...", options);
     accl->copy_from_stream(*res_buf, count, false);
     for (unsigned int i = 0; i < count; ++i) {
       res = (*res_buf)[i];
-      ref = (function == reduceFunction::MAX) ? (*op_buf)[i] : (*op_buf)[i] * size;
+      ref = (function == reduceFunction::MAX) ? (*op_buf)[i] : (*op_buf)[i] *::size;
       EXPECT_EQ(res, ref);
     }
   } else {
@@ -789,9 +818,6 @@ TEST_P(ACCLRootFuncTest, test_reduce_stream2stream) {
 
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
-  if (count_bytes > options.segment_size) {
-    GTEST_SKIP() << "Reduce currently doesn't support segmentation. ";
-  }
 
   auto op_buf = accl->create_buffer<float>(count, dataType::float32);
   auto res_buf = accl->create_buffer<float>(count, dataType::float32);
@@ -799,18 +825,18 @@ TEST_P(ACCLRootFuncTest, test_reduce_stream2stream) {
   random_array(res_buf->buffer(), count);
   res_buf->sync_to_device();
 
-  test_debug("Loading stream on rank" + std::to_string(rank) + "...", options);
+  test_debug("Loading stream on::rank" + std::to_string(::rank) + "...", options);
   accl->copy_to_stream(*op_buf, count, false);
   test_debug("Reduce data to " + std::to_string(root) + "...", options);
   accl->reduce(dataType::float32, dataType::float32, count, root, function);
 
   float res, ref;
-  if (rank == root) {
-    test_debug("Unloading stream on rank" + std::to_string(rank) + "...", options);
+  if (::rank == root) {
+    test_debug("Unloading stream on::rank" + std::to_string(::rank) + "...", options);
     accl->copy_from_stream(*res_buf, count, false);
     for (unsigned int i = 0; i < count; ++i) {
       res = (*res_buf)[i];
-      ref = (function == reduceFunction::MAX) ? (*op_buf)[i] : (*op_buf)[i] * size;
+      ref = (function == reduceFunction::MAX) ? (*op_buf)[i] : (*op_buf)[i] *::size;
       EXPECT_EQ(res, ref);
     }
   } else {
@@ -826,13 +852,10 @@ TEST_P(ACCLFuncTest, test_reduce_scatter) {
 
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
-  if (count_bytes > options.segment_size) {
-    GTEST_SKIP() << "Reduce scatter currently doesn't support segmentation. ";
-  }
 
-  auto op_buf = accl->create_buffer<float>(count * size, dataType::float32);
+  auto op_buf = accl->create_buffer<float>(count *::size, dataType::float32);
   auto res_buf = accl->create_buffer<float>(count, dataType::float32);
-  random_array(op_buf->buffer(), count * size);
+  random_array(op_buf->buffer(), count *::size);
 
   test_debug("Reducing data...", options);
   accl->reduce_scatter(*op_buf, *res_buf, count, function);
@@ -840,7 +863,7 @@ TEST_P(ACCLFuncTest, test_reduce_scatter) {
   float res, ref;
   for (unsigned int i = 0; i < count; ++i) {
     res = (*res_buf)[i];
-    ref = (function == reduceFunction::MAX) ? (*op_buf)[i+rank*count] : (*op_buf)[i+rank*count] * size;
+    ref = (function == reduceFunction::MAX) ? (*op_buf)[i+ ::rank *count] : (*op_buf)[i+ ::rank *count] *::size;
     EXPECT_EQ(res, ref);
   }
 }
@@ -853,13 +876,10 @@ TEST_P(ACCLFuncTest, test_reduce_scatter_compressed) {
 
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
-  if (count_bytes > options.segment_size) {
-    GTEST_SKIP() << "Reduce scatter currently doesn't support segmentation. ";
-  }
 
-  auto op_buf = accl->create_buffer<float>(count * size, dataType::float32);
+  auto op_buf = accl->create_buffer<float>(count *::size, dataType::float32);
   auto res_buf = accl->create_buffer<float>(count, dataType::float32);
-  random_array(op_buf->buffer(), count * size);
+  random_array(op_buf->buffer(), count *::size);
 
   test_debug("Reducing data...", options);
   accl->reduce_scatter(*op_buf, *res_buf, count, function, GLOBAL_COMM, false, false, dataType::float16);
@@ -867,7 +887,7 @@ TEST_P(ACCLFuncTest, test_reduce_scatter_compressed) {
   float res, ref;
   for (unsigned int i = 0; i < count; ++i) {
     res = (*res_buf)[i];
-    ref = (function == reduceFunction::MAX) ? (*op_buf)[i+rank*count] : (*op_buf)[i+rank*count] * size;
+    ref = (function == reduceFunction::MAX) ? (*op_buf)[i+ ::rank *count] : (*op_buf)[i+ ::rank *count] *::size;
     EXPECT_TRUE(is_close(res, ref, FLOAT16RTOL, FLOAT16ATOL));
   }
 }
@@ -889,7 +909,7 @@ TEST_P(ACCLFuncTest, test_allreduce) {
   float res, ref;
   for (unsigned int i = 0; i < count; ++i) {
     res = (*res_buf)[i];
-    ref = (function == reduceFunction::MAX) ? (*op_buf)[i] : (*op_buf)[i] * size;
+    ref = (function == reduceFunction::MAX) ? (*op_buf)[i] : (*op_buf)[i] *::size;
     EXPECT_EQ(res, ref);
   }
 }
@@ -910,7 +930,7 @@ TEST_P(ACCLFuncTest, test_allreduce_compressed) {
   float res, ref;
   for (unsigned int i = 0; i < count; ++i) {
     res = (*res_buf)[i];
-    ref = (function == reduceFunction::MAX) ? (*op_buf)[i] : (*op_buf)[i] * size;
+    ref = (function == reduceFunction::MAX) ? (*op_buf)[i] : (*op_buf)[i] *::size;
     EXPECT_TRUE(is_close(res, ref, FLOAT16RTOL, FLOAT16ATOL));
   }
 }
@@ -919,10 +939,24 @@ TEST_F(ACCLTest, test_barrier) {
   accl->barrier();
 }
 
+TEST_F(ACCLTest, test_perf_counter) {
+  unsigned int count = options.count;
+  auto op_buf = accl->create_buffer<float>(count, dataType::float32);
+  auto res_buf = accl->create_buffer<float>(count, dataType::float32);
+  random_array(op_buf->buffer(), count);
+
+  test_debug("Reducing data...", options);
+  ACCL::ACCLRequest* req = accl->nop(true);
+  accl->wait(req);
+  //check NOP call duration is between 100ns and 1us 
+  bool cnt_in_range = (accl->get_duration(req) > 100) && (accl->get_duration(req) < 1000);
+  EXPECT_TRUE(cnt_in_range);
+}
+
 INSTANTIATE_TEST_SUITE_P(reduction_tests, ACCLFuncTest, testing::Values(reduceFunction::SUM, reduceFunction::MAX));
-INSTANTIATE_TEST_SUITE_P(rooted_tests, ACCLRootTest, testing::Range(0, size));
+INSTANTIATE_TEST_SUITE_P(rooted_tests, ACCLRootTest, testing::Range(0,::size));
 INSTANTIATE_TEST_SUITE_P(rooted_reduction_tests, ACCLRootFuncTest, 
-  testing::Combine(testing::Range(0, size), testing::Values(reduceFunction::SUM, reduceFunction::MAX))
+  testing::Combine(testing::Range(0,::size), testing::Values(reduceFunction::SUM, reduceFunction::MAX))
 );
 INSTANTIATE_TEST_SUITE_P(segmentation_tests, ACCLSegmentationTest, testing::Combine(testing::Values(1, 2), testing::Values(-1, 0, 1)));
 
@@ -969,6 +1003,10 @@ options_t parse_options(int argc, char *argv[]) {
   TCLAP::ValueArg<std::string> csvfile_arg("", "csvfile",
                                           "Name of CSV file to be created for benchmark results",
                                           false, "", "string");
+  TCLAP::ValueArg<unsigned int> max_eager_arg("", "max-eager-count",
+                                            "Maximum byte count for eager mode", false,
+                                            16*1024, "positive integer");
+  cmd.add(max_eager_arg);
   try {
     cmd.parse(argc, argv);
     if (hardware_arg.getValue()) {
@@ -979,7 +1017,7 @@ options_t parse_options(int argc, char *argv[]) {
       }
     }
   } catch (std::exception &e) {
-    if (rank == 0) {
+    if (::rank == 0) {
       std::cout << "Error: " << e.what() << std::endl;
     }
 
@@ -1007,6 +1045,7 @@ options_t parse_options(int argc, char *argv[]) {
   opts.startemu = startemu_arg.getValue();
   opts.benchmark = bench_arg.getValue();
   opts.csvfile = csvfile_arg.getValue();
+  opts.max_eager_count = max_eager_arg.getValue();
   return opts;
 }
 
@@ -1016,8 +1055,8 @@ int main(int argc, char *argv[]) {
 
   MPI_Init(&argc, &argv);
 
-  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-  MPI_Comm_size(MPI_COMM_WORLD, &size);
+  MPI_Comm_rank(MPI_COMM_WORLD, &::rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &::size);
 
   //init google test with any arguments specific to it
   ::testing::InitGoogleTest(&argc, argv);
@@ -1027,7 +1066,7 @@ int main(int argc, char *argv[]) {
   options = parse_options(argc, argv);
 
   if(options.startemu){
-    emulator_pid = start_emulator(options, size, rank);
+    emulator_pid = start_emulator(options,::size,::rank);
     if(!emulator_is_running(emulator_pid)){
       std::cout << "Could not start emulator" << std::endl;
       return -1;

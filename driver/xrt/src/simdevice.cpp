@@ -27,7 +27,8 @@ static void finish_sim_request(ACCL::SimRequest *req) {
   // wait on zmq context
   zmq_client_retcall(cclo->get_context());
   // get ret code before notifying waiting theads
-  req->set_retcode(cclo->read(ACCL::RETCODE_OFFSET));
+  req->set_retcode(cclo->read(ACCL::CCLO_ADDR::RETCODE_OFFSET));
+  req->set_duration(cclo->read(ACCL::CCLO_ADDR::PERFCNT_OFFSET));
   req->set_status(ACCL::operationStatus::COMPLETED);
   req->notify();
   cclo->complete_request(req);
@@ -55,8 +56,8 @@ void SimRequest::start() {
       options.comm, options.root_src_dst, function, options.arithcfg_addr,
       static_cast<int>(options.compression_flags),
       static_cast<int>(options.stream_flags),
-      options.addr_0->physical_address(), options.addr_1->physical_address(),
-      options.addr_2->physical_address());
+      options.addr_0->address(), options.addr_1->address(),
+      options.addr_2->address());
 
   // launch an async wait simulating a callback for completing
   auto f = std::async(std::launch::async, finish_sim_request, this);
@@ -113,6 +114,15 @@ bool SimDevice::test(ACCLRequest *request) {
   return sim_handle->second->get_status() == operationStatus::COMPLETED;
 }
 
+uint64_t SimDevice::get_duration(ACCLRequest *request) {  
+  auto sim_handle = request_map.find(*request);
+
+  if (sim_handle == request_map.end())
+    return 0;
+
+  return sim_handle->second->get_duration() * 4;
+}
+
 void SimDevice::free_request(ACCLRequest *request) {
   auto fpga_handle = request_map.find(*request);
 
@@ -150,6 +160,11 @@ void SimDevice::write(addr_t offset, val_t val) {
   zmq_client_cfgwrite(&(this->zmq_ctx), offset, val);
 }
 
+CCLO::deviceType SimDevice::get_device_type()
+{
+  std::cout<<"get_device_type: sim_device"<<std::endl;
+  return CCLO::sim_device;
+}
 void SimDevice::launch_request() {
   // This guarantees permission to only one thread trying to start an operation
   if (queue.run()) {

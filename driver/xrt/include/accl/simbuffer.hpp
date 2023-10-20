@@ -87,7 +87,7 @@ private:
    *
    */
   void allocate_buffer() {
-    zmq_client_memalloc(this->zmq_ctx, (uint64_t)this->_physical_address,
+    zmq_client_memalloc(this->zmq_ctx, (uint64_t)this->_address,
                         (unsigned int)this->_size);
   }
 
@@ -141,11 +141,11 @@ public:
    * @param length           Amount of elements in host pointer.
    * @param type             ACCL datatype of buffer.
    * @param context          The zmq server of the CCLO to use.
-   * @param physical_address The physical address of the device buffer.
+   * @param address The physical address of the device buffer.
    */
   SimBuffer(dtype *buffer, size_t length, dataType type,
-            zmq_intf_context *const context, const addr_t physical_address)
-      : Buffer<dtype>(buffer, length, type, physical_address), zmq_ctx(context),
+            zmq_intf_context *const context, const addr_t address)
+      : Buffer<dtype>(buffer, length, type, address), zmq_ctx(context),
         _bo(xrt::bo()) {
     allocate_buffer();
   }
@@ -155,10 +155,10 @@ public:
    *
    */
   SimBuffer(dtype *buffer, size_t length, dataType type,
-            zmq_intf_context *const context, const addr_t physical_address,
+            zmq_intf_context *const context, const addr_t address,
             xrt::bo &bo, xrt::device &device, bool bo_valid_,
             bool is_slice = false)
-      : Buffer<dtype>(buffer, length, type, physical_address), zmq_ctx(context),
+      : Buffer<dtype>(buffer, length, type, address), zmq_ctx(context),
         _bo(bo), _device(device), bo_valid(bo_valid_) {
     if (bo_valid) {
       internal_copy_bo = xrt::bo(_device, this->_size,
@@ -186,7 +186,7 @@ public:
    * @return xrt::bo* The underlying BO buffer if it exists, otherwise a
    * nullptr.
    */
-  xrt::bo *bo() override {
+  xrt::bo *bo() {
     if (bo_valid) {
       return &_bo;
     }
@@ -201,6 +201,12 @@ public:
   bool is_simulated() const override { return true; }
 
   /**
+   * Check if the buffer is host-only, always false in sim.
+   *
+   */
+  bool is_host_only() const override { return false; }
+
+  /**
    * Sync the user BO buffer to the simulated buffer.
    *
    */
@@ -210,7 +216,7 @@ public:
       // want to overwrite the host pointer of the user BO buffer.
       internal_copy_bo.copy(_bo, this->_size);
       internal_copy_bo.sync(xclBOSyncDirection::XCL_BO_SYNC_BO_FROM_DEVICE);
-      zmq_client_memwrite(this->zmq_ctx, (uint64_t)this->_physical_address,
+      zmq_client_memwrite(this->zmq_ctx, (uint64_t)this->_address,
                           (unsigned int)this->_size,
                           internal_copy_bo.map<uint8_t *>());
     }
@@ -222,7 +228,7 @@ public:
    */
   void sync_bo_from_device() override {
     if (bo_valid) {
-      zmq_client_memread(this->zmq_ctx, (uint64_t)this->_physical_address,
+      zmq_client_memread(this->zmq_ctx, (uint64_t)this->_address,
                          (unsigned int)this->_size,
                          internal_copy_bo.map<uint8_t *>());
       // Use the internal copy BO buffer to sync to the device, since we don't
@@ -242,7 +248,7 @@ public:
     // First sync the BO buffer to the simulated buffer to make sure it's up to
     // date.
     sync_bo_to_device();
-    zmq_client_memread(this->zmq_ctx, (uint64_t)this->_physical_address,
+    zmq_client_memread(this->zmq_ctx, (uint64_t)this->_address,
                        (unsigned int)this->_size,
                        static_cast<uint8_t *>(this->_byte_array));
   }
@@ -254,7 +260,7 @@ public:
    *
    */
   void sync_to_device() override {
-    zmq_client_memwrite(this->zmq_ctx, (uint64_t)this->_physical_address,
+    zmq_client_memwrite(this->zmq_ctx, (uint64_t)this->_address,
                         (unsigned int)this->_size,
                         static_cast<uint8_t *>(this->_byte_array));
     if (bo_valid) {
@@ -277,7 +283,7 @@ public:
 
     return std::unique_ptr<BaseBuffer>(new SimBuffer(
         &this->_buffer[start], end - start, this->_type, this->zmq_ctx,
-        this->_physical_address + start, bo_slice, _device, bo_valid, true));
+        this->_address + start, bo_slice, _device, bo_valid, true));
   }
 };
 } // namespace ACCL

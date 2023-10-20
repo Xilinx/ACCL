@@ -54,10 +54,10 @@ class TestEnvironment : public ::testing::Environment {
       std::vector<rank_t> ranks;
 
       if (options.config_file == "") {
-        ranks = generate_ranks(!options.hardware || options.axis3, rank, size,
+        ranks = generate_ranks(!options.hardware || options.axis3, ::rank, ::size,
                               options.start_port, options.rxbuf_size);
       } else {
-        ranks = generate_ranks(options.config_file, rank, options.start_port,
+        ranks = generate_ranks(options.config_file, ::rank, options.start_port,
                               options.rxbuf_size);
       }
 
@@ -77,9 +77,9 @@ class TestEnvironment : public ::testing::Environment {
       }
 
       // Set up for benchmarking
-      if (options.benchmark && options.hardware && !(options.axis3 && rank > 0)) {
+      if (options.benchmark && options.hardware && !(options.axis3 && ::rank > 0)) {
         // Create a probe object or disable benchmark
-        std::cout << "Initializing call probe on rank " << rank << std::endl;
+        std::cout << "Initializing call probe on rank " << ::rank << std::endl;
         auto xclbin_uuid = dev.load_xclbin(options.xclbin);
         try{
           auto probe_krnl = xrt::kernel(dev, xclbin_uuid, "call_probe:{probe_0}");
@@ -103,10 +103,11 @@ class TestEnvironment : public ::testing::Environment {
       }
 
       accl = initialize_accl(
-          ranks, rank, !options.hardware, design, dev, options.xclbin, options.rxbuf_count,
+          ranks, ::rank, !options.hardware, design, dev, options.xclbin, options.rxbuf_count,
           options.rxbuf_size, options.segment_size, options.rsfec);
       std::cout << "Setting up TestEnvironment" << std::endl;
       accl->set_timeout(1e6);
+      accl->set_rendezvous_threshold(options.max_eager_count);
 
       if(options.benchmark){
         probe->read();
