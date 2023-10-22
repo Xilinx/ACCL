@@ -39,7 +39,7 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          DEBIAN_FRONTEND=noninteractive sudo apt-get install -y --no-install-recommends build-essential cmake libjsoncpp-dev libzmqpp-dev libtclap-dev libopenmpi-dev
+          DEBIAN_FRONTEND=noninteractive sudo apt-get install -y --no-install-recommends build-essential cmake libjsoncpp-dev libzmqpp-dev libtclap-dev libopenmpi-dev libboost-all-dev
           sudo dpkg -i xrt.deb || true
           sudo apt --fix-broken install -y --no-install-recommends 
 
