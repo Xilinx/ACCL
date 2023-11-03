@@ -102,7 +102,7 @@ proc create_hier_cell_microblaze_0_local_memory { parentCell nameHier } {
 
 
 # Hierarchical cell: exchange_mem
-proc create_hier_cell_exchange_mem { parentCell nameHier } {
+proc create_hier_cell_exchange_mem { parentCell nameHier idCode} {
 
   if { $parentCell eq "" || $nameHier eq "" } {
      catch {common::send_gid_msg -ssname BD::TCL -id 2092 -severity "ERROR" "create_hier_cell_exchange_mem() - Empty argument(s)!"}
@@ -202,7 +202,7 @@ set axi_bram_ctrl_bypass [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_bram_
   set xlconstant_hwid [ create_bd_cell -type ip -vlnv xilinx.com:ip:xlconstant:1.1 xlconstant_hwid ]
   set_property -dict [ list \
    CONFIG.CONST_WIDTH {32} \
-   CONFIG.CONST_VAL {0xcafebabe} \
+   CONFIG.CONST_VAL $idCode \
  ] $xlconstant_hwid
 
   # Create instance: axi_register_slice_0, and set properties
@@ -342,7 +342,7 @@ proc create_hier_cell_cmd_arbiter { parentCell nameHier {numCmdStreams 1} } {
 }
 
 # Hierarchical cell: control
-proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
+proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} {idCode 0xcafebabe} } {
 
   if { $parentCell eq "" || $nameHier eq "" } {
      catch {common::send_gid_msg -ssname BD::TCL -id 2092 -severity "ERROR" "create_hier_cell_control() - Empty argument(s)!"}
@@ -462,7 +462,7 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
   set_property -dict [ list CONFIG.NUM_MI {5} ] $microblaze_0_axi_periph
 
   # Create instance: exchange_mem
-  create_hier_cell_exchange_mem $hier_obj exchange_mem
+  create_hier_cell_exchange_mem $hier_obj exchange_mem $idCode
 
   # Create instance: microblaze_0_local_memory
   create_hier_cell_microblaze_0_local_memory $hier_obj microblaze_0_local_memory

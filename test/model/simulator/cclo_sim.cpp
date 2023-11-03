@@ -495,7 +495,7 @@ int main(int argc, char **argv)
     }
 
     //set up the logger with the specified log level
-    logger = Log(static_cast<log_level>(loglevel.getValue(), localrank.getValue()));
+    logger = Log(static_cast<log_level>(loglevel.getValue()), localrank.getValue());
 
     //get world size and local rank from environment
     unsigned int world_size = worldsize.getValue(); // number of processes

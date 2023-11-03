@@ -25,7 +25,8 @@
 # enableCompression - 0/1 - enables compression feature
 # enableExtKrnlStream - 0/1 - enables PL stream attachments, providing support for non-memory send/recv
 # debugLevel - 0/1/2 - enables DEBUG/TRACE support for the control microblaze
-proc create_root_design { netStackType enableDMA enableArithmetic enableCompression enableExtKrnlStream debugLevel externalDMA } {
+# commitHash - first 24 bits of the commit hash from which we're building
+proc create_root_design { netStackType enableDMA enableArithmetic enableCompression enableExtKrnlStream debugLevel externalDMA {commitHash 0xcafeba} } {
 
   if { ( $enableDMA == 0 ) && ( $externalDMA == 0) && ( $enableExtKrnlStream == 0) } {
       catch {common::send_gid_msg -severity "ERROR" "No data sources and sinks enabled, please enable either DMAs or Streams"}
@@ -110,8 +111,9 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
   set control_xbar [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_interconnect:2.1 control_xbar ]
   set_property -dict [ list CONFIG.NUM_MI {2} ] $control_xbar
 
-  source -notrace ./tcl/control_bd.tcl
-  create_hier_cell_control [current_bd_instance .] control $debugLevel
+  source -notrace ./tcl/control_bd.tcl  
+  set idcode [expr {$commitHash<<8 | $externalDMA<<7 | ($debugLevel > 0)<<6 | $enableExtKrnlStream<<5 | $enableCompression<<4 | $enableArithmetic<<3 | $enableDMA<<2 | ($netStackType == "RDMA" ? 2 : $netStackType == "TCP" ? 1 : 0) }]
+  create_hier_cell_control [current_bd_instance .] control $debugLevel $idcode
 
   if { $enableDMA == 1 } {
 

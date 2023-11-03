@@ -316,7 +316,7 @@ enum class compressionFlags {
 enum class networkProtocol {
   TCP,  /**< The TCP protocol */
   UDP,  /**< The UDP protocol */
-  RDMA  /**< Use RDMA for data transfers; currently unsupported */
+  RDMA  /**< Use RDMA for data transfers */
 };
 
 inline compressionFlags operator|(compressionFlags lhs, compressionFlags rhs) {

@@ -47,6 +47,7 @@ else
 	$(error Unsupported PLATFORM)
 endif
 
+COMMIT_HASH := 0x$(shell git rev-parse HEAD | cut -c 1-6)
 GEN_KERNEL_TCL := tcl/generate_kernel.tcl
 REBUILD_BD_TCL := tcl/rebuild_bd.tcl tcl/control_bd.tcl tcl/rx_bd.tcl tcl/tx_bd.tcl
 
@@ -57,7 +58,7 @@ xsa: $(CCLO_XSA)
 
 $(CCLO_XSA): $(GEN_KERNEL_TCL) $(REBUILD_BD_TCL)
 	$(MAKE) -C hls/ DEVICE=$(FPGAPART)
-	vivado -mode batch -source $< -tclargs $(FPGAPART) $(HW_DEBUG) $(CCLO_XSA) $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) $(MB_DEBUG_LEVEL) $(EN_EXT_DMA)
+	vivado -mode batch -source $< -tclargs $(FPGAPART) $(HW_DEBUG) $(CCLO_XSA) $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) $(MB_DEBUG_LEVEL) $(EN_EXT_DMA) $(COMMIT_HASH)
 
 OPTIMIZATION=3
 #valid values 0,1,2,3,s,g

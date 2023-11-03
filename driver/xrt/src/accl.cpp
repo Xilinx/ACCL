@@ -1146,12 +1146,27 @@ std::string ACCL::dump_eager_rx_buffers(size_t n_egr_rx_bufs, bool dump_data) {
   return stream.str();
 }
 
+void ACCL::parse_hwid(){
+  unsigned int hwid = get_hwid();
+  debug("CCLO HWID: " + std::to_string(hwid) + " at 0x" + debug_hex(cclo->get_base_addr()));
+  //   set idcode [expr { $externalDMA<<7 | ($debugLevel > 0)<<6 | $enableExtKrnlStream<<5 | $enableCompression<<4 | $enableArithmetic<<3 | $enableDMA<<2 | ($netStackType == "RDMA" ? 2 : $netStackType == "TCP" ? 1 : 0) }]
+  debug("CCLO source commit (first 24b): " + debug_hex((hwid >> 8) & 0xffffff));
+  debug("CCLO Capabilities:");
+  unsigned int stype = hwid & 0x3;
+  debug("Stack type: " + std::string((stype == 0) ? "UDP" : (stype == 1) ? "TCP" : (stype == 2) ? "RDMA" : "Unrecognized"));
+  debug("Internal DMA:" + std::string(((hwid >> 2) & 0x1) ? "True" : "False"));
+  debug("External DMA:" + std::string(((hwid >> 7) & 0x1) ? "True" : "False"));
+  debug("Reduction:" + std::string(((hwid >> 3) & 0x1) ? "True" : "False"));
+  debug("Compression:" + std::string(((hwid >> 4) & 0x1) ? "True" : "False"));
+  debug("Kernel Streams:" + std::string(((hwid >> 5) & 0x1) ? "True" : "False"));
+  debug("Debug:" + std::string(((hwid >> 6) & 0x1) ? "True" : "False"));
+}
+
 void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
                            int n_egr_rx_bufs, addr_t egr_rx_buf_size, 
                            addr_t max_egr_size, addr_t max_rndzv_size) {
-  // reset_log();
-  debug("CCLO HWID: " + std::to_string(get_hwid()) + " at 0x" +
-        debug_hex(cclo->get_base_addr()));
+
+  parse_hwid();
 
   if (cclo->read(CCLO_ADDR::CFGRDY_OFFSET) != 0) {
     throw std::runtime_error("CCLO appears configured, might be in use. Please "

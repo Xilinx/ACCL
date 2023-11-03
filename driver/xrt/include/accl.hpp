@@ -135,6 +135,12 @@ public:
   val_t get_hwid() { return this->cclo->read(CCLO_ADDR::IDCODE_OFFSET); }
 
   /**
+   * Parse the hardware id from the FPGA.
+   *
+   */
+  void parse_hwid();
+
+  /**
    * Set the timeout of ACCL calls.
    *
    * @param value          Timeout in miliseconds
