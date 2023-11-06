@@ -36,7 +36,7 @@ TEST_F(ACCLTest, test_copy){
   accl->copy(*op_buf, *res_buf, count);
 
   for (unsigned int i = 0; i < count; ++i) {
-    EXPECT_EQ((*op_buf)[i], (*res_buf)[i]);
+    EXPECT_FLOAT_EQ((*op_buf)[i], (*res_buf)[i]);
   }
 }
 
@@ -50,7 +50,7 @@ TEST_F(ACCLTest, test_copy_stream) {
   accl->copy_from_stream(*res_buf, count, false);
 
   for (unsigned int i = 0; i < count; ++i) {
-    EXPECT_EQ((*op_buf)[i], (*res_buf)[i]);
+    EXPECT_FLOAT_EQ((*op_buf)[i], (*res_buf)[i]);
   }
 }
 
@@ -71,7 +71,7 @@ TEST_F(ACCLTest, test_copy_p2p) {
   accl->copy(*op_buf, *p2p_buf, count);
 
   for (unsigned int i = 0; i < count; ++i) {
-    EXPECT_EQ((*op_buf)[i], (*p2p_buf)[i]);
+    EXPECT_FLOAT_EQ((*op_buf)[i], (*p2p_buf)[i]);
   }
 }
 
@@ -98,7 +98,7 @@ TEST_P(ACCLFuncTest, test_combine) {
       ref = ((*op_buf1)[i] > (*op_buf2)[i]) ? (*op_buf1)[i] : (*op_buf2)[i];
       res = (*res_buf)[i];
     }
-    EXPECT_EQ(ref, res);
+    EXPECT_FLOAT_EQ(ref, res);
   }
 }
 
@@ -138,7 +138,7 @@ TEST_F(ACCLTest, test_sendrcv_basic) {
 
   if(next_rank < ::size){
     for (unsigned int i = 0; i < count; ++i) {
-      EXPECT_EQ((*res_buf)[i], (*op_buf)[i]);
+      EXPECT_FLOAT_EQ((*res_buf)[i], (*op_buf)[i]);
     }
   } else {
     SUCCEED();
@@ -198,7 +198,7 @@ TEST_F(ACCLTest, test_sendrcv_bo) {
   recv_bo.sync(XCL_BO_SYNC_BO_FROM_DEVICE);
 
   for (unsigned int i = 0; i < count; ++i) {
-    EXPECT_EQ(validation_data[i], data[i]);
+    EXPECT_FLOAT_EQ(validation_data[i], data[i]);
   }
 
   std::free(data);
@@ -236,7 +236,7 @@ TEST_F(ACCLTest, test_sendrcv) {
   accl->recv(*res_buf, count, next_rank, 1);
 
   for (unsigned int i = 0; i < count; ++i) {
-    EXPECT_EQ((*res_buf)[i], (*op_buf)[i]);
+    EXPECT_FLOAT_EQ((*res_buf)[i], (*op_buf)[i]);
   }
 
 }
@@ -284,7 +284,7 @@ TEST_P(ACCLSegmentationTest, test_sendrcv_segmentation){
   accl->recv(*res_buf, count, next_rank, 1);
 
   for (unsigned int i = 0; i < count; ++i) {
-    EXPECT_EQ((*res_buf)[i], (*op_buf)[i]);
+    EXPECT_FLOAT_EQ((*res_buf)[i], (*op_buf)[i]);
   }
 }
 
@@ -315,7 +315,7 @@ TEST_F(ACCLTest, test_sendrcv_stream) {
   accl->recv(*res_buf, count, next_rank, 1);
 
   for (unsigned int i = 0; i < count; ++i) {
-    EXPECT_EQ((*res_buf)[i], (*op_buf)[i]);
+    EXPECT_FLOAT_EQ((*res_buf)[i], (*op_buf)[i]);
   }
 
 }
@@ -343,7 +343,7 @@ TEST_F(ACCLTest, test_stream_put) {
   accl->recv(*res_buf, count, next_rank, 1);
 
   for (unsigned int i = 0; i < count; ++i) {
-    EXPECT_EQ((*res_buf)[i], (*op_buf)[i]);
+    EXPECT_FLOAT_EQ((*res_buf)[i], (*op_buf)[i]);
   }
 
 }
@@ -410,7 +410,7 @@ TEST_P(ACCLRootTest, test_bcast) {
 
   if (::rank != root) {
     for (unsigned int i = 0; i < count; ++i) {
-      EXPECT_EQ((*res_buf)[i], (*op_buf)[i]);
+      EXPECT_FLOAT_EQ((*res_buf)[i], (*op_buf)[i]);
     }
   } else {
     EXPECT_TRUE(true);
@@ -455,7 +455,7 @@ TEST_P(ACCLRootTest, test_scatter) {
   accl->scatter(*op_buf, *res_buf, count, root);
 
   for (unsigned int i = 0; i < count; ++i) {
-    EXPECT_EQ((*res_buf)[i], (*op_buf)[i +::rank * count]);
+    EXPECT_FLOAT_EQ((*res_buf)[i], (*op_buf)[i +::rank * count]);
   }
 }
 
@@ -496,7 +496,7 @@ TEST_P(ACCLRootTest, test_gather) {
 
   if (::rank == root) {
     for (unsigned int i = 0; i < count *::size; ++i) {
-      EXPECT_EQ((*res_buf)[i], host_op_buf.get()[i]);
+      EXPECT_FLOAT_EQ((*res_buf)[i], host_op_buf.get()[i]);
     }
   } else {
     EXPECT_TRUE(true);
@@ -544,7 +544,7 @@ TEST_F(ACCLTest, test_alltoall) {
 
   for (int i = 0; i < ::size; ++i) {
     for (unsigned int j = 0; j < count; ++j) {
-      EXPECT_EQ((*res_buf)[i*count+j], host_op_buf.get()[i*::size*count+::rank*count+j]);
+      EXPECT_FLOAT_EQ((*res_buf)[i*count+j], host_op_buf.get()[i*::size*count+::rank*count+j]);
     }
   }
 }
@@ -561,7 +561,7 @@ TEST_F(ACCLTest, test_allgather) {
   accl->allgather(*op_buf, *res_buf, count);
 
   for (unsigned int i = 0; i < count *::size; ++i) {
-    EXPECT_EQ((*res_buf)[i], host_op_buf.get()[i]);
+    EXPECT_FLOAT_EQ((*res_buf)[i], host_op_buf.get()[i]);
   }
 }
 
@@ -634,7 +634,7 @@ TEST_F(ACCLTest, test_allgather_comms) {
     } else {
       ref = 0.0;
     }
-    EXPECT_EQ(res, ref);
+    EXPECT_FLOAT_EQ(res, ref);
   }
 }
 
@@ -668,7 +668,7 @@ TEST_F(ACCLTest, test_multicomm) {
     accl->recv(*res_buf, count, 1, 1, new_comm);
     test_debug("Second recv completed", options);
     for (unsigned int i = 0; i < count; ++i) {
-      EXPECT_EQ((*res_buf)[i], host_op_buf.get()[i]);
+      EXPECT_FLOAT_EQ((*res_buf)[i], host_op_buf.get()[i]);
     }
   } else if (new_rank == 1) {
     accl->recv(*res_buf, count, 0, 0, new_comm);
@@ -682,7 +682,7 @@ TEST_F(ACCLTest, test_multicomm) {
   }
   accl->allreduce(*op_buf, *res_buf, count, ACCL::reduceFunction::SUM, new_comm);
   for (unsigned int i = 0; i < count; ++i) {
-    EXPECT_EQ((*res_buf)[i], 3*host_op_buf.get()[i]);
+    EXPECT_FLOAT_EQ((*res_buf)[i], 3*host_op_buf.get()[i]);
   }
 }
 
@@ -769,7 +769,7 @@ TEST_P(ACCLRootFuncTest, test_reduce_stream2mem) {
     for (unsigned int i = 0; i < count; ++i) {
       res = (*res_buf)[i];
       ref = (function == reduceFunction::MAX) ? (*op_buf)[i] : (*op_buf)[i] *::size;
-      EXPECT_EQ(res, ref);
+      EXPECT_FLOAT_EQ(res, ref);
     }
   } else {
     EXPECT_TRUE(true);
@@ -802,7 +802,7 @@ TEST_P(ACCLRootFuncTest, test_reduce_mem2stream) {
     for (unsigned int i = 0; i < count; ++i) {
       res = (*res_buf)[i];
       ref = (function == reduceFunction::MAX) ? (*op_buf)[i] : (*op_buf)[i] *::size;
-      EXPECT_EQ(res, ref);
+      EXPECT_FLOAT_EQ(res, ref);
     }
   } else {
     EXPECT_TRUE(true);
@@ -837,7 +837,7 @@ TEST_P(ACCLRootFuncTest, test_reduce_stream2stream) {
     for (unsigned int i = 0; i < count; ++i) {
       res = (*res_buf)[i];
       ref = (function == reduceFunction::MAX) ? (*op_buf)[i] : (*op_buf)[i] *::size;
-      EXPECT_EQ(res, ref);
+      EXPECT_FLOAT_EQ(res, ref);
     }
   } else {
     EXPECT_TRUE(true);
@@ -864,7 +864,7 @@ TEST_P(ACCLFuncTest, test_reduce_scatter) {
   for (unsigned int i = 0; i < count; ++i) {
     res = (*res_buf)[i];
     ref = (function == reduceFunction::MAX) ? (*op_buf)[i+ ::rank *count] : (*op_buf)[i+ ::rank *count] *::size;
-    EXPECT_EQ(res, ref);
+    EXPECT_FLOAT_EQ(res, ref);
   }
 }
 
@@ -910,7 +910,7 @@ TEST_P(ACCLFuncTest, test_allreduce) {
   for (unsigned int i = 0; i < count; ++i) {
     res = (*res_buf)[i];
     ref = (function == reduceFunction::MAX) ? (*op_buf)[i] : (*op_buf)[i] *::size;
-    EXPECT_EQ(res, ref);
+    EXPECT_FLOAT_EQ(res, ref);
   }
 }
 
