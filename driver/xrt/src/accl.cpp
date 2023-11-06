@@ -84,7 +84,7 @@ void ACCL::deinit() {
   debug("Removing CCLO object at " + debug_hex(cclo->get_base_addr()));
 
   cclo->printDebug();
-  
+
   CCLO::Options options{};
   options.scenario = operation::config;
   options.cfg_function = cfgFunc::reset_periph;
@@ -512,8 +512,6 @@ ACCLRequest *ACCL::scatter(BaseBuffer &sendbuf,
                            std::vector<ACCLRequest *> waitfor) {
   CCLO::Options options{};
 
-  unsigned count_bytes = count * (dataTypeSize.at(sendbuf.type()) / 8);
-
   const Communicator &communicator = communicators[comm_id];
 
   bool is_root = communicator.local_rank() == root;
@@ -564,8 +562,6 @@ ACCLRequest *ACCL::gather(BaseBuffer &sendbuf,
                           dataType compress_dtype, bool run_async,
                           std::vector<ACCLRequest *> waitfor) {
   CCLO::Options options{};
-
-  unsigned count_bytes = count * (dataTypeSize.at(sendbuf.type()) / 8);
 
   const Communicator &communicator = communicators[comm_id];
 
@@ -627,8 +623,6 @@ ACCLRequest *ACCL::allgather(BaseBuffer &sendbuf,
                              std::vector<ACCLRequest *> waitfor) {
   CCLO::Options options{};
 
-  unsigned count_bytes = count * (dataTypeSize.at(sendbuf.type()) / 8);
-
   const Communicator &communicator = communicators[comm_id];
 
   if (to_fpga == false && run_async == true) {
@@ -687,8 +681,6 @@ ACCLRequest *ACCL::reduce(BaseBuffer &sendbuf,
                           std::vector<ACCLRequest *> waitfor) {
   CCLO::Options options{};
 
-  unsigned count_bytes = count * (dataTypeSize.at(sendbuf.type()) / 8);
-
   const Communicator &communicator = communicators[comm_id];
 
   bool is_root = communicator.local_rank() == root;
@@ -741,8 +733,6 @@ ACCLRequest *ACCL::reduce(dataType src_data_type,
                           std::vector<ACCLRequest *> waitfor) {
   CCLO::Options options{};
 
-  unsigned count_bytes = count * (dataTypeSize.at(src_data_type) / 8);
-
   const Communicator &communicator = communicators[comm_id];
 
   bool is_root = communicator.local_rank() == root;
@@ -791,8 +781,6 @@ ACCLRequest *ACCL::reduce(BaseBuffer &sendbuf, dataType dst_data_type,
                           std::vector<ACCLRequest *> waitfor) {
   CCLO::Options options{};
 
-  unsigned count_bytes = count * (dataTypeSize.at(sendbuf.type()) / 8);
-
   const Communicator &communicator = communicators[comm_id];
 
   if (count == 0) {
@@ -833,8 +821,6 @@ ACCLRequest *ACCL::reduce(dataType src_data_type, dataType dst_data_type,
                           dataType compress_dtype, bool run_async,
                           std::vector<ACCLRequest *> waitfor) {
   CCLO::Options options{};
-
-  unsigned count_bytes = count * (dataTypeSize.at(src_data_type) / 8);
 
   const Communicator &communicator = communicators[comm_id];
 
@@ -923,8 +909,6 @@ ACCLRequest *ACCL::reduce_scatter(BaseBuffer &sendbuf,
                                   std::vector<ACCLRequest *> waitfor) {
   CCLO::Options options{};
 
-  unsigned count_bytes = count * (dataTypeSize.at(sendbuf.type()) / 8);
-
   const Communicator &communicator = communicators[comm_id];
 
   if (to_fpga == false && run_async == true) {
@@ -971,8 +955,6 @@ ACCLRequest *ACCL::alltoall(BaseBuffer &sendbuf, BaseBuffer &recvbuf, unsigned i
                             communicatorId comm_id, bool from_fpga, bool to_fpga,
                             dataType compress_dtype, bool run_async, std::vector<ACCLRequest *> waitfor){
   CCLO::Options options{};
-
-  unsigned count_bytes = count * (dataTypeSize.at(sendbuf.type()) / 8);
 
   const Communicator &communicator = communicators[comm_id];
 
@@ -1025,7 +1007,6 @@ ACCLRequest *ACCL::alltoall(BaseBuffer &sendbuf, BaseBuffer &recvbuf, unsigned i
   return nullptr;
 
 }
-
 
 void ACCL::barrier(communicatorId comm_id,
                    std::vector<ACCLRequest *> waitfor) {
@@ -1163,7 +1144,7 @@ void ACCL::parse_hwid(){
 }
 
 void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
-                           int n_egr_rx_bufs, addr_t egr_rx_buf_size, 
+                           int n_egr_rx_bufs, addr_t egr_rx_buf_size,
                            addr_t max_egr_size, addr_t max_rndzv_size) {
 
   parse_hwid();
@@ -1275,7 +1256,7 @@ void ACCL::setup_rendezvous_spare_buffers(addr_t rndzv_spare_buf_size, const std
       buf = new SimBuffer(new int8_t[max_rndzv_msg_size](), max_rndzv_msg_size, dataType::int8,
                         static_cast<SimDevice *>(cclo)->get_context());
     } else if(cclo->get_device_type() == CCLO::xrt_device ){
-      buf = new FPGABuffer<int8_t>(max_rndzv_msg_size, dataType::int8, 
+      buf = new FPGABuffer<int8_t>(max_rndzv_msg_size, dataType::int8,
                         *(static_cast<FPGADevice *>(cclo)->get_device()), devicemem[i % devicemem.size()]);
     } else if(cclo->get_device_type() == CCLO::coyote_device){
       buf = new CoyoteBuffer<int8_t>(max_rndzv_msg_size, dataType::int8, static_cast<CoyoteDevice *>(cclo));
@@ -1367,7 +1348,6 @@ void ACCL::prepare_call(CCLO::Options &options) {
 
   // if no compressed data type specified, set same as uncompressed
   options.compression_flags = compressionFlags::NO_COMPRESSION;
-
 
   if (dtypes.empty()) {
     options.arithcfg_addr = 0x0;
@@ -1512,7 +1492,6 @@ void ACCL::set_max_rendezvous_msg_size(unsigned int value) {
   max_eager_msg_size = value;
   check_return_value("set_max_rendezvous_msg_size", handle);
 }
-
 
 void ACCL::configure_communicator(const std::vector<rank_t> &ranks,
                                             int local_rank) {
