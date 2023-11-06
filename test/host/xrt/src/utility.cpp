@@ -27,6 +27,16 @@ pid_t start_emulator(options_t opts, unsigned size, unsigned rank) {
   pid_t pid = fork();
   if (pid == 0) {
     // we're in a child process, start emulated rank
+    char const* emu_path_envvar = getenv("ACCL_EMULATOR_PATH");
+    std::string emu_path;
+    if(emu_path_envvar != NULL){
+      emu_path = std::string(emu_path_envvar);
+      std::cout << "Using emulator at " << emu_path << std::endl;
+    } else {
+      std::cout << "Using emulator at default path" << std::endl;
+      emu_path = "../../model/emulator/cclo_emu";
+    }
+
     std::stringstream outss, errss;
     outss << "emu_rank_" << rank << "_stdout.log";
     errss << "emu_rank_" << rank << "_stderr.log";
@@ -36,14 +46,23 @@ pid_t start_emulator(options_t opts, unsigned size, unsigned rank) {
     dup2(outfd, STDOUT_FILENO);
     dup2(errfd, STDERR_FILENO);
 
-    char* emu_argv[] = {(char*)"../../model/emulator/cclo_emu",
+    std::string comm_backend;
+    if(opts.udp || opts.roce){
+      comm_backend = "udp";
+    } else if(opts.tcp || opts.cyt_tcp || opts.axis3){
+      comm_backend = "tcp";
+    } else if(opts.cyt_rdma){
+      comm_backend = "cyt_rdma";
+    }
+
+    char* emu_argv[] = {(char*)(emu_path.c_str()),
                         (char*)"-s", (char*)(std::to_string(size).c_str()),
                         (char*)"-r", (char*)(std::to_string(rank).c_str()),
                         (char*)"-p", (char*)(std::to_string(opts.start_port).c_str()),
                         (char*)"-b",
-                        opts.udp ? (char*)"-u" : NULL,
+                        (char*)"--comms", (char*)(comm_backend.c_str()),
                         NULL};
-    execvp("../../model/emulator/cclo_emu", emu_argv);
+    execvp(emu_path.c_str(), emu_argv);
     //guard against failed execution of emulator (child will exit)
     exit(0);
   }

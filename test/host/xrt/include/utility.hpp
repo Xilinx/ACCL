@@ -42,6 +42,8 @@ struct options_t {
   bool udp;
   bool tcp;
   bool roce;
+  bool cyt_tcp;
+  bool cyt_rdma;
   bool return_error;
   bool rsfec;
   std::string xclbin;

@@ -31,7 +31,7 @@
 // TODO: Properly document functions in this header
 
 namespace accl_network_utils {
-enum class acclDesign { AXIS3x, TCP, UDP, ROCE };
+enum class acclDesign { AXIS3x, TCP, UDP, ROCE, CYT_TCP, CYT_RDMA };
 
 // Error used for runtime network problems
 class network_error : public std::runtime_error {
