@@ -9,6 +9,7 @@ runs:
       with:
         path: xrt.deb
         key: ${{ runner.os }}-xrt
+        fail-on-cache-miss: true
 
     - name: Restore Cached Emulator
       id: cache-emulator-restore
@@ -16,6 +17,7 @@ runs:
       with:
         path: cclo_emu
         key: ${{ runner.os }}-emulator-${{ github.run_id }}
+        fail-on-cache-miss: true
 
     - name: Restore Cached Test
       id: cache-test-restore
@@ -23,6 +25,7 @@ runs:
       with:
         path: test
         key: ${{ runner.os }}-test-${{ github.run_id }}
+        fail-on-cache-miss: true
 
     - name: Install Run Dependencies
       run: |
