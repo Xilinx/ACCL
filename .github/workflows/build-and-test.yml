@@ -46,6 +46,9 @@ jobs:
     timeout-minutes: 10
     needs: ["build"]
     steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v3
+
       - name: Get Run Dependencies
         id: get-run-dependencies
         uses: ./.github/actions/setup-accl-run-env          
@@ -60,6 +63,9 @@ jobs:
     timeout-minutes: 20
     needs: ["build"]
     steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v3
+
       - name: Get Run Dependencies
         id: get-run-dependencies
         uses: ./.github/actions/setup-accl-run-env          
@@ -74,6 +80,9 @@ jobs:
     timeout-minutes: 20
     needs: ["build"]
     steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v3
+        
       - name: Get Run Dependencies
         id: get-run-dependencies
         uses: ./.github/actions/setup-accl-run-env          
