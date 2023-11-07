@@ -56,7 +56,7 @@ jobs:
       - name: Run Test
         run: |
           source /opt/xilinx/xrt/setup.sh
-          ACCL_EMULATOR_PATH=./cclo_emu mpirun -np 1 --allow-run-as-root accl_test --startemu --udp --gtest_filter=-*perf_counter*
+          ACCL_EMULATOR_PATH=./cclo_emu mpirun -np 1 --allow-run-as-root ./test --startemu --udp --gtest_filter=-*perf_counter*
 
   test_udp:
     runs-on: ubuntu-20.04
@@ -73,7 +73,7 @@ jobs:
       - name: Run Test
         run: |
           source /opt/xilinx/xrt/setup.sh
-          ACCL_EMULATOR_PATH=./cclo_emu mpirun -np 2 --allow-run-as-root accl_test --startemu --udp
+          ACCL_EMULATOR_PATH=./cclo_emu mpirun -np 2 --allow-run-as-root ./test --startemu --udp
 
   test_tcp:
     runs-on: ubuntu-20.04
@@ -90,4 +90,4 @@ jobs:
       - name: Run Test
         run: |
           source /opt/xilinx/xrt/setup.sh
-          ACCL_EMULATOR_PATH=./cclo_emu mpirun -np 2 --allow-run-as-root accl_test --startemu --tcp
+          ACCL_EMULATOR_PATH=./cclo_emu mpirun -np 2 --allow-run-as-root ./test --startemu --tcp
