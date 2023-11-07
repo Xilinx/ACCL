@@ -18,6 +18,11 @@
 #include "ap_int.h"
 #include "eth_intf.h"
 #include "rxbuf_offload.h"
+#ifndef ACCL_SYNTHESIS
+#include "log.hpp"
+
+extern Log logger;
+#endif
 
 using namespace std;
 
@@ -89,7 +94,7 @@ void rdma_depacketizer(
 #ifndef ACCL_SYNTHESIS
 	std::stringstream ss;
 	ss << "RDMA Depacketizer: Processing incoming fragment count=" << notif.length << " for qpn " << notif.session_id << "\n";
-	std::cout << ss.str();
+	logger << log_level::verbose << ss.str();
 #endif
 
 	//get remaining message bytes, from local storage

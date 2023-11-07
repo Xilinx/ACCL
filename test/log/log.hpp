@@ -20,6 +20,7 @@
 
 #include <ctime>
 #include <map>
+#include <mutex>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -73,7 +74,10 @@ public:
             auto local_time = *std::localtime(&time);
             char time_buffer[9];
             strftime(time_buffer, sizeof(time_buffer), "%H:%M:%S", &local_time);
-            *_ostream << "[Rank " + std::to_string(_local_rank) + ": " + LOG_STRING.at(level) + " " + time_buffer + "] " + message;
+            std::lock_guard<std::mutex> guard(logging_mutex);
+            *_ostream << std::right << "[Rank " << std::setw(3) << std::to_string(_local_rank) << ": " 
+                  << std::left  << std::setw(8) << LOG_STRING.at(level);
+            *_ostream << " " << time_buffer << "] " << message;
             _ostream->flush();
         }
     }
@@ -123,4 +127,5 @@ private:
     std::ostream *_ostream;
     log_level buffer_level;
     std::ostringstream buffer;
+    std::mutex logging_mutex;
 };

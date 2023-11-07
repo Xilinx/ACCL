@@ -17,8 +17,15 @@
 
 #include "dma_mover.h"
 #include "Axi.h"
+#ifndef ACCL_SYNTHESIS
+#include "log.hpp"
+#endif
 
 using namespace hlslib;
+
+#ifndef ACCL_SYNTHESIS
+extern Log logger;
+#endif
 
 void router_cmd_execute(
     STREAM<router_instruction> &instruction, 
@@ -318,7 +325,7 @@ void eth_cmd_execute(
 #ifndef ACCL_SYNTHESIS
             std::stringstream ss;
             ss << "DMA MOVE Offload: Emitting Eth segment dst=" << pkt_cmd.dst << " len=" << pkt_cmd.count << "\n";
-            std::cout << ss.str();
+            logger << log_level::verbose << ss.str();
 #endif
         }
     }
@@ -540,7 +547,7 @@ void instruction_decode(
 #ifndef ACCL_SYNTHESIS
             std::stringstream ss;
             ss << "DMA MOVE Offload: Op0 Read addr=" << dm0_rd.addr << " len=" << dm0_rd.total_bytes << "\n";
-            std::cout << ss.str();
+            logger << log_level::verbose << ss.str();
 #endif
         }
         prev_dm0_rd = dm0_rd;
@@ -598,7 +605,7 @@ void instruction_decode(
                     std::stringstream ss;
                     ss << "DMA MOVE Offload: Segment " << ack_insn.release_count << ", remaining bytes: " << bytes_remaining << "\n";
                     ss << "DMA MOVE Offload: Op1 Read on Recv addr=" << dm1_rd.addr << " len=" << dm1_rd.total_bytes << "\n";
-                    std::cout << ss.str();
+                    logger << log_level::verbose << ss.str();
 #endif
                 }
                 //update expected sequence number
@@ -615,7 +622,7 @@ void instruction_decode(
 #ifndef ACCL_SYNTHESIS
             std::stringstream ss;
             ss << "DMA MOVE Offload: Op1 Read addr=" << dm1_rd.addr << " len=" << dm1_rd.total_bytes << "\n";
-            std::cout << ss.str();
+            logger << log_level::verbose << ss.str();
 #endif
         }
         prev_dm1_rd = dm1_rd;
@@ -654,7 +661,7 @@ void instruction_decode(
 #ifndef ACCL_SYNTHESIS
                 std::stringstream ss;
                 ss << "DMA MOVE Offload: Send dst=" << pkt_wr.dst_sess_id << " len=" << pkt_wr.len << " tag=" << pkt_wr.mpi_tag << "\n";
-                std::cout << ss.str();
+                logger << log_level::verbose << ss.str();
 #endif
             }
         } else if(!(insn.res_opcode == MOVE_STREAM)){
@@ -686,7 +693,7 @@ void instruction_decode(
 #ifndef ACCL_SYNTHESIS
                 std::stringstream ss;
                 ss << "DMA MOVE Offload: Res Write addr=" << dm1_wr.addr << " len=" << dm1_wr.total_bytes << "\n";
-                std::cout << ss.str();
+                logger << log_level::verbose << ss.str();
 #endif
             }
             prev_dm1_wr = dm1_wr;
@@ -725,7 +732,7 @@ void instruction_retire(
 #ifndef ACCL_SYNTHESIS
                 std::stringstream ss;
                 ss << "DMA MOVE Offload: Releasing segment " << i << " of " << insn.release_count << "\n";
-                std::cout << ss.str();
+                logger << log_level::verbose << ss.str();
 #endif
             }
         }
