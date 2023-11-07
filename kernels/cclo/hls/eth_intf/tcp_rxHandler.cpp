@@ -15,6 +15,11 @@
 #
 # *******************************************************************************/
 #include "eth_intf.h"
+#ifndef ACCL_SYNTHESIS
+#include "log.hpp"
+
+extern Log logger;
+#endif
 
 using namespace std;
 
@@ -111,7 +116,7 @@ void requestFSM(
 #ifndef ACCL_SYNTHESIS
         std::stringstream ss;
         ss << "TCP RX Handler: Requesting data length=" << length << "\n";
-        std::cout << ss.str();
+        logger << log_level::verbose << ss.str();
 #endif
 
         if (length!=0)

@@ -52,9 +52,7 @@
 using namespace std;
 using namespace hlslib;
 
-namespace {
-    Log logger;
-}
+Log logger;
 
 void dma_read(vector<char> &mem, Stream<ap_axiu<104,0,0,DEST_WIDTH> > &cmd, Stream<ap_uint<32> > &sts, Stream<stream_word > &rdata){
     axi::Command<64, 23> command = axi::Command<64, 23>(cmd.Pop().data);

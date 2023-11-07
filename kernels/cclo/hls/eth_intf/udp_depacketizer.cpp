@@ -16,7 +16,11 @@
 # *******************************************************************************/
 
 #include "eth_intf.h"
-#include <iostream>
+#ifndef ACCL_SYNTHESIS
+#include "log.hpp"
+
+extern Log logger;
+#endif
 
 using namespace std;
 
@@ -115,7 +119,7 @@ void udp_depacketizer(
 #ifndef ACCL_SYNTHESIS
 	std::stringstream ss;
 	ss << "UDP Depacketizer: Processing incoming fragment for session " << notif.session_id << "\n";
-	std::cout << ss.str();
+	logger << log_level::verbose << ss.str();
 	ss.str(std::string());
 #endif
 
