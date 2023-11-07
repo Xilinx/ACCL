@@ -1,0 +1,34 @@
+name: 'Set up ACCL run environment'
+description: 'Install ACCL run dependencies'
+runs:
+  using: "composite"
+  steps:
+    - name: Restore Cached XRT
+      id: cache-xrt-restore
+      uses: actions/cache/restore@v3
+      with:
+        path: xrt.deb
+        key: ${{ runner.os }}-xrt
+
+    - name: Restore Cached Emulator
+      id: cache-emulator-restore
+      uses: actions/cache/restore@v3
+      with:
+        path: cclo_emu
+        key: ${{ runner.os }}-emulator-${{ github.run_id }}
+
+    - name: Restore Cached Test
+      id: cache-test-restore
+      uses: actions/cache/restore@v3
+      with:
+        path: test
+        key: ${{ runner.os }}-test-${{ github.run_id }}
+
+    - name: Install Run Dependencies
+      run: |
+        sudo apt-get update
+        DEBIAN_FRONTEND=noninteractive sudo apt-get install -y --no-install-recommends libjsoncpp1 libzmqpp4 openmpi-bin
+        sudo dpkg -i xrt.deb || true
+        sudo apt --fix-broken install -y --no-install-recommends  
+      shell: bash
+

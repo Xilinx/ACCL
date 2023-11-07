@@ -28,6 +28,9 @@
 #define FLOAT16ATOL 0.05
 
 TEST_F(ACCLTest, test_copy){
+  if(::size > 1){
+    GTEST_SKIP() << "Skipping single-node test on multi-node setup";
+  }
   unsigned int count = options.count;
   auto op_buf = accl->create_buffer<float>(count, dataType::float32);
   auto res_buf = accl->create_buffer<float>(count, dataType::float32);
@@ -41,6 +44,9 @@ TEST_F(ACCLTest, test_copy){
 }
 
 TEST_F(ACCLTest, test_copy_stream) {
+  if(::size > 1){
+    GTEST_SKIP() << "Skipping single-node test on multi-node setup";
+  }
   unsigned int count = options.count;
   auto op_buf = accl->create_buffer<float>(count, dataType::float32);
   auto res_buf = accl->create_buffer<float>(count, dataType::float32);
@@ -55,6 +61,9 @@ TEST_F(ACCLTest, test_copy_stream) {
 }
 
 TEST_F(ACCLTest, test_copy_p2p) {
+  if(::size > 1){
+    GTEST_SKIP() << "Skipping single-node test on multi-node setup";
+  }
   unsigned int count = options.count;
   auto op_buf = accl->create_buffer<float>(count, dataType::float32);
   std::unique_ptr<ACCL::Buffer<float>> p2p_buf;
@@ -76,6 +85,9 @@ TEST_F(ACCLTest, test_copy_p2p) {
 }
 
 TEST_P(ACCLFuncTest, test_combine) {
+  if(::size > 1){
+    GTEST_SKIP() << "Skipping single-node test on multi-node setup";
+  }
   if((GetParam() != reduceFunction::SUM) && (GetParam() != reduceFunction::MAX)){
     GTEST_SKIP() << "Unrecognized reduction function";
   }
@@ -103,6 +115,10 @@ TEST_P(ACCLFuncTest, test_combine) {
 }
 
 TEST_F(ACCLTest, test_sendrcv_basic) {
+  if(::size == 1){
+    GTEST_SKIP() << "Skipping send/recv test on single-node setup";
+  }
+
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
 
@@ -146,7 +162,9 @@ TEST_F(ACCLTest, test_sendrcv_basic) {
 }
 
 TEST_F(ACCLTest, test_sendrcv_bo) {
-
+  if(::size == 1){
+    GTEST_SKIP() << "Skipping send/recv test on single-node setup";
+  }
   if(!options.test_xrt_simulator) {
     GTEST_SKIP() << "Skipping xrt::bo test. We are not running on hardware and "
                  "XCL emulation is disabled. Make sure XILINX_VITIS and "
@@ -206,6 +224,9 @@ TEST_F(ACCLTest, test_sendrcv_bo) {
 }
 
 TEST_F(ACCLTest, test_sendrcv) {
+  if(::size == 1){
+    GTEST_SKIP() << "Skipping send/recv test on single-node setup";
+  }
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
 
@@ -242,6 +263,9 @@ TEST_F(ACCLTest, test_sendrcv) {
 }
 
 TEST_P(ACCLSegmentationTest, test_sendrcv_segmentation){
+  if(::size == 1){
+    GTEST_SKIP() << "Skipping send/recv test on single-node setup";
+  }
   unsigned int count_per_segment = options.segment_size / (dataTypeSize.at(dataType::float32) / 8);
   unsigned int multiplier = std::get<0>(GetParam());
   int offset = std::get<1>(GetParam());
@@ -289,6 +313,9 @@ TEST_P(ACCLSegmentationTest, test_sendrcv_segmentation){
 }
 
 TEST_F(ACCLTest, test_sendrcv_stream) {
+  if(::size == 1){
+    GTEST_SKIP() << "Skipping send/recv test on single-node setup";
+  }
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
 
@@ -321,6 +348,9 @@ TEST_F(ACCLTest, test_sendrcv_stream) {
 }
 
 TEST_F(ACCLTest, test_stream_put) {
+  if(::size == 1){
+    GTEST_SKIP() << "Skipping send/recv test on single-node setup";
+  }
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
 
@@ -349,7 +379,9 @@ TEST_F(ACCLTest, test_stream_put) {
 }
 
 TEST_F(ACCLTest, test_sendrcv_compressed) {
-
+  if(::size == 1){
+    GTEST_SKIP() << "Skipping send/recv test on single-node setup";
+  }
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
 
@@ -1011,12 +1043,10 @@ options_t parse_options(int argc, char *argv[]) {
   cmd.add(max_eager_arg);
   try {
     cmd.parse(argc, argv);
-    if (hardware_arg.getValue()) {
-      if (axis3_arg.getValue() + udp_arg.getValue() + tcp_arg.getValue() +
-              roce_arg.getValue() + cyt_rdma_arg.getValue() + cyt_tcp_arg.getValue() != 1) {
-        throw std::runtime_error("When using hardware, specify only one of axis3, "
-                                 "tcp, udp, roce, cyt_tcp, or cyt_rdma modes.");
-      }
+    if (axis3_arg.getValue() + udp_arg.getValue() + tcp_arg.getValue() +
+            roce_arg.getValue() + cyt_rdma_arg.getValue() + cyt_tcp_arg.getValue() != 1) {
+      throw std::runtime_error("Specify exactly one network backend out of axis3, "
+                                "tcp, udp, roce, cyt_tcp, or cyt_rdma modes.");
     }
   } catch (std::exception &e) {
     if (::rank == 0) {
