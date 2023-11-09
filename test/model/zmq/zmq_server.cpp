@@ -66,7 +66,11 @@ zmq_intf_context zmq_server_intf(unsigned int starting_port, unsigned int local_
     this_thread::sleep_for(chrono::milliseconds(1000));
 
     *logger << log_level::verbose << "Rank " << local_rank << " subscribing to " << local_rank << " (ETH)" << endl;
-    ctx.eth_rx_socket->subscribe(to_string(local_rank));
+    // Create a padded version of the rank to prevent subscription to
+    // ranks that have the same starting digits
+    std::stringstream rank_pad;
+    rank_pad << std::setw(DEST_PADDING) << std::setfill('0') << local_rank; 
+    ctx.eth_rx_socket->subscribe(rank_pad.str());
 
     this_thread::sleep_for(chrono::milliseconds(1000));
 
@@ -116,8 +120,12 @@ void eth_endpoint_egress_port(zmq_intf_context *ctx, Stream<stream_word > &in, u
         }
     }while(tmp.last == 0);
     dest = tmp.dest;
+    // Create a padded version of he destitnation port ID to ensure unique string
+    // for each rank
+    std::stringstream dest_pad;
+    dest_pad << std::setw(DEST_PADDING) << std::setfill('0') << dest; 
     //first part of the message is the destination port ID
-    message << to_string(dest);
+    message << dest_pad.str();
     //second part of the message is the local rank of the sender
     message << to_string(local_rank);
     //finally package the data

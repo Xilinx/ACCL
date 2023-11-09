@@ -32,6 +32,14 @@
 #define ACCL_SIM_MEM_SIZE_KB 256
 #endif
 
+// Destination ranks are padded in the ZMQ messages with DEST_PADDING digists.
+// ZMQ comares the first characters of a message with the subscription string.
+// In consequence, without padding, rank 1 will also receive all messages targetted to 
+// rank 11 to 19 etc...
+#ifndef DEST_PADDING
+#define DEST_PADDING 4
+#endif
+
 /**
  * @brief Create a server-side interface to the CCLO simulator/emulator, via ZMQ
  * 
