@@ -26,7 +26,7 @@ if (HAS_PARENT)
   set(XCLBIN_SCAN_INCLUDE_PATH ${CMAKE_CURRENT_LIST_DIR}/include PARENT_SCOPE)
 endif (HAS_PARENT)
 
-add_library(xclbin_scan OBJECT src/xclbin_scan.cpp)
+add_library(xclbin_scan STATIC src/xclbin_scan.cpp)
 
 target_include_directories(xclbin_scan PUBLIC ${XCLBIN_SCAN_INCLUDE_PATH})
 

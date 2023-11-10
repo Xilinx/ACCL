@@ -11,27 +11,18 @@ runs:
         key: ${{ runner.os }}-xrt
         fail-on-cache-miss: true
 
-    - name: Restore Cached Emulator
-      id: cache-emulator-restore
-      uses: actions/cache/restore@v3
+    - name: Restore Testing Artefacts
+      id: artifact-restore
+      uses: actions/download-artifact@v3
       with:
-        path: cclo_emu
-        key: ${{ runner.os }}-emulator-${{ github.run_id }}
-        fail-on-cache-miss: true
-
-    - name: Restore Cached Test
-      id: cache-test-restore
-      uses: actions/cache/restore@v3
-      with:
-        path: test
-        key: ${{ runner.os }}-test-${{ github.run_id }}
-        fail-on-cache-miss: true
+        name: testing-artifacts
 
     - name: Install Run Dependencies
       run: |
         sudo apt-get update
-        DEBIAN_FRONTEND=noninteractive sudo apt-get install -y --no-install-recommends libjsoncpp1 libzmqpp4 openmpi-bin
         sudo dpkg -i xrt.deb || true
         sudo apt --fix-broken install -y --no-install-recommends  
+        sudo dpkg -i accl.deb || true
+        sudo apt --fix-broken install -y --no-install-recommends
       shell: bash
 

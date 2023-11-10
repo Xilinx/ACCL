@@ -17,6 +17,8 @@
 
 cmake_minimum_required(VERSION 3.13)
 
+set(CMAKE_CXX_STANDARD 17)
+
 # Consider switching to PROJECT_IS_TOP_LEVEL from CMake 3.21 (2021)
 # (https://cmake.org/cmake/help/latest/variable/PROJECT_IS_TOP_LEVEL.html)
 get_directory_property(HAS_PARENT PARENT_DIRECTORY)
