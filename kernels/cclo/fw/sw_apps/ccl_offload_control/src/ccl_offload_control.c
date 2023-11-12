@@ -1563,17 +1563,17 @@ int reduce( unsigned int count,
                     //if dst_addr is in host memory
                     host = ((i==0) && src_buf_host) | (((i==world.size-2) && dst_buf_host) << 2);
                     start_move(
+                        (i==0) ? MOVE_IMMEDIATE : MOVE_STREAM,
                         MOVE_IMMEDIATE,
-                        MOVE_IMMEDIATE,
-                        MOVE_IMMEDIATE,
+                        (i==world.size-2) ? MOVE_IMMEDIATE : MOVE_STREAM,
                         pack_flags(NO_COMPRESSION, RES_LOCAL, host),
                         func, count,
                         comm_offset, arcfg_offset,
-                        (i==0) ? src_addr : prev_accum_addr, buf_addr, (i==world.size-2) ? dst_addr : accum_addr, 0, 0, 0,
+                        src_addr, buf_addr, dst_addr, 0, 0, 0,
                         0, 0, 0, 0
                     );
                     pending_moves++;
-                    if(pending_moves > 2){
+                    if(pending_moves > 3){
                         err |= end_move();
                         pending_moves--;
                     }
