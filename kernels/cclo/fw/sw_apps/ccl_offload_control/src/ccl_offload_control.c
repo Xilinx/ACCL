@@ -37,7 +37,7 @@ static unsigned int datatype_nbytes;
 static datapath_arith_config arcfg;
 static communicator world;
 static bool comm_cached = false;
-static bool comm_cache_adr;
+static uint32_t comm_cache_adr;
 
 #ifdef MB_FW_EMULATION
 //uint32_t sim_cfgmem[END_OF_EXCHMEM/4];

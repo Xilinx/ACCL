@@ -564,6 +564,9 @@ TEST_P(ACCLRootTest, test_gather_compressed) {
 }
 
 TEST_F(ACCLTest, test_alltoall) {
+  if(!options.cyt_rdma){
+    GTEST_SKIP() << "Alltoall requires rendezvous support, currently only available on Coyote RDMA backend";
+  }
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
 
@@ -678,7 +681,7 @@ TEST_F(ACCLTest, test_multicomm) {
   unsigned int own_rank = accl->get_comm_rank(GLOBAL_COMM);
   int errors = 0;
   if (group.size() < 4) {
-    GTEST_SKIP() << "Too few::ranks. ";
+    GTEST_SKIP() << "Too few ranks for multi-communicator test";
   }
   if (own_rank == 1 || own_rank > 3) {
     EXPECT_TRUE(true);
@@ -689,12 +692,14 @@ TEST_F(ACCLTest, test_multicomm) {
   new_group.push_back(group[3]);
   unsigned int new_rank = (own_rank == 0) ? 0 : own_rank - 1;
   communicatorId new_comm = accl->create_communicator(new_group, new_rank);
+  //return if we're not involved in the new communicator
+  if(own_rank == 1) return;
+  //else, start testing
   test_debug(accl->dump_communicator(), options);
   std::unique_ptr<float> host_op_buf = random_array<float>(count);
   auto op_buf = accl->create_buffer(host_op_buf.get(), count, dataType::float32);
   auto res_buf = accl->create_buffer<float>(count, dataType::float32);
-  // start with a send/recv between::ranks 0 and 2 (0 and 1 in the new
-  // communicator)
+  // start with a send/recv between every pair of ranks in the new communicator
   if (new_rank == 0) {
     accl->send(*op_buf, count, 1, 0, new_comm);
     accl->recv(*res_buf, count, 1, 1, new_comm);
@@ -708,6 +713,32 @@ TEST_F(ACCLTest, test_multicomm) {
     accl->send(*op_buf, count, 0, 1, new_comm);
   }
 
+  if (new_rank == 1) {
+    accl->send(*op_buf, count, 2, 2, new_comm);
+    accl->recv(*res_buf, count, 2, 3, new_comm);
+    test_debug("Second recv completed", options);
+    for (unsigned int i = 0; i < count; ++i) {
+      EXPECT_FLOAT_EQ((*res_buf)[i], host_op_buf.get()[i]);
+    }
+  } else if (new_rank == 2) {
+    accl->recv(*res_buf, count, 1, 2, new_comm);
+    test_debug("First recv completed", options);
+    accl->send(*op_buf, count, 1, 3, new_comm);
+  }
+
+  if (new_rank == 0) {
+    accl->send(*op_buf, count, 2, 4, new_comm);
+    accl->recv(*res_buf, count, 2, 5, new_comm);
+    test_debug("Second recv completed", options);
+    for (unsigned int i = 0; i < count; ++i) {
+      EXPECT_FLOAT_EQ((*res_buf)[i], host_op_buf.get()[i]);
+    }
+  } else if (new_rank == 2) {
+    accl->recv(*res_buf, count, 0, 4, new_comm);
+    test_debug("First recv completed", options);
+    accl->send(*op_buf, count, 0, 5, new_comm);
+  }
+
   // do an all-reduce on the new communicator
   for (unsigned int i = 0; i < count; ++i) {
     host_op_buf.get()[i] = i;
@@ -716,6 +747,8 @@ TEST_F(ACCLTest, test_multicomm) {
   for (unsigned int i = 0; i < count; ++i) {
     EXPECT_FLOAT_EQ((*res_buf)[i], 3*host_op_buf.get()[i]);
   }
+
+  test_debug(accl->dump_communicator(), options);
 }
 
 TEST_P(ACCLRootFuncTest, test_reduce) {
@@ -968,10 +1001,16 @@ TEST_P(ACCLFuncTest, test_allreduce_compressed) {
 }
 
 TEST_F(ACCLTest, test_barrier) {
+  if(!options.cyt_rdma){
+    GTEST_SKIP() << "Barrier requires rendezvous support, currently only available on Coyote RDMA backend";
+  }
   accl->barrier();
 }
 
 TEST_F(ACCLTest, test_perf_counter) {
+  if(!options.hardware){
+    GTEST_SKIP() << "Performance counter tests not run in simulation";
+  }
   unsigned int count = options.count;
   auto op_buf = accl->create_buffer<float>(count, dataType::float32);
   auto res_buf = accl->create_buffer<float>(count, dataType::float32);
