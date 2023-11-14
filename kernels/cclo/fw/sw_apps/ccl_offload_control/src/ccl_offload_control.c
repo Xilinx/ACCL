@@ -1079,19 +1079,19 @@ int scatter(unsigned int count,
             return rendezvous_get_completion(src_rank, dst_buf_addr, res_is_host, count, TAG_ANY);
         }
     } else {
-
         //determine if we're sending or receiving
         if(src_rank == world.local_rank){
             //on the root we only care about ETH_COMPRESSED and OP0_COMPRESSED
             //so replace RES_COMPRESSED with ETH_COMPRESSED
-            compression = compression | ((compression & ETH_COMPRESSED) >> 1);
+            //unless we're copying to ourselves in case we're keeping flags as-is
+            unsigned int compression_snd = (compression & OP0_COMPRESSED) | ((compression & ETH_COMPRESSED) >> 1);
 
             for(int i=0; i < world.size; i++){
                 start_move(
                     (i==0) ? MOVE_IMMEDIATE : MOVE_INCREMENT,
                     MOVE_NONE,
                     MOVE_IMMEDIATE,
-                    pack_flags(compression, (i==src_rank) ? RES_LOCAL : RES_REMOTE, host & (OP0_HOST | RES_HOST)),
+                    pack_flags((i==src_rank) ? compression : compression_snd, (i==src_rank) ? RES_LOCAL : RES_REMOTE, host & (OP0_HOST | RES_HOST)),
                     0,
                     count,
                     comm_offset, arcfg_offset,
