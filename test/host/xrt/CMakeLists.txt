@@ -32,7 +32,7 @@ FetchContent_MakeAvailable(googletest)
 
 # Set useful compile warnings
 add_compile_options(-Wall -Wextra -Wno-unused-variable
-                    -Wno-unused-but-set-variable -Wno-unused-parameter)
+                    -Wno-unused-but-set-variable -Wno-unused-parameter -march=ivybridge)
 
 if (NOT CMAKE_LIBRARY_OUTPUT_DIRECTORY)
     set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib")

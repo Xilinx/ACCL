@@ -32,6 +32,14 @@
 #define ACCL_SIM_MEM_SIZE_KB 256
 #endif
 
+// Destination ranks are padded in the ZMQ messages with DEST_PADDING digists.
+// ZMQ comares the first characters of a message with the subscription string.
+// In consequence, without padding, rank 1 will also receive all messages targetted to 
+// rank 11 to 19 etc...
+#ifndef DEST_PADDING
+#define DEST_PADDING 4
+#endif
+
 /**
  * @brief Create a server-side interface to the CCLO simulator/emulator, via ZMQ
  * 
@@ -69,9 +77,8 @@ void eth_endpoint_ingress_port(zmq_intf_context *ctx, hlslib::Stream<stream_word
  * @param ctx Pointer to existing ZMQ context
  * @param in Stream carrying data from the emulated CCLO Ethernet output, to be send over ZMQ
  * @param local_rank The local rank of this process.
- * @param remap_dest Activate destination remapping. Set to True when using TCP.
  */
-void eth_endpoint_egress_port(zmq_intf_context *ctx, hlslib::Stream<stream_word > &in, unsigned int local_rank, bool remap_dest);
+void eth_endpoint_egress_port(zmq_intf_context *ctx, hlslib::Stream<stream_word > &in, unsigned int local_rank);
 
 /**
  * @brief Serve an input streaming data port
@@ -128,7 +135,7 @@ void zmq_eth_ingress_server(zmq_intf_context *ctx, hlslib::Stream<stream_word > 
  * @param local_rank The local rank of this process.
  * @param remap_dest Activate destination remapping. Set to True when using TCP.
  */
-void zmq_eth_egress_server(zmq_intf_context *ctx, hlslib::Stream<stream_word > &in, unsigned int local_rank, bool remap_dest);
+void zmq_eth_egress_server(zmq_intf_context *ctx, hlslib::Stream<stream_word > &in, unsigned int local_rank);
 
 /**
  * @brief Run zmq_krnl_egress_port repeatedly

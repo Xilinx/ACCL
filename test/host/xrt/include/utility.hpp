@@ -32,6 +32,7 @@ struct options_t {
   unsigned int rxbuf_size;
   unsigned int rxbuf_count;
   unsigned int segment_size;
+  unsigned int max_eager_count;
   unsigned int count;
   unsigned int device_index;
   bool test_xrt_simulator;
@@ -41,6 +42,8 @@ struct options_t {
   bool udp;
   bool tcp;
   bool roce;
+  bool cyt_tcp;
+  bool cyt_rdma;
   bool return_error;
   bool rsfec;
   std::string xclbin;

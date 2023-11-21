@@ -53,10 +53,10 @@ const char *error_code_to_string(errorCode code) {
     return "COLLECTIVE NOT IMPLEMENTED ERROR";
   case errorCode::RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID:
     return "RECEIVE OFFCHIP SPARE BUFF ID NOT VALID";
-  case errorCode::OPEN_PORT_NOT_SUCCEEDED:
-    return "OPEN PORT NOT SUCCEEDED";
-  case errorCode::OPEN_CON_NOT_SUCCEEDED:
-    return "OPEN CON NOT SUCCEEDED";
+  case errorCode::EAGER_THRESHOLD_INVALID:
+    return "EAGER THRESHOLD VALUE INVALID";
+  case errorCode::RENDEZVOUS_THRESHOLD_INVALID:
+    return "RENDEZVOUS THRESHOLD VALUE INVALID";
   case errorCode::DMA_SIZE_ERROR:
     return "DMA SIZE ERROR";
   case errorCode::ARITH_ERROR:

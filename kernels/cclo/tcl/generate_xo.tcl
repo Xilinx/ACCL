@@ -21,6 +21,7 @@ set en_arith [lindex $::argv 2]
 set en_compress [lindex $::argv 3]
 set en_extkrnl [lindex $::argv 4]
 set mb_debug_level [lindex $::argv 5]
+set ext_dma [lindex $::argv 6]
 
 set kernel_name    "ccl_offload"
 set kernel_vendor  "Xilinx"
@@ -87,6 +88,7 @@ proc edit_core {core} {
     global en_arith
     global en_compress
     global en_dma
+    global ext_dma
     global en_extkrnl
     global mb_debug_level
 
@@ -103,6 +105,19 @@ proc edit_core {core} {
     if { $en_dma == 1 } {
         config_axi_if $core "m_axi_0" "ap_clk" 64 32 32
         config_axi_if $core "m_axi_1" "ap_clk" 64 32 32
+    } elseif { $ext_dma == 1} {
+        config_axis_if $core "m_axis_dma0_s2mm" "ap_clk" 64 0 0 8 1 0 1 1
+        config_axis_if $core "s_axis_dma0_mm2s" "ap_clk" 64 0 0 0 1 0 1 1
+        config_axis_if $core "m_axis_dma1_s2mm" "ap_clk" 64 0 0 8 1 0 1 1
+        config_axis_if $core "s_axis_dma1_mm2s" "ap_clk" 64 0 0 0 1 0 1 1
+        config_axis_if $core "m_axis_dma0_mm2s_cmd" "ap_clk" 13 0 0 0 1 0 0 0
+        config_axis_if $core "s_axis_dma0_mm2s_sts" "ap_clk" 1 0 0 0 1 0 1 1
+        config_axis_if $core "m_axis_dma0_s2mm_cmd" "ap_clk" 13 0 0 0 1 0 0 0
+        config_axis_if $core "s_axis_dma0_s2mm_sts" "ap_clk" 4 0 0 0 1 0 1 1
+        config_axis_if $core "m_axis_dma1_mm2s_cmd" "ap_clk" 13 0 0 0 1 0 0 0
+        config_axis_if $core "s_axis_dma1_mm2s_sts" "ap_clk" 1 0 0 0 1 0 1 1
+        config_axis_if $core "m_axis_dma1_s2mm_cmd" "ap_clk" 13 0 0 0 1 0 0 0
+        config_axis_if $core "s_axis_dma1_s2mm_sts" "ap_clk" 4 0 0 0 1 0 1 1
     }
 
     if { $stacktype == "TCP" } {
@@ -111,11 +126,11 @@ proc edit_core {core} {
         config_axis_if $core "s_axis_eth_rx_meta" "ap_clk" 2 0 0 0 1 0 1 1
         config_axis_if $core "m_axis_eth_tx_meta" "ap_clk" 4 0 0 0 1 0 1 1
         config_axis_if $core "s_axis_eth_tx_status" "ap_clk" 8 0 0 0 1 0 1 1
-        config_axis_if $core "m_axis_eth_open_connection" "ap_clk" 8 0 0 0 1 0 1 1
-        config_axis_if $core "m_axis_eth_close_connection" "ap_clk" 2 0 0 0 1 0 1 1
-        config_axis_if $core "s_axis_eth_open_status" "ap_clk" 16 0 0 0 1 0 1 1
-        config_axis_if $core "m_axis_eth_listen_port" "ap_clk" 2 0 0 0 1 0 1 1
-        config_axis_if $core "s_axis_eth_port_status" "ap_clk" 1 0 0 0 1 0 1 1
+    }
+
+    if { $stacktype == "RDMA" } {
+        config_axis_if $core "m_axis_rdma_sq" "ap_clk" 16 0 0 0 1 0 0 0
+        config_axis_if $core "s_axis_eth_notification" "ap_clk" 8 0 0 0 1 0 0 0
     }
 
     if { $en_extkrnl == 1 } {

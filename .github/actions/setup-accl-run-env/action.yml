@@ -1,0 +1,28 @@
+name: 'Set up ACCL run environment'
+description: 'Install ACCL run dependencies'
+runs:
+  using: "composite"
+  steps:
+    - name: Restore Cached XRT
+      id: cache-xrt-restore
+      uses: actions/cache/restore@v3
+      with:
+        path: xrt.deb
+        key: ${{ runner.os }}-xrt
+        fail-on-cache-miss: true
+
+    - name: Restore Testing Artefacts
+      id: artifact-restore
+      uses: actions/download-artifact@v3
+      with:
+        name: testing-artifacts
+
+    - name: Install Run Dependencies
+      run: |
+        sudo apt-get update
+        sudo dpkg -i xrt.deb || true
+        sudo apt --fix-broken install -y --no-install-recommends  
+        sudo dpkg -i accl.deb || true
+        sudo apt --fix-broken install -y --no-install-recommends
+      shell: bash
+

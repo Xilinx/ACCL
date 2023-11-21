@@ -54,10 +54,10 @@ void rxbuf_session_status(
 }
 
 void rxbuf_session_command(
-	STREAM<ap_uint<104> > &rxbuf_dma_cmd, 
+	STREAM<ap_axiu<104,0,0,DEST_WIDTH> > &rxbuf_dma_cmd, 
 	STREAM<ap_uint<32> > &rxbuf_idx_in,
     STREAM<ap_uint<32> > &rxbuf_idx_out,
-    STREAM<ap_uint<104> > &fragment_dma_cmd,
+    STREAM<ap_axiu<104,0,0,DEST_WIDTH> > &fragment_dma_cmd,
     STREAM<eth_notification> &session_notification,
     STREAM<eth_header> &eth_hdr_in,
     STREAM<eth_header> &eth_hdr_out,
@@ -69,6 +69,7 @@ void rxbuf_session_command(
     eth_notification notif;
     rxbuf_session_descriptor desc;
     hlslib::axi::Command<64, 23> cmd;
+    ap_axiu<104,0,0,DEST_WIDTH> cmd_word;
     stream_word inword;
     eth_header hdr;
     rxbuf_status_control sts_command;
@@ -81,8 +82,10 @@ void rxbuf_session_command(
             if(notif.type == 1){
                 cmd.address = desc.address;
                 cmd.length = notif.length;
-                cmd.address = desc.address;
-                STREAM_WRITE(fragment_dma_cmd, cmd);
+                cmd_word.data = cmd;
+                cmd_word.last = 1;//always last, each command is a single word
+                cmd_word.dest = 0;//always write RX data to device (not host)
+                STREAM_WRITE(fragment_dma_cmd, cmd_word);
             } else {
                 //if EOF update address in descriptor
                 desc.address += notif.length;
@@ -93,7 +96,7 @@ void rxbuf_session_command(
                 STREAM_WRITE(status_instruction, sts_command);
                 //if remaining is zero, flush
                 if(desc.remaining == 0){
-                    STREAM_WRITE(rxbuf_idx_out, desc.index);
+                    STREAM_WRITE(rxbuf_idx_out, desc.buf_index);
                     STREAM_WRITE(eth_hdr_out, desc.header);
                     desc.active = false;
                 }
@@ -102,9 +105,11 @@ void rxbuf_session_command(
             sts_command.first = false;
         } else {
             //this is a SOM notification so descriptor does not exist, initialize
-            cmd = hlslib::axi::Command<64, 23>(STREAM_READ(rxbuf_dma_cmd));//{undex, current write address, bytes remaining, header}
+            auto rxbuf_dma_cmd_word = STREAM_READ(rxbuf_dma_cmd);
+            cmd = hlslib::axi::Command<64, 23>(rxbuf_dma_cmd_word.data);//{undex, current write address, bytes remaining, header}
             desc.active = true;
-            desc.index = STREAM_READ(rxbuf_idx_in);
+            desc.buf_index = STREAM_READ(rxbuf_idx_in);
+            desc.mem_index = rxbuf_dma_cmd_word.dest;
             desc.address = cmd.address;
             //store header
 	        desc.header = STREAM_READ(eth_hdr_in);
@@ -119,12 +124,12 @@ void rxbuf_session_command(
 
 void rxbuf_session(
     //interface to enqueue/dequeue engines; we intercept the DMA and inflight streams
-	STREAM<ap_uint<104> > &rxbuf_dma_cmd, //incoming command for a full DMA transfer targeting a RX buffer
+	STREAM<ap_axiu<104,0,0,DEST_WIDTH> > &rxbuf_dma_cmd, //incoming command for a full DMA transfer targeting a RX buffer
     STREAM<ap_uint<32> > &rxbuf_dma_sts, //status of a rxbuf write (assembled from statuses of fragments)
 	STREAM<ap_uint<32> > &rxbuf_idx_in, //indicates RX buffer index corresponding to DMA command on rxbuf_dma_cmd
     STREAM<ap_uint<32> > &rxbuf_idx_out, //forward index of completed RX buffer
     //interface to Datamover
-    STREAM<ap_uint<104> > &fragment_dma_cmd, //outgoing DMA command for a partial message write to a RX buffer
+    STREAM<ap_axiu<104,0,0,DEST_WIDTH> > &fragment_dma_cmd, //outgoing DMA command for a partial message write to a RX buffer
 	STREAM<ap_uint<32> > &fragment_dma_sts, //status of a fragment write
     //interface to depacketizer
     STREAM<eth_notification> &session_notification, //get notified when there is data for a session

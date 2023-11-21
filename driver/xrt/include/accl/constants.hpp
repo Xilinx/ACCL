@@ -37,14 +37,122 @@ const unsigned int TAG_ANY = 0xFFFFFFFF;
 const addr_t EXCHANGE_MEM_OFFSET_ADDRESS = 0x0;
 /** Exchange mem address range */
 const addr_t EXCHANGE_MEM_ADDRESS_RANGE = 0x2000;
-/** Return code offset */
-const addr_t RETCODE_OFFSET = 0x1FFC;
-/** hardware id offset */
-const addr_t IDCODE_OFFSET = 0x1FF8;
-/** Configuration ready offset */
-const addr_t CFGRDY_OFFSET = 0x1FF4;
 /** Global Communicator */
 const communicatorId GLOBAL_COMM = 0x0;
+
+/**
+ * Address offsets inside the HOSTCTRL internal memory
+ * 
+ */
+namespace HOSTCTRL_ADDR {
+// address maps for the hostcontrol kernel
+// (copied from hw/hdl/operators/examples/accl/rtl/hostctrl_control_s_axi.v)
+//------------------------Address Info-------------------
+// 0x00 : Control signals
+//        bit 0  - ap_start (Read/Write/COH)
+//        bit 1  - ap_done (Read/COR)
+//        bit 2  - ap_idle (Read)
+//        bit 3  - ap_ready (Read/COR)
+//        bit 7  - auto_restart (Read/Write)
+//        bit 9  - interrupt (Read)
+//        others - reserved
+constexpr auto const AP_CTRL                = 0x00;
+// 0x04 : Global Interrupt Enable Register
+//        bit 0  - Global Interrupt Enable (Read/Write)
+//        others - reserved
+constexpr auto const GIE                    = 0x04;
+// 0x08 : IP Interrupt Enable Register (Read/Write)
+//        bit 0 - enable ap_done interrupt (Read/Write)
+//        bit 1 - enable ap_ready interrupt (Read/Write)
+//        others - reserved
+constexpr auto const IER                    = 0x08;
+// 0x0c : IP Interrupt Status Register (Read/COR)
+//        bit 0 - ap_done (Read/COR)
+//        bit 1 - ap_ready (Read/COR)
+//        others - reserved
+constexpr auto const ISR                    = 0x0c;
+// 0x10 : Data signal of scenario
+//        bit 31~0 - scenario[31:0] (Read/Write)
+constexpr auto const SCEN                   = 0x10;
+// 0x14 : reserved
+// 0x18 : Data signal of len
+//        bit 31~0 - len[31:0] (Read/Write)
+constexpr auto const LEN                    = 0x18;
+// 0x1c : reserved
+// 0x20 : Data signal of comm
+//        bit 31~0 - comm[31:0] (Read/Write)
+constexpr auto const COMM                   = 0x20;
+// 0x24 : reserved
+// 0x28 : Data signal of root_src_dst
+//        bit 31~0 - root_src_dst[31:0] (Read/Write)
+constexpr auto const ROOT_SRC_DST           = 0x28;
+// 0x2c : reserved
+// 0x30 : Data signal of function_r
+//        bit 31~0 - function_r[31:0] (Read/Write)
+constexpr auto const FUNCTION_R             = 0x30;
+// 0x34 : reserved
+// 0x38 : Data signal of msg_tag
+//        bit 31~0 - msg_tag[31:0] (Read/Write)
+constexpr auto const MSG_TAG               = 0x38;
+// 0x3c : reserved
+// 0x40 : Data signal of datapath_cfg
+//        bit 31~0 - datapath_cfg[31:0] (Read/Write)
+constexpr auto const DATAPATH_CFG           = 0x40;
+// 0x44 : reserved
+// 0x48 : Data signal of compression_flags
+//        bit 31~0 - compression_flags[31:0] (Read/Write)
+constexpr auto const COMPRESSION_FLAGS           = 0x48;
+// 0x4c : reserved
+// 0x50 : Data signal of stream_flags
+//        bit 31~0 - stream_flags[31:0] (Read/Write)
+constexpr auto const STREAM_FLAGS           = 0x50;
+// 0x54 : reserved
+// 0x58 : Data signal of addra
+//        bit 31~0 - addra[31:0] (Read/Write)
+constexpr auto const ADDRA_0           = 0x58;
+// 0x5c : Data signal of addra
+//        bit 31~0 - addra[63:32] (Read/Write)
+constexpr auto const ADDRA_1           = 0x5c;
+// 0x60 : reserved
+// 0x64 : Data signal of addrb
+//        bit 31~0 - addrb[31:0] (Read/Write)
+constexpr auto const ADDRB_0           = 0x64;
+// 0x68 : Data signal of addrb
+//        bit 31~0 - addrb[63:32] (Read/Write)
+constexpr auto const ADDRB_1           = 0x68;
+// 0x6c : reserved
+// 0x70 : Data signal of addrc
+//        bit 31~0 - addrc[31:0] (Read/Write)
+constexpr auto const ADDRC_0           = 0x70;
+// 0x74 : Data signal of addrc
+//        bit 31~0 - addrc[63:32] (Read/Write)
+constexpr auto const ADDRC_1           = 0x74;
+// 0x78 : reserved
+// (SC = Self Clear, COR = Clear on Read, TOW = Toggle on Write, COH = Clear on Handshake)
+// control signals
+}
+
+/**
+ * Address offsets inside the CCLO internal memory
+ * 
+ */
+namespace CCLO_ADDR {
+  constexpr auto const RETCODE_OFFSET         = 0x1FFC;
+  constexpr auto const IDCODE_OFFSET          = 0x1FF8;
+  constexpr auto const CFGRDY_OFFSET          = 0x1FF4;
+  constexpr auto const PERFCNT_OFFSET         = 0x1FF0;
+  constexpr auto const SPARE3_OFFSET          = 0x1FE8;
+  constexpr auto const SPARE2_OFFSET          = 0x1FE0;
+  constexpr auto const SPARE1_OFFSET          = 0x1FD8;
+  constexpr auto const REDUCE_FLAT_TREE_MAX_COUNT_OFFSET = 0x1FD4;
+  constexpr auto const REDUCE_FLAT_TREE_MAX_RANKS_OFFSET = 0x1FD0;
+  constexpr auto const BCAST_FLAT_TREE_MAX_RANKS_OFFSET = 0x1FCC;
+  constexpr auto const GATHER_FLAT_TREE_MAX_COUNT_OFFSET = 0x1FC8;
+  constexpr auto const GATHER_FLAT_TREE_MAX_FANIN_OFFSET = 0x1FC4;
+  constexpr auto const EGR_RX_BUF_SIZE_OFFSET = 0x4;
+  constexpr auto const NUM_EGR_RX_BUFS_OFFSET = 0x0;
+}
+
 
 /**
  * Configuration functions
@@ -54,11 +162,8 @@ enum class cfgFunc {
   reset_periph = 0,
   enable_pkt = 1,
   set_timeout = 2,
-  open_port = 3,
-  open_con = 4,
-  set_stack_type = 5,
-  set_max_segment_size = 6,
-  close_con = 7
+  set_max_eager_msg_size = 3,
+  set_max_rendezvous_msg_size = 4
 };
 
 /**
@@ -82,7 +187,7 @@ enum class operation : int {
   reduce_scatter = 11,  /**< Perform reduce operator on remote FPGA buffers
                              and scatter to all ranks */
   barrier = 12,         /**< barrier kernel */
-  all_to_all = 13,      /**< All-to-all kernel */
+  alltoall = 13,        /**< All-to-all kernel */
   nop = 255             /**< NOP operation */
 };
 
@@ -170,6 +275,27 @@ inline streamFlags &operator|=(streamFlags &lhs, streamFlags rhs) {
 }
 
 /**
+ * ACCL host flags to specify host-only buffers.
+ *
+ */
+enum class hostFlags {
+  NO_HOST = 0,  /**< No buffers are host-only */
+  OP0_HOST = 1, /**< The first operand is host-only */
+  OP1_HOST = 2, /**< The second operand is host-only */
+  RES_HOST = 4  /**< The result is host-only */
+};
+
+inline hostFlags operator|(hostFlags lhs, hostFlags rhs) {
+  return static_cast<hostFlags>(static_cast<int>(lhs) |
+                                  static_cast<int>(rhs));
+}
+
+inline hostFlags &operator|=(hostFlags &lhs, hostFlags rhs) {
+  lhs = lhs | rhs;
+  return lhs;
+}
+
+/**
  * ACCL compression flags to specify compression configuration.
  *
  */
@@ -190,7 +316,7 @@ enum class compressionFlags {
 enum class networkProtocol {
   TCP,  /**< The TCP protocol */
   UDP,  /**< The UDP protocol */
-  RDMA  /**< Use RDMA for data transfers; currently unsupported */
+  RDMA  /**< Use RDMA for data transfers */
 };
 
 inline compressionFlags operator|(compressionFlags lhs, compressionFlags rhs) {
@@ -226,8 +352,8 @@ enum class errorCode {
   DEQUEUE_BUFFER_SPARE_BUFFER_INDEX_ERROR = 1 << 13,
   COLLECTIVE_NOT_IMPLEMENTED = 1 << 14,
   RECEIVE_OFFCHIP_SPARE_BUFF_ID_NOT_VALID = 1 << 15,
-  OPEN_PORT_NOT_SUCCEEDED = 1 << 16,
-  OPEN_CON_NOT_SUCCEEDED = 1 << 17,
+  EAGER_THRESHOLD_INVALID = 1 << 16,
+  RENDEZVOUS_THRESHOLD_INVALID = 1 << 17,
   DMA_SIZE_ERROR = 1 << 18,
   ARITH_ERROR = 1 << 19,
   PACK_TIMEOUT_STS_ERROR = 1 << 20,
@@ -236,8 +362,7 @@ enum class errorCode {
   KRNL_TIMEOUT_STS_ERROR = 1 << 23,
   KRNL_STS_COUNT_ERROR = 1 << 24,
   SEGMENTER_EXPECTED_BTT_ERROR = 1 << 25,
-  DMA_TAG_MISMATCH_ERROR = 1 << 26,
-  CLOSE_CON_NOT_SUCCEEDED = 1 << 27
+  DMA_TAG_MISMATCH_ERROR = 1 << 26
 };
 
 /** Amount of bits used for error codes. */

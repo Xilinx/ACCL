@@ -15,7 +15,7 @@
 #
 # *******************************************************************************/
 
-# netStackType - UDP or TCP - type of POE attachment generated
+# netStackType - UDP or TCP or RDMA - type of POE attachment generated
 # enableDMA - 0/1 - enables DMAs, providing support for send/recv from/to memory, and collectives
 # enableArithmetic - 0/1 - enables arithmetic, providing support for reduction collectives and combine primitive
 # enableCompression - 0/1 - enables compression feature
@@ -142,29 +142,55 @@ if { $stacktype == "TCP" } {
     make_bd_intf_pins_external  [get_bd_intf_pins dummy_tcp_stack/net_tx]
     set_property name m_axis_eth_tx_data [get_bd_intf_ports net_tx_0]
     #make remaining connections
-    delete_bd_objs [get_bd_intf_ports s_axis_eth_open_status]
-    delete_bd_objs [get_bd_intf_ports s_axis_eth_port_status]
     delete_bd_objs [get_bd_intf_ports s_axis_eth_notification]
     delete_bd_objs [get_bd_intf_ports s_axis_eth_rx_meta]
     delete_bd_objs [get_bd_intf_ports s_axis_eth_tx_status]
-    delete_bd_objs [get_bd_intf_ports m_axis_eth_open_connection]
-    delete_bd_objs [get_bd_intf_ports m_axis_eth_close_connection]
-    delete_bd_objs [get_bd_intf_ports m_axis_eth_listen_port]
     delete_bd_objs [get_bd_intf_ports m_axis_eth_read_pkg]
     delete_bd_objs [get_bd_intf_ports m_axis_eth_tx_meta]
     
-    connect_bd_intf_net [get_bd_intf_pins dummy_tcp_stack/m_axis_tcp_open_status] [get_bd_intf_pins cclo/s_axis_eth_open_status]
-    connect_bd_intf_net [get_bd_intf_pins dummy_tcp_stack/m_axis_tcp_port_status] [get_bd_intf_pins cclo/s_axis_eth_port_status]
     connect_bd_intf_net [get_bd_intf_pins dummy_tcp_stack/m_axis_tcp_notification] [get_bd_intf_pins cclo/s_axis_eth_notification]
     connect_bd_intf_net [get_bd_intf_pins dummy_tcp_stack/m_axis_tcp_rx_meta] [get_bd_intf_pins cclo/s_axis_eth_rx_meta]
     connect_bd_intf_net [get_bd_intf_pins dummy_tcp_stack/m_axis_tcp_tx_status] [get_bd_intf_pins cclo/s_axis_eth_tx_status]
-    connect_bd_intf_net [get_bd_intf_pins dummy_tcp_stack/s_axis_tcp_open_connection] [get_bd_intf_pins cclo/m_axis_eth_open_connection]
-    connect_bd_intf_net [get_bd_intf_pins dummy_tcp_stack/s_axis_tcp_close_connection] [get_bd_intf_pins cclo/m_axis_eth_close_connection]
-    connect_bd_intf_net [get_bd_intf_pins dummy_tcp_stack/s_axis_tcp_listen_port] [get_bd_intf_pins cclo/m_axis_eth_listen_port]
     connect_bd_intf_net [get_bd_intf_pins dummy_tcp_stack/s_axis_tcp_read_pkg] [get_bd_intf_pins cclo/m_axis_eth_read_pkg]
     connect_bd_intf_net [get_bd_intf_pins dummy_tcp_stack/s_axis_tcp_tx_meta] [get_bd_intf_pins cclo/m_axis_eth_tx_meta]
     connect_bd_intf_net [get_bd_intf_pins dummy_tcp_stack/s_axis_tcp_tx_data] [get_bd_intf_pins cclo/m_axis_eth_tx_data]
     connect_bd_intf_net [get_bd_intf_pins dummy_tcp_stack/m_axis_tcp_rx_data] [get_bd_intf_pins cclo/s_axis_eth_rx_data]
+}
+
+if { $stacktype == "RDMA" } {
+    create_bd_cell -type ip -vlnv xilinx.com:ACCL:cyt_rdma:1.0 dummy_cyt_rdma_stack
+    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins dummy_cyt_rdma_stack/ap_clk]
+    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins dummy_cyt_rdma_stack/ap_rst_n]
+
+    delete_bd_objs [get_bd_intf_ports s_axis_eth_rx_data]
+    delete_bd_objs [get_bd_intf_ports m_axis_eth_tx_data]
+    delete_bd_objs [get_bd_intf_ports m_axis_rdma_sq]
+    delete_bd_objs [get_bd_intf_ports s_axis_eth_notification]
+
+    make_bd_intf_pins_external  [get_bd_intf_pins dummy_cyt_rdma_stack/rx]
+    set_property name s_axis_eth_rx_data [get_bd_intf_ports rx_0]
+    make_bd_intf_pins_external  [get_bd_intf_pins dummy_cyt_rdma_stack/tx]
+    set_property name m_axis_eth_tx_data [get_bd_intf_ports tx_0]
+
+    connect_bd_intf_net [get_bd_intf_pins cclo/m_axis_rdma_sq] [get_bd_intf_pins dummy_cyt_rdma_stack/rdma_sq]
+    connect_bd_intf_net [get_bd_intf_pins dummy_cyt_rdma_stack/notif] [get_bd_intf_pins cclo/s_axis_eth_notification]
+    connect_bd_intf_net [get_bd_intf_pins dummy_cyt_rdma_stack/recv_data] [get_bd_intf_pins cclo/s_axis_eth_rx_data]
+    connect_bd_intf_net [get_bd_intf_pins cclo/m_axis_eth_tx_data] [get_bd_intf_pins dummy_cyt_rdma_stack/send_data]
+
+    set_property -dict [list CONFIG.NUM_SI {4}] [get_bd_cells external_memory/axi_crossbar_0]
+
+    create_bd_cell -type ip -vlnv xilinx.com:ip:axi_datamover:5.1 cyt_wr_dma
+    set_property -dict [list CONFIG.c_enable_mm2s {0} CONFIG.c_include_s2mm_dre {true} CONFIG.c_s2mm_support_indet_btt {true} ] [get_bd_cells cyt_wr_dma]
+    set_property -dict [list CONFIG.c_m_axi_s2mm_data_width.VALUE_SRC USER CONFIG.c_s_axis_s2mm_tdata_width.VALUE_SRC USER] [get_bd_cells cyt_wr_dma]
+    set_property -dict [list CONFIG.c_addr_width {64} CONFIG.c_m_axi_s2mm_data_width {512} CONFIG.c_s_axis_s2mm_tdata_width {512} ] [get_bd_cells cyt_wr_dma]
+    connect_bd_intf_net [get_bd_intf_pins cyt_wr_dma/S_AXIS_S2MM] [get_bd_intf_pins dummy_cyt_rdma_stack/wr_data]
+    connect_bd_intf_net [get_bd_intf_pins dummy_cyt_rdma_stack/wr_cmd] [get_bd_intf_pins cyt_wr_dma/S_AXIS_S2MM_CMD]
+    connect_bd_intf_net [get_bd_intf_pins dummy_cyt_rdma_stack/wr_sts] [get_bd_intf_pins cyt_wr_dma/M_AXIS_S2MM_STS]
+    connect_bd_intf_net [get_bd_intf_pins cyt_wr_dma/M_AXI_S2MM] [get_bd_intf_pins external_memory/axi_crossbar_0/S03_AXI]
+    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins cyt_wr_dma/m_axi_s2mm_aclk] [get_bd_pins cyt_wr_dma/m_axis_s2mm_cmdsts_awclk]
+    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins cyt_wr_dma/m_axi_s2mm_aresetn] [get_bd_pins cyt_wr_dma/m_axis_s2mm_cmdsts_aresetn]
+
+    assign_bd_address -target_address_space /cyt_wr_dma/Data_S2MM [get_bd_addr_segs external_memory/axi_bram_ctrl_0/S_AXI/Mem0] -force
 }
 
 # connect arithmetic plugins

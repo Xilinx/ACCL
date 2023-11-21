@@ -124,13 +124,22 @@ public:
    *
    * @return xrt::bo* The underlying BO buffer.
    */
-  xrt::bo *bo() override { return &_bo; }
+  xrt::bo *bo() { return &_bo; }
 
   /**
    * Check if the buffer is simulated, always false.
    *
    */
   bool is_simulated() const override { return false; }
+
+  /**
+   * Check if the buffer is host-only.
+   *
+   */
+  bool is_host_only() const override { 
+    auto flags = _bo.get_flags();
+    return flags == xrt::bo::flags::host_only;
+  }
 
   /**
    * Sync the data from the device back to the host. Will copy the data from

@@ -23,9 +23,9 @@
 
 
 TEST_P(ACCLSweepBenchmark, benchmark_sendrecv) {
-  if(rank == 0)
+  if(::rank == 0)
     accl->send(*buf_0, std::pow(2,GetParam()), 1, 0, GLOBAL_COMM, true);
-  else if(rank == 1)
+  else if(::rank == 1)
     accl->recv(*buf_0, std::pow(2,GetParam()), 0, 0, GLOBAL_COMM, true);
 }
 
@@ -89,11 +89,11 @@ options_t parse_options(int argc, char *argv[]) {
       throw std::runtime_error("When using hardware, specify one of axis3, "
                                 "tcp, udp, or roce mode, but not both.");
     }
-    if (axis3_arg.getValue() && (size > 3)) {
+    if (axis3_arg.getValue() && (::size > 3)) {
       throw std::runtime_error("When using axis3x, use up to 3 ranks.");
     }
   } catch (std::exception &e) {
-    if (rank == 0) {
+    if (::rank == 0) {
       std::cout << "Error: " << e.what() << std::endl;
     }
 
@@ -114,7 +114,7 @@ options_t parse_options(int argc, char *argv[]) {
   opts.rsfec = rsfec_arg.getValue();
   opts.device_index = device_index_arg.getValue();
   opts.xclbin = xclbin_arg.getValue();
-  opts.csvfile = "results_"+std::to_string(rank)+".csv";
+  opts.csvfile = "results_"+std::to_string(::rank)+".csv";
 
   return opts;
 }
@@ -122,8 +122,8 @@ options_t parse_options(int argc, char *argv[]) {
 int main(int argc, char *argv[]) {
   MPI_Init(&argc, &argv);
 
-  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-  MPI_Comm_size(MPI_COMM_WORLD, &size);
+  MPI_Comm_rank(MPI_COMM_WORLD, &::rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &::size);
 
   //init google test with any arguments specific to it
   ::testing::InitGoogleTest(&argc, argv);

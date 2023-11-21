@@ -425,7 +425,7 @@ void interface_handler(XSI_DUT *dut, Stream<unsigned int> &axilite_rd_addr, Stre
                         Stream<unsigned int> &callreq, Stream<unsigned int> &callack,
                         Stream<stream_word> &eth_tx_data, Stream<stream_word> &eth_rx_data,
                         Stream<stream_word> &cclo_to_krnl_data, Stream<stream_word> &krnl_to_cclo_data){
-    logger << log_level::info << "Starting XSI interface server" << endl;
+    logger << log_level::verbose << "Starting XSI interface server" << endl;
     while(!stop){
         dut->run_ncycles(1);
         control_read_fsm(dut, axilite_rd_addr, axilite_rd_data);
@@ -439,7 +439,7 @@ void interface_handler(XSI_DUT *dut, Stream<unsigned int> &axilite_rd_addr, Stre
         krnl_ingress_fsm(dut, krnl_to_cclo_data);
         krnl_egress_fsm(dut, cclo_to_krnl_data);
     }
-    logger << log_level::info << "Exiting XSI interface server" << endl;
+    logger << log_level::verbose << "Exiting XSI interface server" << endl;
 }
 
 //this function copies from the global var stop
@@ -485,7 +485,6 @@ int main(int argc, char **argv)
                                           false, 5500, "positive integer");
     cmd.add(startport);
 
-    TCLAP::SwitchArg udp_arg("u", "udp", "Use UDP hardware setup", cmd, false);
     TCLAP::SwitchArg loopback_arg("b", "loopback", "Enable kernel loopback", cmd, false);
     TCLAP::SwitchArg wave_en("w", "waveform", "Enable waveform recording", cmd, false);
 
@@ -496,7 +495,7 @@ int main(int argc, char **argv)
     }
 
     //set up the logger with the specified log level
-    logger = Log(static_cast<log_level>(loglevel.getValue()));
+    logger = Log(static_cast<log_level>(loglevel.getValue()), localrank.getValue());
 
     //get world size and local rank from environment
     unsigned int world_size = worldsize.getValue(); // number of processes
@@ -565,7 +564,7 @@ int main(int argc, char **argv)
                                     aximm_wr_addr, aximm_wr_data, aximm_wr_strb,
                                     callreq, callack);
         //ZMQ to other nodes process(es)
-        HLSLIB_DATAFLOW_FUNCTION(zmq_eth_egress_server, &ctx, eth_tx_data, local_rank, !udp_arg.getValue());
+        HLSLIB_DATAFLOW_FUNCTION(zmq_eth_egress_server, &ctx, eth_tx_data, local_rank);
         HLSLIB_DATAFLOW_FUNCTION(zmq_eth_ingress_server, &ctx, eth_rx_data);
         HLSLIB_DATAFLOW_FUNCTION(zmq_krnl_egress_server, &ctx, cclo_to_krnl_data);
         HLSLIB_DATAFLOW_FUNCTION(zmq_krnl_ingress_server, &ctx, krnl_to_cclo_data);

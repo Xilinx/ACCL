@@ -39,7 +39,7 @@ xml_footer = "</kernel></root>"
 xml_ports = "<ports>\n"
 xml_args = "<args>\n"
 
-#$(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) 
+#$(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) $(EN_EXT_DMA)
 
 xml_ports += fill_xml_axilite_port("s_axi_control", 8*1024)
 
@@ -59,11 +59,10 @@ if sys.argv[1] == "TCP":
     xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "s_axis_eth_rx_meta", False, 16, id)
     xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "m_axis_eth_tx_meta", True, 32, id)
     xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "s_axis_eth_tx_status", False, 64, id)
-    xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "m_axis_eth_open_connection", True, 64, id)
-    xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "m_axis_eth_close_connection", True, 16, id)
-    xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "s_axis_eth_open_status", False, 128, id)
-    xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "m_axis_eth_listen_port", True, 16, id)
-    xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "s_axis_eth_port_status", False, 8, id)
+
+if sys.argv[1] == "RDMA":
+    xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "s_axis_eth_notification", False, 64, id)
+    xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "m_axis_rdma_sq", True, 128, id)
 
 if  int(sys.argv[5]) == 1:
     xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "s_axis_krnl", False, 512, id)
@@ -81,6 +80,20 @@ if  int(sys.argv[3]) == 1:
     xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "s_axis_arith_res", False, 512, id)
     xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "m_axis_arith_op0", True, 512, id)
     xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "m_axis_arith_op1", True, 512, id)
+
+if  int(sys.argv[6]) == 1 and int(sys.argv[2]) == 0:
+    xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "m_axis_dma0_s2mm", True, 512, id)
+    xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "s_axis_dma0_mm2s", False, 512, id)
+    xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "m_axis_dma1_s2mm", True, 512, id)
+    xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "s_axis_dma1_mm2s", False, 512, id)
+    xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "m_axis_dma0_mm2s_cmd", True, 104, id)
+    xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "s_axis_dma0_mm2s_sts", False, 32, id)
+    xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "m_axis_dma0_s2mm_cmd", True, 104, id)
+    xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "s_axis_dma0_s2mm_sts", False, 32, id)
+    xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "m_axis_dma1_mm2s_cmd", True, 104, id)
+    xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "s_axis_dma1_mm2s_sts", False, 32, id)
+    xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "m_axis_dma1_s2mm_cmd", True, 104, id)
+    xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "s_axis_dma1_s2mm_sts", False, 32, id)
 
 xml_ports += "</ports>\n"
 xml_args += "</args>\n"

@@ -42,15 +42,13 @@ def build_executable():
         sys.exit(1)
 
 
-def run_simulator(ranks: int, log_level: int, start_port: int, use_udp: bool, kernel_loopback: bool, waveform: bool):
+def run_simulator(ranks: int, log_level: int, start_port: int, kernel_loopback: bool, waveform: bool):
     env = os.environ.copy()
     env['LD_LIBRARY_PATH'] = env.get('LD_LIBRARY_PATH', "") + f":{os.environ['XILINX_VIVADO']}/lib/lnx64.o"
     # create processes into a list
     processes = []
     for r in range(ranks):
         args = [str(executable), '-s', str(ranks), '-r', str(r), '-l', str(log_level), '-p', str(start_port)]
-        if use_udp:
-            args.append('-u')
         if kernel_loopback:
             args.append('-b')
         if waveform:
@@ -86,7 +84,7 @@ def run_simulator(ranks: int, log_level: int, start_port: int, use_udp: bool, ke
 
 
 def main(ranks: int, log_level: int, start_port: int,
-         use_udp: bool, kernel_loopback: bool, build: bool, waveform: bool):
+         kernel_loopback: bool, build: bool, waveform: bool):
     if not build and not executable.exists():
         print(f"Executable {executable} does not exists!")
         sys.exit(1)
@@ -98,7 +96,7 @@ def main(ranks: int, log_level: int, start_port: int,
         build_executable()
 
     print("Starting simulator...")
-    run_simulator(ranks, log_level, start_port, use_udp, kernel_loopback, waveform)
+    run_simulator(ranks, log_level, start_port, kernel_loopback, waveform)
 
 
 if __name__ == '__main__':
@@ -109,8 +107,6 @@ if __name__ == '__main__':
                         help='Log level to use, defaults to 3 (info)')
     parser.add_argument('-s', '--start-port', type=int, default=5500,
                         help='Start port of simulator')
-    parser.add_argument('-u', '--udp', action='store_true', default=False,
-                        help='Run simulator over UDP instead of TCP')
     parser.add_argument('-w', '--waveform', action='store_true', default=False,
                         help='Dump waveforms')
     parser.add_argument('--no-build', action='store_true', default=False,
@@ -118,5 +114,5 @@ if __name__ == '__main__':
     parser.add_argument('--no-kernel-loopback', action='store_true', default=False,
                         help="Do not connect user kernel data ports in loopback")
     args = parser.parse_args()
-    main(args.nranks, args.log_level, args.start_port, args.udp,
+    main(args.nranks, args.log_level, args.start_port,
         not args.no_kernel_loopback, not args.no_build, args.waveform)

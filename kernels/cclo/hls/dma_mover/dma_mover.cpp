@@ -17,8 +17,15 @@
 
 #include "dma_mover.h"
 #include "Axi.h"
+#ifndef ACCL_SYNTHESIS
+#include "log.hpp"
+#endif
 
 using namespace hlslib;
+
+#ifndef ACCL_SYNTHESIS
+extern Log logger;
+#endif
 
 void router_cmd_execute(
     STREAM<router_instruction> &instruction, 
@@ -203,13 +210,14 @@ void router_ack_execute(
 // break up a large transfer into DMA_MAX_BTT chunks
 void dma_cmd_execute(
     STREAM<datamover_instruction> &instruction,
-    STREAM<ap_uint<104> > &dma_cmd_channel,
+    STREAM<ap_axiu<104,0,0,DEST_WIDTH> > &dma_cmd_channel,
     STREAM<datamover_ack_instruction> &ack_instruction
 ) {
 #pragma HLS PIPELINE II=1 style=flp
     ap_uint<4> tag;
     ap_uint<32> ncommands;
     unsigned int btt;
+    ap_axiu<104,0,0,DEST_WIDTH> dma_cmd_word;
     axi::Command<64, 23> dma_cmd;
     datamover_instruction instr;
     datamover_ack_instruction ack_instr;
@@ -225,7 +233,10 @@ void dma_cmd_execute(
                 dma_cmd.length = btt;
                 dma_cmd.address = instr.addr;
                 dma_cmd.tag = tag;
-                STREAM_WRITE(dma_cmd_channel, dma_cmd);
+                dma_cmd_word.data = dma_cmd;
+                dma_cmd_word.last = 1;//always last
+                dma_cmd_word.dest = instr.mem_id;
+                STREAM_WRITE(dma_cmd_channel, dma_cmd_word);
                 //update state
                 instr.total_bytes -= btt;
                 tag++;
@@ -254,7 +265,7 @@ void dma_ack_execute(
             while(instr.ncommands > 0){
                 status = axi::Status(STREAM_READ(dma_sts_channel));
                 if(status.tag != tag) {
-                    ret = ret | DMA_TAG_MISMATCH_ERROR;
+                    // ret = ret | DMA_TAG_MISMATCH_ERROR; // TODO: Coyote Sts Tag contains the dest, not always 0
                 }
                 if(status.internalError) {
                     ret = ret | DMA_INTERNAL_ERROR;
@@ -302,6 +313,9 @@ void eth_cmd_execute(
             pkt_cmd.seqn = sequence_number;
             pkt_cmd.strm = insn.to_stream ? (insn.mpi_tag + SWITCH_M_BYPASS) : 0;
             pkt_cmd.dst = insn.dst_sess_id;
+            pkt_cmd.host = insn.to_host;
+            pkt_cmd.vaddr = insn.addr;
+            pkt_cmd.msg_type = insn.rendezvous ? RNDZVS_MSG : EGR_MSG;
             STREAM_WRITE(eth_cmd_channel, pkt_cmd);
             packetizer_ack_instruction ack_insn;
             ack_insn.expected_seqn = sequence_number;
@@ -311,7 +325,7 @@ void eth_cmd_execute(
 #ifndef ACCL_SYNTHESIS
             std::stringstream ss;
             ss << "DMA MOVE Offload: Emitting Eth segment dst=" << pkt_cmd.dst << " len=" << pkt_cmd.count << "\n";
-            std::cout << ss.str();
+            logger << log_level::verbose << ss.str();
 #endif
         }
     }
@@ -360,7 +374,11 @@ void instruction_fetch(
         ret.op1_is_compressed = (compression_flags & OP1_COMPRESSED) != 0;
         ret.res_is_compressed = (compression_flags & RES_COMPRESSED) != 0;
         ret.func_id = tmp(16,13);
-        
+        ret.op0_is_host = tmp(17,17);
+        ret.op1_is_host = tmp(18,18);
+        ret.res_is_host = tmp(19,19);
+        ret.res_is_rendezvous = tmp(20,20);
+
         ret.count = (STREAM_READ(cmd)).data;
 
         //get arith config offset
@@ -501,6 +519,7 @@ void instruction_decode(
     #pragma HLS reset variable=prev_dm0_rd
     if((insn.op0_opcode != MOVE_NONE) & (insn.op0_opcode != MOVE_STREAM)){
         dm0_rd.total_bytes = insn.op0_is_compressed ? total_bytes_compressed : total_bytes_uncompressed;
+        dm0_rd.mem_id = insn.op0_is_host ? 1 : 0;
         switch(insn.op0_opcode){
             //add options here - reuse, increment, etc
             case MOVE_IMMEDIATE:
@@ -528,7 +547,7 @@ void instruction_decode(
 #ifndef ACCL_SYNTHESIS
             std::stringstream ss;
             ss << "DMA MOVE Offload: Op0 Read addr=" << dm0_rd.addr << " len=" << dm0_rd.total_bytes << "\n";
-            std::cout << ss.str();
+            logger << log_level::verbose << ss.str();
 #endif
         }
         prev_dm0_rd = dm0_rd;
@@ -540,6 +559,7 @@ void instruction_decode(
     unsigned int inbound_seqn, bytes_remaining;
     if(insn.op1_opcode != MOVE_NONE){
         dm1_rd.total_bytes = insn.op1_is_compressed ? total_bytes_compressed : total_bytes_uncompressed;
+        dm1_rd.mem_id = insn.op1_is_host ? 1 : 0; 
         dm1_rd.last = true;
         switch(insn.op1_opcode){
             //add options here - reuse, increment, etc
@@ -585,7 +605,7 @@ void instruction_decode(
                     std::stringstream ss;
                     ss << "DMA MOVE Offload: Segment " << ack_insn.release_count << ", remaining bytes: " << bytes_remaining << "\n";
                     ss << "DMA MOVE Offload: Op1 Read on Recv addr=" << dm1_rd.addr << " len=" << dm1_rd.total_bytes << "\n";
-                    std::cout << ss.str();
+                    logger << log_level::verbose << ss.str();
 #endif
                 }
                 //update expected sequence number
@@ -602,7 +622,7 @@ void instruction_decode(
 #ifndef ACCL_SYNTHESIS
             std::stringstream ss;
             ss << "DMA MOVE Offload: Op1 Read addr=" << dm1_rd.addr << " len=" << dm1_rd.total_bytes << "\n";
-            std::cout << ss.str();
+            logger << log_level::verbose << ss.str();
 #endif
         }
         prev_dm1_rd = dm1_rd;
@@ -616,10 +636,17 @@ void instruction_decode(
                 pkt_wr.src_rank = exchange_mem[insn.comm_offset + COMM_LOCAL_RANK_OFFSET];
                 pkt_wr.seqn = exchange_mem[insn.comm_offset + COMM_RANKS_OFFSET + (insn.dst_rank * RANK_SIZE) + RANK_OUTBOUND_SEQ_OFFSET];
                 pkt_wr.dst_sess_id = exchange_mem[insn.comm_offset + COMM_RANKS_OFFSET + (insn.dst_rank * RANK_SIZE) + RANK_SESSION_OFFSET];
-                pkt_wr.max_seg_len = exchange_mem[insn.comm_offset + COMM_RANKS_OFFSET + (insn.dst_rank * RANK_SIZE) + RANK_SEGLEN_OFFSET];
                 pkt_wr.len = insn.res_is_compressed ? total_bytes_compressed : total_bytes_uncompressed;
+                if(insn.res_is_rendezvous){
+                    pkt_wr.max_seg_len = pkt_wr.len;
+                } else {
+                    pkt_wr.max_seg_len = exchange_mem[insn.comm_offset + COMM_RANKS_OFFSET + (insn.dst_rank * RANK_SIZE) + RANK_SEGLEN_OFFSET];
+                }
                 pkt_wr.mpi_tag = insn.mpi_tag;
                 pkt_wr.to_stream = (insn.res_opcode == MOVE_STREAM);
+                pkt_wr.to_host = insn.res_is_host;
+                pkt_wr.addr = insn.res_addr;
+                pkt_wr.rendezvous = insn.res_is_rendezvous;
                 STREAM_WRITE(eth_insn, pkt_wr);
                 ack_insn.check_eth_tx = true;
                 //if we're not sending to a remote stream, update sequence number
@@ -634,11 +661,12 @@ void instruction_decode(
 #ifndef ACCL_SYNTHESIS
                 std::stringstream ss;
                 ss << "DMA MOVE Offload: Send dst=" << pkt_wr.dst_sess_id << " len=" << pkt_wr.len << " tag=" << pkt_wr.mpi_tag << "\n";
-                std::cout << ss.str();
+                logger << log_level::verbose << ss.str();
 #endif
             }
         } else if(!(insn.res_opcode == MOVE_STREAM)){
             dm1_wr.total_bytes = insn.res_is_compressed ? total_bytes_compressed : total_bytes_uncompressed;
+            dm1_wr.mem_id = insn.res_is_host ? 1 : 0;
             switch(insn.res_opcode){
                 case MOVE_IMMEDIATE:
                     dm1_wr.addr = insn.res_addr;
@@ -665,7 +693,7 @@ void instruction_decode(
 #ifndef ACCL_SYNTHESIS
                 std::stringstream ss;
                 ss << "DMA MOVE Offload: Res Write addr=" << dm1_wr.addr << " len=" << dm1_wr.total_bytes << "\n";
-                std::cout << ss.str();
+                logger << log_level::verbose << ss.str();
 #endif
             }
             prev_dm1_wr = dm1_wr;
@@ -704,7 +732,7 @@ void instruction_retire(
 #ifndef ACCL_SYNTHESIS
                 std::stringstream ss;
                 ss << "DMA MOVE Offload: Releasing segment " << i << " of " << insn.release_count << "\n";
-                std::cout << ss.str();
+                logger << log_level::verbose << ss.str();
 #endif
             }
         }
@@ -726,9 +754,9 @@ void dma_mover(
     STREAM<rxbuf_seek_result> &rxbuf_ack,
     STREAM<ap_uint<32> > &rxbuf_release_req,
     //interfaces to data movement engines
-    STREAM<ap_uint<104> > &dma0_read_cmd,
-    STREAM<ap_uint<104> > &dma1_read_cmd,
-    STREAM<ap_uint<104> > &dma1_write_cmd,
+    STREAM<ap_axiu<104,0,0,DEST_WIDTH> > &dma0_read_cmd,
+    STREAM<ap_axiu<104,0,0,DEST_WIDTH> > &dma1_read_cmd,
+    STREAM<ap_axiu<104,0,0,DEST_WIDTH> > &dma1_write_cmd,
     STREAM<ap_uint<32>> &dma0_read_sts,
     STREAM<ap_uint<32>> &dma1_read_sts,
     STREAM<ap_uint<32>> &dma1_write_sts,

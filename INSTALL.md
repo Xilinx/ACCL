@@ -23,14 +23,16 @@ sudo apt --fix-broken install
 
 ```sh
 source <VITIS_INSTALL>/settings64.sh
-cd "test/hardware"
+cd "test/refdesigns"
 make MODE=<Build Mode> PLATFORM=<Platform Name>
 ```
 
 The following build modes are supported:
 | Build Mode | Description                              |
 |------------|------------------------------------------|
-| udp or tcp | One ACCL instance per FPGA, with UDP or TCP transport respectively, via Ethernet port 0 |
+| udp or tcp | One ACCL instance per FPGA, with UDP or TCP transport respectively, via Ethernet port 0 on XRT shell |
+| coyote_tcp | One ACCL instance deployed to a Coyote shell over TCP |
+| coyote_rdma | One ACCL instance deployed to a Coyote shell over RDMA, with rendezvous mode support |
 | axis3x     | Three ACCL instances connected together internally on a single FPGA, using an AXI-Stream switch. Used for testing (see below) |
 
 The following platforms are supported for Alveo boards:

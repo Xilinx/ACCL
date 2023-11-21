@@ -57,8 +57,8 @@ void rxbuf_seek(
             pending_notif = STREAM_READ(rx_pending);
             if((pending_notif.signature.tag == seek_sig.tag || pending_notif.signature.tag == TAG_ANY) && 
                     pending_notif.signature.src == seek_sig.src && pending_notif.signature.seqn == seek_sig.seqn){
-                seek_res.addr(31,0) = rx_buffers[1 + pending_notif.index * SPARE_BUFFER_FIELDS + ADDRL_OFFSET];
-                seek_res.addr(63,32) = rx_buffers[1 + pending_notif.index * SPARE_BUFFER_FIELDS + ADDRH_OFFSET];
+                seek_res.addr(31,0) = rx_buffers[(RX_BUFFER_METADATA_OFFSET/4) + pending_notif.index * SPARE_BUFFER_FIELDS + ADDRL_OFFSET];
+                seek_res.addr(63,32) = rx_buffers[(RX_BUFFER_METADATA_OFFSET/4) + pending_notif.index * SPARE_BUFFER_FIELDS + ADDRH_OFFSET];
                 seek_res.len = pending_notif.signature.len;
                 seek_res.index = pending_notif.index;
                 seek_res.valid = true;
@@ -74,6 +74,6 @@ void rxbuf_seek(
     unsigned int spare_idx;
     if(!STREAM_IS_EMPTY(rx_release_request)){
         spare_idx = STREAM_READ(rx_release_request);
-        rx_buffers[1 + spare_idx * SPARE_BUFFER_FIELDS + STATUS_OFFSET] = STATUS_IDLE;
+        rx_buffers[(RX_BUFFER_METADATA_OFFSET/4) + spare_idx * SPARE_BUFFER_FIELDS + STATUS_OFFSET] = STATUS_IDLE;
     }
 }

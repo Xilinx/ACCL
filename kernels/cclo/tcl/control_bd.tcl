@@ -102,7 +102,7 @@ proc create_hier_cell_microblaze_0_local_memory { parentCell nameHier } {
 
 
 # Hierarchical cell: exchange_mem
-proc create_hier_cell_exchange_mem { parentCell nameHier } {
+proc create_hier_cell_exchange_mem { parentCell nameHier idCode} {
 
   if { $parentCell eq "" || $nameHier eq "" } {
      catch {common::send_gid_msg -ssname BD::TCL -id 2092 -severity "ERROR" "create_hier_cell_exchange_mem() - Empty argument(s)!"}
@@ -183,6 +183,7 @@ set axi_bram_ctrl_bypass [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_bram_
   set axi_crossbar_1 [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_crossbar:2.1 axi_crossbar_1 ]
   set_property -dict [ list \
    CONFIG.NUM_SI {1} \
+   CONFIG.NUM_MI {3} \
  ] $axi_crossbar_1
 
   # Create instance: axi_gpio_0, and set properties
@@ -201,7 +202,7 @@ set axi_bram_ctrl_bypass [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_bram_
   set xlconstant_hwid [ create_bd_cell -type ip -vlnv xilinx.com:ip:xlconstant:1.1 xlconstant_hwid ]
   set_property -dict [ list \
    CONFIG.CONST_WIDTH {32} \
-   CONFIG.CONST_VAL {0xcafebabe} \
+   CONFIG.CONST_VAL $idCode \
  ] $xlconstant_hwid
 
   # Create instance: axi_register_slice_0, and set properties
@@ -221,6 +222,31 @@ set axi_bram_ctrl_bypass [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_bram_
    CONFIG.DOUT_WIDTH {1} \
  ] $xlslice_encore_rstn
 
+  # Create instances for performance counter
+  set axi_gpio_1 [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_gpio:2.0 axi_gpio_1 ]
+  set_property -dict [ list \
+   CONFIG.C_IS_DUAL {1} \
+   CONFIG.C_ALL_INPUTS {0} \
+   CONFIG.C_ALL_OUTPUTS {1} \
+   CONFIG.C_ALL_INPUTS_2 {1} \
+   CONFIG.C_GPIO2_WIDTH {32} \
+   CONFIG.C_GPIO_WIDTH {2} \
+   CONFIG.C_INTERRUPT_PRESENT {0} \
+ ] $axi_gpio_1
+
+  set perf_ctr [ create_bd_cell -type ip -vlnv xilinx.com:ip:c_counter_binary:12.0 perf_ctr ]
+  set_property -dict [list \
+   CONFIG.CE {true} \
+   CONFIG.Output_Width {32} \
+   CONFIG.SCLR {true} \
+   CONFIG.Final_Count_Value {FFFFFFFE} \
+   CONFIG.Restrict_Count {true} \
+  ] $perf_ctr
+
+  set perf_ctr_sclr [ create_bd_cell -type ip -vlnv xilinx.com:ip:xlslice:1.0 perf_ctr_sclr ]
+  set perf_ctr_ce [ create_bd_cell -type ip -vlnv xilinx.com:ip:xlslice:1.0 perf_ctr_ce ]
+  set_property -dict [list CONFIG.DIN_FROM {1} CONFIG.DIN_TO {1}] $perf_ctr_ce
+
   # Create interface connections
   connect_bd_intf_net -intf_net S00_AXI_1 [get_bd_intf_pins S_AXI_MB] [get_bd_intf_pins axi_crossbar_1/S00_AXI]
   connect_bd_intf_net -intf_net S_AXI_1 [get_bd_intf_pins S_AXI_HOST] [get_bd_intf_pins axi_register_slice_0/S_AXI]
@@ -228,16 +254,22 @@ set axi_bram_ctrl_bypass [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_bram_
   connect_bd_intf_net -intf_net axi_crossbar_0_M00_AXI [get_bd_intf_pins axi_bram_ctrl_0/S_AXI] [get_bd_intf_pins axi_crossbar_0/M00_AXI]
   connect_bd_intf_net -intf_net axi_crossbar_1_M00_AXI [get_bd_intf_pins axi_crossbar_0/S00_AXI] [get_bd_intf_pins axi_crossbar_1/M00_AXI]
   connect_bd_intf_net -intf_net axi_crossbar_1_M01_AXI [get_bd_intf_pins axi_crossbar_1/M01_AXI] [get_bd_intf_pins axi_gpio_0/S_AXI]
+  connect_bd_intf_net [get_bd_intf_pins axi_crossbar_1/M02_AXI] [get_bd_intf_pins axi_gpio_1/S_AXI]
   connect_bd_intf_net -intf_net axi_register_slice_0_M_AXI [get_bd_intf_pins axi_crossbar_0/S01_AXI] [get_bd_intf_pins axi_register_slice_0/M_AXI]
   connect_bd_intf_net [get_bd_intf_pins S_AXI_BYP] [get_bd_intf_pins axi_bram_ctrl_bypass/S_AXI]
   connect_bd_intf_net [get_bd_intf_pins axi_bram_ctrl_bypass/BRAM_PORTA] [get_bd_intf_pins axi_bram_ctrl_0_bram/BRAM_PORTB]
   # Create port connections
-  connect_bd_net [get_bd_pins ap_rst_n] [get_bd_pins axi_bram_ctrl_0/s_axi_aresetn] [get_bd_pins axi_register_slice_0/aresetn] [get_bd_pins axi_crossbar_0/aresetn] [get_bd_pins axi_crossbar_1/aresetn] [get_bd_pins axi_gpio_0/s_axi_aresetn]
+  connect_bd_net [get_bd_pins ap_rst_n] [get_bd_pins axi_bram_ctrl_0/s_axi_aresetn] [get_bd_pins axi_register_slice_0/aresetn] [get_bd_pins axi_crossbar_0/aresetn] [get_bd_pins axi_crossbar_1/aresetn] [get_bd_pins axi_gpio_0/s_axi_aresetn] [get_bd_pins axi_gpio_1/s_axi_aresetn]
   connect_bd_net [get_bd_pins encore_rst_n] [get_bd_pins axi_bram_ctrl_bypass/s_axi_aresetn]
   connect_bd_net -net axi_gpio_0_gpio_io_o [get_bd_pins axi_gpio_0/gpio_io_o] [get_bd_pins xlslice_encore_rstn/Din]
-  connect_bd_net -net s_axi_aclk_1 [get_bd_pins s_axi_aclk] [get_bd_pins axi_bram_ctrl_0/s_axi_aclk] [get_bd_pins axi_bram_ctrl_bypass/s_axi_aclk] [get_bd_pins axi_crossbar_0/aclk] [get_bd_pins axi_crossbar_1/aclk] [get_bd_pins axi_gpio_0/s_axi_aclk] [get_bd_pins axi_register_slice_0/aclk]
+  connect_bd_net -net s_axi_aclk_1 [get_bd_pins s_axi_aclk] [get_bd_pins axi_bram_ctrl_0/s_axi_aclk] [get_bd_pins axi_bram_ctrl_bypass/s_axi_aclk] [get_bd_pins axi_crossbar_0/aclk] [get_bd_pins axi_crossbar_1/aclk] [get_bd_pins axi_gpio_0/s_axi_aclk] [get_bd_pins axi_gpio_1/s_axi_aclk] [get_bd_pins axi_register_slice_0/aclk] [get_bd_pins perf_ctr/CLK]
   connect_bd_net -net xlslice_encore_rstn_Dout [get_bd_pins encore_aresetn] [get_bd_pins xlslice_encore_rstn/Dout]
   connect_bd_net -net hwid [get_bd_pins xlconstant_hwid/dout] [get_bd_pins axi_gpio_0/gpio2_io_i]
+  connect_bd_net [get_bd_pins perf_ctr/Q] [get_bd_pins axi_gpio_1/gpio2_io_i]
+  connect_bd_net [get_bd_pins axi_gpio_1/gpio_io_o] [get_bd_pins perf_ctr_sclr/Din]
+  connect_bd_net [get_bd_pins perf_ctr_sclr/Dout] [get_bd_pins perf_ctr/SCLR]
+  connect_bd_net [get_bd_pins axi_gpio_1/gpio_io_o] [get_bd_pins perf_ctr_ce/Din] 
+  connect_bd_net [get_bd_pins perf_ctr_ce/Dout] [get_bd_pins perf_ctr/CE]
 
   # Restore current instance
   current_bd_instance $oldCurInst
@@ -251,13 +283,15 @@ proc create_dma_infrastructure { dmaIndex } {
   create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 dma${dmaIndex}_s2mm_sts
 
   create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 fifo_dma${dmaIndex}_mm2s_cmd
-  set_property -dict [ list CONFIG.HAS_TLAST {0} CONFIG.TDATA_NUM_BYTES {13} CONFIG.FIFO_DEPTH {32} CONFIG.FIFO_MEMORY_TYPE {distributed}] [get_bd_cells fifo_dma${dmaIndex}_mm2s_cmd]
+  set_property -dict [list CONFIG.TDEST_WIDTH.VALUE_SRC USER] [get_bd_cells fifo_dma${dmaIndex}_mm2s_cmd]
+  set_property -dict [ list CONFIG.HAS_TLAST {1} CONFIG.TDEST_WIDTH {8} CONFIG.TDATA_NUM_BYTES {13} CONFIG.FIFO_DEPTH {32} CONFIG.FIFO_MEMORY_TYPE {distributed}] [get_bd_cells fifo_dma${dmaIndex}_mm2s_cmd]
   create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 fifo_dma${dmaIndex}_mm2s_sts
   set_property -dict [ list CONFIG.HAS_TLAST {1} CONFIG.TDATA_NUM_BYTES {4} CONFIG.FIFO_DEPTH {32} CONFIG.FIFO_MEMORY_TYPE {distributed}] [get_bd_cells fifo_dma${dmaIndex}_mm2s_sts]
   create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 fifo_dma${dmaIndex}_s2mm_cmd
-  set_property -dict [ list CONFIG.HAS_TLAST {1} CONFIG.TDATA_NUM_BYTES {13} CONFIG.FIFO_DEPTH {32} CONFIG.FIFO_MEMORY_TYPE {distributed}] [get_bd_cells fifo_dma${dmaIndex}_s2mm_cmd]
+  set_property -dict [list CONFIG.TDEST_WIDTH.VALUE_SRC USER] [get_bd_cells fifo_dma${dmaIndex}_s2mm_cmd]
+  set_property -dict [ list CONFIG.HAS_TLAST {1} CONFIG.TDEST_WIDTH {8} CONFIG.TDATA_NUM_BYTES {13} CONFIG.FIFO_DEPTH {32} CONFIG.FIFO_MEMORY_TYPE {distributed}] [get_bd_cells fifo_dma${dmaIndex}_s2mm_cmd]
   create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 fifo_dma${dmaIndex}_s2mm_sts
-  set_property -dict [ list CONFIG.HAS_TLAST {0} CONFIG.TDATA_NUM_BYTES {4} CONFIG.FIFO_DEPTH {32} CONFIG.FIFO_MEMORY_TYPE {distributed}] [get_bd_cells fifo_dma${dmaIndex}_s2mm_sts]
+  set_property -dict [ list CONFIG.HAS_TLAST {1} CONFIG.TDATA_NUM_BYTES {4} CONFIG.FIFO_DEPTH {32} CONFIG.FIFO_MEMORY_TYPE {distributed}] [get_bd_cells fifo_dma${dmaIndex}_s2mm_sts]
 
   connect_bd_intf_net [get_bd_intf_pins dma${dmaIndex}_mm2s_cmd] [get_bd_intf_pins fifo_dma${dmaIndex}_mm2s_cmd/M_AXIS]
   connect_bd_intf_net [get_bd_intf_pins dma${dmaIndex}_mm2s_sts] [get_bd_intf_pins fifo_dma${dmaIndex}_mm2s_sts/S_AXIS]
@@ -308,7 +342,7 @@ proc create_hier_cell_cmd_arbiter { parentCell nameHier {numCmdStreams 1} } {
 }
 
 # Hierarchical cell: control
-proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
+proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} {idCode 0xcafebabe} } {
 
   if { $parentCell eq "" || $nameHier eq "" } {
      catch {common::send_gid_msg -ssname BD::TCL -id 2092 -severity "ERROR" "create_hier_cell_control() - Empty argument(s)!"}
@@ -346,13 +380,6 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
   create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 eth_packetizer_cmd
   create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 eth_depacketizer_sts
   create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 eth_packetizer_sts
-  
-  create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 eth_opencon_cmd
-  create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 eth_closecon_cmd
-  create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 eth_opencon_sts
-
-  create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 eth_openport_cmd
-  create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 eth_openport_sts
 
   create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 call_req
   create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 call_ack
@@ -372,6 +399,9 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
   create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 clane2_res_seg_cmd
   create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 krnl_out_seg_sts
 
+  create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_ub_sq
+  create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 s_axis_ub_rq
+
   # Create pins
   create_bd_pin -dir I -type clk ap_clk
   create_bd_pin -dir I -type rst ap_rst_n
@@ -379,15 +409,13 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
 
   # Create instance: fifo_eth_packetizer_cmd, and set properties
   set fifo_eth_packetizer_cmd [ create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 fifo_eth_packetizer_cmd ]
-  set_property -dict [ list CONFIG.HAS_TLAST {1} CONFIG.TDATA_NUM_BYTES {24} CONFIG.FIFO_DEPTH {32} CONFIG.FIFO_MEMORY_TYPE {distributed}] $fifo_eth_packetizer_cmd
+  set_property -dict [ list CONFIG.HAS_TLAST {1} CONFIG.TDATA_NUM_BYTES {32} CONFIG.FIFO_DEPTH {32} CONFIG.FIFO_MEMORY_TYPE {distributed}] $fifo_eth_packetizer_cmd
   # Create instance: fifo_eth_depacketizer_sts, and set properties
   set fifo_eth_depacketizer_sts [ create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 fifo_eth_depacketizer_sts ]
-  set_property -dict [ list CONFIG.HAS_TLAST {1} CONFIG.TDATA_NUM_BYTES {24} CONFIG.FIFO_DEPTH {32} CONFIG.FIFO_MEMORY_TYPE {distributed}] $fifo_eth_depacketizer_sts
+  set_property -dict [ list CONFIG.HAS_TLAST {1} CONFIG.TDATA_NUM_BYTES {32} CONFIG.FIFO_DEPTH {32} CONFIG.FIFO_MEMORY_TYPE {distributed}] $fifo_eth_depacketizer_sts
    # Create instance: fifo_eth_packetizer_sts, and set properties
   set fifo_eth_packetizer_sts [ create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 fifo_eth_packetizer_sts ]
   set_property -dict [ list  CONFIG.HAS_TLAST {1}  CONFIG.TDATA_NUM_BYTES {4} CONFIG.FIFO_DEPTH {32} CONFIG.FIFO_MEMORY_TYPE {distributed}] $fifo_eth_packetizer_sts
-  # Create instance: tcp session handler
-  set tcp_session [create_bd_cell -type ip -vlnv xilinx.com:hls:tcp_sessionHandler:1.0 tcp_session]
 
   # Create instance: microblaze_0, and set properties
   # TODO: make debug/trace optional; the profiling buffer is large
@@ -398,7 +426,7 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
    CONFIG.C_USE_INTERRUPT {0} \
    CONFIG.C_D_AXI {1} \
    CONFIG.C_D_LMB {1} \
-   CONFIG.C_FSL_LINKS {4} \
+   CONFIG.C_FSL_LINKS {5} \
    CONFIG.C_I_LMB {1} \
    CONFIG.C_TRACE {0} \
    CONFIG.C_USE_EXTENDED_FSL_INSTR {1} \
@@ -434,7 +462,7 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
   set_property -dict [ list CONFIG.NUM_MI {5} ] $microblaze_0_axi_periph
 
   # Create instance: exchange_mem
-  create_hier_cell_exchange_mem $hier_obj exchange_mem
+  create_hier_cell_exchange_mem $hier_obj exchange_mem $idCode
 
   # Create instance: microblaze_0_local_memory
   create_hier_cell_microblaze_0_local_memory $hier_obj microblaze_0_local_memory
@@ -476,7 +504,7 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
   set_property -dict [ list CONFIG.HAS_TLAST {1} CONFIG.TDATA_NUM_BYTES {4} CONFIG.FIFO_DEPTH {32} CONFIG.FIFO_MEMORY_TYPE {distributed}] [get_bd_cells fifo_dmasts_session]
 
   create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 fifo_hdr_session
-  set_property -dict [ list CONFIG.HAS_TLAST {1} CONFIG.TDATA_NUM_BYTES {24} CONFIG.FIFO_DEPTH {32} CONFIG.FIFO_MEMORY_TYPE {distributed}] [get_bd_cells fifo_hdr_session]
+  set_property -dict [ list CONFIG.HAS_TLAST {1} CONFIG.TDATA_NUM_BYTES {32} CONFIG.FIFO_DEPTH {32} CONFIG.FIFO_MEMORY_TYPE {distributed}] [get_bd_cells fifo_hdr_session]
 
 
   connect_bd_intf_net [get_bd_intf_pins rxbuf_enqueue/dma_cmd] [get_bd_intf_pins fifo_dmacmd_session/S_AXIS] 
@@ -538,6 +566,12 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
   connect_bd_intf_net [get_bd_intf_pins dma_mover/m_axi_mem] [get_bd_intf_pins dma_memory_ic/S03_AXI]
   connect_bd_intf_net [get_bd_intf_pins exchange_mem/S_AXI_BYP] [get_bd_intf_pins dma_memory_ic/M00_AXI]
   
+  # call retry and pending notification FIFOs
+  create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 fifo_call_retry
+  set_property -dict [ list CONFIG.HAS_TLAST {1} CONFIG.TDATA_NUM_BYTES {4} CONFIG.FIFO_DEPTH {64} CONFIG.FIFO_MEMORY_TYPE {distributed}] [get_bd_cells fifo_call_retry]
+  create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 fifo_rndzv_pending
+  set_property -dict [ list CONFIG.HAS_TLAST {1} CONFIG.TDATA_NUM_BYTES {4} CONFIG.FIFO_DEPTH {64} CONFIG.FIFO_MEMORY_TYPE {distributed}] [get_bd_cells fifo_rndzv_pending]
+
   # Create interface connections
   connect_bd_intf_net -intf_net microblaze_0_dlmb_1 [get_bd_intf_pins microblaze_0/DLMB] [get_bd_intf_pins microblaze_0_local_memory/DLMB]
   connect_bd_intf_net -intf_net microblaze_0_ilmb_1 [get_bd_intf_pins microblaze_0/ILMB] [get_bd_intf_pins microblaze_0_local_memory/ILMB]
@@ -547,22 +581,11 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
   connect_bd_intf_net -intf_net c0 [get_bd_intf_pins exchange_mem/S_AXI_MB] [get_bd_intf_pins microblaze_0_axi_periph/M00_AXI]
   connect_bd_intf_net -intf_net c1 [get_bd_intf_pins encore_control] [get_bd_intf_pins microblaze_0_axi_periph/M01_AXI]
 
-  connect_bd_intf_net -intf_net eth_openport_cmd [get_bd_intf_pins tcp_session/m_axis_tcp_listen_port] [get_bd_intf_pins eth_openport_cmd]
-  connect_bd_intf_net -intf_net eth_opencon_cmd [get_bd_intf_pins tcp_session/m_axis_tcp_open_connection] [get_bd_intf_pins eth_opencon_cmd]
-  connect_bd_intf_net [get_bd_intf_pins tcp_session/m_axis_tcp_close_connection] [get_bd_intf_pins eth_closecon_cmd]
   connect_bd_intf_net -intf_net eth_packetizer_cmd [get_bd_intf_pins fifo_eth_packetizer_cmd/M_AXIS] [get_bd_intf_pins eth_packetizer_cmd]
-  connect_bd_intf_net -intf_net eth_openport_sts [get_bd_intf_pins tcp_session/s_axis_tcp_port_status] [get_bd_intf_pins eth_openport_sts]
-  connect_bd_intf_net -intf_net eth_opencon_sts [get_bd_intf_pins tcp_session/s_axis_tcp_open_status] [get_bd_intf_pins eth_opencon_sts]
   connect_bd_intf_net -intf_net eth_packetizer_sts [get_bd_intf_pins fifo_eth_packetizer_sts/S_AXIS] [get_bd_intf_pins eth_packetizer_sts]
   connect_bd_intf_net [get_bd_intf_pins fifo_eth_depacketizer_sts/S_AXIS] [get_bd_intf_pins eth_depacketizer_sts]
 
   connect_bd_intf_net [get_bd_intf_pins microblaze_0/M_AXI_DP] [get_bd_intf_pins microblaze_0_axi_periph/S00_AXI]
-
-  connect_bd_intf_net [get_bd_intf_pins tcp_session/port_cmd] [get_bd_intf_pins microblaze_0/M2_AXIS]
-  connect_bd_intf_net [get_bd_intf_pins tcp_session/port_sts] [get_bd_intf_pins microblaze_0/S2_AXIS]
-
-  connect_bd_intf_net [get_bd_intf_pins tcp_session/con_cmd] [get_bd_intf_pins microblaze_0/M3_AXIS]
-  connect_bd_intf_net [get_bd_intf_pins tcp_session/con_sts] [get_bd_intf_pins microblaze_0/S3_AXIS]
 
   connect_bd_intf_net [get_bd_intf_pins call_req] [get_bd_intf_pins microblaze_0/S0_AXIS]
   connect_bd_intf_net [get_bd_intf_pins call_ack] [get_bd_intf_pins microblaze_0/M0_AXIS]
@@ -591,10 +614,17 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
   connect_bd_intf_net [get_bd_intf_pins clane2_res_seg_cmd] [get_bd_intf_pins dma_mover/clane2_res_seg_cmd]
   connect_bd_intf_net [get_bd_intf_pins krnl_out_seg_sts] [get_bd_intf_pins dma_mover/krnl_out_seg_sts]
 
+  connect_bd_intf_net [get_bd_intf_pins microblaze_0/M2_AXIS] [get_bd_intf_pins m_axis_ub_sq] 
+  connect_bd_intf_net [get_bd_intf_pins s_axis_ub_rq] [get_bd_intf_pins microblaze_0/S2_AXIS] 
+
+  connect_bd_intf_net [get_bd_intf_pins microblaze_0/M3_AXIS] [get_bd_intf_pins fifo_rndzv_pending/S_AXIS] 
+  connect_bd_intf_net [get_bd_intf_pins fifo_rndzv_pending/M_AXIS] [get_bd_intf_pins microblaze_0/S3_AXIS] 
+  connect_bd_intf_net [get_bd_intf_pins microblaze_0/M4_AXIS] [get_bd_intf_pins fifo_call_retry/S_AXIS] 
+  connect_bd_intf_net [get_bd_intf_pins fifo_call_retry/M_AXIS] [get_bd_intf_pins microblaze_0/S4_AXIS] 
+
   # Clocks and resets
   connect_bd_net -net SYS_Rst_1 [get_bd_pins microblaze_0_local_memory/SYS_Rst] [get_bd_pins proc_sys_reset_0/peripheral_reset]
-  connect_bd_net [get_bd_pins ap_clk] [get_bd_pins tcp_session/ap_clk] \
-                                      [get_bd_pins fifo_eth_depacketizer_sts/s_axis_aclk] \
+  connect_bd_net [get_bd_pins ap_clk] [get_bd_pins fifo_eth_depacketizer_sts/s_axis_aclk] \
                                       [get_bd_pins fifo_eth_packetizer_cmd/s_axis_aclk] \
                                       [get_bd_pins fifo_eth_packetizer_sts/s_axis_aclk] \
                                       [get_bd_pins fifo_seek/s_axis_aclk] \
@@ -618,6 +648,8 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
                                       [get_bd_pins dma_mover/ap_clk] \
                                       [get_bd_pins fifo_dma_mover_command/s_axis_aclk] \
                                       [get_bd_pins fifo_dma_mover_error/s_axis_aclk] \
+                                      [get_bd_pins fifo_call_retry/s_axis_aclk] \
+                                      [get_bd_pins fifo_rndzv_pending/s_axis_aclk] \
                                       [get_bd_pins dma_memory_ic/aclk]
                                       
   connect_bd_net [get_bd_pins ap_rst_n] [get_bd_pins proc_sys_reset_0/ext_reset_in]
@@ -642,7 +674,6 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
                                                                    [get_bd_pins fifo_eth_depacketizer_sts/s_axis_aresetn] \
                                                                    [get_bd_pins fifo_eth_packetizer_cmd/s_axis_aresetn] \
                                                                    [get_bd_pins fifo_eth_packetizer_sts/s_axis_aresetn] \
-                                                                   [get_bd_pins tcp_session/ap_rst_n] \
                                                                    [get_bd_pins fifo_seek/s_axis_aresetn] \
                                                                    [get_bd_pins fifo_inflight/s_axis_aresetn] \
                                                                    [get_bd_pins rxbuf_enqueue/ap_rst_n] \
@@ -651,6 +682,8 @@ proc create_hier_cell_control { parentCell nameHier {mbDebugLevel 0} } {
                                                                    [get_bd_pins dma_mover/ap_rst_n] \
                                                                    [get_bd_pins fifo_dma_mover_command/s_axis_aresetn] \
                                                                    [get_bd_pins fifo_dma_mover_error/s_axis_aresetn] \
+                                                                   [get_bd_pins fifo_call_retry/s_axis_aresetn] \
+                                                                   [get_bd_pins fifo_rndzv_pending/s_axis_aresetn] \
                                                                    [get_bd_pins dma_memory_ic/aresetn]
 
   # Create some hierarchies to keep things organized

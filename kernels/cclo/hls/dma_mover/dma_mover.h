@@ -31,9 +31,15 @@ typedef struct {
     ap_uint<3> op1_opcode;
     ap_uint<3> res_opcode;
     bool res_is_remote;
+    bool res_is_rendezvous;
     bool op0_is_compressed;
     bool op1_is_compressed;
     bool res_is_compressed;
+
+    bool op0_is_host;
+    bool op1_is_host;
+    bool res_is_host;
+
     ap_uint<4> func_id;//up to 16 functions
 
     //count
@@ -72,6 +78,7 @@ typedef struct{
 typedef struct{
     unsigned int total_bytes;
     ap_uint<64> addr;
+    ap_uint<DEST_WIDTH> mem_id;
     bool last = true;
 } datamover_instruction;
 
@@ -106,6 +113,9 @@ typedef struct{
     unsigned int mpi_tag;
     unsigned int max_seg_len;
     bool to_stream;
+    bool to_host;
+    bool rendezvous;
+    ap_uint<64> addr;
 } packetizer_instruction;
 
 typedef struct{
@@ -123,9 +133,9 @@ void dma_mover(
     STREAM<rxbuf_seek_result> &rxbuf_ack,
     STREAM<ap_uint<32> > &rxbuf_release_req,
     //interfaces to data movement engines
-    STREAM<ap_uint<104> > &dma0_read_cmd,
-    STREAM<ap_uint<104> > &dma1_read_cmd,
-    STREAM<ap_uint<104> > &dma1_write_cmd,
+    STREAM<ap_axiu<104,0,0,DEST_WIDTH> > &dma0_read_cmd,
+    STREAM<ap_axiu<104,0,0,DEST_WIDTH> > &dma1_read_cmd,
+    STREAM<ap_axiu<104,0,0,DEST_WIDTH> > &dma1_write_cmd,
     STREAM<ap_uint<32> > &dma0_read_sts,
     STREAM<ap_uint<32> > &dma1_read_sts,
     STREAM<ap_uint<32> > &dma1_write_sts,

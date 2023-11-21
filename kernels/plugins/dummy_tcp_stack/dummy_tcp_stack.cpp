@@ -174,52 +174,6 @@ static hlslib::Stream<hlslib::axi::Stream<ap_uint<DATA_WIDTH>, DEST_WIDTH>, 512>
     }//switch
 }
 
-//[15:0] session; [23:16] success; [55:24] ip; [71:56] port 
-void open_con_handler(
-    STREAM<pkt64>& s_axis_tcp_open_connection,
-    STREAM<pkt128>& m_axis_tcp_open_status,
-    STREAM<pkt16>& s_axis_tcp_close_connection
-){
-#pragma HLS PIPELINE II=1 style=flp
-#pragma HLS INLINE off
-
-    static int sessionCnt = 0;
-    //openConReq and openConRsp
-    if (!STREAM_IS_EMPTY(s_axis_tcp_open_connection))
-    {
-        pkt64 openConnection_pkt = STREAM_READ(s_axis_tcp_open_connection);
-        ap_uint<32> ip = openConnection_pkt.data(31,0);
-        ap_uint<16> port = openConnection_pkt.data(47,32);
-
-        pkt128 open_status_pkt;
-        open_status_pkt.data(15,0) = sessionCnt;
-        open_status_pkt.data(23,16) = 1;
-        open_status_pkt.data(55,24) = ip;
-        open_status_pkt.data(71,56) = port;
-        STREAM_WRITE(m_axis_tcp_open_status, open_status_pkt);
-        sessionCnt ++;
-    } else if(!STREAM_IS_EMPTY(s_axis_tcp_close_connection)) {
-        STREAM_READ(s_axis_tcp_close_connection);
-    }
-}
-
-void listen_port_handler(
-    STREAM<pkt16>& s_axis_tcp_listen_port, 
-    STREAM<pkt8>& m_axis_tcp_port_status
-){
-#pragma HLS PIPELINE II=1 style=flp
-#pragma HLS INLINE off
-
-    //listen port and listen port status
-    if (!STREAM_IS_EMPTY(s_axis_tcp_listen_port))
-    {
-        pkt16 listen_port_pkt = STREAM_READ(s_axis_tcp_listen_port);
-        pkt8 port_status_pkt;
-        port_status_pkt.data = 1;
-        STREAM_WRITE(m_axis_tcp_port_status, port_status_pkt);
-    }
-}
-
 void network_krnl(
     STREAM<pkt128>& m_axis_tcp_notification, 
     STREAM<pkt32>& s_axis_tcp_read_pkg,
@@ -228,11 +182,6 @@ void network_krnl(
     STREAM<pkt32>& s_axis_tcp_tx_meta, 
     STREAM<stream_word>& s_axis_tcp_tx_data, 
     STREAM<pkt64>& m_axis_tcp_tx_status,
-    STREAM<pkt64>& s_axis_tcp_open_connection,
-    STREAM<pkt128>& m_axis_tcp_open_status,
-    STREAM<pkt16>& s_axis_tcp_close_connection,
-    STREAM<pkt16>& s_axis_tcp_listen_port, 
-    STREAM<pkt8>& m_axis_tcp_port_status,
     STREAM<stream_word>& net_rx,
     STREAM<stream_word>& net_tx
 ){
@@ -243,19 +192,12 @@ void network_krnl(
 #pragma HLS INTERFACE axis register both port=s_axis_tcp_tx_meta
 #pragma HLS INTERFACE axis register both port=s_axis_tcp_tx_data
 #pragma HLS INTERFACE axis register both port=m_axis_tcp_tx_status
-#pragma HLS INTERFACE axis register both port=s_axis_tcp_open_connection
-#pragma HLS INTERFACE axis register both port=m_axis_tcp_open_status
-#pragma HLS INTERFACE axis register both port=s_axis_tcp_close_connection
-#pragma HLS INTERFACE axis register both port=s_axis_tcp_listen_port
-#pragma HLS INTERFACE axis register both port=m_axis_tcp_port_status
 #pragma HLS INTERFACE axis register both port=net_rx
 #pragma HLS INTERFACE axis register both port=net_tx
 #pragma HLS INTERFACE ap_ctrl_none port=return
 
 #pragma HLS DATAFLOW disable_start_propagation
-    
-open_con_handler(s_axis_tcp_open_connection, m_axis_tcp_open_status, s_axis_tcp_close_connection);
-listen_port_handler(s_axis_tcp_listen_port, m_axis_tcp_port_status);
+
 rx_handler(
     m_axis_tcp_notification, 
     s_axis_tcp_read_pkg,

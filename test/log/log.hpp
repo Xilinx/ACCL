@@ -20,6 +20,7 @@
 
 #include <ctime>
 #include <map>
+#include <mutex>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -47,16 +48,20 @@ class Log {
 public:
     Log() {}
 
-    Log(log_level level, std::ostream &ostream = std::cout)
-            : _level(level), _ostream(&ostream) {
+    Log(log_level level, unsigned int rank, std::ostream &ostream = std::cout)
+            : _level(level), _ostream(&ostream), _local_rank(rank) {
         buffer.str("");
         buffer_level = log_level::info;
     }
 
-    Log(const Log &log) : Log(log.level(), *log.ostream()) {}
+    Log(const Log &log) : Log(log.level(),log.rank(), *log.ostream()) {}
 
     log_level level() const {
         return _level;
+    }
+
+    unsigned int rank() const {
+        return _local_rank;
     }
 
     std::ostream *ostream() const {
@@ -69,7 +74,10 @@ public:
             auto local_time = *std::localtime(&time);
             char time_buffer[9];
             strftime(time_buffer, sizeof(time_buffer), "%H:%M:%S", &local_time);
-            *_ostream << "[" + LOG_STRING.at(level) + " " + time_buffer + "] " + message;
+            std::lock_guard<std::mutex> guard(logging_mutex);
+            *_ostream << std::right << "[Rank " << std::setw(3) << std::to_string(_local_rank) << ": " 
+                  << std::left  << std::setw(8) << LOG_STRING.at(level);
+            *_ostream << " " << time_buffer << "] " << message;
             _ostream->flush();
         }
     }
@@ -107,6 +115,7 @@ public:
     Log& operator=(const Log &l) {
         _level = l.level();
         _ostream = l.ostream();
+        _local_rank = l.rank();
         buffer.str("");
         buffer_level = log_level::info;
         return *this;
@@ -114,7 +123,9 @@ public:
 
 private:
     log_level _level;
+    unsigned int _local_rank;
     std::ostream *_ostream;
     log_level buffer_level;
     std::ostringstream buffer;
+    std::mutex logging_mutex;
 };

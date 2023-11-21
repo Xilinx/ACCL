@@ -17,6 +17,11 @@
 #include "ap_axi_sdata.h"
 #include "ap_int.h"
 #include "eth_intf.h"
+#ifndef ACCL_SYNTHESIS
+#include "log.hpp"
+
+extern Log logger;
+#endif
 
 using namespace std;
 
@@ -83,7 +88,7 @@ void tcp_depacketizer(
 #ifndef ACCL_SYNTHESIS
 	std::stringstream ss;
 	ss << "TCP Depacketizer: Processing incoming fragment count=" << notif.length << " for session " << notif.session_id << "\n";
-	std::cout << ss.str();
+	logger << log_level::verbose << ss.str();
 #endif
 
 	//get remaining message bytes, from local storage
@@ -92,6 +97,7 @@ void tcp_depacketizer(
 		message_rem = remaining[notif.session_id];
 	}
 	
+	downstream_notif.session_id = notif.session_id;
 	if(message_rem == 0){//if remaining bytes is zero, then this is the start of a new message
 		//get header and some important info from it
 		inword = STREAM_READ(in);
@@ -101,7 +107,6 @@ void tcp_depacketizer(
 		if(message_strm == 0){
 			//put notification, header in output streams
 			STREAM_WRITE(sts, hdr);
-			downstream_notif.session_id = notif.session_id;
 			downstream_notif.type = 0; //for SOM
 			downstream_notif.length = hdr.count;
 			STREAM_WRITE(notif_out, downstream_notif);
@@ -118,7 +123,7 @@ void tcp_depacketizer(
 	//only notify for the part up to the end of the current message
 	if(message_strm == 0){
 		downstream_notif.type = 1; //for SOF
-		downstream_notif.length = max_dma_bytes;
+		downstream_notif.length = notif.length;
 		STREAM_WRITE(notif_out, downstream_notif);
 	}
 	//copy data in -> out

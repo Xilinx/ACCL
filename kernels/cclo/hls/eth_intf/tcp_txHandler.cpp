@@ -15,6 +15,11 @@
 #
 # *******************************************************************************/
 #include "eth_intf.h"
+#ifndef ACCL_SYNTHESIS
+#include "log.hpp"
+
+extern Log logger;
+#endif
 
 using namespace std;
 
@@ -113,7 +118,7 @@ void tcp_txHandler(
                         //Check if connection  was torn down
                         if (error == 1)
                         {
-                            // std::cout << "Connection was torn down. " << sessionID << std::endl;
+                            // logger << log_level::verbose << "Connection was torn down. " << sessionID << std::endl;
                         }
                         else
                         {
