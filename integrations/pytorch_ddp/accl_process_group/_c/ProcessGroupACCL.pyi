@@ -33,6 +33,8 @@ class ACCLDesign(Enum):
    tcp = 1
    udp = 2
    roce = 3
+   cyt_tcp = 4
+   cyt_rdma = 5
 
 
 class Rank:
@@ -77,6 +79,13 @@ class ProcessGroupACCL(ProcessGroup):
         nbufs: int = 16,
         bufsize: int = 1024,
         rsfec: bool = False) -> None: ...
+
+    def get_local_qp(self: ProcessGroupACCL, rank: int) -> list[int]: ...
+
+    def set_remote_qp(self: ProcessGroupACCL, rank: int, qp: list[int]) -> None:
+        ...
+
+    def initialize(self: ProcessGroupACCL) -> None: ...
 
     @property
     def compression(self) -> dict[DataType, DataType]: ...

@@ -30,7 +30,7 @@ rank = 0
 size = 0
 
 count = 1024
-rxbufsize = 1024 * 4
+rxbufsize = 1500 * 4
 
 
 def test_broadcast():

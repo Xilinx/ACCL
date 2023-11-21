@@ -1,3 +1,5 @@
+This is a seperate repo based on https://github.com/Xilinx/ACCL/tree/pytorch_ddp
+
 ## Build
 
 From within a virtual environment, do:

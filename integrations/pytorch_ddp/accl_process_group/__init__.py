@@ -17,4 +17,5 @@
 
 from ._c.ProcessGroupACCL import ProcessGroupACCL, Rank, DataType, ACCLDesign
 from .process_group_wrapper import create_process_group, \
-    create_simulate_process_group, set_compression, get_compression
+    create_process_group_coyote, create_simulate_process_group, initialize, \
+    set_compression, get_compression, get_local_qp, set_remote_qp

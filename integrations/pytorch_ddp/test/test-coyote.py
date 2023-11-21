@@ -123,9 +123,33 @@ def test_allreduce():
     print("Test allreduce finished!")
 
 
-def start_test(simulator: bool, *,
-               xclbin: Optional[str] = None,
-               device_index: Optional[int] = None):
+def exchange_qp(first_rank, second_rank, rank, ranks):
+    if rank == first_rank:
+        mpi.send(accl.get_local_qp(second_rank), dest=second_rank, tag=23)
+    elif rank == second_rank:
+        accl.set_remote_qp(first_rank, mpi.recv(source=first_rank, tag=23))
+
+    mpi.barrier()
+
+    if rank == second_rank:
+        mpi.send(accl.get_local_qp(first_rank), dest=first_rank, tag=24)
+    elif rank == first_rank:
+        accl.set_remote_qp(second_rank, mpi.recv(source=second_rank, tag=24))
+
+    mpi.barrier()
+
+
+def configure_cyt_rdma(ranks):
+    global rank, size
+    for first_rank in range(0, size):
+        for second_rank in range(first_rank + 1, size):
+            exchange_qp(first_rank, second_rank, rank, ranks)
+    accl.initialize()
+    mpi.barrier()
+
+
+
+def start_test(simulator: bool):
     global rank, size
     if 'MASTER_ADDR' not in os.environ:
         os.environ['MASTER_ADDR'] = 'localhost'
@@ -139,8 +163,8 @@ def start_test(simulator: bool, *,
     if simulator:
         accl.create_simulate_process_group(ranks, bufsize=rxbufsize)
     else:
-        accl.create_process_group(ranks, xclbin, device_index,
-                                  accl.ACCLDesign.axis3x, bufsize=rxbufsize)
+        accl.create_process_group_coyote(ranks, accl.ACCLDesign.cyt_rdma,
+                                         bufsize=rxbufsize)
     dist.init_process_group("ACCL", rank=rank, world_size=size)
 
     with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
@@ -166,18 +190,11 @@ def start_test(simulator: bool, *,
 
 if __name__ == '__main__':
     import argparse
-    parser = argparse.ArgumentParser(description='Tests for ACCL ProcessGroup')
+    parser = argparse.ArgumentParser(description='Coyote tests for ACCL ProcessGroup')
     parser.add_argument('-s', '--simulation', action='store_true',
                         default=False, help='Use simulation instead of '
                                             'hardware')
-    parser.add_argument('--xclbin', type=str, default='',
-                        help='Path to xclbin')
-    parser.add_argument('--device-index', type=int, default=0,
-                        help='Device index of fpga')
 
     args = parser.parse_args()
 
-    start_test(
-        args.simulation,
-        xclbin=args.xclbin,
-        device_index=args.device_index)
+    start_test(args.simulation)

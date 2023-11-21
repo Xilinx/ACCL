@@ -37,7 +37,9 @@
 
 #include <accl.hpp>
 #include <accl_network_utils.hpp>
+#include "coyote_init.hpp"
 
+namespace cyt = coyote_init;
 namespace py = pybind11;
 
 namespace c10d {
@@ -238,6 +240,24 @@ std::unique_ptr<ACCL::BaseBuffer> create_buffer(ACCL::ACCL &accl, size_t length,
 }
 
 // Create an ACCL Buffer with correct type
+std::unique_ptr<ACCL::BaseBuffer> create_coyotebuffer(ACCL::ACCL &accl, size_t length,
+                                                c10::ScalarType type) {
+  switch (type) {
+  case at::kInt:
+    return accl.create_coyotebuffer<int32_t>(length, acclDatatype.at(type));
+  case at::kLong:
+    return accl.create_coyotebuffer<int64_t>(length, acclDatatype.at(type));
+  case at::kFloat:
+    return accl.create_coyotebuffer<float>(length, acclDatatype.at(type));
+  case at::kDouble:
+    return accl.create_coyotebuffer<double>(length, acclDatatype.at(type));
+  default:
+    TORCH_CHECK(false, "Tensor has unsupported datatype");
+    break;
+  }
+}
+
+// Create an ACCL Buffer with correct type
 std::unique_ptr<ACCL::BaseBuffer> wrap_buffer(ACCL::ACCL &accl, xrt::bo &bo,
                                               size_t length,
                                               c10::ScalarType type) {
@@ -297,7 +317,7 @@ std::unique_ptr<ACCL::BaseBuffer> create_buffer(ACCL::ACCL &accl,
                                 acclDatatype.at(tensor.scalar_type()));
 
     ACCL::debug("Creating int32 buffer at 0x" +
-                ACCL::debug_hex(buffer->physical_address()) + " of " +
+                ACCL::debug_hex(buffer->address()) + " of " +
                 std::to_string(buffer->size()) + "B.");
     break;
   case at::kLong:
@@ -306,7 +326,7 @@ std::unique_ptr<ACCL::BaseBuffer> create_buffer(ACCL::ACCL &accl,
                                 acclDatatype.at(tensor.scalar_type()));
 
     ACCL::debug("Creating int64 buffer at 0x" +
-                ACCL::debug_hex(buffer->physical_address()) + " of " +
+                ACCL::debug_hex(buffer->address()) + " of " +
                 std::to_string(buffer->size()) + "B.");
     break;
   case at::kFloat:
@@ -315,7 +335,7 @@ std::unique_ptr<ACCL::BaseBuffer> create_buffer(ACCL::ACCL &accl,
                                 acclDatatype.at(tensor.scalar_type()));
 
     ACCL::debug("Creating float32 buffer at 0x" +
-                ACCL::debug_hex(buffer->physical_address()) + " of " +
+                ACCL::debug_hex(buffer->address()) + " of " +
                 std::to_string(buffer->size()) + "B.");
 
     break;
@@ -325,7 +345,7 @@ std::unique_ptr<ACCL::BaseBuffer> create_buffer(ACCL::ACCL &accl,
                                 acclDatatype.at(tensor.scalar_type()));
 
     ACCL::debug("Creating float64 buffer at 0x" +
-                ACCL::debug_hex(buffer->physical_address()) + " of " +
+                ACCL::debug_hex(buffer->address()) + " of " +
                 std::to_string(buffer->size()) + "B.");
     break;
   default:
@@ -496,6 +516,7 @@ bool check_arp(vnx::Networklayer &network_layer,
 
   return true;
 }
+
 } // namespace
 
 ACCL::dataType ProcessGroupACCL::get_compressed_type(c10::ScalarType datatype) {
@@ -568,8 +589,14 @@ ProcessGroupACCL::ProcessGroupACCL(
     const std::vector<int> &profiling_ranks, double profiling_timeout,
     const std::string &xclbin, accl_network_utils::acclDesign design,
     int device_index, int nbufs, uint64_t bufsize, bool rsfec)
-    : ProcessGroup(rank, size), store_(store), stop_(false), bufsize(bufsize),
-      p2p_enabled(p2p_enabled), compression(compression) {
+    : ProcessGroup(rank, size), store_(store), stop_(false),
+      device_index_(device_index), nbufs_(nbufs), bufsize_(bufsize),
+      rsfec_(rsfec), simulator_(simulator), xclbin_(xclbin),
+      bufsize(bufsize), p2p_enabled(p2p_enabled),
+      coyote_enabled(
+        design == accl_network_utils::acclDesign::CYT_RDMA
+        || design == accl_network_utils::acclDesign::CYT_TCP),
+      compression(compression), initialized(false) {
 
   if (std::find(profiling_ranks.begin(), profiling_ranks.end(), rank) !=
       profiling_ranks.end()) {
@@ -577,23 +604,77 @@ ProcessGroupACCL::ProcessGroupACCL(
         std::chrono::duration<double>(profiling_timeout));
   }
 
-  xrt::device device;
-  if (!simulator) {
-    device = xrt::device(device_index);
+  ranks_ = convert_ranks(ranks);
+
+  if (coyote_enabled) {
+    if (design == accl_network_utils::acclDesign::CYT_TCP) {
+      cyt_device = new ACCL::CoyoteDevice();
+    } else if (design == accl_network_utils::acclDesign::CYT_RDMA) {
+      cyt_device = new ACCL::CoyoteDevice(size_);
+      cyt::setup_cyt_rdma(ibvQpConn_vec, ranks_, rank_, *cyt_device);
+    } else {
+      throw std::runtime_error("Undefined ACCL design");
+    }
+  }
+}
+
+std::vector<std::uint8_t> ProcessGroupACCL::get_local_qp(unsigned int rank) {
+  std::vector<std::uint8_t> qp;
+  char *data = (char *) &ibvQpConn_vec[rank]->getQpairStruct()->local;
+  for (std::size_t i = 0; i < sizeof(fpga::ibvQ); ++i) {
+    qp.push_back(data[i]);
   }
 
-  accl = accl_network_utils::initialize_accl(convert_ranks(ranks), rank,
-                                             simulator, design, device, xclbin,
-                                             nbufs, bufsize, 0, rsfec);
-  int devicemem = accl->devicemem();
-  if (!simulator) {
-    // Initialize cache buffers
-    buf0 = xrt::bo(device, bufsize, devicemem);
-    buf1 = xrt::bo(device, bufsize, devicemem);
+  return qp;
+}
+
+void ProcessGroupACCL::set_remote_qp(unsigned int rank, std::vector<std::uint8_t> &qp) {
+  fpga::ibvQ remote_qp;
+  char *data = (char *) &remote_qp;
+  for (std::size_t i = 0; i < sizeof(fpga::ibvQ); ++i) {
+    data[i] = qp[i];
   }
+
+  ibvQpConn_vec[rank]->getQpairStruct()->remote = remote_qp;
+}
+
+void ProcessGroupACCL::initialize() {
+  xrt::device device;
+  if (initialized) {
+    throw std::runtime_error("Already initialized process group");
+  }
+
+  if (coyote_enabled) {
+    if (design_ == accl_network_utils::acclDesign::CYT_RDMA) {
+      cyt::configure_cyt_rdma(ibvQpConn_vec, ranks_, rank_);
+    } else {
+      throw std::runtime_error("Coyote configure not implemented");
+    }
+
+    accl = std::make_unique<ACCL::ACCL>(cyt_device, ranks_, rank_, size_ + 2,
+                                        bufsize, bufsize, 8388608UL);
+    ACCL::debug(std::string("[ACCL coyote] communicator: ") + accl->dump_communicator());
+  } else {
+    if (!simulator_) {
+      device = xrt::device(device_index_);
+    }
+
+    accl = accl_network_utils::initialize_accl(ranks_, rank_,
+                                               simulator_, design_, device,
+                                               xclbin_, nbufs_, bufsize, 0,
+                                               rsfec_);
+    int devicemem = accl->devicemem();
+    if (!simulator_) {
+      // Initialize cache buffers
+      buf0 = xrt::bo(device, bufsize, devicemem);
+      buf1 = xrt::bo(device, bufsize, devicemem);
+    }
+  }
+
   accl->set_timeout(1e8);
   // Start the worker thread accepting ACCL calls
   workerThread_ = std::thread(&ProcessGroupACCL::runLoop, this);
+  initialized = true;
 }
 
 ProcessGroupACCL::~ProcessGroupACCL() { destroy(); }
@@ -650,9 +731,13 @@ void ProcessGroupACCL::runLoop() {
   }
 }
 
-c10::intrusive_ptr<ProcessGroup::Work> ProcessGroupACCL::enqueue(
+c10::intrusive_ptr<Work> ProcessGroupACCL::enqueue(
     std::unique_ptr<WorkEntry> entry, const char *profilingTitle, OpType optype,
     const c10::optional<std::vector<at::Tensor>> &inputTensors) {
+  if (!initialized) {
+    throw std::runtime_error("Process group not yet initialized, "
+                             "call accl_process_group.initialize()");
+  }
   auto work = c10::make_intrusive<WorkACCL>(entry->dst, profilingTitle, optype,
                                             inputTensors);
   std::unique_lock<std::mutex> lock(pgMutex_);
@@ -676,7 +761,19 @@ void ProcessGroupACCL::run_broadcast(at::Tensor tensor_original,
   if (p2p_applicable(*accl, tensor_original, p2p_enabled)) {
     data = create_and_copy_p2p_buffer(*accl, tensor_original);
   } else {
-    if (tensor_original.device().type() != c10::DeviceType::CPU) {
+    if (coyote_enabled) {
+      // Copy tensor to CPU tensor first
+      data = create_coyotebuffer(*accl, tensor->numel(), tensor->scalar_type());
+      ACCL::debug("Copying data to CPU tensor of size " +
+                  std::to_string(tensor_original.numel()));
+      empty_tensor = torch::from_blob(
+          data->byte_array(), tensor_original.sizes(),
+          tensor_original.options().device(c10::DeviceType::CPU));
+      tensor = &empty_tensor;
+      if (rank_ == opts.rootRank) {
+        tensor->copy_(tensor_original);
+      }
+    } else if (tensor_original.device().type() != c10::DeviceType::CPU) {
       // Copy tensor to CPU tensor first
       data = create_buffer(*accl, tensor->numel(), tensor->scalar_type());
       ACCL::debug("Copying data to CPU tensor of size " +
@@ -685,7 +782,9 @@ void ProcessGroupACCL::run_broadcast(at::Tensor tensor_original,
           data->byte_array(), tensor_original.sizes(),
           tensor_original.options().device(c10::DeviceType::CPU));
       tensor = &empty_tensor;
-      tensor->copy_(tensor_original);
+      if (rank_ == opts.rootRank) {
+        tensor->copy_(tensor_original);
+      }
     } else {
       data = create_buffer(*accl, *tensor);
     }
@@ -694,24 +793,35 @@ void ProcessGroupACCL::run_broadcast(at::Tensor tensor_original,
   // Run broadcast
   ACCL::debug("Starting broadcast of " + std::to_string(tensor->numel()) +
               " items");
-  accl->bcast(*data, tensor->numel(), opts.rootRank, ACCL::GLOBAL_COMM, false,
-              false, get_compressed_type(tensor->scalar_type()));
+
+  if (!coyote_enabled && rank_ == opts.rootRank) {
+    data->sync_to_device();
+  }
+
+  accl->bcast(*data, tensor->numel(), opts.rootRank, ACCL::GLOBAL_COMM, true,
+              true, get_compressed_type(tensor->scalar_type()));
   int retcode = accl->get_retcode();
   if (retcode) {
     TORCH_CHECK(false, ACCL_ERROR(retcode));
   }
 
+  if (!coyote_enabled && rank_ != opts.rootRank) {
+    data->sync_from_device();
+  }
+
   // Copy results back to GPU if necessary
   if (p2p_applicable(*accl, tensor_original, p2p_enabled)) {
     copy_back_p2p_buffer(*data, tensor_original);
-  } else if (tensor_original.device().type() != c10::DeviceType::CPU) {
+  } else if (coyote_enabled || tensor_original.device().type() != c10::DeviceType::CPU) {
     ACCL::debug("Copying data back from CPU tensor of size " +
                 std::to_string(tensor_original.numel()));
-    tensor_original.copy_(*tensor);
+    if (rank_ != opts.rootRank) {
+      tensor_original.copy_(*tensor);
+    }
   }
 }
 
-c10::intrusive_ptr<ProcessGroup::Work>
+c10::intrusive_ptr<Work>
 ProcessGroupACCL::broadcast(std::vector<at::Tensor> &tensors,
                             const BroadcastOptions &opts) {
   checkSingleTensor(tensors);
@@ -752,7 +862,7 @@ void ProcessGroupACCL::run_allreduce(at::Tensor tensor_original,
     data = create_and_copy_p2p_buffer(*accl, tensor_original);
     result = create_buffer_p2p(*accl, tensor->numel(), tensor->scalar_type());
   } else {
-    if (accl->is_simulated()) {
+    if (accl->is_simulated() || coyote_enabled) {
       data = create_buffer(*accl, tensor->numel(), tensor->scalar_type());
     } else {
       data = wrap_buffer(*accl, buf0, tensor->numel(), tensor->scalar_type());
@@ -766,7 +876,7 @@ void ProcessGroupACCL::run_allreduce(at::Tensor tensor_original,
     tensor->copy_(tensor_original);
     ACCL::debug("Creating extra result buffer of size " +
                 std::to_string(tensor_original.numel()));
-    if (accl->is_simulated()) {
+    if (accl->is_simulated() || coyote_enabled) {
       result = create_buffer(*accl, tensor->numel(), tensor->scalar_type());
     } else {
       result = wrap_buffer(*accl, buf1, tensor->numel(), tensor->scalar_type());
@@ -776,12 +886,19 @@ void ProcessGroupACCL::run_allreduce(at::Tensor tensor_original,
   // Run allreduce
   ACCL::debug("Starting allreduce of " + std::to_string(tensor->numel()) +
               " items");
+  if (!coyote_enabled) {
+    data->sync_to_device();
+  }
   accl->allreduce(*data, *result, tensor->numel(), acclOp.at(opts.reduceOp),
-                  ACCL::GLOBAL_COMM, false, false,
+                  ACCL::GLOBAL_COMM, true, true,
                   get_compressed_type(tensor->scalar_type()));
   int retcode = accl->get_retcode();
   if (retcode) {
     TORCH_CHECK(false, ACCL_ERROR(retcode));
+  }
+
+  if (!coyote_enabled) {
+    result->sync_from_device();
   }
 
   // Copy result buffer back to original tensor
@@ -796,7 +913,7 @@ void ProcessGroupACCL::run_allreduce(at::Tensor tensor_original,
   }
 }
 
-c10::intrusive_ptr<ProcessGroup::Work>
+c10::intrusive_ptr<Work>
 ProcessGroupACCL::allreduce(std::vector<at::Tensor> &tensors,
                             const AllreduceOptions &opts) {
   checkSingleTensor(tensors);
@@ -821,7 +938,7 @@ ProcessGroupACCL::allreduce(std::vector<at::Tensor> &tensors,
                  c10::optional<std::vector<at::Tensor>>(tensors));
 }
 
-c10::intrusive_ptr<ProcessGroup::Work>
+c10::intrusive_ptr<Work>
 ProcessGroupACCL::allreduce_coalesced(std::vector<at::Tensor> &tensors,
                                       const AllreduceCoalescedOptions &opts) {
   TORCH_CHECK(false,
@@ -848,7 +965,17 @@ void ProcessGroupACCL::run_reduce(at::Tensor tensor_original,
       result = create_buffer_p2p(*accl, tensor->numel(), tensor->scalar_type());
     }
   } else {
-    if (tensor_original.device().type() != c10::DeviceType::CPU) {
+    if (coyote_enabled) {
+      // Copy tensor to CPU tensor first
+      data = create_coyotebuffer(*accl, tensor->numel(), tensor->scalar_type());
+      ACCL::debug("Copying data to CPU tensor of size " +
+                  std::to_string(tensor_original.numel()));
+      empty_tensor = torch::from_blob(
+          data->byte_array(), tensor_original.sizes(),
+          tensor_original.options().device(c10::DeviceType::CPU));
+      tensor = &empty_tensor;
+      tensor->copy_(tensor_original);
+    } else if (tensor_original.device().type() != c10::DeviceType::CPU) {
       data = create_buffer(*accl, tensor->numel(), tensor->scalar_type());
       ACCL::debug("Copying data to CPU tensor of size " +
                   std::to_string(tensor_original.numel()));
@@ -864,19 +991,30 @@ void ProcessGroupACCL::run_reduce(at::Tensor tensor_original,
     if (rank_ == opts.rootRank) {
       ACCL::debug("Creating extra result buffer of size " +
                   std::to_string(tensor_original.numel()));
-      result = create_buffer(*accl, tensor->numel(), tensor->scalar_type());
+      if (coyote_enabled) {
+        result = create_coyotebuffer(*accl, tensor->numel(), tensor->scalar_type());
+      } else {
+        result = create_buffer(*accl, tensor->numel(), tensor->scalar_type());
+      }
     }
   }
 
   // Run reduce
   ACCL::debug("Starting reduce of " + std::to_string(tensor->numel()) +
               " items");
+  if (!coyote_enabled) {
+    data->sync_to_device();
+  }
   accl->reduce(*data, *result, tensor->numel(), opts.rootRank,
-               acclOp.at(opts.reduceOp), ACCL::GLOBAL_COMM, false, false,
+               acclOp.at(opts.reduceOp), ACCL::GLOBAL_COMM, true, true,
                get_compressed_type(tensor->scalar_type()));
   int retcode = accl->get_retcode();
   if (retcode) {
     TORCH_CHECK(false, ACCL_ERROR(retcode));
+  }
+
+  if (!coyote_enabled && rank_ == opts.rootRank) {
+    result->sync_from_device();
   }
 
   // Copy result buffer back to original tensor
@@ -893,7 +1031,7 @@ void ProcessGroupACCL::run_reduce(at::Tensor tensor_original,
   }
 }
 
-c10::intrusive_ptr<ProcessGroup::Work>
+c10::intrusive_ptr<Work>
 ProcessGroupACCL::reduce(std::vector<at::Tensor> &tensors,
                          const ReduceOptions &opts) {
   checkSingleTensor(tensors);
@@ -935,7 +1073,17 @@ void ProcessGroupACCL::run_allgather(
   if (p2p_applicable(*accl, srctensor_original, p2p_enabled)) {
     srcdata = create_and_copy_p2p_buffer(*accl, srctensor_original);
   } else {
-    if (srctensor_original.device().type() != c10::DeviceType::CPU) {
+    if (coyote_enabled) {
+      // Copy tensor to CPU tensor first
+      srcdata = create_coyotebuffer(*accl, srctensor->numel(), srctensor->scalar_type());
+      ACCL::debug("Copying data to CPU tensor of size " +
+                  std::to_string(srctensor_original.numel()));
+      empty_srctensor = torch::from_blob(
+          srcdata->byte_array(), srctensor_original.sizes(),
+          srctensor_original.options().device(c10::DeviceType::CPU));
+      srctensor = &empty_srctensor;
+      srctensor->copy_(srctensor_original);
+    } else if (srctensor_original.device().type() != c10::DeviceType::CPU) {
       srcdata =
           create_buffer(*accl, srctensor->numel(), srctensor->scalar_type());
       ACCL::debug("Copying data to CPU tensor of size " +
@@ -955,6 +1103,15 @@ void ProcessGroupACCL::run_allgather(
     dstdata = create_buffer_p2p(*accl,
                                 srctensor->numel() * static_cast<size_t>(size_),
                                 srctensor->scalar_type());
+  } else if (coyote_enabled) {
+    dstdata =
+        create_coyotebuffer(*accl, srctensor->numel() * static_cast<size_t>(size_),
+                      srctensor->scalar_type());
+    std::vector<int64_t> sizes = {static_cast<int64_t>(srctensor->numel()) *
+                                  size_};
+    dsttensor = torch::from_blob(
+        dstdata->byte_array(), sizes,
+        srctensor_original.options().device(c10::DeviceType::CPU));
   } else {
     dstdata =
         create_buffer(*accl, srctensor->numel() * static_cast<size_t>(size_),
@@ -969,12 +1126,18 @@ void ProcessGroupACCL::run_allgather(
   // Run allgather
   ACCL::debug("Starting allgather of " + std::to_string(srctensor->numel()) +
               " items");
+  if (!coyote_enabled) {
+    srcdata->sync_to_device();
+  }
   accl->allgather(*srcdata, *dstdata, srctensor->numel(), ACCL::GLOBAL_COMM,
-                  false, false, get_compressed_type(srctensor->scalar_type()));
+                  true, true, get_compressed_type(srctensor->scalar_type()));
 
   int retcode = accl->get_retcode();
   if (retcode) {
     TORCH_CHECK(false, ACCL_ERROR(retcode));
+  }
+  if (!coyote_enabled) {
+    dstdata->sync_from_device();
   }
 
   // Copy results back to dsttensorvec
@@ -990,7 +1153,7 @@ void ProcessGroupACCL::run_allgather(
   }
 }
 
-c10::intrusive_ptr<ProcessGroup::Work>
+c10::intrusive_ptr<Work>
 ProcessGroupACCL::allgather(std::vector<std::vector<at::Tensor>> &outputTensors,
                             std::vector<at::Tensor> &inputTensors,
                             const AllgatherOptions &opts) {
@@ -1033,7 +1196,7 @@ ProcessGroupACCL::allgather(std::vector<std::vector<at::Tensor>> &outputTensors,
                  c10::optional<std::vector<at::Tensor>>(inputTensors));
 }
 
-c10::intrusive_ptr<ProcessGroup::Work> ProcessGroupACCL::allgather_coalesced(
+c10::intrusive_ptr<Work> ProcessGroupACCL::allgather_coalesced(
     std::vector<std::vector<at::Tensor>> & /* unused */,
     std::vector<at::Tensor> & /* unused */,
     const AllgatherOptions & /* unused */) {
@@ -1057,7 +1220,17 @@ void ProcessGroupACCL::run_gather(at::Tensor srctensor_original,
   if (p2p_applicable(*accl, srctensor_original, p2p_enabled)) {
     srcdata = create_and_copy_p2p_buffer(*accl, srctensor_original);
   } else {
-    if (srctensor_original.device().type() != c10::DeviceType::CPU) {
+    if (coyote_enabled) {
+      srcdata =
+          create_coyotebuffer(*accl, srctensor->numel(), srctensor->scalar_type());
+      ACCL::debug("Copying data to CPU tensor of size " +
+                  std::to_string(srctensor_original.numel()));
+      empty_srctensor = torch::from_blob(
+          srcdata->byte_array(), srctensor_original.sizes(),
+          srctensor_original.options().device(c10::DeviceType::CPU));
+      srctensor = &empty_srctensor;
+      srctensor->copy_(srctensor_original);
+    } else if (srctensor_original.device().type() != c10::DeviceType::CPU) {
       srcdata =
           create_buffer(*accl, srctensor->numel(), srctensor->scalar_type());
       ACCL::debug("Copying data to CPU tensor of size " +
@@ -1078,6 +1251,15 @@ void ProcessGroupACCL::run_gather(at::Tensor srctensor_original,
       dstdata = create_buffer_p2p(
           *accl, srctensor->numel() * static_cast<size_t>(size_),
           srctensor->scalar_type());
+    } else if (coyote_enabled) {
+      dstdata =
+          create_coyotebuffer(*accl, srctensor->numel() * static_cast<size_t>(size_),
+                        srctensor->scalar_type());
+      std::vector<int64_t> sizes = {static_cast<int64_t>(srctensor->numel()) *
+                                    size_};
+      dsttensor =
+          torch::from_blob(dstdata->byte_array(), sizes,
+                           srctensor->options().device(c10::DeviceType::CPU));
     } else {
       dstdata =
           create_buffer(*accl, srctensor->numel() * static_cast<size_t>(size_),
@@ -1093,13 +1275,22 @@ void ProcessGroupACCL::run_gather(at::Tensor srctensor_original,
   // Run gather
   ACCL::debug("Starting gather of " + std::to_string(srctensor->numel()) +
               " items");
+
+  if (!coyote_enabled) {
+    srcdata->sync_to_device();
+  }
+
   accl->gather(*srcdata, *dstdata, srctensor->numel(), opts.rootRank,
-               ACCL::GLOBAL_COMM, false, false,
+               ACCL::GLOBAL_COMM, true, true,
                get_compressed_type(srctensor->scalar_type()));
 
   int retcode = accl->get_retcode();
   if (retcode) {
     TORCH_CHECK(false, ACCL_ERROR(retcode));
+  }
+
+  if (!coyote_enabled && rank_ == opts.rootRank) {
+    dstdata->sync_from_device();
   }
 
   // Copy results back to dsttensorvec
@@ -1117,7 +1308,7 @@ void ProcessGroupACCL::run_gather(at::Tensor srctensor_original,
   }
 }
 
-c10::intrusive_ptr<ProcessGroup::Work>
+c10::intrusive_ptr<Work>
 ProcessGroupACCL::gather(std::vector<std::vector<at::Tensor>> &outputTensors,
                          std::vector<at::Tensor> &inputTensors,
                          const GatherOptions &opts) {
@@ -1194,6 +1385,15 @@ void ProcessGroupACCL::run_scatter(std::vector<at::Tensor> &srctensorvec,
         srcdata = create_buffer_p2p(
             *accl, dsttensor->numel() * static_cast<size_t>(size_),
             dsttensor->scalar_type());
+      } else if (coyote_enabled) {
+        srcdata = create_coyotebuffer(*accl,
+                                dsttensor->numel() * static_cast<size_t>(size_),
+                                dsttensor->scalar_type());
+        std::vector<int64_t> sizes = {static_cast<int64_t>(dsttensor->numel()) *
+                                      size_};
+        srctensor =
+            torch::from_blob(srcdata->byte_array(), sizes,
+                             dsttensor->options().device(c10::DeviceType::CPU));
       } else {
         srcdata = create_buffer(*accl,
                                 dsttensor->numel() * static_cast<size_t>(size_),
@@ -1224,7 +1424,17 @@ void ProcessGroupACCL::run_scatter(std::vector<at::Tensor> &srctensorvec,
   if (p2p_applicable(*accl, dsttensor_original, p2p_enabled)) {
     dstdata = create_and_copy_p2p_buffer(*accl, dsttensor_original);
   } else {
-    if (dsttensor_original.device().type() != c10::DeviceType::CPU) {
+    if (coyote_enabled) {
+      dstdata =
+          create_coyotebuffer(*accl, dsttensor->numel(), dsttensor->scalar_type());
+      ACCL::debug("Copying data to CPU tensor of size " +
+                  std::to_string(dsttensor_original.numel()));
+      empty_dsttensor = torch::from_blob(
+          dstdata->byte_array(), dsttensor_original.sizes(),
+          dsttensor_original.options().device(c10::DeviceType::CPU));
+      dsttensor = &empty_dsttensor;
+      dsttensor->copy_(dsttensor_original);
+    } else if (dsttensor_original.device().type() != c10::DeviceType::CPU) {
       dstdata =
           create_buffer(*accl, dsttensor->numel(), dsttensor->scalar_type());
       ACCL::debug("Copying data to CPU tensor of size " +
@@ -1242,25 +1452,34 @@ void ProcessGroupACCL::run_scatter(std::vector<at::Tensor> &srctensorvec,
   // Run scatter
   ACCL::debug("Starting scatter of " + std::to_string(dsttensor->numel()) +
               " items");
+
+  if (!coyote_enabled && rank_ == opts.rootRank) {
+    srcdata->sync_to_device();
+  }
+
   accl->scatter(*srcdata, *dstdata, dsttensor->numel(), opts.rootRank,
-                ACCL::GLOBAL_COMM, false, false,
+                ACCL::GLOBAL_COMM, true, true,
                 get_compressed_type(dsttensor->scalar_type()));
   int retcode = accl->get_retcode();
   if (retcode) {
     TORCH_CHECK(false, ACCL_ERROR(retcode));
   }
 
+  if (!coyote_enabled) {
+    dstdata->sync_from_device();
+  }
+
   // Copy result back to GPU if necessary
   if (p2p_applicable(*accl, dsttensor_original, p2p_enabled)) {
     copy_back_p2p_buffer(*dstdata, dsttensor_original);
-  } else if (dsttensor_original.device().type() != c10::DeviceType::CPU) {
+  } else if (coyote_enabled || dsttensor_original.device().type() != c10::DeviceType::CPU) {
     ACCL::debug("Copying data back from CPU tensor of size " +
                 std::to_string(dsttensor_original.numel()));
     dsttensor_original.copy_(*dsttensor);
   }
 }
 
-c10::intrusive_ptr<ProcessGroup::Work>
+c10::intrusive_ptr<Work>
 ProcessGroupACCL::scatter(std::vector<at::Tensor> &outputTensors,
                           std::vector<std::vector<at::Tensor>> &inputTensors,
                           const ScatterOptions &opts) {
@@ -1323,21 +1542,135 @@ ProcessGroupACCL::scatter(std::vector<at::Tensor> &outputTensors,
   }
 }
 
-c10::intrusive_ptr<ProcessGroup::Work> ProcessGroupACCL::reduce_scatter(
+c10::intrusive_ptr<Work> ProcessGroupACCL::reduce_scatter(
     std::vector<at::Tensor> &outputTensors,
     std::vector<std::vector<at::Tensor>> &inputTensors,
     const ReduceScatterOptions &opts) {
   TORCH_CHECK(false, "ProcessGroupACCL does not support reduce_scatter");
 }
 
-c10::intrusive_ptr<ProcessGroup::Work> ProcessGroupACCL::alltoall_base(
+void ProcessGroupACCL::run_alltoall(at::Tensor srctensor_original,
+                                    at::Tensor dsttensor_original,
+                                    const AllToAllOptions &opts) {
+  at::Tensor *srctensor = &srctensor_original;
+  at::Tensor *dsttensor = &dsttensor_original;
+  at::Tensor empty_srctensor, empty_dsttensor;
+  std::unique_ptr<ACCL::BaseBuffer> srcdata;
+  std::unique_ptr<ACCL::BaseBuffer> dstdata;
+
+  // Reserve device
+  c10::DeviceGuard guard(srctensor->device());
+  std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
+
+  // Copy data from GPU to FPGA if necessary, and create a new result buffer,
+  // since ACCL doesn't support in-place allreduce
+  if (p2p_applicable(*accl, srctensor_original, p2p_enabled)) {
+    srcdata = create_and_copy_p2p_buffer(*accl, srctensor_original);
+  } else {
+    if (accl->is_simulated() || coyote_enabled) {
+      srcdata = create_buffer(*accl, srctensor->numel(), srctensor->scalar_type());
+    } else {
+      srcdata = wrap_buffer(*accl, buf0, srctensor->numel(), srctensor->scalar_type());
+    }
+    ACCL::debug("Copying data to aligned CPU tensor of size " +
+                std::to_string(srctensor_original.numel()));
+    empty_srctensor = torch::from_blob(
+        srcdata->byte_array(), srctensor_original.sizes(),
+        srctensor_original.options().device(c10::DeviceType::CPU));
+    srctensor = &empty_srctensor;
+    srctensor->copy_(srctensor_original);
+    ACCL::debug("Creating extra result buffer of size " +
+                std::to_string(srctensor_original.numel()));
+  }
+
+  // Create output buffer
+  if (p2p_applicable(*accl, dsttensor_original, p2p_enabled)) {
+    dstdata = create_and_copy_p2p_buffer(*accl, dsttensor_original);
+  } else {
+    if (accl->is_simulated() || coyote_enabled) {
+      dstdata = create_buffer(*accl, dsttensor->numel(), dsttensor->scalar_type());
+    } else {
+      dstdata = wrap_buffer(*accl, buf0, dsttensor->numel(), dsttensor->scalar_type());
+    }
+  }
+
+  // Run alltoall
+  ACCL::debug("Starting alltoall of " + std::to_string(srctensor->numel()) +
+              " items");
+  if (!coyote_enabled) {
+    srcdata->sync_to_device();
+  }
+  accl->alltoall(*srcdata, *dstdata, srctensor->numel(),
+                  ACCL::GLOBAL_COMM, true, true,
+                  get_compressed_type(srctensor->scalar_type()));
+  int retcode = accl->get_retcode();
+  if (retcode) {
+    TORCH_CHECK(false, ACCL_ERROR(retcode));
+  }
+  if (!coyote_enabled) {
+    dstdata->sync_from_device();
+  }
+
+  // Copy result buffer back to original tensor
+  if (p2p_applicable(*accl, dsttensor_original, p2p_enabled)) {
+    copy_back_p2p_buffer(*dstdata, dsttensor_original);
+  } else {
+    ACCL::debug("Copying result data back to original tensor of size " +
+                std::to_string(dsttensor_original.numel()));
+    dsttensor_original.copy_(torch::from_blob(
+        dstdata->byte_array(), dsttensor_original.sizes(),
+        dsttensor_original.options().device(c10::DeviceType::CPU)));
+  }
+}
+
+c10::intrusive_ptr<Work> ProcessGroupACCL::alltoall_base(
     at::Tensor &outputTensor, at::Tensor &inputTensor,
     std::vector<int64_t> &outputSplitSizes,
     std::vector<int64_t> &inputSplitSizes, const AllToAllOptions &opts) {
-  TORCH_CHECK(false, "ProcessGroupACCL does not support alltoall_base");
+  if (outputSplitSizes.size() == 0 && inputSplitSizes.size() == 0) {
+    // We can use alltoall
+    TORCH_CHECK(
+        outputTensor.numel() == inputTensor.numel() &&
+            outputTensor.type() == inputTensor.type(),
+        "Tensors are not equal in size or data type");
+    TORCH_CHECK(
+        outputTensor.size(0) % size_ == 0,
+        "Tensor's dim 0 does not divide equally across group size");
+
+    std::function<void(std::unique_ptr<WorkEntry>&)> runFunc =
+        [opts, this](std::unique_ptr<WorkEntry>& entry) {
+          auto srctensor = (entry->src)[0];
+          auto dsttensor = (entry->dst)[0];
+          c10::DeviceGuard guard(srctensor.device());
+          std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
+          // Segment data if necessary
+          if (dsttensor.nbytes() > bufsize) {
+            ACCL::debug("dsttensor to large!");
+            size_t n = bufsize / dsttensor.itemsize();
+            for (size_t i = 0; i < dsttensor.numel(); i += n) {
+              ACCL::debug("part " + std::to_string(i) + "!");
+              size_t end =
+                  std::min(i + n, static_cast<size_t>(dsttensor.numel()));
+              run_alltoall(srctensor.slice(0, i, end), dsttensor.slice(0, i, end), opts);
+            }
+          } else {
+            run_alltoall(srctensor, dsttensor, opts);
+          }
+        };
+    std::vector<at::Tensor> inputTensors = {inputTensor};
+    std::vector<at::Tensor> outputTensors = {outputTensor};
+    auto entry = std::make_unique<WorkEntry>(
+        &inputTensors, &outputTensors, std::move(runFunc));
+    return enqueue(
+        std::move(entry),
+        "accl:all_to_all_base", OpType::ALLTOALL_BASE,
+        c10::optional<std::vector<at::Tensor>>(inputTensors));
+  } else {
+    TORCH_CHECK(false, "ProcessGroupACCL does not support alltoallv required by alltoall_base");
+  }
 }
 
-c10::intrusive_ptr<ProcessGroup::Work>
+c10::intrusive_ptr<Work>
 ProcessGroupACCL::alltoall(std::vector<at::Tensor> &outputTensors,
                            std::vector<at::Tensor> &inputTensors,
                            const AllToAllOptions &opts) {
@@ -1358,7 +1691,17 @@ void ProcessGroupACCL::run_send(at::Tensor tensor_original, int dstRank,
   if (p2p_applicable(*accl, tensor_original, p2p_enabled)) {
     data = create_and_copy_p2p_buffer(*accl, tensor_original);
   } else {
-    if (tensor_original.device().type() != c10::DeviceType::CPU) {
+    if (coyote_enabled) {
+      // Copy tensor to CPU tensor first
+      data = create_coyotebuffer(*accl, tensor->numel(), tensor->scalar_type());
+      ACCL::debug("Copying data to CPU tensor of size " +
+                  std::to_string(tensor_original.numel()));
+      empty_tensor = torch::from_blob(
+          data->byte_array(), tensor_original.sizes(),
+          tensor_original.options().device(c10::DeviceType::CPU));
+      tensor = &empty_tensor;
+      tensor->copy_(tensor_original);
+    } else if (tensor_original.device().type() != c10::DeviceType::CPU) {
       // Copy tensor to CPU tensor first
       data = create_buffer(*accl, tensor->numel(), tensor->scalar_type());
       ACCL::debug("Copying data to CPU tensor of size " +
@@ -1376,7 +1719,10 @@ void ProcessGroupACCL::run_send(at::Tensor tensor_original, int dstRank,
   // Run send
   ACCL::debug("Starting send of " + std::to_string(tensor->numel()) +
               " items to " + std::to_string(dstRank));
-  accl->send(*data, tensor->numel(), dstRank, tag, ACCL::GLOBAL_COMM, false,
+  if (!coyote_enabled) {
+    data->sync_to_device();
+  }
+  accl->send(*data, tensor->numel(), dstRank, tag, ACCL::GLOBAL_COMM, true,
              get_compressed_type(tensor->scalar_type()));
 
   int retcode = accl->get_retcode();
@@ -1385,7 +1731,7 @@ void ProcessGroupACCL::run_send(at::Tensor tensor_original, int dstRank,
   }
 }
 
-c10::intrusive_ptr<ProcessGroup::Work>
+c10::intrusive_ptr<Work>
 ProcessGroupACCL::send(std::vector<at::Tensor> &tensors, int dstRank, int tag) {
   checkSingleTensor(tensors);
 
@@ -1424,7 +1770,16 @@ void ProcessGroupACCL::run_recv(at::Tensor tensor_original, int srcRank,
   if (p2p_applicable(*accl, tensor_original, p2p_enabled)) {
     data = create_buffer_p2p(*accl, tensor_original);
   } else {
-    if (tensor_original.device().type() != c10::DeviceType::CPU) {
+    if (coyote_enabled) {
+      // Copy tensor to CPU tensor first
+      data = create_coyotebuffer(*accl, tensor->numel(), tensor->scalar_type());
+      ACCL::debug("Creating CPU tensor of size " +
+                  std::to_string(tensor_original.numel()));
+      empty_tensor = torch::from_blob(
+          data->byte_array(), tensor_original.sizes(),
+          tensor_original.options().device(c10::DeviceType::CPU));
+      tensor = &empty_tensor;
+    } else if (tensor_original.device().type() != c10::DeviceType::CPU) {
       data = create_buffer(*accl, tensor->numel(), tensor->scalar_type());
       ACCL::debug("Copying data to CPU tensor of size " +
                   std::to_string(tensor_original.numel()));
@@ -1440,7 +1795,7 @@ void ProcessGroupACCL::run_recv(at::Tensor tensor_original, int srcRank,
   // Run recieve
   ACCL::debug("Starting recieve of " + std::to_string(tensor->numel()) +
               " items from " + std::to_string(srcRank));
-  accl->recv(*data, tensor->numel(), srcRank, tag, ACCL::GLOBAL_COMM, false,
+  accl->recv(*data, tensor->numel(), srcRank, tag, ACCL::GLOBAL_COMM, true,
              get_compressed_type(tensor->scalar_type()));
 
   int retcode = accl->get_retcode();
@@ -1448,17 +1803,21 @@ void ProcessGroupACCL::run_recv(at::Tensor tensor_original, int srcRank,
     TORCH_CHECK(false, ACCL_ERROR(retcode));
   }
 
+  if (!coyote_enabled) {
+    data->sync_from_device();
+  }
+
   // Copy data back to original tensor if necessary
   if (p2p_applicable(*accl, tensor_original, p2p_enabled)) {
     copy_back_p2p_buffer(*data, tensor_original);
-  } else if (tensor_original.device().type() != c10::DeviceType::CPU) {
+  } else if (coyote_enabled || tensor_original.device().type() != c10::DeviceType::CPU) {
     ACCL::debug("Copying data back from CPU tensor of size " +
                 std::to_string(tensor_original.numel()));
     tensor_original.copy_(*tensor);
   }
 }
 
-c10::intrusive_ptr<ProcessGroup::Work>
+c10::intrusive_ptr<Work>
 ProcessGroupACCL::recv(std::vector<at::Tensor> &tensors, int srcRank, int tag) {
   checkSingleTensor(tensors);
 
@@ -1483,17 +1842,17 @@ ProcessGroupACCL::recv(std::vector<at::Tensor> &tensors, int srcRank, int tag) {
                  c10::optional<std::vector<at::Tensor>>(tensors));
 }
 
-c10::intrusive_ptr<ProcessGroup::Work>
+c10::intrusive_ptr<Work>
 ProcessGroupACCL::recvAnysource(std::vector<at::Tensor> &tensors, int tag) {
   TORCH_CHECK(false, "ProcessGroupACCL does not support recvAnysource");
 }
 
-c10::intrusive_ptr<ProcessGroup::Work>
+c10::intrusive_ptr<Work>
 ProcessGroupACCL::barrier(const BarrierOptions &opts) {
   TORCH_CHECK(false, "ProcessGroupACCL does not support barrier");
 }
 
-c10::intrusive_ptr<ProcessGroup::Work>
+c10::intrusive_ptr<Work>
 ProcessGroupACCL::_allgather_base(at::Tensor & /*unused */,
                                   at::Tensor & /*unused */,
                                   const AllgatherOptions & /*unused */) {
@@ -1533,7 +1892,13 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
              "UDP ACCL backend; uses VNx network kernel on hardware")
       .value("roce", accl_network_utils::acclDesign::ROCE,
              "Only applicable for hardware; uses UDP ACCL backend and RoCE "
-             "network kernel");
+             "network kernel")
+      .value("cyt_tcp", accl_network_utils::acclDesign::CYT_TCP,
+             "Only applicable for hardware; uses coyote ACCL backend with a "
+             "TCP network kernel")
+      .value("cyt_rdma", accl_network_utils::acclDesign::CYT_RDMA,
+             "Only applicable for hardware; uses coyote ACCL backend with a "
+             "RDMA network kernel");
 
   py::class_<ProcessGroupACCL::Rank,
              c10::intrusive_ptr<ProcessGroupACCL::Rank>>(m, "Rank")
@@ -1562,6 +1927,10 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
            py::arg("xclbin") = std::string(),
            py::arg("device_index") = 0,  py::arg("nbufs") = 16,
            py::arg("bufsize") = 1024, py::arg("rsfec") = false)
+      .def("get_local_qp", &ProcessGroupACCL::get_local_qp, py::arg("rank"))
+      .def("set_remote_qp", &ProcessGroupACCL::set_remote_qp, py::arg("rank"),
+           py::arg("qp"))
+      .def("initialize", &ProcessGroupACCL::initialize)
       .def_property("compression", &ProcessGroupACCL::get_compression,
                     &ProcessGroupACCL::set_compression);
 }

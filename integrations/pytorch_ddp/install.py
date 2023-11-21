@@ -23,9 +23,11 @@ import sys
 import os
 from pathlib import Path
 
-_CURRENT_PYTORCH = '1.12'
+_CURRENT_PYTORCH = '2.1'
 CURRENT_PYTORCH_VERSION = f'v{_CURRENT_PYTORCH}'
 CURRENT_PYTORCH_BRANCH = f'release/{_CURRENT_PYTORCH}'
+
+CURRENT_ACCL_BRANCH = f'dev'
 
 root = Path(__file__).parent.resolve()
 accl_repo = root / 'accl'
@@ -65,16 +67,21 @@ def check_torch():
 
 def clone_pytorch():
     print("Cloning PyTorch...")
-    # Use custom fork for 1.11 which has some backports from the master branch
-    # that are required for ACCL
-    if CURRENT_PYTORCH_BRANCH == 'release/1.11':
-        url = 'https://github.com/TristanLaan/pytorch.git'
-    else:
-        url = 'https://github.com/pytorch/pytorch.git'
+    url = 'https://github.com/pytorch/pytorch.git'
 
     subprocess.run(['git', 'clone', '--depth=1', '--recursive',
                     f'--branch={CURRENT_PYTORCH_BRANCH}',
                     url, 'torch'],
+                   check=True, cwd=root)
+
+
+def clone_accl():
+    print("Cloning ACCL...")
+    url = 'https://github.com/Xilinx/ACCL.git'
+
+    subprocess.run(['git', 'clone', '--depth=1', '--recursive',
+                    f'--branch={CURRENT_ACCL_BRANCH}',
+                    url, 'accl'],
                    check=True, cwd=root)
 
 
@@ -103,12 +110,6 @@ def install_pytorch(rocm: bool = False, cuda: bool = False):
                    cwd=torch_dir, env=env, check=True)
 
 
-def get_submodules():
-    print("Downloading submodules...")
-    subprocess.run(['git', 'submodule', 'update', '--init',
-                   '--recursive'], cwd=root, check=True)
-
-
 def install_accl_driver(accl_driver_path: Path):
     print("Installing accl driver...")
     if 'ACCL_DEBUG' in os.environ:
@@ -122,7 +123,7 @@ def install_accl_driver(accl_driver_path: Path):
 
 def install_accl_process_group(rocm: bool = False, cuda: bool = False):
     if not accl_driver_path.exists():
-        get_submodules()
+        clone_accl()
     if not accl_driver.exists():
         install_accl_driver(accl_driver_path)
 
