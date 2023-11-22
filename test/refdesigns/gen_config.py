@@ -63,7 +63,8 @@ if args.axis3x:
         endch = "" if i == num_cclo-1 else "."
         poe_instantiation += "poe_{inst_nr}".format(inst_nr=i) + endch
 elif args.poe == "tcp":
-    poe_instantiation = "nk=network_krnl:1:poe_0"
+    poe_instantiation = "nk=network_krnl:1:poe_0\n"
+    poe_instantiation += "nk=tcp_session_handler:1:session_handler_0"
 elif args.poe == "udp":
     poe_instantiation = "nk=networklayer:1:poe_0"
 else:
@@ -135,6 +136,7 @@ for i in range(num_cclo):
         slr_constraints += "slr=poe_{inst_nr}:SLR{slr_nr}\n".format(inst_nr=i, slr_nr=target_slr)
     elif args.poe == "tcp":
         slr_constraints += "slr=poe_0:SLR{slr_nr}\n".format(slr_nr=gt_slr)
+        slr_constraints += "slr=session_handler_0:SLR{slr_nr}\n".format(slr_nr=gt_slr)
     if args.probe and i == 0:
         slr_constraints += "slr=probe_{inst_nr}:SLR{slr_nr}\n".format(inst_nr=i, slr_nr=target_slr)
     if not args.vadd:
@@ -265,18 +267,19 @@ for i in range(num_cclo):
 # Connect CCLOs to POEs
 if args.poe == "tcp" or args.poe == "tcp_dummy":
     for i in range(num_cclo):
-        stream_connections += "stream_connect=poe_{inst_nr}.m_axis_tcp_port_status:ccl_offload_{inst_nr}.s_axis_eth_port_status:512\n".format(inst_nr=i)
-        stream_connections += "stream_connect=poe_{inst_nr}.m_axis_tcp_open_status:ccl_offload_{inst_nr}.s_axis_eth_open_status:512\n".format(inst_nr=i)
         stream_connections += "stream_connect=poe_{inst_nr}.m_axis_tcp_notification:ccl_offload_{inst_nr}.s_axis_eth_notification:512\n".format(inst_nr=i)
         stream_connections += "stream_connect=poe_{inst_nr}.m_axis_tcp_rx_meta:ccl_offload_{inst_nr}.s_axis_eth_rx_meta:512\n".format(inst_nr=i)
         stream_connections += "stream_connect=poe_{inst_nr}.m_axis_tcp_rx_data:ccl_offload_{inst_nr}.s_axis_eth_rx_data:512\n".format(inst_nr=i)
         stream_connections += "stream_connect=poe_{inst_nr}.m_axis_tcp_tx_status:ccl_offload_{inst_nr}.s_axis_eth_tx_status:512\n".format(inst_nr=i)
-        stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_eth_listen_port:poe_{inst_nr}.s_axis_tcp_listen_port:512\n".format(inst_nr=i)
-        stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_eth_open_connection:poe_{inst_nr}.s_axis_tcp_open_connection:512\n".format(inst_nr=i)
-        stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_eth_close_connection:poe_{inst_nr}.s_axis_tcp_close_connection:512\n".format(inst_nr=i)
         stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_eth_read_pkg:poe_{inst_nr}.s_axis_tcp_read_pkg:512\n".format(inst_nr=i)
         stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_eth_tx_meta:poe_{inst_nr}.s_axis_tcp_tx_meta:512\n".format(inst_nr=i)
         stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_eth_tx_data:poe_{inst_nr}.s_axis_tcp_tx_data:512\n".format(inst_nr=i)
+        if args.poe == "tcp":
+            stream_connections += "stream_connect=poe_{inst_nr}.m_axis_tcp_port_status:session_handler_{inst_nr}.port_status:512\n".format(inst_nr=i)
+            stream_connections += "stream_connect=poe_{inst_nr}.m_axis_tcp_open_status:session_handler_{inst_nr}.open_status:512\n".format(inst_nr=i)
+            stream_connections += "stream_connect=session_handler_{inst_nr}.listen_port:poe_{inst_nr}.s_axis_tcp_listen_port:512\n".format(inst_nr=i)
+            stream_connections += "stream_connect=session_handler_{inst_nr}.open_connection:poe_{inst_nr}.s_axis_tcp_open_connection:512\n".format(inst_nr=i)
+            stream_connections += "stream_connect=session_handler_{inst_nr}.close_connection:poe_{inst_nr}.s_axis_tcp_close_connection:512\n".format(inst_nr=i)
 elif args.poe == "udp":
     stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_eth_tx_data:poe_0.S_AXIS_sk2nl:512\n".format(inst_nr=i)
     stream_connections += "stream_connect=poe_0.M_AXIS_nl2sk:ccl_offload_{inst_nr}.s_axis_eth_rx_data:512\n".format(inst_nr=i)

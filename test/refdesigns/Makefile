@@ -62,6 +62,7 @@ PROBE_XO=../../kernels/plugins/call_probe/call_probe.xo
 SUM_XO=../../kernels/plugins/reduce_ops/reduce_ops.xo
 COMPRESSION_XO=../../kernels/plugins/hp_compression/hp_compression.xo
 LOOPBACK_XO=../../kernels/plugins/loopback/loopback.xo
+TCP_SESS_XO=../../kernels/plugins/tcp_session_handler/tcp_session_handler.xo
 VADD_XO=../../kernels/plugins/vadd_put/vadd_put.xo
 
 ARITHMETIC_XO = $(SUM_XO) $(COMPRESSION_XO)
@@ -168,7 +169,7 @@ else ifeq (tcp, $(MODE))
 	NET_XO = $(TCP_XO)
 	NET_XO += $(CMAC_TCP_XO)
 	ADV_CMD += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/Vitis_with_100Gbps_TCP-IP/scripts/post_sys_link.tcl
-	OTHER_XO += $(LOOPBACK_XO)
+	OTHER_XO += $(LOOPBACK_XO) $(TCP_SESS_XO)
 	IPREPO_CMD += --user_ip_repo_paths Vitis_with_100Gbps_TCP-IP/build/fpga-network-stack/iprepo
 	CCLO_STACK_TYPE = TCP
 else ifeq (roce, $(MODE))
