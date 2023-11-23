@@ -18,6 +18,7 @@
 
 #include "accl/fpgadevice.hpp"
 #include "accl/common.hpp"
+#include "accl/commands.hpp"
 #include <future>
 #include <cassert>
 
@@ -43,19 +44,148 @@ void FPGARequest::start() {
   } else {
     function = static_cast<int>(options.reduce_function);
   }
-  run.set_arg(arg_id++, static_cast<uint32_t>(options.scenario));
-  run.set_arg(arg_id++, static_cast<uint32_t>(options.count));
-  run.set_arg(arg_id++, static_cast<uint32_t>(options.comm));
-  run.set_arg(arg_id++, static_cast<uint32_t>(options.root_src_dst));
-  run.set_arg(arg_id++, static_cast<uint32_t>(function));
-  run.set_arg(arg_id++, static_cast<uint32_t>(options.tag));
-  run.set_arg(arg_id++, static_cast<uint32_t>(options.arithcfg_addr));
-  run.set_arg(arg_id++, static_cast<uint32_t>(options.compression_flags));
-  run.set_arg(arg_id++, static_cast<uint32_t>(options.stream_flags));
-  run.set_arg(arg_id++, static_cast<uint64_t>(options.addr_0->address()));
-  run.set_arg(arg_id++, static_cast<uint64_t>(options.addr_1->address()));
-  run.set_arg(arg_id++, static_cast<uint64_t>(options.addr_2->address()));
-  
+  switch(options.scenario) {
+    case ACCL::operation::copy:
+      run.set_arg(SCENARIO_ID, static_cast<uint32_t>(options.scenario));
+      run.set_arg(COUNT_ID, static_cast<uint32_t>(options.count));
+      run.set_arg(ARITHCFG_ADDR_ID, static_cast<uint32_t>(options.arithcfg_addr));
+      run.set_arg(COMPRESSION_FLAGS_ID, static_cast<uint32_t>(options.compression_flags));
+      run.set_arg(STREAM_FLAGS_ID, static_cast<uint32_t>(options.stream_flags));
+      run.set_arg(ADDR_0_ID, static_cast<uint64_t>(options.addr_0->address()));
+      run.set_arg(ADDR_2_ID, static_cast<uint64_t>(options.addr_2->address()));
+      break;
+    case ACCL::operation::combine:
+      run.set_arg(SCENARIO_ID, static_cast<uint32_t>(options.scenario));
+      run.set_arg(COUNT_ID, static_cast<uint32_t>(options.count));
+      run.set_arg(FUNCTION_ID, static_cast<uint32_t>(function));
+      run.set_arg(ARITHCFG_ADDR_ID, static_cast<uint32_t>(options.arithcfg_addr)); 
+      run.set_arg(COMPRESSION_FLAGS_ID, static_cast<uint32_t>(options.compression_flags));
+      run.set_arg(STREAM_FLAGS_ID, static_cast<uint32_t>(options.stream_flags)); 
+      run.set_arg(ADDR_0_ID, static_cast<uint64_t>(options.addr_0->address()));
+      run.set_arg(ADDR_1_ID, static_cast<uint64_t>(options.addr_1->address()));
+      run.set_arg(ADDR_2_ID, static_cast<uint64_t>(options.addr_2->address()));
+      break;
+    case ACCL::operation::send:
+      run.set_arg(SCENARIO_ID, static_cast<uint32_t>(options.scenario));
+      run.set_arg(COUNT_ID, static_cast<uint32_t>(options.count));
+      run.set_arg(COMM_ID, static_cast<uint32_t>(options.comm));
+      run.set_arg(ROOT_SRC_DST_ID, static_cast<uint32_t>(options.root_src_dst));
+      run.set_arg(TAG_ID, static_cast<uint32_t>(options.tag));
+      run.set_arg(ARITHCFG_ADDR_ID, static_cast<uint32_t>(options.arithcfg_addr));
+      run.set_arg(COMPRESSION_FLAGS_ID, static_cast<uint32_t>(options.compression_flags));
+      run.set_arg(STREAM_FLAGS_ID, static_cast<uint32_t>(options.stream_flags));
+      run.set_arg(ADDR_0_ID, static_cast<uint64_t>(options.addr_0->address()));
+      break;
+    case ACCL::operation::recv:
+      run.set_arg(SCENARIO_ID, static_cast<uint32_t>(options.scenario));
+      run.set_arg(COUNT_ID, static_cast<uint32_t>(options.count));
+      run.set_arg(COMM_ID, static_cast<uint32_t>(options.comm));
+      run.set_arg(ROOT_SRC_DST_ID, static_cast<uint32_t>(options.root_src_dst));
+      run.set_arg(TAG_ID, static_cast<uint32_t>(options.tag));
+      run.set_arg(ARITHCFG_ADDR_ID, static_cast<uint32_t>(options.arithcfg_addr));
+      run.set_arg(COMPRESSION_FLAGS_ID, static_cast<uint32_t>(options.compression_flags));
+      run.set_arg(STREAM_FLAGS_ID, static_cast<uint32_t>(options.stream_flags));
+      run.set_arg(ADDR_2_ID, static_cast<uint64_t>(options.addr_2->address()));
+      break;
+    case ACCL::operation::bcast:
+      run.set_arg(SCENARIO_ID, static_cast<uint32_t>(options.scenario));
+      run.set_arg(COUNT_ID, static_cast<uint32_t>(options.count));
+      run.set_arg(COMM_ID, static_cast<uint32_t>(options.comm));
+      run.set_arg(ROOT_SRC_DST_ID, static_cast<uint32_t>(options.root_src_dst));
+      run.set_arg(ARITHCFG_ADDR_ID, static_cast<uint32_t>(options.arithcfg_addr));
+      run.set_arg(COMPRESSION_FLAGS_ID, static_cast<uint32_t>(options.compression_flags));
+      run.set_arg(STREAM_FLAGS_ID, static_cast<uint32_t>(options.stream_flags));
+      run.set_arg(ADDR_0_ID, static_cast<uint64_t>(options.addr_0->address()));
+      break;
+    case ACCL::operation::scatter:
+      run.set_arg(SCENARIO_ID, static_cast<uint32_t>(options.scenario));
+      run.set_arg(COUNT_ID, static_cast<uint32_t>(options.count));
+      run.set_arg(COMM_ID, static_cast<uint32_t>(options.comm));
+      run.set_arg(ROOT_SRC_DST_ID, static_cast<uint32_t>(options.root_src_dst));
+      run.set_arg(ARITHCFG_ADDR_ID, static_cast<uint32_t>(options.arithcfg_addr)); 
+      run.set_arg(COMPRESSION_FLAGS_ID, static_cast<uint32_t>(options.compression_flags));
+      run.set_arg(STREAM_FLAGS_ID, static_cast<uint32_t>(options.stream_flags)); 
+      run.set_arg(ADDR_0_ID, static_cast<uint64_t>(options.addr_0->address()));
+      run.set_arg(ADDR_2_ID, static_cast<uint64_t>(options.addr_2->address()));
+      break;
+    case ACCL::operation::gather:
+      run.set_arg(SCENARIO_ID, static_cast<uint32_t>(options.scenario));
+      run.set_arg(COUNT_ID, static_cast<uint32_t>(options.count));
+      run.set_arg(COMM_ID, static_cast<uint32_t>(options.comm));
+      run.set_arg(ROOT_SRC_DST_ID, static_cast<uint32_t>(options.root_src_dst));
+      run.set_arg(ARITHCFG_ADDR_ID, static_cast<uint32_t>(options.arithcfg_addr));
+      run.set_arg(COMPRESSION_FLAGS_ID, static_cast<uint32_t>(options.compression_flags));
+      run.set_arg(STREAM_FLAGS_ID, static_cast<uint32_t>(options.stream_flags)); 
+      run.set_arg(ADDR_0_ID, static_cast<uint64_t>(options.addr_0->address()));
+      run.set_arg(ADDR_2_ID, static_cast<uint64_t>(options.addr_2->address()));
+      break;
+    case ACCL::operation::reduce:
+      run.set_arg(SCENARIO_ID, static_cast<uint32_t>(options.scenario));
+      run.set_arg(COUNT_ID, static_cast<uint32_t>(options.count));
+      run.set_arg(COMM_ID, static_cast<uint32_t>(options.comm));
+      run.set_arg(ROOT_SRC_DST_ID, static_cast<uint32_t>(options.root_src_dst));
+      run.set_arg(FUNCTION_ID, static_cast<uint32_t>(function));
+      run.set_arg(ARITHCFG_ADDR_ID, static_cast<uint32_t>(options.arithcfg_addr));
+      run.set_arg(COMPRESSION_FLAGS_ID, static_cast<uint32_t>(options.compression_flags));
+      run.set_arg(STREAM_FLAGS_ID, static_cast<uint32_t>(options.stream_flags));
+      run.set_arg(ADDR_0_ID, static_cast<uint64_t>(options.addr_0->address()));
+      run.set_arg(ADDR_2_ID, static_cast<uint64_t>(options.addr_2->address()));
+      break;
+    case ACCL::operation::allgather:
+      run.set_arg(SCENARIO_ID, static_cast<uint32_t>(options.scenario));
+      run.set_arg(COUNT_ID, static_cast<uint32_t>(options.count));
+      run.set_arg(COMM_ID, static_cast<uint32_t>(options.comm));
+      run.set_arg(ARITHCFG_ADDR_ID, static_cast<uint32_t>(options.arithcfg_addr));
+      run.set_arg(COMPRESSION_FLAGS_ID, static_cast<uint32_t>(options.compression_flags));
+      run.set_arg(STREAM_FLAGS_ID, static_cast<uint32_t>(options.stream_flags));
+      run.set_arg(ADDR_0_ID, static_cast<uint64_t>(options.addr_0->address()));
+      run.set_arg(ADDR_2_ID, static_cast<uint64_t>(options.addr_2->address()));
+      break;
+    case ACCL::operation::reduce_scatter:
+      run.set_arg(SCENARIO_ID, static_cast<uint32_t>(options.scenario));
+      run.set_arg(COUNT_ID, static_cast<uint32_t>(options.count));
+      run.set_arg(COMM_ID, static_cast<uint32_t>(options.comm));
+      run.set_arg(FUNCTION_ID, static_cast<uint32_t>(function));
+      run.set_arg(ARITHCFG_ADDR_ID, static_cast<uint32_t>(options.arithcfg_addr)); 
+      run.set_arg(COMPRESSION_FLAGS_ID, static_cast<uint32_t>(options.compression_flags));
+      run.set_arg(STREAM_FLAGS_ID, static_cast<uint32_t>(options.stream_flags)); 
+      run.set_arg(ADDR_0_ID, static_cast<uint64_t>(options.addr_0->address()));
+      run.set_arg(ADDR_2_ID, static_cast<uint64_t>(options.addr_2->address()));
+      break;
+    case ACCL::operation::allreduce:
+      run.set_arg(SCENARIO_ID, static_cast<uint32_t>(options.scenario));
+      run.set_arg(COUNT_ID, static_cast<uint32_t>(options.count));
+      run.set_arg(COMM_ID, static_cast<uint32_t>(options.comm));
+      run.set_arg(FUNCTION_ID, static_cast<uint32_t>(function));
+      run.set_arg(ARITHCFG_ADDR_ID, static_cast<uint32_t>(options.arithcfg_addr));
+      run.set_arg(COMPRESSION_FLAGS_ID, static_cast<uint32_t>(options.compression_flags));
+      run.set_arg(STREAM_FLAGS_ID, static_cast<uint32_t>(options.stream_flags));
+      run.set_arg(ADDR_0_ID, static_cast<uint64_t>(options.addr_0->address()));
+      run.set_arg(ADDR_2_ID, static_cast<uint64_t>(options.addr_2->address()));
+      break;
+    case ACCL::operation::barrier:
+      run.set_arg(SCENARIO_ID, static_cast<uint32_t>(options.scenario));
+      run.set_arg(COMM_ID, static_cast<uint32_t>(options.comm));
+      run.set_arg(ARITHCFG_ADDR_ID, static_cast<uint32_t>(options.arithcfg_addr));
+      run.set_arg(ADDR_0_ID, static_cast<uint64_t>(options.addr_0->address()));
+      break;
+    case ACCL::operation::alltoall:
+      run.set_arg(SCENARIO_ID, static_cast<uint32_t>(options.scenario));
+      run.set_arg(COUNT_ID, static_cast<uint32_t>(options.count));
+      run.set_arg(COMM_ID, static_cast<uint32_t>(options.comm));
+      run.set_arg(ARITHCFG_ADDR_ID, static_cast<uint32_t>(options.arithcfg_addr));
+      run.set_arg(COMPRESSION_FLAGS_ID, static_cast<uint32_t>(options.compression_flags));
+      run.set_arg(STREAM_FLAGS_ID, static_cast<uint32_t>(options.stream_flags));
+      run.set_arg(ADDR_0_ID, static_cast<uint64_t>(options.addr_0->address()));
+      run.set_arg(ADDR_2_ID, static_cast<uint64_t>(options.addr_2->address()));
+      break;
+    case ACCL::operation::config:
+      run.set_arg(SCENARIO_ID, static_cast<uint32_t>(options.scenario));
+      run.set_arg(FUNCTION_ID, static_cast<uint32_t>(function));
+      break;
+    case ACCL::operation::nop:
+      break;
+  }
   auto f = std::async(std::launch::async, finish_fpga_request, this);
 
   run.start();  
