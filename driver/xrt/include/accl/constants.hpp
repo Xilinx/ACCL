@@ -153,6 +153,24 @@ namespace CCLO_ADDR {
   constexpr auto const NUM_EGR_RX_BUFS_OFFSET = 0x0;
 }
 
+/**
+ * IDs for XRT argument passing
+*/
+namespace XRT_ARG_ID {
+  constexpr auto const SCENARIO_ID = 0;
+  constexpr auto const COUNT_ID = 1;
+  constexpr auto const COMM_ID = 2;
+  constexpr auto const ROOT_SRC_DST_ID = 3;
+  constexpr auto const FUNCTION_ID = 4;
+  constexpr auto const TAG_ID = 5;
+  constexpr auto const ARITHCFG_ADDR_ID = 6;
+  constexpr auto const COMPRESSION_FLAGS_ID = 7;
+  constexpr auto const STREAM_FLAGS_ID = 8;
+  constexpr auto const ADDR_0_ID = 9;
+  constexpr auto const ADDR_1_ID = 10;
+  constexpr auto const ADDR_2_ID = 11;
+}
+
 
 /**
  * Configuration functions
