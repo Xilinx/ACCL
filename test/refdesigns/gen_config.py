@@ -134,9 +134,8 @@ for i in range(num_cclo):
         slr_constraints += "slr=hostctrl_{inst_nr}_{dp_nr}:SLR{slr_nr}\n".format(inst_nr=i, dp_nr=j, slr_nr=target_slr)
     if args.axis3x:
         slr_constraints += "slr=poe_{inst_nr}:SLR{slr_nr}\n".format(inst_nr=i, slr_nr=target_slr)
-    elif args.poe == "tcp":
+    else:
         slr_constraints += "slr=poe_0:SLR{slr_nr}\n".format(slr_nr=gt_slr)
-        slr_constraints += "slr=session_handler_0:SLR{slr_nr}\n".format(slr_nr=gt_slr)
     if args.probe and i == 0:
         slr_constraints += "slr=probe_{inst_nr}:SLR{slr_nr}\n".format(inst_nr=i, slr_nr=target_slr)
     if not args.vadd:
@@ -148,6 +147,7 @@ for i in range(num_cclo):
             slr_constraints += "slr=extdma_{inst_nr}_{dp_nr}:SLR{slr_nr}\n".format(inst_nr=i, dp_nr=j, slr_nr=target_slr)
 
 if args.poe == "tcp":
+    slr_constraints += "slr=session_handler_0:SLR{slr_nr}\n".format(slr_nr=gt_slr)
     slr_constraints += "slr=lb_udp_txrx:SLR{slr_nr}\nslr=lb_udp_meta:SLR{slr_nr}\n".format(slr_nr=gt_slr)
 
 # Memory bank assignment
