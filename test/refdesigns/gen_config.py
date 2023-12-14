@@ -119,6 +119,8 @@ else:
 # Kernels Foorplaning
 num_slr = 4 if args.board == "u250" else 2 if args.board == "u50" else 3
 gt_slr = 1 if args.board == "u50" or args.board == "u55c" else 2
+poe_slr = 3 if args.board == "u250" else gt_slr
+cclo_slr = gt_slr if args.board == "u250" else gt_slr-1
 
 if not args.axis3x and not args.hwemu:
     slr_constraints = "slr=cmac:SLR{slr_nr}\n".format(slr_nr=gt_slr)
@@ -126,7 +128,7 @@ else:
     slr_constraints = ""
 
 for i in range(num_cclo):
-    target_slr = min(i,num_slr-1) if args.axis3x else gt_slr-1
+    target_slr = min(i,num_slr-1) if args.axis3x else cclo_slr
     slr_constraints += "slr=arb_{inst_nr}:SLR{slr_nr}\nslr=arith_{inst_nr}:SLR{slr_nr}\nslr=ccl_offload_{inst_nr}:SLR{slr_nr}\n".format(inst_nr=i, slr_nr=target_slr)
     for j in range(3):
         slr_constraints += "slr=compression_{inst_nr}_{dp_nr}:SLR{slr_nr}\n".format(inst_nr=i, dp_nr=j, slr_nr=target_slr)
@@ -135,7 +137,7 @@ for i in range(num_cclo):
     if args.axis3x:
         slr_constraints += "slr=poe_{inst_nr}:SLR{slr_nr}\n".format(inst_nr=i, slr_nr=target_slr)
     else:
-        slr_constraints += "slr=poe_0:SLR{slr_nr}\n".format(slr_nr=gt_slr)
+        slr_constraints += "slr=poe_0:SLR{slr_nr}\n".format(slr_nr=poe_slr)
     if args.probe and i == 0:
         slr_constraints += "slr=probe_{inst_nr}:SLR{slr_nr}\n".format(inst_nr=i, slr_nr=target_slr)
     if not args.vadd:
@@ -147,20 +149,22 @@ for i in range(num_cclo):
             slr_constraints += "slr=extdma_{inst_nr}_{dp_nr}:SLR{slr_nr}\n".format(inst_nr=i, dp_nr=j, slr_nr=target_slr)
 
 if args.poe == "tcp":
-    slr_constraints += "slr=session_handler_0:SLR{slr_nr}\n".format(slr_nr=gt_slr)
-    slr_constraints += "slr=lb_udp_txrx:SLR{slr_nr}\nslr=lb_udp_meta:SLR{slr_nr}\n".format(slr_nr=gt_slr)
+    slr_constraints += "slr=session_handler_0:SLR{slr_nr}\n".format(slr_nr=poe_slr)
+    slr_constraints += "slr=lb_udp_txrx:SLR{slr_nr}\nslr=lb_udp_meta:SLR{slr_nr}\n".format(slr_nr=poe_slr)
 
 # Memory bank assignment
 mem_type = "DDR" if args.board == "u250" or args.board == "u200" else "HBM"
+poe_ddr_bank = 3 if args.board == "u200" else poe_slr
+cclo_ddr_bank = cclo_slr
 
 if args.probe:
-    mem_constraints = "sp=probe_0.m_axi_mem:{mtype}[{midx}]\n".format(mtype=mem_type, midx=gt_slr-1)
+    mem_constraints = "sp=probe_0.m_axi_mem:{mtype}[{midx}]\n".format(mtype=mem_type, midx=cclo_slr)
 else:
     mem_constraints = ""
 bank_ctr = 0
 for i in range(num_cclo):
     if mem_type == "DDR":
-        target_bank = i if args.axis3x else gt_slr-1
+        target_bank = i if args.axis3x else cclo_slr
         if args.host:
             mem_constraints += "sp=extdma_{inst_nr}_0.m_axi_0:DDR[{start_bank}]\n".format(inst_nr=i, start_bank=target_bank)
             mem_constraints += "sp=extdma_{inst_nr}_0.m_axi_1:HOST[0]\n".format(inst_nr=i)
@@ -180,7 +184,7 @@ for i in range(num_cclo):
             mem_constraints += "sp=ccl_offload_{inst_nr}.m_axi_1:HBM[{start_bank}:{end_bank}]\n".format(inst_nr=i, start_bank=bank_ctr, end_bank=bank_ctr+5)
         bank_ctr += 6
     if args.poe == "tcp":
-        poe_bank = bank_ctr if mem_type == "HBM" else 3 if args.board == "u200" else gt_slr
+        poe_bank = bank_ctr if mem_type == "HBM" else poe_ddr_bank
         mem_constraints += "sp=poe_{inst_nr}.m00_axi:{mtype}[{start_bank}]\n".format(inst_nr=i, mtype=mem_type, start_bank=poe_bank)
         mem_constraints += "sp=poe_{inst_nr}.m01_axi:{mtype}[{start_bank}]\n".format(inst_nr=i, mtype=mem_type, start_bank=poe_bank)
         bank_ctr += 1 if mem_type == "HBM" else 0
