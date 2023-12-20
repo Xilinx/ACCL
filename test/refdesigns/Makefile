@@ -65,6 +65,10 @@ LOOPBACK_XO=../../kernels/plugins/loopback/loopback.xo
 TCP_SESS_XO=../../kernels/plugins/tcp_session_handler/tcp_session_handler.xo
 VADD_XO=../../kernels/plugins/vadd_put/vadd_put.xo
 
+HWEMU_MST_XO=$$XILINX_VITIS/data/emulation/XO/sim_ipc_axis_master_512.xo
+HWEMU_SLV_XO=$$XILINX_VITIS/data/emulation/XO/sim_ipc_axis_slave_512.xo
+HWEMU_XO = $(HWEMU_MST_XO) $(HWEMU_SLV_XO)
+
 ARITHMETIC_XO = $(SUM_XO) $(COMPRESSION_XO)
 
 ifeq (all,$(PROFILE))
@@ -122,6 +126,9 @@ endif
 ifeq (hw_emu, $(VPP_TARGET))
 	VPP_CONFIG += -g
 	GEN_CONFIG_FLAGS += --hwemu
+	ifneq (axis3x, $(MODE))
+		OTHER_XO += $(HWEMU_XO)
+	endif
 endif
 
 ifeq (probe, $(DEBUG))
