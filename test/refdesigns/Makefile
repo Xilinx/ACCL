@@ -161,8 +161,11 @@ ifeq (udp,$(MODE))
 	ifeq (u280,$(findstring u280, $(PLATFORM)))
 		HLS_IP_FOLDER  = $(shell readlink -f ./$(NETLAYERHLS)/synthesis_results_HBM)
 	endif
-	NET_XO = $(UDP_XO) $(CMAC_UDP_XO)
-	ADV_CMD += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/$(VNX)/Ethernet/post_sys_link.tcl
+	NET_XO = $(UDP_XO)
+	ifneq (hw_emu, $(VPP_TARGET))
+		NET_XO += $(CMAC_UDP_XO)
+		ADV_CMD += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/$(VNX)/Ethernet/post_sys_link.tcl
+	endif
 	IPREPO_CMD += --user_ip_repo_paths $(HLS_IP_FOLDER)
 	CCLO_STACK_TYPE = UDP
 else ifeq (axis3x,$(MODE))
@@ -174,14 +177,19 @@ else ifeq (axis3x,$(MODE))
 else ifeq (tcp, $(MODE))
 	CMAC_TCP_XO=Vitis_with_100Gbps_TCP-IP/_x.hw.$(XSA)/cmac_krnl.xo
 	NET_XO = $(TCP_XO)
-	NET_XO += $(CMAC_TCP_XO)
-	ADV_CMD += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/Vitis_with_100Gbps_TCP-IP/scripts/post_sys_link.tcl
+	ifneq (hw_emu, $(VPP_TARGET))
+		NET_XO += $(CMAC_TCP_XO)
+		ADV_CMD += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/Vitis_with_100Gbps_TCP-IP/scripts/post_sys_link.tcl
+	endif
 	OTHER_XO += $(LOOPBACK_XO) $(TCP_SESS_XO)
 	IPREPO_CMD += --user_ip_repo_paths Vitis_with_100Gbps_TCP-IP/build/fpga-network-stack/iprepo
 	CCLO_STACK_TYPE = TCP
 else ifeq (roce, $(MODE))
-	NET_XO = $(ROCE_XO) $(CMAC_UDP_XO)
-	ADV_CMD += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/$(VNX)/Ethernet/post_sys_link.tcl
+	NET_XO = $(ROCE_XO)
+	ifneq (hw_emu, $(VPP_TARGET))
+		NET_XO += $(CMAC_UDP_XO)
+		ADV_CMD += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/$(VNX)/Ethernet/post_sys_link.tcl
+	endif
 	CCLO_STACK_TYPE = UDP
 else ifeq (coyote_tcp, $(MODE))
 	OTHER_XO = coyote_shell
