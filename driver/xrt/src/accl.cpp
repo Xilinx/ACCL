@@ -80,10 +80,8 @@ ACCL::~ACCL() {
   delete cclo;
 }
 
-void ACCL::deinit() {
-  debug("Removing CCLO object at " + debug_hex(cclo->get_base_addr()));
-
-  cclo->printDebug();
+void ACCL::soft_reset() {
+  debug("Doing a soft reset");
 
   CCLO::Options options{};
   options.scenario = operation::config;
@@ -91,9 +89,17 @@ void ACCL::deinit() {
   ACCLRequest *handle = call_async(options);
   std::chrono::milliseconds timeout(100);
   if(!wait(handle, timeout)){
-    throw std::runtime_error("CCLO failed to reset");
+    throw std::runtime_error("CCLO failed to soft reset");
   }
   check_return_value("reset_periph", handle);
+}
+
+void ACCL::deinit() {
+  debug("Removing CCLO object at " + debug_hex(cclo->get_base_addr()));
+
+  cclo->printDebug();
+
+  soft_reset();
 
   for (auto &buf : eager_rx_buffers) {
     buf->free_buffer();
@@ -1149,6 +1155,8 @@ void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
 
   parse_hwid();
 
+  soft_reset();
+
   if (cclo->read(CCLO_ADDR::CFGRDY_OFFSET) != 0) {
     throw std::runtime_error("CCLO appears configured, might be in use. Please "
                              "reset the CCLO and retry");
@@ -1172,7 +1180,6 @@ void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
   // Mark CCLO as configured
   debug("CCLO configured");
   cclo->write(CCLO_ADDR::CFGRDY_OFFSET, 1);
-  config_rdy = true;
 
   debug("Set timeout");
   set_timeout(1000000);
@@ -1186,6 +1193,8 @@ void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
   options.scenario = operation::config;
   options.cfg_function = cfgFunc::enable_pkt;
   call_sync(options);
+
+  config_rdy = true;
 
   debug("Accelerator ready!");
 }
@@ -1454,7 +1463,7 @@ void ACCL::free_request(ACCLRequest *request) {
 }
 
 ACCLRequest *ACCL::call_async(CCLO::Options &options) {
-  if (!config_rdy) {
+  if (!config_rdy && options.scenario != operation::config) {
     throw std::runtime_error("CCLO not configured, cannot call");
   }
 
@@ -1464,7 +1473,7 @@ ACCLRequest *ACCL::call_async(CCLO::Options &options) {
 }
 
 ACCLRequest *ACCL::call_sync(CCLO::Options &options) {
-  if (!config_rdy) {
+  if (!config_rdy && options.scenario != operation::config) {
     throw std::runtime_error("CCLO not configured, cannot call");
   }
 
