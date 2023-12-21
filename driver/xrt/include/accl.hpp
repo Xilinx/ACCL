@@ -114,6 +114,11 @@ public:
   ~ACCL();
 
   /**
+   * Performs a soft reset of the CCLO.
+  */
+  void reset();
+
+  /**
    * Deinitializes the CCLO.
    *
    */
