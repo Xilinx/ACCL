@@ -116,7 +116,7 @@ public:
   /**
    * Performs a soft reset of the CCLO.
   */
-  void reset();
+  void soft_reset();
 
   /**
    * Deinitializes the CCLO.

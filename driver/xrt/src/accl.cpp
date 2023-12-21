@@ -80,8 +80,8 @@ ACCL::~ACCL() {
   delete cclo;
 }
 
-void ACCL::reset() {
-  debug("Doing a reset");
+void ACCL::soft_reset() {
+  debug("Doing a soft reset");
 
   CCLO::Options options{};
   options.scenario = operation::config;
@@ -89,7 +89,7 @@ void ACCL::reset() {
   ACCLRequest *handle = call_async(options);
   std::chrono::milliseconds timeout(100);
   if(!wait(handle, timeout)){
-    throw std::runtime_error("CCLO failed to reset");
+    throw std::runtime_error("CCLO failed to soft reset");
   }
   check_return_value("reset_periph", handle);
 }
@@ -99,7 +99,7 @@ void ACCL::deinit() {
 
   cclo->printDebug();
 
-  reset();
+  soft_reset();
 
   for (auto &buf : eager_rx_buffers) {
     buf->free_buffer();
@@ -1155,7 +1155,7 @@ void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
 
   parse_hwid();
 
-  reset();
+  soft_reset();
 
   if (cclo->read(CCLO_ADDR::CFGRDY_OFFSET) != 0) {
     throw std::runtime_error("CCLO appears configured, might be in use. Please "
