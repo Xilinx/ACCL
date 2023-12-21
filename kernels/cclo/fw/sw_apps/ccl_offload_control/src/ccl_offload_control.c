@@ -2238,13 +2238,24 @@ void init(void) {
     SET(GPIO_DATA_REG, GPIO_SWRST_MASK);
     //mark init done
     SET(GPIO_DATA_REG, GPIO_READY_MASK);
+    //mark communicator not cached
+    comm_cached = false;
+    new_call = true;
+    flush_retries = false;
 }
 
-//reset the control module
-//since this cancels any dma movement in flight and
-//clears the queues it's necessary to reset the dma tag and dma_tag_lookup
+//reset the control module and flush any pending operations
 void encore_soft_reset(void){
-    //1. activate reset pin
+    //1. drop all calls in retry queue
+    while(tngetd(STS_CALL_RETRY) == 0){
+        int i;
+        for(i=0; i<16; i++){
+            getd(STS_CALL_RETRY);
+        }
+        Xil_Out32(RETVAL_OFFSET, NOT_READY_ERROR);
+        putd(STS_CALL, NOT_READY_ERROR);
+    }
+    //2. activate reset pin
     CLR(GPIO_DATA_REG, GPIO_SWRST_MASK);
 }
 
