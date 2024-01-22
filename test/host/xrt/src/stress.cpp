@@ -109,7 +109,27 @@ options_t parse_options(int argc, char *argv[]) {
   return opts;
 }
 
+void accl_sa_handler(int)
+{
+	static bool once = true;
+	if(once) {
+		accl.reset();
+		std::cout << "Error! Signal received. Finalizing MPI..." << std::endl;
+		MPI_Finalize();
+		std::cout << "Done. Terminating..." << std::endl;
+		once = false;
+	}
+	exit(EXIT_FAILURE);
+}
+
 int main(int argc, char *argv[]) {
+
+  struct sigaction sa;
+  memset( &sa, 0, sizeof(sa) );
+  sa.sa_handler = accl_sa_handler;
+  sigfillset(&sa.sa_mask);
+  sigaction(SIGINT,&sa,NULL);
+	sigaction(SIGSEGV, &sa, NULL);
 
   MPI_Init(&argc, &argv);
 

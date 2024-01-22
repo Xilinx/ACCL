@@ -124,6 +124,14 @@ public:
    */
   void deinit();
 
+
+  /**
+   * Initializes ACCL 
+  */
+  void initialize(const std::vector<rank_t> &ranks, int local_rank,
+                  int n_egr_rx_bufs, addr_t egr_rx_buf_size, 
+                  addr_t max_egr_size, addr_t max_rndzv_size);
+
   /**
    * Get the return code of the last ACCL call.
    *

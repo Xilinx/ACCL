@@ -27,6 +27,7 @@
 #include <fstream>
 #include <arpa/inet.h>
 #include <string>
+#include <signal.h>
 
 using namespace ACCL;
 
@@ -1027,6 +1028,8 @@ void test_allreduce(ACCL::ACCL &accl, options_t &options,
 
 }
 
+std::unique_ptr<::ACCL::ACCL> accl;
+
 void test_accl_base(options_t options)
 {
 	std::cout << "Testing ACCL base functionality..." << std::endl;
@@ -1106,11 +1109,14 @@ void test_accl_base(options_t options)
 			accl = std::make_unique<ACCL::ACCL>(device,
 				ranks, mpi_rank,
 				mpi_size+2, options.rxbuf_size, options.seg_size, 4096*1024*2);
+			accl.get()->initialize(ranks, mpi_rank,
+				mpi_size+2, options.rxbuf_size, options.seg_size, 4096*1024*2);
 		} else if (options.protoc == 1){
 			std::cout<<"Rendezvous Protocol"<<std::endl;
 			accl = std::make_unique<ACCL::ACCL>(device,
 				ranks, mpi_rank,
 				mpi_size, 64, 64, options.seg_size);
+			accl.get()->initialize(ranks, mpi_rank, mpi_size, 64, 64, options.seg_size);
 		}  
 
 		debug(accl->dump_communicator());
@@ -1233,10 +1239,29 @@ struct aligned_allocator {
   }
 };
 
+void accl_sa_handler(int)
+{
+	static bool once = true;
+	if(once) {
+		accl.reset();
+		std::cout << "Error! Signal received. Finalizing MPI..." << std::endl;
+		MPI_Finalize();
+		std::cout << "Done. Terminating..." << std::endl;
+		once = false;
+	}
+	exit(EXIT_FAILURE);
+}
 
 int main(int argc, char *argv[])
 {
-	std::cout << "Argumnents: ";
+	struct sigaction sa;
+    memset( &sa, 0, sizeof(sa) );
+    sa.sa_handler = accl_sa_handler;
+    sigfillset(&sa.sa_mask);
+    sigaction(SIGINT,&sa,NULL);
+	sigaction(SIGSEGV, &sa, NULL);
+
+	std::cout << "Arguments: ";
 	for (int i = 0; i < argc; i++) std::cout << "'" << argv[i] << "' "; std::cout << std::endl;
 	std::cout << "Running ACCL test in coyote..." << std::endl;
 	std::cout << "Initializing MPI..." << std::endl;

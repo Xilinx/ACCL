@@ -36,7 +36,6 @@ ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
     : arith_config(arith_config), sim_mode(false),
       _devicemem(devicemem), rxbufmem(rxbufmem) {
   cclo = new FPGADevice(cclo_ip, hostctrl_ip, device);
-  initialize_accl(ranks, local_rank, n_egr_rx_bufs, egr_rx_buf_size, max_egr_size, max_rndzv_size);
 }
 
 // Simulation constructor
@@ -47,8 +46,6 @@ ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
     : arith_config(arith_config), sim_mode(true),
       _devicemem(0), rxbufmem({}) {
   cclo = new SimDevice(sim_start_port, local_rank);
-  debug("initialize_accl");
-  initialize_accl(ranks, local_rank, n_egr_rx_bufs, egr_rx_buf_size, max_egr_size, max_rndzv_size);
 }
 
 ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
@@ -59,7 +56,6 @@ ACCL::ACCL(const std::vector<rank_t> &ranks, int local_rank,
     : arith_config(arith_config), sim_mode(true),
       _devicemem(0), rxbufmem({}) {
   cclo = new SimDevice(sim_start_port, local_rank);
-  initialize_accl(ranks, local_rank, n_egr_rx_bufs, egr_rx_buf_size, max_egr_size, max_rndzv_size);
 }
 
 // constructor for coyote fpga device
@@ -68,12 +64,7 @@ ACCL::ACCL(CoyoteDevice *dev, const std::vector<rank_t> &ranks, int local_rank,
         addr_t max_egr_size, addr_t max_rndzv_size,
         const arithConfigMap &arith_config)
   : arith_config(arith_config), sim_mode(false),
-    _devicemem(0), rxbufmem(0)
-{
-  cclo = dev;
-  initialize_accl(ranks, local_rank, n_egr_rx_bufs, egr_rx_buf_size, max_egr_size, max_rndzv_size);
-  std::cout << "Coyote ACCL initialized!" << std::endl;
-}
+    _devicemem(0), rxbufmem(0), cclo(dev) {}
 
 ACCL::~ACCL() {
   deinit();
@@ -1149,7 +1140,7 @@ void ACCL::parse_hwid(){
   debug("Debug:" + std::string(((hwid >> 6) & 0x1) ? "True" : "False"));
 }
 
-void ACCL::initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
+void ACCL::initialize(const std::vector<rank_t> &ranks, int local_rank,
                            int n_egr_rx_bufs, addr_t egr_rx_buf_size,
                            addr_t max_egr_size, addr_t max_rndzv_size) {
 
