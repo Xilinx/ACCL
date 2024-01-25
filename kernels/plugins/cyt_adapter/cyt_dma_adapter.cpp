@@ -35,8 +35,8 @@ void dm_byp_cmd_converter(hls::stream<ap_axiu<104,0,0,DEST_WIDTH>>& dm_cmd,
 		ap_uint<23> btt = dm_cmd_word(22,0);
 		ap_uint<64> saddr = dm_cmd_word(95,32);
 		ap_uint<3> tag = dm_cmd_with_dest.dest(2,0); // dest field encodes the host stream/fpga stream information
-
-		cyt_req_t req(0, 0, 0, DMA_CHANNEL, 0, 1, 0, tag, btt, saddr);
+		ap_uint<1> ctl = dm_cmd_word(30,30); // ctl field determines if a TLAST must be asserted at the end of the data stream
+		cyt_req_t req(0, 0, 0, DMA_CHANNEL, 0, ctl, 0, tag, btt, saddr);
 
 		STREAM_WRITE(byp_cmd, req);
 	}

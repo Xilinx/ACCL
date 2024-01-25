@@ -217,6 +217,7 @@ void dma_cmd_execute(
     ap_uint<4> tag;
     ap_uint<32> ncommands;
     unsigned int btt;
+    bool eof;
     ap_axiu<104,0,0,DEST_WIDTH> dma_cmd_word;
     axi::Command<64, 23> dma_cmd;
     datamover_instruction instr;
@@ -230,7 +231,9 @@ void dma_cmd_execute(
             tag = 0;
             while(instr.total_bytes > 0){
                 btt = (instr.total_bytes > DMA_MAX_BTT) ? DMA_MAX_BTT : instr.total_bytes;
+                eof = (instr.total_bytes > DMA_MAX_BTT) ? false : true; 
                 dma_cmd.length = btt;
+                dma_cmd.eof = eof;
                 dma_cmd.address = instr.addr;
                 dma_cmd.tag = tag;
                 dma_cmd_word.data = dma_cmd;
@@ -239,6 +242,7 @@ void dma_cmd_execute(
                 STREAM_WRITE(dma_cmd_channel, dma_cmd_word);
                 //update state
                 instr.total_bytes -= btt;
+                instr.addr += btt;
                 tag++;
                 ack_instr.ncommands++;
             }
@@ -257,16 +261,11 @@ void dma_ack_execute(
     ap_uint<32> ret = NO_ERROR;
     datamover_ack_instruction instr;
     axi::Status status;
-    unsigned int tag;
     if(!STREAM_IS_EMPTY(instruction)){
         do{
             instr = STREAM_READ(instruction);
-            tag = 0;
             while(instr.ncommands > 0){
                 status = axi::Status(STREAM_READ(dma_sts_channel));
-                if(status.tag != tag) {
-                    // ret = ret | DMA_TAG_MISMATCH_ERROR; // TODO: Coyote Sts Tag contains the dest, not always 0
-                }
                 if(status.internalError) {
                     ret = ret | DMA_INTERNAL_ERROR;
                 }
@@ -280,7 +279,6 @@ void dma_ack_execute(
                     ret = ret | DMA_NOT_OKAY_ERROR;
                 }
                 instr.ncommands--;
-                tag++;
             }
             STREAM_WRITE(error, ret);
         } while(!instr.last);
