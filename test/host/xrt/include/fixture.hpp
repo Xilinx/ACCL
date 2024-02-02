@@ -121,6 +121,9 @@ class TestEnvironment : public ::testing::Environment {
         delete probe;
       }
       accl.reset();
+      std::cout << "Error! Signal received. Finalizing MPI..." << std::endl;
+		  MPI_Finalize();
+		  std::cout << "Done. Terminating..." << std::endl;
     }
 };
 

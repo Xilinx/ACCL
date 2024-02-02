@@ -278,7 +278,6 @@ void CoyoteRequest::wait_kernel() {
 CoyoteDevice::CoyoteDevice(): num_qp(0) {
   this->coyote_proc = new fpga::cProcess(targetRegion, getpid());
 	std::cerr << "ACLL DEBUG: aquiring cProc: targetRegion: " << targetRegion << ", cPid: " << coyote_proc->getCpid() << std::endl;
-  coyote_all_cprocs.push_back(std::shared_ptr<fpga::cProcess>(this->coyote_proc));
 }
 
 CoyoteDevice::CoyoteDevice(unsigned int num_qp): num_qp(num_qp) {
@@ -287,7 +286,6 @@ CoyoteDevice::CoyoteDevice(unsigned int num_qp): num_qp(num_qp) {
   {
     fpga::cProcess* cproc = new fpga::cProcess(targetRegion, getpid());
     coyote_qProc_vec.push_back(cproc);
-    coyote_all_cprocs.push_back(std::shared_ptr<fpga::cProcess>(cproc));
   }
 
   for (unsigned int i=0; i<coyote_qProc_vec.size(); i++){
@@ -301,11 +299,12 @@ CoyoteDevice::CoyoteDevice(unsigned int num_qp): num_qp(num_qp) {
 
   if(coyote_proc == NULL || coyote_proc->getCpid() != 0){
     std::cerr << "cProc initialization error!"<<std::endl;
-  for(unsigned int i = 0; i < coyote_all_cprocs.size(); i++) {
-      if(coyote_all_cprocs[i] != nullptr) {
-        coyote_all_cprocs[i].reset();
+    for(unsigned int i = 0; i < coyote_qProc_vec.size(); i++) {
+      if(coyote_qProc_vec[i] != nullptr) {
+        delete coyote_qProc_vec[i];
       }
     }
+    delete this->coyote_proc;
   }
 
   for (unsigned int i=0; i<coyote_qProc_vec.size(); i++){
@@ -315,11 +314,12 @@ CoyoteDevice::CoyoteDevice(unsigned int num_qp): num_qp(num_qp) {
 }
 
 CoyoteDevice::~CoyoteDevice() {
-  for(unsigned int i = 0; i < coyote_all_cprocs.size(); i++) {
-    if(coyote_all_cprocs[i] != nullptr) {
-      coyote_all_cprocs[i].reset();
+  for(unsigned int i = 0; i < coyote_qProc_vec.size(); i++) {
+    if(coyote_qProc_vec[i] != nullptr) {
+      delete coyote_qProc_vec[i];
     }
   }
+  delete this->coyote_proc;
 }
 
 

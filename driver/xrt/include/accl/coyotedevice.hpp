@@ -127,7 +127,6 @@ public:
   // The CCLO kernel is still managed by coyote_proc
   unsigned int num_qp;
   std::vector<fpga::cProcess*> coyote_qProc_vec;
-  std::vector<std::shared_ptr<fpga::cProcess>> coyote_all_cprocs;
 private:
   const size_t OFFSET_CCLO = 0x0; 
 

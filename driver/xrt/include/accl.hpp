@@ -1142,10 +1142,6 @@ private:
                  dataType data_type, bool run_async,
                  std::vector<ACCLRequest *> waitfor);
 
-  void initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
-                           int n_egr_rx_bufs, addr_t egr_rx_buf_size, 
-                           addr_t max_egr_size, addr_t max_rndzv_size);
-
   void configure_arithmetic();
 
   void setup_eager_rx_buffers(size_t n_egr_rx_bufs, addr_t egr_rx_buf_size,
