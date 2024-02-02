@@ -1455,7 +1455,7 @@ void ACCL::free_request(ACCLRequest *request) {
 
 ACCLRequest *ACCL::call_async(CCLO::Options &options) {
   if (!config_rdy && options.scenario != operation::config) {
-    throw std::runtime_error("CCLO not configured, cannot call");
+    throw std::runtime_error("CCLO not configured, cannot call. Please make sure that you are invoking initialize().");
   }
 
   prepare_call(options);
@@ -1465,7 +1465,7 @@ ACCLRequest *ACCL::call_async(CCLO::Options &options) {
 
 ACCLRequest *ACCL::call_sync(CCLO::Options &options) {
   if (!config_rdy && options.scenario != operation::config) {
-    throw std::runtime_error("CCLO not configured, cannot call");
+    throw std::runtime_error("CCLO not configured, cannot call. Please make sure that you are invoking initialize().");
   }
 
   prepare_call(options);
