@@ -120,7 +120,6 @@ options_t parse_options(int argc, char *argv[]) {
 }
 
 int main(int argc, char *argv[]) {
-
   MPI_Init(&argc, &argv);
 
   MPI_Comm_rank(MPI_COMM_WORLD, &::rank);
