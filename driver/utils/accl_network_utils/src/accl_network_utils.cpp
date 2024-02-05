@@ -357,8 +357,7 @@ initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
   }
 
   if (simulator) {
-    accl = std::make_unique<ACCL::ACCL>(ranks, local_rank, ranks[0].port, 
-                                        device, nbufs, bufsize, segsize);
+    accl = std::make_unique<ACCL::ACCL>(ranks[0].port, local_rank);
   } else {
     int devicemem;
     std::vector<int> rxbufmem;
@@ -423,11 +422,9 @@ initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
       configure_roce(cmac, hivenet, ranks, local_rank, rsfec);
     }
 
-    accl = std::make_unique<ACCL::ACCL>(ranks, local_rank, device, cclo_ip,
-                                        hostctrl_ip, devicemem, rxbufmem,
-                                        nbufs, bufsize, segsize);
+    accl = std::make_unique<ACCL::ACCL>(device, cclo_ip, hostctrl_ip, devicemem, rxbufmem);
   }
-
+  accl.get()->initialize(ranks, local_rank,	nbufs, bufsize, segsize);
   return accl;
 }
 } // namespace accl_network_utils

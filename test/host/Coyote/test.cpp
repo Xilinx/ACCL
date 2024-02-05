@@ -1104,18 +1104,13 @@ void test_accl_base(options_t options)
 
 		MPI_Barrier(MPI_COMM_WORLD);
 
+		accl = std::make_unique<ACCL::ACCL>(device);
 		if (options.protoc == 0){
 			std::cout<<"Eager Protocol"<<std::endl;
-			accl = std::make_unique<ACCL::ACCL>(device,
-				ranks, mpi_rank,
-				mpi_size+2, options.rxbuf_size, options.seg_size, 4096*1024*2);
 			accl.get()->initialize(ranks, mpi_rank,
 				mpi_size+2, options.rxbuf_size, options.seg_size, 4096*1024*2);
 		} else if (options.protoc == 1){
 			std::cout<<"Rendezvous Protocol"<<std::endl;
-			accl = std::make_unique<ACCL::ACCL>(device,
-				ranks, mpi_rank,
-				mpi_size, 64, 64, options.seg_size);
 			accl.get()->initialize(ranks, mpi_rank, mpi_size, 64, 64, options.seg_size);
 		}  
 
