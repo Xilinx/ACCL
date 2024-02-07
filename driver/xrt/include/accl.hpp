@@ -48,63 +48,35 @@ public:
   /**
    * Construct a new ACCL object that talks to hardware.
    *
-   * @param ranks         All ranks on the network
-   * @param local_rank    Rank of this process
    * @param device        FPGA device on which the CCLO lives
    * @param cclo_ip       The CCLO kernel on the FPGA
    * @param hostctrl_ip   The hostctrl kernel on the FPGA
    * @param devicemem     Memory bank of device memory
    * @param rxbufmem      Memory banks of rxbuf memory
-   * @param n_egr_rx_bufs         Amount of buffers to use
-   * @param egr_rx_buf_size       Size of buffers
    * @param arith_config  Arithmetic configuration to use
    */
-  ACCL(const std::vector<rank_t> &ranks, int local_rank, xrt::device &device,
-       xrt::ip &cclo_ip, xrt::kernel &hostctrl_ip, int devicemem,
-       const std::vector<int> &rxbufmem, int n_egr_rx_bufs = 16,
-       addr_t egr_rx_buf_size = 1024, addr_t max_egr_size = 1024, addr_t max_rndzv_size = 32*1024,
+  ACCL(xrt::device &device, xrt::ip &cclo_ip, xrt::kernel &hostctrl_ip, 
+       int devicemem, const std::vector<int> &rxbufmem, 
        const arithConfigMap &arith_config = DEFAULT_ARITH_CONFIG);
 
   /**
    * Construct a new ACCL object that talks to the ACCL emulator/simulator.
    *
-   * @param ranks         All ranks on the network
-   * @param local_rank    Rank of this process
    * @param start_port    First port to use to connect to the ACCL emulator/
    *                      simulator
-   * @param n_egr_rx_bufs         Amount of buffers to use
-   * @param egr_rx_buf_size       Size of buffers
+   * @param local_rank    Rank of this process
    * @param arith_config  Arithmetic configuration to use
    */
-  ACCL(const std::vector<rank_t> &ranks, int local_rank,
-       unsigned int start_port,
-       int n_egr_rx_bufs = 16, addr_t egr_rx_buf_size = 1024,
-       addr_t max_egr_size = 1024, addr_t max_rndzv_size = 32*1024,
+  ACCL(unsigned int start_port, unsigned int local_rank, 
        const arithConfigMap &arith_config = DEFAULT_ARITH_CONFIG);
 
   /**
-   * Construct a new ACCL object that talks to emulator/simulator and is
-   * compatible with the Vitis emulator.
+   * Construct a new ACCL object on Coyote.
    *
-   * @param ranks         All ranks on the network
-   * @param local_rank    Rank of this process
-   * @param start_port    First port to use to connect to the ACCL emulator/
-   *                      simulator
-   * @param device        Simulated FPGA device from the Vitis emulator
-   * @param n_egr_rx_bufs         Amount of buffers to use
-   * @param egr_rx_buf_size       Size of buffers
+   * @param dev           Coyote device object
    * @param arith_config  Arithmetic configuration to use
-
    */
-  ACCL(const std::vector<rank_t> &ranks, int local_rank,
-       unsigned int start_port, xrt::device &device, int n_egr_rx_bufs = 16,
-       addr_t egr_rx_buf_size = 1024, addr_t max_egr_size = 1024, addr_t max_rndzv_size = 32*1024,
-       const arithConfigMap &arith_config = DEFAULT_ARITH_CONFIG);
-
-  // constructor for coyote fpga device
-  ACCL(CoyoteDevice *dev, const std::vector<rank_t> &ranks, int local_rank,
-       int n_egr_rx_bufs = 16, addr_t egr_rx_buf_size = 1024,
-       addr_t max_egr_size = 1024, addr_t max_rndzv_size = 32*1024,
+  ACCL(CoyoteDevice *dev,
        const arithConfigMap &arith_config = DEFAULT_ARITH_CONFIG);
   
   /**
@@ -123,6 +95,14 @@ public:
    *
    */
   void deinit();
+
+
+  /**
+   * Initializes ACCL 
+  */
+  void initialize(const std::vector<rank_t> &ranks, int local_rank,
+                  int n_egr_rx_bufs = 16, addr_t egr_rx_buf_size = 1024, 
+                  addr_t max_egr_size = 1024, addr_t max_rndzv_size = 32*1024);
 
   /**
    * Get the return code of the last ACCL call.
@@ -1127,16 +1107,11 @@ private:
   // memory banks for hardware
   const int _devicemem;
   const std::vector<int> rxbufmem;
-  // xrt::device device;
 
   ACCLRequest *copy(BaseBuffer *srcbuf, BaseBuffer *dstbuf, unsigned int count,
                  bool from_fpga, bool to_fpga, streamFlags stream_flags,
                  dataType data_type, bool run_async,
                  std::vector<ACCLRequest *> waitfor);
-
-  void initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
-                           int n_egr_rx_bufs, addr_t egr_rx_buf_size, 
-                           addr_t max_egr_size, addr_t max_rndzv_size);
 
   void configure_arithmetic();
 
