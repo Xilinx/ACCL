@@ -24,9 +24,6 @@
 [submodule "hlslib"]
 	path = hlslib
 	url = https://github.com/quetric/hlslib.git
-[submodule "test/hardware/HiveNet"]
-	path = test/refdesigns/HiveNet
-	url = https://github.com/quetric/AlveoLink.git
 [submodule "test/model/emulator/hls_sim_headers"]
 	path = test/model/emulator/hls_sim_headers
 	url = https://github.com/quetric/hls_sim_headers.git

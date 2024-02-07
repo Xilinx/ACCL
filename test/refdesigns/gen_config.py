@@ -19,7 +19,7 @@ import argparse
 
 parser = argparse.ArgumentParser(description='Generate ACCL linker config file')
 parser.add_argument('-b', '--board', type=str, choices=['u50', 'u55c', 'u200', 'u250', 'u280'], default="u55c", help="Board name")
-parser.add_argument('-p', '--poe', type=str, choices=['udp', 'tcp', 'roce', 'axis3x'], default="tcp", help="Type of POE")
+parser.add_argument('-p', '--poe', type=str, choices=['udp', 'tcp', 'axis3x'], default="tcp", help="Type of POE")
 parser.add_argument('-o', '--outfile', type=str, default="link_config.ini", help="Name of generated config file")
 parser.add_argument('--ethif', type=int, default=0, choices=[0, 1], help="Which Ethernet port to use, on cards which have two")
 parser.add_argument('--vadd', action='store_true', help="Connect a Vadd kernel to the CCLO(s)")
@@ -31,9 +31,6 @@ args = parser.parse_args()
 
 if args.board == "u50" and args.ethif != 0:
     raise "U50 has a single Ethernet port"
-
-if args.board != "u55c" and args.poe == "roce":
-    raise "ROCE only supported on U55C"
 
 if args.host:
     if args.board == "u280" or args.board == "u50":
@@ -291,12 +288,6 @@ else:
     stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_eth_tx_data:poe_0.inputData:512\n".format(inst_nr=i)
     stream_connections += "stream_connect=poe_0.outData:ccl_offload_{inst_nr}.s_axis_eth_rx_data:512\n".format(inst_nr=i)
 
-#Clock frequency constraints
-roce_clock_constraints = """freqHz=300000000:poe_0.ap_clk_320
-freqHz=150000000:poe_0.ap_clk
-freqHz=100000000:poe_0.ref_clock
-"""
-
 with open(args.outfile, "w") as f:
     f.write("[connectivity]\n")
     f.write(cclo_instantiation+"\n")
@@ -314,7 +305,5 @@ with open(args.outfile, "w") as f:
         f.write(slr_constraints+"\n")
     f.write(mem_constraints+"\n")
     f.write(stream_connections+"\n")
-    if args.poe == "roce":
-        f.write("[clocks]\n")
-        f.write(roce_clock_constraints)
+
 

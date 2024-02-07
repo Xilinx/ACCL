@@ -47,7 +47,7 @@ pid_t start_emulator(options_t opts, unsigned size, unsigned rank) {
     dup2(errfd, STDERR_FILENO);
 
     std::string comm_backend;
-    if(opts.udp || opts.roce){
+    if(opts.udp){
       comm_backend = "udp";
     } else if(opts.tcp || opts.cyt_tcp || opts.axis3){
       comm_backend = "tcp";

@@ -1055,7 +1055,6 @@ options_t parse_options(int argc, char *argv[]) {
                              false);
   TCLAP::SwitchArg udp_arg("u", "udp", "Use UDP hardware setup", cmd, false);
   TCLAP::SwitchArg tcp_arg("t", "tcp", "Use TCP hardware setup", cmd, false);
-  TCLAP::SwitchArg roce_arg("r", "roce", "Use RoCE hardware setup", cmd, false);
   TCLAP::SwitchArg cyt_tcp_arg("", "cyt_tcp", "Use Coyote TCP hardware setup", cmd, false);
   TCLAP::SwitchArg cyt_rdma_arg("", "cyt_rdma", "Use Coyote RDMA hardware setup", cmd, false);
   TCLAP::ValueArg<std::string> xclbin_arg(
@@ -1083,9 +1082,9 @@ options_t parse_options(int argc, char *argv[]) {
   try {
     cmd.parse(argc, argv);
     if (axis3_arg.getValue() + udp_arg.getValue() + tcp_arg.getValue() +
-            roce_arg.getValue() + cyt_rdma_arg.getValue() + cyt_tcp_arg.getValue() != 1) {
+            cyt_rdma_arg.getValue() + cyt_tcp_arg.getValue() != 1) {
       throw std::runtime_error("Specify exactly one network backend out of axis3, "
-                                "tcp, udp, roce, cyt_tcp, or cyt_rdma modes.");
+                                "tcp, udp, cyt_tcp, or cyt_rdma modes.");
     }
   } catch (std::exception &e) {
     if (::rank == 0) {
@@ -1107,7 +1106,6 @@ options_t parse_options(int argc, char *argv[]) {
   opts.axis3 = axis3_arg.getValue();
   opts.udp = udp_arg.getValue();
   opts.tcp = tcp_arg.getValue();
-  opts.roce = roce_arg.getValue();
   opts.cyt_rdma = cyt_rdma_arg.getValue();
   opts.cyt_tcp = cyt_tcp_arg.getValue();
   opts.device_index = device_index_arg.getValue();

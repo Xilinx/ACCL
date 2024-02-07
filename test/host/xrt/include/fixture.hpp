@@ -68,8 +68,6 @@ class TestEnvironment : public ::testing::Environment {
         design = acclDesign::UDP;
       } else if (options.tcp) {
         design = acclDesign::TCP;
-      } else if (options.roce) {
-        design = acclDesign::ROCE;
       }
 
       if (options.hardware || options.test_xrt_simulator) {
