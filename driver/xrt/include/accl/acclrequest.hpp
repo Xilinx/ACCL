@@ -135,7 +135,7 @@ public:
   /**
    * Gets the duration of the operation, in CCLO cycles.
    * 
-   * @return val_t Return code of the operation
+   * @return val_t Duration of the operation
    */
   val_t get_duration() const {
     return duration_ncycles;

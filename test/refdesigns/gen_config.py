@@ -24,7 +24,6 @@ parser.add_argument('-o', '--outfile', type=str, default="link_config.ini", help
 parser.add_argument('--ethif', type=int, default=0, choices=[0, 1], help="Which Ethernet port to use, on cards which have two")
 parser.add_argument('--vadd', action='store_true', help="Connect a Vadd kernel to the CCLO(s)")
 parser.add_argument('--host', action='store_true', help="Connect to host memory - this implies use of CCLO configured for external DMA")
-parser.add_argument('--probe', action='store_true', help="Connect a Probe kernel to the CCLO for benchmarking")
 parser.add_argument('--hwemu', action='store_true', help="Replace CMAC with IPC AXIS Master/Slave for emulation")
 parser.add_argument('--chipscope', action='store_true', help="Add Chipscope debug to CCLO streams")
 args = parser.parse_args()
@@ -88,8 +87,6 @@ for i in range(num_cclo):
     if args.host:
         extdma_instantiation += "extdma_{num_inst}_0.extdma_{num_inst}_1".format(num_inst=i) + endch
 
-probe_instantiation = "nk=call_probe:1:probe_0" if args.probe else ""
-
 if args.axis3x:
     if args.vadd:
         loopback_instantiation = ""
@@ -135,8 +132,6 @@ for i in range(num_cclo):
         slr_constraints += "slr=poe_{inst_nr}:SLR{slr_nr}\n".format(inst_nr=i, slr_nr=target_slr)
     else:
         slr_constraints += "slr=poe_0:SLR{slr_nr}\n".format(slr_nr=poe_slr)
-    if args.probe and i == 0:
-        slr_constraints += "slr=probe_{inst_nr}:SLR{slr_nr}\n".format(inst_nr=i, slr_nr=target_slr)
     if not args.vadd:
         slr_constraints += "slr=lb_user_krnl_{inst_nr}:SLR{slr_nr}\n".format(inst_nr=i, slr_nr=target_slr)
     else:
@@ -154,10 +149,7 @@ mem_type = "DDR" if args.board == "u250" or args.board == "u200" else "HBM"
 poe_ddr_bank = 3 if args.board == "u200" else poe_slr
 cclo_ddr_bank = cclo_slr
 
-if args.probe:
-    mem_constraints = "sp=probe_0.m_axi_mem:{mtype}[{midx}]\n".format(mtype=mem_type, midx=cclo_slr)
-else:
-    mem_constraints = ""
+mem_constraints = ""
 bank_ctr = 0
 for i in range(num_cclo):
     if mem_type == "DDR":
@@ -223,14 +215,8 @@ for i in range(num_cclo):
     # Command interfaces
     stream_connections += "stream_connect=hostctrl_{inst_nr}_0.cmd:arb_{inst_nr}.cmd_clients_0\n".format(inst_nr=i)
     stream_connections += "stream_connect=hostctrl_{inst_nr}_1.cmd:arb_{inst_nr}.cmd_clients_1\n".format(inst_nr=i)
-    if args.probe and i==0:
-        stream_connections += "stream_connect=arb_{inst_nr}.cmd_cclo:probe_{inst_nr}.cmd_upstream\n".format(inst_nr=i)
-        stream_connections += "stream_connect=probe_{inst_nr}.cmd_downstream:ccl_offload_{inst_nr}.s_axis_call_req\n".format(inst_nr=i)
-        stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_call_ack:probe_{inst_nr}.ack_downstream\n".format(inst_nr=i)
-        stream_connections += "stream_connect=probe_{inst_nr}.ack_upstream:arb_{inst_nr}.ack_cclo\n".format(inst_nr=i)
-    else:
-        stream_connections += "stream_connect=arb_{inst_nr}.cmd_cclo:ccl_offload_{inst_nr}.s_axis_call_req\n".format(inst_nr=i)
-        stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_call_ack:arb_{inst_nr}.ack_cclo\n".format(inst_nr=i)
+    stream_connections += "stream_connect=arb_{inst_nr}.cmd_cclo:ccl_offload_{inst_nr}.s_axis_call_req\n".format(inst_nr=i)
+    stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_call_ack:arb_{inst_nr}.ack_cclo\n".format(inst_nr=i)
     stream_connections += "stream_connect=arb_{inst_nr}.ack_clients_0:hostctrl_{inst_nr}_0.sts\n".format(inst_nr=i)
     stream_connections += "stream_connect=arb_{inst_nr}.ack_clients_1:hostctrl_{inst_nr}_1.sts\n".format(inst_nr=i)
     # Plugin interfaces
@@ -298,7 +284,6 @@ with open(args.outfile, "w") as f:
     f.write(cast_instantiation+"\n")
     f.write(poe_instantiation+"\n")
     f.write(cmac_instantiation+"\n")
-    f.write(probe_instantiation+"\n")
     f.write(loopback_instantiation+"\n")
     f.write(vadd_instantiation+"\n")
     if not args.hwemu:

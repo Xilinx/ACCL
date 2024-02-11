@@ -96,14 +96,12 @@ ACCLRequest *ACCL::set_timeout(unsigned int value, bool run_async,
   options.cfg_function = cfgFunc::set_timeout;
   ACCLRequest *handle = call_async(options);
 
-  if (run_async) {
-    return handle;
-  } else {
+  if (!run_async) {
     wait(handle);
     check_return_value("set_timeout", handle);
   }
 
-  return nullptr;
+  return handle;
 }
 
 ACCLRequest *ACCL::set_rendezvous_threshold(unsigned int value, bool run_async,
@@ -114,14 +112,12 @@ ACCLRequest *ACCL::set_rendezvous_threshold(unsigned int value, bool run_async,
   options.cfg_function = cfgFunc::set_max_eager_msg_size;
   ACCLRequest *handle = call_async(options);
 
-  if (run_async) {
-    return handle;
-  } else {
+  if (!run_async) {
     wait(handle);
     check_return_value("set_max_eager_msg_size", handle);
   }
 
-  return nullptr;
+  return handle;
 }
 
 ACCLRequest *ACCL::nop(bool run_async, std::vector<ACCLRequest *> waitfor) {
@@ -131,14 +127,12 @@ ACCLRequest *ACCL::nop(bool run_async, std::vector<ACCLRequest *> waitfor) {
   options.count = 0;
   options.waitfor = waitfor;
   ACCLRequest *handle = call_async(options);
-  if (run_async) {
-    return handle;
-  } else {
+  if (!run_async) {
     wait(handle);
     check_return_value("nop", handle);
   }
 
-  return nullptr;
+  return handle;
 }
 
 ACCLRequest *ACCL::send(BaseBuffer &srcbuf, unsigned int count,
@@ -161,14 +155,12 @@ ACCLRequest *ACCL::send(BaseBuffer &srcbuf, unsigned int count,
   options.waitfor = waitfor;
   ACCLRequest *handle = call_async(options);
 
-  if (run_async) {
-    return handle;
-  } else {
+  if (!run_async) {
     wait(handle);
     check_return_value("send", handle);
   }
 
-  return nullptr;
+  return handle;
 }
 
 ACCLRequest *ACCL::send(dataType src_data_type, unsigned int count,
@@ -188,14 +180,12 @@ ACCLRequest *ACCL::send(dataType src_data_type, unsigned int count,
   options.waitfor = waitfor;
   ACCLRequest *handle = call_async(options);
 
-  if (run_async) {
-    return handle;
-  } else {
+  if (!run_async) {
     wait(handle);
     check_return_value("send", handle);
   }
 
-  return nullptr;
+  return handle;
 }
 
 ACCLRequest *ACCL::stream_put(BaseBuffer &srcbuf, unsigned int count,
@@ -222,14 +212,12 @@ ACCLRequest *ACCL::stream_put(BaseBuffer &srcbuf, unsigned int count,
   options.waitfor = waitfor;
   ACCLRequest *handle = call_async(options);
 
-  if (run_async) {
-    return handle;
-  } else {
+  if (!run_async) {
     wait(handle);
     check_return_value("stream_put", handle);
   }
 
-  return nullptr;
+  return handle;
 }
 
 ACCLRequest *ACCL::stream_put(dataType src_data_type, unsigned int count,
@@ -253,14 +241,12 @@ ACCLRequest *ACCL::stream_put(dataType src_data_type, unsigned int count,
   options.waitfor = waitfor;
   ACCLRequest *handle = call_async(options);
 
-  if (run_async) {
-    return handle;
-  } else {
+  if (!run_async) {
     wait(handle);
     check_return_value("stream_put", handle);
   }
 
-  return nullptr;
+  return handle;
 }
 
 ACCLRequest *ACCL::recv(BaseBuffer &dstbuf, unsigned int count,
@@ -285,9 +271,7 @@ ACCLRequest *ACCL::recv(BaseBuffer &dstbuf, unsigned int count,
   options.waitfor = waitfor;
   ACCLRequest *handle = call_async(options);
 
-  if (run_async) {
-    return handle;
-  } else {
+  if (!run_async) {
     wait(handle);
     if (to_fpga == false) {
       dstbuf.sync_from_device();
@@ -295,7 +279,7 @@ ACCLRequest *ACCL::recv(BaseBuffer &dstbuf, unsigned int count,
     check_return_value("recv", handle);
   }
 
-  return nullptr;
+  return handle;
 }
 
 ACCLRequest *ACCL::recv(dataType dst_data_type, unsigned int count,
@@ -315,14 +299,12 @@ ACCLRequest *ACCL::recv(dataType dst_data_type, unsigned int count,
   options.waitfor = waitfor;
   ACCLRequest *handle = call_async(options);
 
-  if (run_async) {
-    return handle;
-  } else {
+  if (!run_async) {
     wait(handle);
     check_return_value("recv", handle);
   }
 
-  return nullptr;
+  return handle;
 }
 
 ACCLRequest *ACCL::copy(BaseBuffer *srcbuf, BaseBuffer *dstbuf, unsigned int count,
@@ -351,9 +333,7 @@ ACCLRequest *ACCL::copy(BaseBuffer *srcbuf, BaseBuffer *dstbuf, unsigned int cou
   options.waitfor = waitfor;
   ACCLRequest *handle = call_async(options);
 
-  if (run_async) {
-    return handle;
-  } else {
+  if (!run_async) {
     wait(handle);
     if (to_fpga == false) {
       dstbuf->sync_from_device();
@@ -361,7 +341,7 @@ ACCLRequest *ACCL::copy(BaseBuffer *srcbuf, BaseBuffer *dstbuf, unsigned int cou
     check_return_value("copy", handle);
   }
 
-  return nullptr;
+  return handle;
 }
 
 ACCLRequest *ACCL::copy(BaseBuffer &srcbuf, BaseBuffer &dstbuf, unsigned int count,
@@ -424,9 +404,7 @@ ACCLRequest *ACCL::combine(unsigned int count, reduceFunction function,
   options.waitfor = waitfor;
   ACCLRequest *handle = call_async(options);
 
-  if (run_async) {
-    return handle;
-  } else {
+  if (!run_async) {
     wait(handle);
     if (to_fpga == false) {
       result.sync_from_device();
@@ -434,7 +412,7 @@ ACCLRequest *ACCL::combine(unsigned int count, reduceFunction function,
     check_return_value("combine", handle);
   }
 
-  return nullptr;
+  return handle;
 }
 
 ACCLRequest *ACCL::bcast(BaseBuffer &buf, unsigned int count,
@@ -472,9 +450,7 @@ ACCLRequest *ACCL::bcast(BaseBuffer &buf, unsigned int count,
   options.waitfor = waitfor;
   ACCLRequest *handle = call_async(options);
 
-  if (run_async) {
-    return handle;
-  } else {
+  if (!run_async) {
     wait(handle);
     if (to_fpga == false) {
       buf.sync_from_device();
@@ -482,7 +458,7 @@ ACCLRequest *ACCL::bcast(BaseBuffer &buf, unsigned int count,
     check_return_value("bcast", handle);
   }
 
-  return nullptr;
+  return handle;
 }
 
 ACCLRequest *ACCL::scatter(BaseBuffer &sendbuf,
@@ -522,9 +498,7 @@ ACCLRequest *ACCL::scatter(BaseBuffer &sendbuf,
   options.waitfor = waitfor;
   ACCLRequest *handle = call_async(options);
 
-  if (run_async) {
-    return handle;
-  } else {
+  if (!run_async) {
     wait(handle);
     if (to_fpga == false) {
       auto slice = recvbuf.slice(0, count);
@@ -533,7 +507,7 @@ ACCLRequest *ACCL::scatter(BaseBuffer &sendbuf,
     check_return_value("scatter", handle);
   }
 
-  return nullptr;
+  return handle;
 }
 
 ACCLRequest *ACCL::gather(BaseBuffer &sendbuf,
@@ -582,9 +556,7 @@ ACCLRequest *ACCL::gather(BaseBuffer &sendbuf,
   options.waitfor = waitfor;
   ACCLRequest *handle = call_async(options);
 
-  if (run_async) {
-    return handle;
-  } else {
+  if (!run_async) {
     wait(handle);
     if (to_fpga == false && is_root == true) {
       auto slice = recvbuf.slice(0, count * communicator.get_ranks()->size());
@@ -593,7 +565,7 @@ ACCLRequest *ACCL::gather(BaseBuffer &sendbuf,
     check_return_value("gather", handle);
   }
 
-  return nullptr;
+  return handle;
 }
 
 ACCLRequest *ACCL::allgather(BaseBuffer &sendbuf,
@@ -640,9 +612,7 @@ ACCLRequest *ACCL::allgather(BaseBuffer &sendbuf,
   options.waitfor = waitfor;
   ACCLRequest *handle = call_async(options);
 
-  if (run_async) {
-    return handle;
-  } else {
+  if (!run_async) {
     wait(handle);
     if (to_fpga == false) {
       auto slice = recvbuf.slice(0, count * communicator.get_ranks()->size());
@@ -651,7 +621,7 @@ ACCLRequest *ACCL::allgather(BaseBuffer &sendbuf,
     check_return_value("allgather", handle);
   }
 
-  return nullptr;
+  return handle;
 }
 
 ACCLRequest *ACCL::reduce(BaseBuffer &sendbuf,
@@ -692,9 +662,7 @@ ACCLRequest *ACCL::reduce(BaseBuffer &sendbuf,
   options.waitfor = waitfor;
   ACCLRequest *handle = call_async(options);
 
-  if (run_async) {
-    return handle;
-  } else {
+  if (!run_async) {
     wait(handle);
     if (to_fpga == false && is_root == true) {
       auto slice = recvbuf.slice(0, count);
@@ -703,7 +671,7 @@ ACCLRequest *ACCL::reduce(BaseBuffer &sendbuf,
     check_return_value("reduce", handle);
   }
 
-  return nullptr;
+  return handle;
 }
 
 ACCLRequest *ACCL::reduce(dataType src_data_type,
@@ -740,9 +708,7 @@ ACCLRequest *ACCL::reduce(dataType src_data_type,
   options.stream_flags = streamFlags::OP0_STREAM;
   ACCLRequest *handle = call_async(options);
 
-  if (run_async) {
-    return handle;
-  } else {
+  if (!run_async) {
     wait(handle);
     if (to_fpga == false && is_root == true) {
       auto slice = recvbuf.slice(0, count);
@@ -751,7 +717,7 @@ ACCLRequest *ACCL::reduce(dataType src_data_type,
     check_return_value("reduce", handle);
   }
 
-  return nullptr;
+  return handle;
 }
 
 ACCLRequest *ACCL::reduce(BaseBuffer &sendbuf, dataType dst_data_type,
@@ -785,14 +751,12 @@ ACCLRequest *ACCL::reduce(BaseBuffer &sendbuf, dataType dst_data_type,
   options.waitfor = waitfor;
   ACCLRequest *handle = call_async(options);
 
-  if (run_async) {
-    return handle;
-  } else {
+  if (!run_async) {
     wait(handle);
     check_return_value("reduce", handle);
   }
 
-  return nullptr;
+  return handle;
 }
 
 ACCLRequest *ACCL::reduce(dataType src_data_type, dataType dst_data_type,
@@ -821,14 +785,12 @@ ACCLRequest *ACCL::reduce(dataType src_data_type, dataType dst_data_type,
   options.stream_flags = streamFlags::OP0_STREAM | streamFlags::RES_STREAM;
   ACCLRequest *handle = call_async(options);
 
-  if (run_async) {
-    return handle;
-  } else {
+  if (!run_async) {
     wait(handle);
     check_return_value("reduce", handle);
   }
 
-  return nullptr;
+  return handle;
 }
 
 ACCLRequest *ACCL::allreduce(BaseBuffer &sendbuf,
@@ -867,9 +829,7 @@ ACCLRequest *ACCL::allreduce(BaseBuffer &sendbuf,
   options.waitfor = waitfor;
   ACCLRequest *handle = call_async(options);
 
-  if (run_async) {
-    return handle;
-  } else {
+  if (!run_async) {
     wait(handle);
     if (to_fpga == false) {
       auto slice = recvbuf.slice(0, count);
@@ -878,7 +838,7 @@ ACCLRequest *ACCL::allreduce(BaseBuffer &sendbuf,
     check_return_value("allreduce", handle);
   }
 
-  return nullptr;
+  return handle;
 }
 
 ACCLRequest *ACCL::reduce_scatter(BaseBuffer &sendbuf,
@@ -917,9 +877,7 @@ ACCLRequest *ACCL::reduce_scatter(BaseBuffer &sendbuf,
   options.waitfor = waitfor;
   ACCLRequest *handle = call_async(options);
 
-  if (run_async) {
-    return handle;
-  } else {
+  if (!run_async) {
     wait(handle);
     if (to_fpga == false) {
       auto slice = recvbuf.slice(0, count);
@@ -928,7 +886,7 @@ ACCLRequest *ACCL::reduce_scatter(BaseBuffer &sendbuf,
     check_return_value("reduce_scatter", handle);
   }
 
-  return nullptr;
+  return handle;
 }
 
 ACCLRequest *ACCL::alltoall(BaseBuffer &sendbuf, BaseBuffer &recvbuf, unsigned int count,
@@ -973,9 +931,7 @@ ACCLRequest *ACCL::alltoall(BaseBuffer &sendbuf, BaseBuffer &recvbuf, unsigned i
   options.waitfor = waitfor;
   ACCLRequest *handle = call_async(options);
 
-  if (run_async) {
-    return handle;
-  } else {
+  if (!run_async) {
     wait(handle);
     if (to_fpga == false) {
       auto slice = recvbuf.slice(0, count * communicator.get_ranks()->size());
@@ -984,11 +940,11 @@ ACCLRequest *ACCL::alltoall(BaseBuffer &sendbuf, BaseBuffer &recvbuf, unsigned i
     check_return_value("alltoall", handle);
   }
 
-  return nullptr;
+  return handle;
 
 }
 
-void ACCL::barrier(communicatorId comm_id,
+ACCLRequest *ACCL::barrier(communicatorId comm_id,
                    std::vector<ACCLRequest *> waitfor) {
   CCLO::Options options{};
 
@@ -1000,7 +956,7 @@ void ACCL::barrier(communicatorId comm_id,
 
   wait(handle);
   check_return_value("barrier", handle);
-
+  return handle;
 }
 
 std::vector<rank_t> ACCL::get_comm_group(communicatorId comm_id) {

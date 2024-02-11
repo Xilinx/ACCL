@@ -32,7 +32,6 @@
 #include <gtest/gtest.h>
 #include <unistd.h>
 #include <sys/types.h>
-#include <probe.hpp>
 #include <utility.hpp>
 
 using namespace ACCL;
@@ -44,7 +43,6 @@ inline pid_t emulator_pid;
 inline options_t options;
 inline xrt::device dev;
 inline std::unique_ptr<ACCL::ACCL> accl;
-inline ACCLProbe *probe;
 inline std::ofstream csvstream;
 
 class TestEnvironment : public ::testing::Environment {
@@ -69,35 +67,21 @@ class TestEnvironment : public ::testing::Environment {
       } else if (options.tcp) {
         design = acclDesign::TCP;
       }
-
+      
       if (options.hardware || options.test_xrt_simulator) {
         dev = xrt::device(options.device_index);
       }
-
+ 
       // Set up for benchmarking
-      if (options.benchmark && options.hardware && !(options.axis3 && ::rank > 0)) {
-        // Create a probe object or disable benchmark
-        std::cout << "Initializing call probe on rank " << ::rank << std::endl;
-        auto xclbin_uuid = dev.load_xclbin(options.xclbin);
-        try{
-          auto probe_krnl = xrt::kernel(dev, xclbin_uuid, "call_probe:{probe_0}");
-          probe = new ACCLProbe(dev, probe_krnl, options.csvfile);
-        } catch(...) {
-          std::cout << "Failed to initialize call probe, disabling benchmarking" << std::endl;
-          options.benchmark = false;
-        }
+      if (options.benchmark && !(options.axis3 && ::rank > 0)) {
+        // Create a data store for benchmark durations, or disable benchmark
+        // Open CSV file stream
+        csvstream.open(options.csvfile, std::ios_base::out);
+        // Push the header to it
+        csvstream << "Test,Param,Cycles" << std::endl;
       } else {
         // Clear any erroneous setting of benchmark flag
         options.benchmark = false;
-      }
-
-      if(options.benchmark){
-        // Arm probe with enough iterations to allow ACCL initialization
-        if (options.tcp) {
-          probe->arm(7);
-        } else {
-          probe->arm(5);
-        }
       }
 
       accl = initialize_accl(
@@ -107,16 +91,13 @@ class TestEnvironment : public ::testing::Environment {
       accl->set_timeout(1e6);
       accl->set_rendezvous_threshold(options.max_eager_count);
 
-      if(options.benchmark){
-        probe->read();
-      }
-
     }
 
     virtual void TearDown(){
       if(options.benchmark){
-        probe->flush();//flush profiling data to CSV file
-        delete probe;
+        //flush profiling data to CSV file
+        csvstream << std::flush;
+        csvstream.close();
       }
       accl.reset();
     }
@@ -135,8 +116,8 @@ protected:
 class ACCLBenchmark : public ::testing::Test {
 protected:
   inline static std::unique_ptr<ACCL::Buffer<float>> buf_0, buf_1, buf_2;
+  unsigned int duration = 0;
   virtual void SetUp() {
-    if(options.benchmark) probe->arm(1);//arm probe for one ACCL call
     if(!buf_0) buf_0 = accl->create_buffer<float>(options.count, dataType::float32);
     if(!buf_1) buf_1 = accl->create_buffer<float>(options.count, dataType::float32);
     if(!buf_2) buf_2 = accl->create_buffer<float>(options.count, dataType::float32);
@@ -144,7 +125,11 @@ protected:
   }
   virtual void TearDown() {
     MPI_Barrier(MPI_COMM_WORLD);
-    if(options.benchmark) probe->read(true);//readback profiling data and append to existing
+    if(options.benchmark && !::testing::UnitTest::GetInstance()->current_test_info()->result()->Skipped()) {
+      csvstream << ::testing::UnitTest::GetInstance()->current_test_info()->name() << "," 
+                << ::testing::UnitTest::GetInstance()->current_test_info()->value_param() << "," 
+                << duration << std::endl;
+    }
   }
 };
 
@@ -152,4 +137,8 @@ class ACCLRootTest : public ACCLTest, public testing::WithParamInterface<int> {}
 class ACCLFuncTest : public ACCLTest, public testing::WithParamInterface<reduceFunction> {};
 class ACCLRootFuncTest : public ACCLTest, public testing::WithParamInterface<std::tuple<int, reduceFunction>> {};
 class ACCLSegmentationTest : public ACCLTest, public testing::WithParamInterface<std::tuple<unsigned int, int>> {};
-class ACCLSweepBenchmark : public ACCLBenchmark, public testing::WithParamInterface<int> {};
+class ACCLSweepBenchmark : public ACCLBenchmark, public testing::WithParamInterface<int> {
+  virtual void SetUp(){
+    if(std::pow(2,GetParam()) > options.count) GTEST_SKIP();
+  }
+};

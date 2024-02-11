@@ -133,7 +133,7 @@ public:
    * @param waitfor        ACCL call will wait for these operations before it will
    *                       start. Currently not implemented.
    * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   *                       status
    */
   ACCLRequest *set_timeout(unsigned int value, bool run_async = false,
                            std::vector<ACCLRequest *> waitfor = {});
@@ -158,7 +158,7 @@ public:
    * @param waitfor        ACCL call will wait for these operations before it will
    *                       start.
    * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   *                       status
    */
   ACCLRequest *nop(bool run_async = false, std::vector<ACCLRequest *> waitfor = {});
 
@@ -178,7 +178,7 @@ public:
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
    * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   *                       status
    */
   ACCLRequest *send(BaseBuffer &srcbuf, unsigned int count, unsigned int dst,
                     unsigned int tag = TAG_ANY, communicatorId comm_id = GLOBAL_COMM,
@@ -199,7 +199,7 @@ public:
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
    * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   *                       status
    */
   ACCLRequest *send(dataType src_data_type, unsigned int count, unsigned int dst,
                     unsigned int tag = TAG_ANY, communicatorId comm_id = GLOBAL_COMM,
@@ -222,7 +222,7 @@ public:
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
    * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   *                       status
    */
   ACCLRequest *stream_put(BaseBuffer &srcbuf, unsigned int count,
                           unsigned int dst, unsigned int stream_id, communicatorId comm_id = GLOBAL_COMM,
@@ -242,7 +242,7 @@ public:
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
    * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   *                       status
    */
   ACCLRequest *stream_put(dataType src_data_type, unsigned int count,
                           unsigned int dst, unsigned int stream_id, communicatorId comm_id = GLOBAL_COMM,
@@ -265,7 +265,7 @@ public:
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
    * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   *                       status
    */
   ACCLRequest *recv(BaseBuffer &dstbuf, unsigned int count, unsigned int src,
                     unsigned int tag = TAG_ANY, communicatorId comm_id = GLOBAL_COMM,
@@ -287,7 +287,7 @@ public:
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
    * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   *                       status
    */
   ACCLRequest *recv(dataType dst_data_type, unsigned int count, unsigned int src,
                     unsigned int tag = TAG_ANY, communicatorId comm_id = GLOBAL_COMM,
@@ -309,7 +309,7 @@ public:
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
    * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   *                       status
    */
   ACCLRequest *copy(BaseBuffer &srcbuf, BaseBuffer &dstbuf, unsigned int count,
                     bool from_fpga = false, bool to_fpga = false,
@@ -326,7 +326,7 @@ public:
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
    * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   *                       status
    */
   ACCLRequest *copy_from_stream(BaseBuffer &dstbuf, unsigned int count,
                     bool to_fpga = false,
@@ -343,7 +343,7 @@ public:
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
    * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   *                       status
    */
   ACCLRequest *copy_to_stream(BaseBuffer &srcbuf, unsigned int count,
                     bool from_fpga = false,
@@ -358,7 +358,7 @@ public:
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
    * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   *                       status
    */
   ACCLRequest *copy_from_to_stream(dataType dst_data_type, unsigned int count,
                     bool run_async = false, std::vector<ACCLRequest *> waitfor = {});
@@ -386,7 +386,7 @@ public:
    * @param waitfor         ACCL call will wait for these operations before it
    *                        will start. Currently not implemented.
    * @return ACCLRequest*   Request object used for waiting and checking for operation
-   *                        status; nullptr if run_async is false.
+   *                        status
    */
   ACCLRequest *combine(unsigned int count, reduceFunction function, BaseBuffer &val1,
                       BaseBuffer &val2, BaseBuffer &result,
@@ -411,7 +411,7 @@ public:
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
    * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   *                       status
    */
   ACCLRequest *bcast(BaseBuffer &buf, unsigned int count, unsigned int root,
                      communicatorId comm_id = GLOBAL_COMM, bool from_fpga = false,
@@ -439,7 +439,7 @@ public:
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
    * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   *                       status
    */
   ACCLRequest *scatter(BaseBuffer &sendbuf, BaseBuffer &recvbuf, unsigned int count,
                        unsigned int root, communicatorId comm_id = GLOBAL_COMM,
@@ -468,7 +468,7 @@ public:
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
    * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   *                       status
    */
   ACCLRequest *gather(BaseBuffer &sendbuf, BaseBuffer &recvbuf, unsigned int count,
                       unsigned int root, communicatorId comm_id = GLOBAL_COMM,
@@ -495,7 +495,7 @@ public:
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
    * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   *                       status
    */
   ACCLRequest *allgather(BaseBuffer &sendbuf, BaseBuffer &recvbuf, unsigned int count,
                          communicatorId comm_id = GLOBAL_COMM, bool from_fpga = false,
@@ -523,7 +523,7 @@ public:
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
    * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   *                       status
    */
   ACCLRequest *reduce(BaseBuffer &sendbuf, BaseBuffer &recvbuf, unsigned int count,
                       unsigned int root, reduceFunction func,
@@ -549,7 +549,7 @@ public:
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
    * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   *                       status
    */
   ACCLRequest *reduce(dataType src_data_type, BaseBuffer &recvbuf, unsigned int count, 
                       unsigned int root, reduceFunction func, 
@@ -575,7 +575,7 @@ public:
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
    * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   *                       status
    */
   ACCLRequest *reduce(BaseBuffer &sendbuf, dataType dst_data_type, unsigned int count,
                       unsigned int root, reduceFunction func,
@@ -599,7 +599,7 @@ public:
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
    * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   *                       status
    */
   ACCLRequest *reduce(dataType src_data_type, dataType dst_data_type, unsigned int count, 
                       unsigned int root, reduceFunction func, 
@@ -625,7 +625,7 @@ public:
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
    * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   *                       status
    */
   ACCLRequest *allreduce(BaseBuffer &sendbuf, BaseBuffer &recvbuf, unsigned int count,
                          reduceFunction func, communicatorId comm_id = GLOBAL_COMM,
@@ -652,7 +652,7 @@ public:
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
    * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   *                       status
    */
   ACCLRequest *reduce_scatter(BaseBuffer &sendbuf, BaseBuffer &recvbuf,
                               unsigned int count, reduceFunction func,
@@ -680,7 +680,7 @@ public:
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
    * @return ACCLRequest*  Request object used for waiting and checking for operation
-   *                       status; nullptr if run_async is false.
+   *                       status
    */
   ACCLRequest *alltoall(BaseBuffer &sendbuf, BaseBuffer &recvbuf, unsigned int count,
                          communicatorId comm_id = GLOBAL_COMM, bool from_fpga = false,
@@ -694,9 +694,11 @@ public:
    * @param comm_id        Index of communicator to use.
    * @param waitfor        ACCL call will wait for these operations before it
    *                       will start. Currently not implemented.
+   * @return ACCLRequest*  Request object used for waiting and checking for operation
+   *                       status
    *
    */
-  void barrier(communicatorId comm_id = GLOBAL_COMM,
+ACCLRequest *barrier(communicatorId comm_id = GLOBAL_COMM,
                std::vector<ACCLRequest *> waitfor = {});
 
   /**
