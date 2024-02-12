@@ -29,7 +29,6 @@ if (HAS_PARENT)
 endif (HAS_PARENT)
 
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../../xrt ${CMAKE_CURRENT_BINARY_DIR}/xrt)
-add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../../../test/refdesigns/HiveNet/network/roce_v2/xrt_utils ${CMAKE_CURRENT_BINARY_DIR}/network_roce_v2)
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../../../test/refdesigns/xup_vitis_network_example/xrt_host_api ${CMAKE_CURRENT_BINARY_DIR}/vnx)
 
 add_library(accl_network_utils STATIC src/accl_network_utils.cpp)
@@ -42,7 +41,7 @@ if (NOT EXISTS $ENV{XILINX_XRT})
 endif ()
 
 target_link_directories(accl_network_utils PUBLIC $ENV{XILINX_XRT}/lib)
-target_link_libraries(accl_network_utils PUBLIC xilinxopencl xrt_coreutil xrt_core accl vnx network_roce_v2)
+target_link_libraries(accl_network_utils PUBLIC xilinxopencl xrt_coreutil xrt_core accl vnx)
 target_include_directories(accl_network_utils PUBLIC $ENV{XILINX_XRT}/include)
 
 if (ACCL_NETWORK_UTILS_MPI)

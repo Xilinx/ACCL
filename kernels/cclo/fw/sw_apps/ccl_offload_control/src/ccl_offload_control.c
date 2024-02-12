@@ -41,6 +41,7 @@ static uint32_t comm_cache_adr;
 
 #ifdef MB_FW_EMULATION
 //uint32_t sim_cfgmem[END_OF_EXCHMEM/4];
+uint64_t duration_us;
 uint32_t sim_cfgmem[(GPIO_BASEADDR+0x1000)/4];
 uint32_t *cfgmem = sim_cfgmem;
 hlslib::Stream<ap_axiu<32,0,0,0>, 512> cmd_fifos[5];
@@ -2279,6 +2280,10 @@ static inline void wait_for_call(void) {
 #ifndef MB_FW_EMULATION
     SET(PERFCTR_CONTROL_REG, PERFCTR_CE_MASK);
     CLR(PERFCTR_CONTROL_REG, PERFCTR_SCLR_MASK);
+#else
+    duration_us = std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::high_resolution_clock::now().time_since_epoch())
+            .count();
 #endif
 }
 
@@ -2290,6 +2295,11 @@ void finalize_call(unsigned int retval) {
     CLR(PERFCTR_CONTROL_REG, PERFCTR_CE_MASK);
     Xil_Out32(PERFCTR_OFFSET, Xil_In32(PERFCTR_DATA_REG));
     SET(PERFCTR_CONTROL_REG, PERFCTR_SCLR_MASK);
+#else
+    duration_us = std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::high_resolution_clock::now().time_since_epoch())
+            .count() - duration_us;
+    Xil_Out32(PERFCTR_OFFSET, (uint32_t)((duration_us*250)&0xffffffff));
 #endif
     // Done: Set done and idle
     putd(STS_CALL, retval);

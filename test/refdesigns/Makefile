@@ -52,8 +52,6 @@ TCP_HLS_ROOTDIR ?= $$XILINX_HLS
 TCP_RX_BYPASS ?= 0
 CMAC_TCP_XO=Vitis_with_100Gbps_TCP-IP/_x.hw.$(XSA)/cmac_krnl.xo
 EXTERNAL_DMA_XO=../../kernels/plugins/external_dma/external_dma.xo
-ROCE_XO=HiveNet/network/roce_v2/hw/HiveNet/build/HiveNet_kernel_$(ETH_IF).xo
-ROCE_HBM_BANK=0
 CYT_BIT=Coyote/hw/build_$(CCLO_STACK_TYPE)/bitstreams/cyt_top.bit
 
 HOSTCTRL_XO=../../kernels/plugins/hostctrl/hostctrl.xo
@@ -184,13 +182,6 @@ else ifeq (tcp, $(MODE))
 	OTHER_XO += $(LOOPBACK_XO) $(TCP_SESS_XO)
 	IPREPO_CMD += --user_ip_repo_paths Vitis_with_100Gbps_TCP-IP/build/fpga-network-stack/iprepo
 	CCLO_STACK_TYPE = TCP
-else ifeq (roce, $(MODE))
-	NET_XO = $(ROCE_XO)
-	ifneq (hw_emu, $(VPP_TARGET))
-		NET_XO += $(CMAC_UDP_XO)
-		ADV_CMD += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/$(VNX)/Ethernet/post_sys_link.tcl
-	endif
-	CCLO_STACK_TYPE = UDP
 else ifeq (coyote_tcp, $(MODE))
 	OTHER_XO = coyote_shell
 	COYOTE_CONFIG = -DFDEV_NAME=$(BOARD) -DEN_MEM=1 -DEN_STRM=1 -DEN_BPSS=1 -DEN_TCP_0=1 -DN_STRM_AXI=2 -DN_CARD_AXI=2 -DEN_HLS=0 -DACLK_F=250
@@ -253,9 +244,6 @@ $(TCP_XO):
 	cmake ../ -DFDEV_NAME=$(BOARD) -DVIVADO_HLS_ROOT_DIR=$(TCP_HLS_ROOTDIR) -DVIVADO_ROOT_DIR=$(TCP_VIVADO_ROOTDIR) -DTCP_STACK_EN=1 -DTCP_STACK_RX_DDR_BYPASS_EN=$(TCP_RX_BYPASS) -DDTCP_STACK_WINDOW_SCALING_EN=0
 	$(MAKE) -C Vitis_with_100Gbps_TCP-IP/build installip
 	$(MAKE) -C Vitis_with_100Gbps_TCP-IP/ network_krnl DEVICE=$(PLATFORM) TEMP_DIR=_x.hw.$(XSA)/ XSA=$(XSA)
-
-$(ROCE_XO):
-	cd HiveNet/network/roce_v2/hw/HiveNet/src/ && vivado -mode batch -source HiveNet_bd.tcl -tclargs $(ETH_IF) $(ROCE_HBM_BANK) $(FPGAPART)
 
 $(CCLO_XO):
 	$(MAKE) -C ../../kernels/cclo PLATFORM=$(PLATFORM) STACK_TYPE=$(CCLO_STACK_TYPE) MB_DEBUG_LEVEL=$(CCLO_MB_DEBUG_LEVEL) EN_EXT_DMA=$(CCLO_EN_EXT_DMA) EN_DMA=$(CCLO_EN_DMA)

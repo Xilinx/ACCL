@@ -41,7 +41,6 @@ struct options_t {
   bool axis3;
   bool udp;
   bool tcp;
-  bool roce;
   bool cyt_tcp;
   bool cyt_rdma;
   bool return_error;

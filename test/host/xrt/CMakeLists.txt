@@ -48,7 +48,6 @@ set(ACCL_NETWORK_UTILS_MPI 1)
 set(ACCL_NETWORK_UTILS_DEBUG 1)
 set(ACCL_DEBUG 1)
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../../../driver/utils/accl_network_utils ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/accl_network_utils)
-add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../../../driver/utils/probe ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/probe)
 
 find_package(MPI REQUIRED)
 add_executable(test ${CMAKE_CURRENT_LIST_DIR}/src/test.cpp ${CMAKE_CURRENT_LIST_DIR}/src/utility.cpp)
@@ -57,8 +56,8 @@ add_executable(bench ${CMAKE_CURRENT_LIST_DIR}/src/bench.cpp ${CMAKE_CURRENT_LIS
 target_include_directories(test PUBLIC ${MPI_CXX_INCLUDE_PATH} ${CMAKE_CURRENT_LIST_DIR}/include/)
 target_include_directories(stress PUBLIC ${MPI_CXX_INCLUDE_PATH}  ${CMAKE_CURRENT_LIST_DIR}/include/)
 target_include_directories(bench PUBLIC ${MPI_CXX_INCLUDE_PATH} ${CMAKE_CURRENT_LIST_DIR}/include/)
-# Explicitely link against vnx and network_roce_v2 because CMake doesn't support nested object libraries
+# Explicitely link against vnx  because CMake doesn't support nested object libraries
 # https://stackoverflow.com/a/71040950
-target_link_libraries(test PUBLIC MPI::MPI_CXX accl_network_utils vnx network_roce_v2 probe GTest::gtest_main)
-target_link_libraries(stress PUBLIC MPI::MPI_CXX accl_network_utils vnx network_roce_v2 probe GTest::gtest_main)
-target_link_libraries(bench PUBLIC MPI::MPI_CXX accl_network_utils vnx network_roce_v2 probe GTest::gtest_main)
+target_link_libraries(test PUBLIC MPI::MPI_CXX accl_network_utils vnx GTest::gtest_main)
+target_link_libraries(stress PUBLIC MPI::MPI_CXX accl_network_utils vnx GTest::gtest_main)
+target_link_libraries(bench PUBLIC MPI::MPI_CXX accl_network_utils vnx GTest::gtest_main)
