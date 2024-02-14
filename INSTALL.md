@@ -38,9 +38,11 @@ The following build modes are supported:
 The following platforms are supported for Alveo boards:
 | Alveo | Platform Name                          |
 |-------|----------------------------------------|
+| U50   | xilinx_u50_gen3x16_xdma_5_202210_1     |
 | U55C  | xilinx_u55c_gen3x16_xdma_3_202210_1    |
-| U250  | xilinx_u250_gen3x16_xdma_3_1_202020_1  |
-| U280  | xilinx_u280_xdma_201920_3              |
+| U200  | xilinx_u200_gen3x16_xdma_2_202110_1    |
+| U250  | xilinx_u250_gen3x16_xdma_4_1_202210_1  |
+| U280  | xilinx_u280_gen3x16_xdma_1_202211_1    |
 
 ## Run ACCL tests
 ### Emulation or simulation tests of host-launched collectives
