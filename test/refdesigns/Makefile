@@ -56,7 +56,6 @@ CYT_BIT=Coyote/hw/build_$(CCLO_STACK_TYPE)/bitstreams/cyt_top.bit
 
 HOSTCTRL_XO=../../kernels/plugins/hostctrl/hostctrl.xo
 CLIENT_ARB_XO=../../kernels/plugins/client_arbiter/client_arbiter.xo
-PROBE_XO=../../kernels/plugins/call_probe/call_probe.xo
 SUM_XO=../../kernels/plugins/reduce_ops/reduce_ops.xo
 COMPRESSION_XO=../../kernels/plugins/hp_compression/hp_compression.xo
 LOOPBACK_XO=../../kernels/plugins/loopback/loopback.xo
@@ -127,11 +126,6 @@ ifeq (hw_emu, $(VPP_TARGET))
 	ifneq (axis3x, $(MODE))
 		OTHER_XO += $(HWEMU_XO)
 	endif
-endif
-
-ifeq (probe, $(DEBUG))
-	GEN_CONFIG_FLAGS += --probe
-	OTHER_XO += $(PROBE_XO)
 endif
 
 CCLO_EN_DMA = 1

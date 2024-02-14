@@ -16,7 +16,7 @@
 #
 # *******************************************************************************/
 
-PERIPHERAL_IPS = hostctrl loopback reduce_ops hp_compression dummy_tcp_stack client_arbiter vadd_put call_probe cyt_adapter external_dma dummy_cyt_rdma_stack tcp_session_handler
+PERIPHERAL_IPS = hostctrl loopback reduce_ops hp_compression dummy_tcp_stack client_arbiter vadd_put cyt_adapter external_dma dummy_cyt_rdma_stack tcp_session_handler
 TARGET=ip
 PLATFORM ?= xilinx_u280_xdma_201920_3
 DEBUG ?= none
@@ -39,7 +39,7 @@ endif
 all: $(PERIPHERAL_IPS)
 
 
-.PHONY: hostctrl loopback reduce_ops hp_compression dummy_tcp_stack client_arbiter vadd_put call_probe cyt_adapter external_dma dummy_cyt_rdma_stack tcp_session_handler
+.PHONY: hostctrl loopback reduce_ops hp_compression dummy_tcp_stack client_arbiter vadd_put cyt_adapter external_dma dummy_cyt_rdma_stack tcp_session_handler
 
 $(PERIPHERAL_IPS):
 	$(MAKE) -C $@ DEVICE=$(FPGAPART) TARGET=$(TARGET) STACK_TYPE=$(STACK_TYPE)
