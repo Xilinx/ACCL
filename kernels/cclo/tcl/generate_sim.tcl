@@ -15,19 +15,21 @@
 #
 # *******************************************************************************/
 
-# netStackType - UDP or TCP or RDMA - type of POE attachment generated
-# enableDMA - 0/1 - enables DMAs, providing support for send/recv from/to memory, and collectives
-# enableArithmetic - 0/1 - enables arithmetic, providing support for reduction collectives and combine primitive
-# enableCompression - 0/1 - enables compression feature
-# enableExtKrnlStream - 0/1 - enables PL stream attachments, providing support for non-memory send/recv
-# debugLevel - 0/1/2 - enables DEBUG/TRACE support for the control microblaze
+# stacktype - UDP or TCP or RDMA - type of POE attachment generated
+# en_dma - 0/1 - enables DMAs, providing support for send/recv from/to memory, and collectives
+# en_arith - 0/1 - enables arithmetic, providing support for reduction collectives and combine primitive
+# en_compress - 0/1 - enables compression feature
+# en_extkrnl - 0/1 - enables PL stream attachments, providing support for non-memory send/recv
+# memsize - size of simulated memory, up to 16M
+# latency - read latency of simulated memory, up to 128 cycles
 set stacktype [lindex $::argv 0]
 set en_dma [lindex $::argv 1]
 set en_arith [lindex $::argv 2]
 set en_compress [lindex $::argv 3]
 set en_extkrnl [lindex $::argv 4]
 set memsize [lindex $::argv 5]
-puts "$stacktype $en_dma $memsize"
+set latency [lindex $::argv 6]
+puts "$stacktype $en_dma $memsize $latency"
 
 # open project
 open_project ./ccl_offload_ex/ccl_offload_ex.xpr
@@ -100,13 +102,14 @@ if { $en_dma != 0 } {
     create_bd_cell -type ip -vlnv xilinx.com:ip:blk_mem_gen:8.4 blk_mem_gen_0
     create_bd_cell -type ip -vlnv xilinx.com:ip:axi_bram_ctrl:4.1 axi_bram_ctrl_0
     set_property -dict [list CONFIG.SINGLE_PORT_BRAM {1} CONFIG.DATA_WIDTH {512} CONFIG.ECC_TYPE {0}] [get_bd_cells axi_bram_ctrl_0]
+    set_property -dict [list CONFIG.PRIM_type_to_Implement {URAM} CONFIG.READ_LATENCY_A $latency] [get_bd_cells blk_mem_gen_0]
     connect_bd_intf_net [get_bd_intf_pins axi_bram_ctrl_0/BRAM_PORTA] [get_bd_intf_pins blk_mem_gen_0/BRAM_PORTA]
 
     create_bd_cell -type ip -vlnv xilinx.com:ip:axi_crossbar:2.1 axi_crossbar_0
     set_property -dict [list CONFIG.NUM_SI {3} CONFIG.NUM_MI {1}] [get_bd_cells axi_crossbar_0]
     connect_bd_intf_net [get_bd_intf_pins axi_crossbar_0/M00_AXI] [get_bd_intf_pins axi_bram_ctrl_0/S_AXI]
-    connect_bd_intf_net [get_bd_intf_pins axi_crossbar_0/S00_AXI] -boundary_type upper [get_bd_intf_pins cclo/m_axi_0]
-    connect_bd_intf_net [get_bd_intf_pins axi_crossbar_0/S01_AXI] -boundary_type upper [get_bd_intf_pins cclo/m_axi_1]
+    connect_bd_intf_net [get_bd_intf_pins axi_crossbar_0/S00_AXI] [get_bd_intf_pins cclo/m_axi_0]
+    connect_bd_intf_net [get_bd_intf_pins axi_crossbar_0/S01_AXI] [get_bd_intf_pins cclo/m_axi_1]
 
     set s_axi [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:aximm_rtl:1.0 s_axi_data ]
     set_property -dict [ list CONFIG.ADDR_WIDTH {64} CONFIG.DATA_WIDTH {512} CONFIG.FREQ_HZ {250000000} CONFIG.HAS_BRESP {0} CONFIG.HAS_BURST {0} CONFIG.HAS_CACHE {0} CONFIG.HAS_LOCK {0} CONFIG.HAS_PROT {0} CONFIG.HAS_QOS {0} CONFIG.HAS_REGION {0} CONFIG.HAS_WSTRB {1} CONFIG.NUM_READ_OUTSTANDING {1} CONFIG.NUM_WRITE_OUTSTANDING {1} CONFIG.PROTOCOL {AXI4} CONFIG.READ_WRITE_MODE {READ_WRITE} ] $s_axi
