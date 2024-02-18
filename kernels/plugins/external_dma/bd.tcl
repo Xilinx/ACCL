@@ -32,7 +32,7 @@ create_bd_port -dir I -type rst ap_rst_n
 
 create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:aximm_rtl:1.0 s_axi_control
 set_property -dict [ list \
-  CONFIG.ADDR_WIDTH {13} \
+  CONFIG.ADDR_WIDTH {16} \
   CONFIG.ARUSER_WIDTH {0} \
   CONFIG.AWUSER_WIDTH {0} \
   CONFIG.BUSER_WIDTH {0} \
@@ -91,11 +91,21 @@ set_property -dict [ list CONFIG.FREQ_HZ {250000000} ] [get_bd_intf_port m_axis_
 
 set interfaces "s_axi_control:s_axis_s2mm:m_axis_mm2s:s_axis_s2mm_cmd:m_axis_s2mm_sts:s_axis_mm2s_cmd:m_axis_mm2s_sts"
 
-# Tie off axilite with a GPIO (currently not used for anything, but we must have it for Vitis)
-create_bd_cell -type ip -vlnv xilinx.com:ip:axi_gpio:2.0 axi_gpio_0
-connect_bd_net [get_bd_ports ap_clk] [get_bd_pins axi_gpio_0/s_axi_aclk]
-connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins axi_gpio_0/s_axi_aresetn]
-connect_bd_intf_net [get_bd_intf_ports s_axi_control] [get_bd_intf_pins axi_gpio_0/S_AXI]
+# Instantiate performance monitor
+create_bd_cell -type ip -vlnv xilinx.com:ip:axi_perf_mon:5.0 axi_perf_mon_0
+set_property -dict [list \
+  CONFIG.C_ENABLE_EVENT_LOG {0} \
+  CONFIG.C_ENABLE_PROFILE {1} \
+  CONFIG.C_ENABLE_TRACE {0} \
+  CONFIG.C_EN_AXI_DEBUG {0} \
+  CONFIG.C_NUM_MONITOR_SLOTS $num_dma \
+  CONFIG.C_SLOT_0_AXI_PROTOCOL {AXI4} \
+] [get_bd_cells axi_perf_mon_0]
+connect_bd_net [get_bd_ports ap_clk] [get_bd_pins axi_perf_mon_0/s_axi_aclk]
+connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins axi_perf_mon_0/s_axi_aresetn]
+connect_bd_net [get_bd_ports ap_clk] [get_bd_pins axi_perf_mon_0/core_aclk]
+connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins axi_perf_mon_0/core_aresetn]
+connect_bd_intf_net [get_bd_intf_ports s_axi_control] [get_bd_intf_pins axi_perf_mon_0/S_AXI]
 assign_bd_address
 
 # DMA connections
@@ -146,6 +156,10 @@ for {set i 0} {$i < $num_dma} {incr i} {
   ] [get_bd_cell dma_${i}]
 
   connect_bd_intf_net [get_bd_intf_ports m_axi_${i}] [get_bd_intf_pins dma_${i}/M_AXI]
+
+  connect_bd_intf_net [get_bd_intf_pins axi_perf_mon_0/SLOT_${i}_AXI] [get_bd_intf_pins dma_${i}/M_AXI]
+  connect_bd_net [get_bd_ports ap_clk] [get_bd_pins axi_perf_mon_0/slot_${i}_axi_aclk]
+  connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins axi_perf_mon_0/slot_${i}_axi_aresetn]
 
   connect_bd_net [get_bd_ports ap_clk] \
                  [get_bd_pins dma_${i}/m_axi_mm2s_aclk] \
