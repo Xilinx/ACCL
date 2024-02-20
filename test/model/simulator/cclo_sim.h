@@ -15,7 +15,7 @@
 #
 # *******************************************************************************/
 
-enum axi_fsm_state {VALID_ADDR, READY_ADDR, CLEAR_ADDR, VALID_DATA, READY_DATA, CLEAR_DATA, VALID_ACK, READY_ACK, CLEAR_ACK};
+enum axi_fsm_state {VALID_ADDR, CONTINUE_ADDR, READY_ADDR, CLEAR_ADDR, VALID_DATA, READY_DATA, UPDATE_DATA, CLEAR_DATA, VALID_ACK, READY_ACK, CLEAR_ACK};
 
 struct axilite{
     std::string basename = "";

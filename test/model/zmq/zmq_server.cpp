@@ -414,8 +414,8 @@ void serve_zmq(zmq_intf_context *ctx, uint32_t *cfgmem, vector<char> &devicemem,
 void serve_zmq(zmq_intf_context *ctx,
                 Stream<unsigned int> &axilite_rd_addr, Stream<unsigned int> &axilite_rd_data,
                 Stream<unsigned int> &axilite_wr_addr, Stream<unsigned int> &axilite_wr_data,
-                Stream<ap_uint<64> > &aximm_rd_addr, Stream<ap_uint<512> > &aximm_rd_data,
-                Stream<ap_uint<64> > &aximm_wr_addr, Stream<ap_uint<512> > &aximm_wr_data, Stream<ap_uint<64> > &aximm_wr_strb,
+                Stream<ap_uint<64> > &aximm_rd_addr, Stream<ap_uint<32> > &aximm_rd_len, Stream<ap_uint<512> > &aximm_rd_data,
+                Stream<ap_uint<64> > &aximm_wr_addr, Stream<ap_uint<32> > &aximm_wr_len, Stream<ap_uint<512> > &aximm_wr_data, Stream<ap_uint<64> > &aximm_wr_strb,
                 Stream<unsigned int> &callreq, Stream<unsigned int> &callack){
 
     Json::Reader reader;
@@ -498,19 +498,17 @@ void serve_zmq(zmq_intf_context *ctx,
                 response["rdata"][0] = 0;
                 *logger << log_level::error << "Mem read outside available range ("<< ACCL_SIM_MEM_SIZE_KB << "KB) at addr: " << adr << " len: " << len << endl;
             } else {
-                for(int i=0; i<len; i+=64){
-                    mem_addr = adr+i;
-                    aximm_rd_addr.Push(mem_addr);
-                    while(!ctx->stop){
-                        if(!aximm_rd_data.IsEmpty()){
-                            mem_data = aximm_rd_data.Pop();
-                            break;
-                        } else{
-                            this_thread::sleep_for(chrono::milliseconds(1));
+                aximm_rd_addr.Push(adr);
+                aximm_rd_len.Push(len);
+                unsigned int idx = 0;
+                while(!ctx->stop && len>idx){
+                    if(!aximm_rd_data.IsEmpty()){
+                        mem_data = aximm_rd_data.Pop();
+                        for(int j=0; j<64 && len>idx; j++, idx++){
+                            response["rdata"][idx] = (unsigned int)mem_data(8*(j+1)-1, 8*j);
                         }
-                    }
-                    for(int j=0; j<64 && (i+j)<len; j++){
-                        response["rdata"][i+j] = (unsigned int)mem_data(8*(j+1)-1, 8*j);
+                    } else{
+                        this_thread::sleep_for(chrono::milliseconds(1));
                     }
                 }
             }
@@ -526,16 +524,16 @@ void serve_zmq(zmq_intf_context *ctx,
                 response["status"] = 1;
                 *logger << log_level::error << "Mem write outside available range ("<< ACCL_SIM_MEM_SIZE_KB << "KB) at addr: " << adr << " len: " << len << endl;
             } else{
+                aximm_wr_addr.Push(adr);
+                aximm_wr_len.Push(len);
                 for(int i=0; i<len; i+=64){
                     mem_strb = 0;
-                    mem_addr = adr+i;
                     for(int j=0; j<64 && (i+j)<len; j++){
                         mem_data(8*(j+1)-1, 8*j) = dma_wdata[i+j].asUInt();
                         mem_strb(j,j) = 1;
                     }
                     while(!ctx->stop){
-                        if(!aximm_wr_addr.IsFull() && !aximm_wr_data.IsFull() && !aximm_wr_strb.IsFull()){
-                            aximm_wr_addr.Push(mem_addr);
+                        if(!aximm_wr_data.IsFull() && !aximm_wr_strb.IsFull()){
                             aximm_wr_data.Push(mem_data);
                             aximm_wr_strb.Push(mem_strb);
                             break;
@@ -681,16 +679,16 @@ void serve_zmq(zmq_intf_context *ctx,
 void zmq_cmd_server(zmq_intf_context *ctx,
                 Stream<unsigned int> &axilite_rd_addr, Stream<unsigned int> &axilite_rd_data,
                 Stream<unsigned int> &axilite_wr_addr, Stream<unsigned int> &axilite_wr_data,
-                Stream<ap_uint<64> > &aximm_rd_addr, Stream<ap_uint<512> > &aximm_rd_data,
-                Stream<ap_uint<64> > &aximm_wr_addr, Stream<ap_uint<512> > &aximm_wr_data, Stream<ap_uint<64> > &aximm_wr_strb,
+                Stream<ap_uint<64> > &aximm_rd_addr, Stream<ap_uint<32> > &aximm_rd_len, Stream<ap_uint<512> > &aximm_rd_data,
+                Stream<ap_uint<64> > &aximm_wr_addr, Stream<ap_uint<32> > &aximm_wr_len, Stream<ap_uint<512> > &aximm_wr_data, Stream<ap_uint<64> > &aximm_wr_strb,
                 Stream<unsigned int> &callreq, Stream<unsigned int> &callack){
     (*logger)("Starting ZMQ server\n", log_level::verbose);
     while(!ctx->stop){
         serve_zmq(ctx,
             axilite_rd_addr, axilite_rd_data,
             axilite_wr_addr, axilite_wr_data,
-            aximm_rd_addr, aximm_rd_data,
-            aximm_wr_addr, aximm_wr_data, aximm_wr_strb,
+            aximm_rd_addr, aximm_rd_len, aximm_rd_data,
+            aximm_wr_addr, aximm_wr_len, aximm_wr_data, aximm_wr_strb,
             callreq, callack
         );
         this_thread::sleep_for(chrono::milliseconds(10));

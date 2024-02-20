@@ -104,9 +104,11 @@ void krnl_endpoint_egress_port(zmq_intf_context *ctx, hlslib::Stream<stream_word
  * @param axilite_rd_data 
  * @param axilite_wr_addr 
  * @param axilite_wr_data 
- * @param aximm_rd_addr 
+ * @param aximm_rd_addr
+ * @param aximm_rd_len 
  * @param aximm_rd_data 
- * @param aximm_wr_addr 
+ * @param aximm_wr_addr
+ * @param aximm_wr_len 
  * @param aximm_wr_data 
  * @param aximm_wr_strb 
  * @param callreq 
@@ -115,8 +117,8 @@ void krnl_endpoint_egress_port(zmq_intf_context *ctx, hlslib::Stream<stream_word
 void zmq_cmd_server(zmq_intf_context *ctx,
                 hlslib::Stream<unsigned int> &axilite_rd_addr, hlslib::Stream<unsigned int> &axilite_rd_data,
                 hlslib::Stream<unsigned int> &axilite_wr_addr, hlslib::Stream<unsigned int> &axilite_wr_data,
-                hlslib::Stream<ap_uint<64> > &aximm_rd_addr, hlslib::Stream<ap_uint<512> > &aximm_rd_data,
-                hlslib::Stream<ap_uint<64> > &aximm_wr_addr, hlslib::Stream<ap_uint<512> > &aximm_wr_data, hlslib::Stream<ap_uint<64> > &aximm_wr_strb,
+                hlslib::Stream<ap_uint<64> > &aximm_rd_addr, hlslib::Stream<ap_uint<32> > &aximm_rd_len, hlslib::Stream<ap_uint<512> > &aximm_rd_data,
+                hlslib::Stream<ap_uint<64> > &aximm_wr_addr, hlslib::Stream<ap_uint<32> > &aximm_wr_len, hlslib::Stream<ap_uint<512> > &aximm_wr_data, hlslib::Stream<ap_uint<64> > &aximm_wr_strb,
                 hlslib::Stream<unsigned int> &callreq, hlslib::Stream<unsigned int> &callack);
 
 /**
