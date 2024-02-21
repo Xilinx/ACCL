@@ -19,7 +19,7 @@ cmake_minimum_required(VERSION 3.9)
 project(accl_simulation)
 
 set(CMAKE_CXX_STANDARD 17)
-set(ACCL_SIM_MEM_SIZE_KB 16384 CACHE STRING "Size of ACCL simulator memory, in KB (must correspond to simdll)")
+set(ACCL_SIM_MEM_SIZE_KB 262144 CACHE STRING "Size of ACCL simulator memory, in KB (must correspond to simdll)")
 
 # Consider using cmake_path from CMake 3.20 (2021) for better error messages:
 # https://cmake.org/cmake/help/latest/command/cmake_path.html

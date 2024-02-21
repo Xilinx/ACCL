@@ -20,16 +20,18 @@
 # en_arith - 0/1 - enables arithmetic, providing support for reduction collectives and combine primitive
 # en_compress - 0/1 - enables compression feature
 # en_extkrnl - 0/1 - enables PL stream attachments, providing support for non-memory send/recv
-# memsize - size of simulated memory, up to 16M
+# memsize_log - log of size of simulated memory
 # latency - read latency of simulated memory, up to 128 cycles
 set stacktype [lindex $::argv 0]
 set en_dma [lindex $::argv 1]
 set en_arith [lindex $::argv 2]
 set en_compress [lindex $::argv 3]
 set en_extkrnl [lindex $::argv 4]
-set memsize [lindex $::argv 5]
+set memsize_log [lindex $::argv 5]
 set latency [lindex $::argv 6]
-puts "$stacktype $en_dma $memsize $latency"
+set memsize [expr { 2 ** $memsize_log }]
+set mem_addr_bits [expr { $memsize_log - 6 }]
+puts "$stacktype $en_dma $memsize $mem_addr_bits $latency"
 
 # open project
 open_project ./ccl_offload_ex/ccl_offload_ex.xpr
@@ -38,6 +40,11 @@ update_compile_order -fileset sim_1
 # add plugins to the catalog
 set_property ip_repo_paths { ./hls ./../plugins } [current_project]
 update_ip_catalog
+
+# add the simulation memory to the project
+add_files -norecurse ./hdl/sim_mem.v
+update_compile_order -fileset sources_1
+update_compile_order -fileset sim_1
 
 # open the block design
 open_bd_design {./ccl_offload_ex/ccl_offload_ex.srcs/sources_1/bd/ccl_offload_bd/ccl_offload_bd.bd}
@@ -99,11 +106,12 @@ assign_bd_address -offset 0x4000 -range 8K -target_address_space [get_bd_addr_sp
 group_bd_cells control [get_bd_cells hostctrl_0] [get_bd_cells hostctrl_1] [get_bd_cells client_arbiter_0] [get_bd_cells smartconnect_0]
 
 if { $en_dma != 0 } {
-    create_bd_cell -type ip -vlnv xilinx.com:ip:blk_mem_gen:8.4 blk_mem_gen_0
     create_bd_cell -type ip -vlnv xilinx.com:ip:axi_bram_ctrl:4.1 axi_bram_ctrl_0
-    set_property -dict [list CONFIG.SINGLE_PORT_BRAM {1} CONFIG.DATA_WIDTH {512} CONFIG.ECC_TYPE {0}] [get_bd_cells axi_bram_ctrl_0]
-    set_property -dict [list CONFIG.PRIM_type_to_Implement {URAM} CONFIG.READ_LATENCY_A $latency] [get_bd_cells blk_mem_gen_0]
-    connect_bd_intf_net [get_bd_intf_pins axi_bram_ctrl_0/BRAM_PORTA] [get_bd_intf_pins blk_mem_gen_0/BRAM_PORTA]
+    set_property -dict [list CONFIG.SINGLE_PORT_BRAM {0} CONFIG.DATA_WIDTH {512} CONFIG.ECC_TYPE {0} CONFIG.READ_LATENCY $latency] [get_bd_cells axi_bram_ctrl_0]
+    create_bd_cell -type module -reference sim_mem sim_mem_0
+    set_property -dict [list CONFIG.MEM_DEPTH_LOG $mem_addr_bits CONFIG.MEM_WIDTH {512} CONFIG.READ_LATENCY $latency] [get_bd_cells sim_mem_0]
+    connect_bd_intf_net [get_bd_intf_pins axi_bram_ctrl_0/BRAM_PORTA] [get_bd_intf_pins sim_mem_0/MEM_PORT_A]
+    connect_bd_intf_net [get_bd_intf_pins axi_bram_ctrl_0/BRAM_PORTB] [get_bd_intf_pins sim_mem_0/MEM_PORT_B]
 
     create_bd_cell -type ip -vlnv xilinx.com:ip:axi_crossbar:2.1 axi_crossbar_0
     set_property -dict [list CONFIG.NUM_SI {3} CONFIG.NUM_MI {1}] [get_bd_cells axi_crossbar_0]
@@ -129,7 +137,7 @@ if { $en_dma != 0 } {
     set_property offset 0x0000000000000000 [get_bd_addr_segs {cclo/dma_1/Data/SEG_axi_bram_ctrl_0_Mem0}]
     set_property offset 0x0000000000000000 [get_bd_addr_segs {cclo/dma_0/Data/SEG_axi_bram_ctrl_0_Mem0}]
 
-    group_bd_cells external_memory [get_bd_cells axi_bram_ctrl_0] [get_bd_cells blk_mem_gen_0] [get_bd_cells axi_crossbar_0]
+    group_bd_cells external_memory [get_bd_cells axi_bram_ctrl_0] [get_bd_cells sim_mem_0] [get_bd_cells axi_crossbar_0]
 
 }
 

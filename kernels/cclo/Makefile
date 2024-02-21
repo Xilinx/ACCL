@@ -24,7 +24,7 @@ EN_ARITH ?= 1
 EN_COMPRESS ?= 1
 EN_EXT_KRNL ?= 1
 MB_DEBUG_LEVEL ?= 0
-SIM_MEM_SIZE ?= 16M
+SIM_MEM_SIZE_LOG ?= 28
 SIM_MEM_LATENCY ?= 50
 CCLO_ELF=vitis_ws/ccl_offload_control/Debug/ccl_offload_control.elf
 CCLO_SIMDLL=ccl_offload_ex/ccl_offload_ex.sim/sim_1/behav/xsim/xsim.dir/ccl_offload_behav/xsimk.so
@@ -88,7 +88,7 @@ simdll: $(CCLO_SIMDLL)
 
 $(CCLO_SIMDLL): tcl/generate_sim.tcl elf
 	$(MAKE) -C ../plugins PLATFORM=$(PLATFORM)
-	vivado -mode batch -source $< -tclargs $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) $(SIM_MEM_SIZE) $(SIM_MEM_LATENCY)
+	vivado -mode batch -source $< -tclargs $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) $(SIM_MEM_SIZE_LOG) $(SIM_MEM_LATENCY)
 	cd ccl_offload_ex/ccl_offload_ex.sim/sim_1/behav/xsim/ && ./compile.sh && ./elaborate.sh
 
 dcp: $(CCLO_DCP)
