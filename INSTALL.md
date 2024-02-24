@@ -65,7 +65,7 @@ First start up either the emulator or simulator:
   cd "kernels/cclo"
   source <VIVADO_INSTALL>/settings64.sh
   make STACK_TYPE=TCP EN_FANIN=1 simdll
-  cd "../../test/model/simulation"
+  cd "../../test/model/simulator"
   source <VITIS_INSTALL>/settings64.sh
   /bin/cmake .
   python3 run.py -n <RANKS>

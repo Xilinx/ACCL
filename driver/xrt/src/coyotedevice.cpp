@@ -49,7 +49,7 @@ void CoyoteRequest::start() {
 
   auto coyote_proc = reinterpret_cast<ACCL::CoyoteDevice *>(cclo())->get_device();
 
-  if (coyote_proc->getCSR((OFFSET_HOSTCTRL + HOSTCTRL_ADDR::AP_CTRL)>>2) && (0x02 == 0)) { // read AP_CTRL and check bit 2 (the done bit)
+  if ((coyote_proc->getCSR((OFFSET_HOSTCTRL + HOSTCTRL_ADDR::AP_CTRL)>>2) & 0x4) == 0) { // read AP_CTRL and check bit 3 (the idle bit)
     throw std::runtime_error(
         "Error, collective is already running, wait for previous to complete!");
   }
