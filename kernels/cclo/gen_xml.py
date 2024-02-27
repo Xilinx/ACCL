@@ -39,14 +39,11 @@ xml_footer = "</kernel></root>"
 xml_ports = "<ports>\n"
 xml_args = "<args>\n"
 
-#$(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) $(EN_EXT_DMA)
+#$(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL)
 
 xml_ports += fill_xml_axilite_port("s_axi_control", 8*1024)
 
 id = 0
-if int(sys.argv[2]) == 1:
-    xml_ports, xml_args, id = fill_xml_aximm_port_arg(xml_ports, xml_args, "m_axi_0", 512, 16, id)
-    xml_ports, xml_args, id = fill_xml_aximm_port_arg(xml_ports, xml_args, "m_axi_1", 512, 32, id)
 
 xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "s_axis_call_req", False, 32, id)
 xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "m_axis_call_ack", True, 32, id)
@@ -81,7 +78,7 @@ if  int(sys.argv[3]) == 1:
     xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "m_axis_arith_op0", True, 512, id)
     xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "m_axis_arith_op1", True, 512, id)
 
-if  int(sys.argv[6]) == 1 and int(sys.argv[2]) == 0:
+if  int(sys.argv[2]) == 1:
     xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "m_axis_dma0_s2mm", True, 512, id)
     xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "s_axis_dma0_mm2s", False, 512, id)
     xml_ports, xml_args, id = fill_xml_stream_port_arg(xml_ports, xml_args, "m_axis_dma1_s2mm", True, 512, id)

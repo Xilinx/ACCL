@@ -15,12 +15,12 @@
 #
 # *******************************************************************************/
 DEVICE=xcu280-fsvh2892-2L-e
-TCP_STACK_IP=dummy_cyt_dma.xo
+DUMMY_DMA_IP=dummy_cyt_dma.xo
 
 TARGET=ip
 
-all: $(TCP_STACK_IP)
+all: $(DUMMY_DMA_IP)
 
-$(TCP_STACK_IP): build_dummy_cyt_dma.tcl dummy_cyt_dma.cpp
+$(DUMMY_DMA_IP): build_dummy_cyt_dma.tcl dummy_cyt_dma.cpp
 	vitis_hls $< -tclargs $(TARGET) $(DEVICE)
 
