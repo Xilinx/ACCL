@@ -105,21 +105,25 @@ byp_sts_word(CYT_DEST_BITS+CYT_PID_BITS,CYT_DEST_BITS+CYT_PID_BITS) = 0;//strm n
 byp_sts_word(CYT_DEST_BITS+CYT_PID_BITS+1,CYT_DEST_BITS+CYT_PID_BITS+1) = 0;//host not used
 
 if (!STREAM_IS_EMPTY(dma0_s2mm_sts)){
+    STREAM_READ(dma0_s2mm_sts);
     byp_sts_word(CYT_DEST_BITS+CYT_PID_BITS-1,CYT_PID_BITS) = 0; //DMA0
     STREAM_WRITE(cyt_byp_wr_sts, byp_sts_word);
 }
 
 if (!STREAM_IS_EMPTY(dma1_s2mm_sts)){
+    STREAM_READ(dma1_s2mm_sts);
     byp_sts_word(CYT_DEST_BITS+CYT_PID_BITS-1,CYT_PID_BITS) = 1; //dest for DMA1
     STREAM_WRITE(cyt_byp_wr_sts, byp_sts_word);
 }
 
 if (!STREAM_IS_EMPTY(dma0_mm2s_sts)){
+    STREAM_READ(dma0_mm2s_sts);
     byp_sts_word(CYT_DEST_BITS+CYT_PID_BITS-1,CYT_PID_BITS) = 0; //DMA0
     STREAM_WRITE(cyt_byp_rd_sts, byp_sts_word);
 }
 
 if (!STREAM_IS_EMPTY(dma1_mm2s_sts)){
+    STREAM_READ(dma1_mm2s_sts);
     byp_sts_word(CYT_DEST_BITS+CYT_PID_BITS-1,CYT_PID_BITS) = 1; //DMA1
     STREAM_WRITE(cyt_byp_rd_sts, byp_sts_word);
 }
