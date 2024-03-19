@@ -16,12 +16,12 @@
 # *******************************************************************************/
 
 DEVICE ?= xcu280-fsvh2892-2L-e
-NUM_DMA ?= 1
+NUM_EXTDMA_AXI ?= 1
 
 all: external_dma.xo
 
 external_dma.v kernel.xml &: gen_files.py
-	python3 $< -n $(NUM_DMA)
+	python3 $< -n $(NUM_EXTDMA_AXI)
 
 external_dma.xo: bd.tcl kernel.xml external_dma.v
 	vivado -mode batch -source $< -notrace -tclargs $(DEVICE)

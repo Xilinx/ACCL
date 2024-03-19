@@ -74,8 +74,9 @@ void zmq_client_cfgwrite(zmq_intf_context *ctx, unsigned int offset, unsigned in
  * @param adr Address in emulated device memory
  * @param size Number of bytes to read
  * @param data Pointer to data
+ * @param host Flag indicating if targeting a "host" buffer
  */
-void zmq_client_memread(zmq_intf_context *ctx, uint64_t adr, unsigned int size, uint8_t *data);
+void zmq_client_memread(zmq_intf_context *ctx, uint64_t adr, unsigned int size, uint8_t *data, bool host=false);
 
 /**
  * @brief Write to emulated device memory
@@ -84,8 +85,9 @@ void zmq_client_memread(zmq_intf_context *ctx, uint64_t adr, unsigned int size, 
  * @param adr Address in emulated device memory
  * @param size Number of bytes to read
  * @param data Pointer to data
+ * @param host Flag indicating if targeting a "host" buffer
  */
-void zmq_client_memwrite(zmq_intf_context *ctx, uint64_t adr, unsigned int size, uint8_t *data);
+void zmq_client_memwrite(zmq_intf_context *ctx, uint64_t adr, unsigned int size, uint8_t *data, bool host=false);
 
 /**
  * @brief Allocate memory on emulated device
@@ -93,8 +95,9 @@ void zmq_client_memwrite(zmq_intf_context *ctx, uint64_t adr, unsigned int size,
  * @param ctx Pointer to existing ZMQ context
  * @param adr Address in emulated device memory
  * @param size Number of bytes to allocate
+ * @param host Flag indicating if targeting a "host" buffer
  */
-void zmq_client_memalloc(zmq_intf_context *ctx, uint64_t adr, unsigned int size);
+void zmq_client_memalloc(zmq_intf_context *ctx, uint64_t adr, unsigned int size, bool host=false);
 
 /**
  * @brief Read from CCLO output data stream

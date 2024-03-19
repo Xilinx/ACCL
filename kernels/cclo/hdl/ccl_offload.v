@@ -677,7 +677,6 @@ module ccl_offload
         .s_axi_data_arqos(s_axi_data_arqos),
         .s_axi_data_arready(s_axi_data_arready),
         .s_axi_data_arsize(s_axi_data_arsize),
-        .s_axi_data_aruser(s_axi_data_aruser),
         .s_axi_data_arvalid(s_axi_data_arvalid),
         .s_axi_data_awaddr(s_axi_data_awaddr),
         .s_axi_data_awburst(s_axi_data_awburst),

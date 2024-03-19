@@ -87,7 +87,7 @@ $(CCLO_ELF): tcl/generate_sw.tcl tcl/associate_elf.tcl $(FW_SOURCES) $(CCLO_XSA)
 simdll: $(CCLO_SIMDLL)
 
 $(CCLO_SIMDLL): tcl/generate_sim.tcl elf
-	$(MAKE) -C ../plugins PLATFORM=$(PLATFORM)
+	$(MAKE) -C ../plugins PLATFORM=$(PLATFORM) NUM_EXTDMA_AXI=2
 	vivado -mode batch -source $< -tclargs $(STACK_TYPE) $(EN_DMA) $(EN_ARITH) $(EN_COMPRESS) $(EN_EXT_KRNL) $(SIM_MEM_SIZE_LOG) $(SIM_MEM_LATENCY)
 	cd ccl_offload_ex/ccl_offload_ex.sim/sim_1/behav/xsim/ && ./compile.sh && ./elaborate.sh
 

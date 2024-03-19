@@ -21,6 +21,7 @@ TARGET=ip
 PLATFORM ?= xilinx_u280_xdma_201920_3
 DEBUG ?= none
 STACK_TYPE ?= UDP
+NUM_EXTDMA_AXI ?= 1
 
 ifeq (u250,$(findstring u250, $(PLATFORM)))
 	FPGAPART=xcu250-figd2104-2L-e
