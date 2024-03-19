@@ -52,9 +52,6 @@
 
 //DMA CONST 
 #define DMA_MAX_BTT              (((1<<23)-1)/64*64)
-#define DMA_MAX_TRANSACTIONS     20
-#define DMA_TRANSACTION_SIZE     (4*1024*1024) //info: can correspond to MAX_BTT
-#define MAX_DMA_TAGS 16
 
 //******************************
 //**  XCC Operations          **

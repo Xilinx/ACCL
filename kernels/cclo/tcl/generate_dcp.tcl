@@ -21,7 +21,6 @@ set en_arith [lindex $::argv 2]
 set en_compress [lindex $::argv 3]
 set en_extkrnl [lindex $::argv 4]
 set mb_debug_level [lindex $::argv 5]
-set ext_dma [lindex $::argv 6]
 
 # open project
 open_project ./ccl_offload_ex/ccl_offload_ex.xpr
@@ -33,8 +32,6 @@ if { $en_arith == 1 } { set extra_synth_options "$extra_synth_options -verilog_d
 if { $en_compress == 1 } { set extra_synth_options "$extra_synth_options -verilog_define COMPRESSION_ENABLE " }
 if { $en_dma == 1 } { 
     set extra_synth_options "$extra_synth_options -verilog_define DMA_ENABLE " 
-} elseif { $ext_dma == 1 } { 
-    set extra_synth_options "$extra_synth_options -verilog_define DMA_EXTERNAL " 
 }
 if { $en_extkrnl == 1 } { set extra_synth_options "$extra_synth_options -verilog_define STREAM_ENABLE " }
 if { $stacktype == "TCP" } { set extra_synth_options "$extra_synth_options -verilog_define TCP_ENABLE " }

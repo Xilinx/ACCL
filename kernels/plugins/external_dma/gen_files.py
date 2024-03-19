@@ -31,11 +31,9 @@ module external_dma
   input ap_rst_n,
 
   input [15:0] s_axi_control_araddr,
-  input [2:0] s_axi_control_arprot,
   output s_axi_control_arready,
   input s_axi_control_arvalid,
   input [15:0] s_axi_control_awaddr,
-  input [2:0] s_axi_control_awprot,
   output s_axi_control_awready,
   input s_axi_control_awvalid,
   input s_axi_control_bready,
@@ -91,11 +89,9 @@ module external_dma
   external_dma_bd ext_dma_bd(
 
         .s_axi_control_araddr(s_axi_control_araddr),
-        .s_axi_control_arprot(s_axi_control_arprot),
         .s_axi_control_arready(s_axi_control_arready),
         .s_axi_control_arvalid(s_axi_control_arvalid),
         .s_axi_control_awaddr(s_axi_control_awaddr),
-        .s_axi_control_awprot(s_axi_control_awprot),
         .s_axi_control_awready(s_axi_control_awready),
         .s_axi_control_awvalid(s_axi_control_awvalid),
         .s_axi_control_bready(s_axi_control_bready),
@@ -145,7 +141,7 @@ module external_dma
         .m_axis_s2mm_sts_tready(m_axis_s2mm_sts_tready),
         .m_axis_s2mm_sts_tvalid(m_axis_s2mm_sts_tvalid),
         .m_axis_s2mm_sts_tkeep(m_axis_s2mm_sts_tkeep),
-        .m_axis_s2mm_sts_tlas(m_axis_s2mm_sts_tlas),
+        .m_axis_s2mm_sts_tlast(m_axis_s2mm_sts_tlast),
 
         .ap_clk(ap_clk),
         .ap_rst_n(ap_rst_n)

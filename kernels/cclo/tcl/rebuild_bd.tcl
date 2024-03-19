@@ -19,22 +19,21 @@
 # DESIGN PROCs
 ##################################################################
 # netStackType - UDP or TCP or RDMA - type of POE attachment generated
-# enableDMA - 0/1 - enables DMAs, providing support for send/recv from/to memory, and collectives
-# externalDMA - 0/1 - exports all DMA streams to the kernel interface, allowing exteral datamovers to be used
+# enableDMA - 0/1 - enables DMA command/data interfaces, providing support for send/recv from/to memory, and collectives
 # enableArithmetic - 0/1 - enables arithmetic, providing support for reduction collectives and combine primitive
 # enableCompression - 0/1 - enables compression feature
 # enableExtKrnlStream - 0/1 - enables PL stream attachments, providing support for non-memory send/recv
 # debugLevel - 0/1/2 - enables DEBUG/TRACE support for the control microblaze
 # commitHash - first 24 bits of the commit hash from which we're building
-proc create_root_design { netStackType enableDMA enableArithmetic enableCompression enableExtKrnlStream debugLevel externalDMA {commitHash 0xcafeba} } {
+proc create_root_design { netStackType enableDMA enableArithmetic enableCompression enableExtKrnlStream debugLevel {commitHash 0xcafeba} } {
 
-  if { ( $enableDMA == 0 ) && ( $externalDMA == 0) && ( $enableExtKrnlStream == 0) } {
+  if { ( $enableDMA == 0 ) && ( $enableExtKrnlStream == 0) } {
       catch {common::send_gid_msg -severity "ERROR" "No data sources and sinks enabled, please enable either DMAs or Streams"}
       return
   }
 
-  if { ( $enableDMA == 1 ) && ( $externalDMA == 1) } {
-      catch {common::send_gid_msg -severity "ERROR" "External DMA interfaces can't be enabled when internal DMA enabled"}
+  if { $debugLevel > 2 } {
+      catch {common::send_gid_msg -severity "ERROR" "Debug level can only take values: 0, 1, 2"}
       return
   }
 
@@ -112,122 +111,10 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
   set_property -dict [ list CONFIG.NUM_MI {2} ] $control_xbar
 
   source -notrace ./tcl/control_bd.tcl  
-  set idcode [expr {$commitHash<<8 | $externalDMA<<7 | ($debugLevel > 0)<<6 | $enableExtKrnlStream<<5 | $enableCompression<<4 | $enableArithmetic<<3 | $enableDMA<<2 | ($netStackType == "RDMA" ? 2 : $netStackType == "TCP" ? 1 : 0) }]
+  set idcode [expr {$commitHash<<8 | $debugLevel<<6 | $enableExtKrnlStream<<5 | $enableCompression<<4 | $enableArithmetic<<3 | $enableDMA<<2 | ($netStackType == "RDMA" ? 2 : $netStackType == "TCP" ? 1 : 0) }]
   create_hier_cell_control [current_bd_instance .] control $debugLevel $idcode
 
   if { $enableDMA == 1 } {
-
-    set m_axi_0 [ create_bd_intf_port -mode Master -vlnv xilinx.com:interface:aximm_rtl:1.0 m_axi_0 ]
-    set_property -dict [ list CONFIG.ADDR_WIDTH {64} CONFIG.DATA_WIDTH {512} CONFIG.FREQ_HZ {250000000} CONFIG.HAS_BRESP {0} CONFIG.HAS_BURST {0} CONFIG.HAS_CACHE {0} CONFIG.HAS_LOCK {0} CONFIG.HAS_PROT {0} CONFIG.HAS_QOS {0} CONFIG.HAS_REGION {0} CONFIG.HAS_WSTRB {1} CONFIG.NUM_READ_OUTSTANDING {1} CONFIG.NUM_WRITE_OUTSTANDING {1} CONFIG.PROTOCOL {AXI4} CONFIG.READ_WRITE_MODE {READ_WRITE} ] $m_axi_0
-    set m_axi_1 [ create_bd_intf_port -mode Master -vlnv xilinx.com:interface:aximm_rtl:1.0 m_axi_1 ]
-    set_property -dict [ list CONFIG.ADDR_WIDTH {64} CONFIG.DATA_WIDTH {512} CONFIG.FREQ_HZ {250000000} CONFIG.HAS_BRESP {0} CONFIG.HAS_BURST {0} CONFIG.HAS_CACHE {0} CONFIG.HAS_LOCK {0} CONFIG.HAS_PROT {0} CONFIG.HAS_QOS {0} CONFIG.HAS_REGION {0} CONFIG.HAS_WSTRB {1} CONFIG.NUM_READ_OUTSTANDING {1} CONFIG.NUM_WRITE_OUTSTANDING {1} CONFIG.PROTOCOL {AXI4} CONFIG.READ_WRITE_MODE {READ_WRITE} ] $m_axi_1
-    set interfaces "$interfaces:m_axi_0:m_axi_1"
-
-    # Create DMA instances
-
-    # Create instance: dma_0, and set properties
-    set dma_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_datamover:5.1 dma_0 ]
-    set_property -dict [ list \
-     CONFIG.c_addr_width {64} \
-     CONFIG.c_dummy {0} \
-     CONFIG.c_enable_mm2s {1} \
-     CONFIG.c_include_mm2s {Full} \
-     CONFIG.c_include_mm2s_stsfifo {true} \
-     CONFIG.c_m_axi_mm2s_data_width {512} \
-     CONFIG.c_m_axi_mm2s_id_width {0} \
-     CONFIG.c_m_axi_s2mm_data_width {512} \
-     CONFIG.c_m_axi_s2mm_id_width {0} \
-     CONFIG.c_m_axis_mm2s_tdata_width {512} \
-     CONFIG.c_mm2s_btt_used {23} \
-     CONFIG.c_mm2s_burst_size {64} \
-     CONFIG.c_mm2s_include_sf {true} \
-     CONFIG.c_s2mm_btt_used {23} \
-     CONFIG.c_s2mm_burst_size {64} \
-     CONFIG.c_s2mm_support_indet_btt {true} \
-     CONFIG.c_s_axis_s2mm_tdata_width {512} \
-     CONFIG.c_include_mm2s_dre {true} \
-     CONFIG.c_include_s2mm_dre {true} \
-     CONFIG.c_single_interface {1} \
-   ] $dma_0
-
-   # Create instance: dma_1, and set properties
-    set dma_1 [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_datamover:5.1 dma_1 ]
-    set_property -dict [ list \
-     CONFIG.c_addr_width {64} \
-     CONFIG.c_dummy {0} \
-     CONFIG.c_enable_mm2s {1} \
-     CONFIG.c_include_mm2s {Full} \
-     CONFIG.c_include_mm2s_stsfifo {true} \
-     CONFIG.c_m_axi_mm2s_data_width {512} \
-     CONFIG.c_m_axi_mm2s_id_width {0} \
-     CONFIG.c_m_axi_s2mm_data_width {512} \
-     CONFIG.c_m_axi_s2mm_id_width {0} \
-     CONFIG.c_m_axis_mm2s_tdata_width {512} \
-     CONFIG.c_mm2s_btt_used {23} \
-     CONFIG.c_mm2s_burst_size {64} \
-     CONFIG.c_mm2s_include_sf {true} \
-     CONFIG.c_s2mm_btt_used {23} \
-     CONFIG.c_s2mm_burst_size {64} \
-     CONFIG.c_s2mm_support_indet_btt {true} \
-     CONFIG.c_s_axis_s2mm_tdata_width {512} \
-     CONFIG.c_include_mm2s_dre {true} \
-     CONFIG.c_include_s2mm_dre {true} \
-     CONFIG.c_single_interface {1} \
-   ] $dma_1
-  
-    # DMA connections
-    for {set i 0} {$i < 2} {incr i} {
-      connect_bd_intf_net -intf_net dma${i}_rx_cmd [get_bd_intf_pins control/dma${i}_mm2s_cmd] [get_bd_intf_pins dma_${i}/S_AXIS_MM2S_CMD]
-      connect_bd_intf_net -intf_net dma${i}_rx_sts [get_bd_intf_pins control/dma${i}_mm2s_sts] [get_bd_intf_pins dma_${i}/M_AXIS_MM2S_STS]
-      connect_bd_intf_net -intf_net dma${i}_tx_cmd [get_bd_intf_pins control/dma${i}_s2mm_cmd] [get_bd_intf_pins dma_${i}/S_AXIS_S2MM_CMD]
-      connect_bd_intf_net -intf_net dma${i}_tx_sts [get_bd_intf_pins control/dma${i}_s2mm_sts] [get_bd_intf_pins dma_${i}/M_AXIS_S2MM_STS]
-  
-      connect_bd_intf_net -intf_net dma_${i}_m00_axi [get_bd_intf_ports m_axi_${i}] [get_bd_intf_pins dma_${i}/M_AXI]
-    }
-  
-    # Segmenters for DMA to Switch
-    create_bd_cell -type ip -vlnv xilinx.com:hls:stream_segmenter:1.0 sseg_dma0_rd
-    create_bd_cell -type ip -vlnv xilinx.com:hls:stream_segmenter:1.0 sseg_dma1_rd
-
-    connect_bd_intf_net [get_bd_intf_pins dma_0/M_AXIS_MM2S] [get_bd_intf_pins sseg_dma0_rd/in_r]
-    connect_bd_intf_net [get_bd_intf_pins dma_1/M_AXIS_MM2S] [get_bd_intf_pins sseg_dma1_rd/in_r]
-    connect_bd_intf_net [get_bd_intf_pins sseg_dma0_rd/out_r] [get_bd_intf_pins axis_switch_0/S00_AXIS]
-    connect_bd_intf_net [get_bd_intf_pins sseg_dma1_rd/out_r] [get_bd_intf_pins axis_switch_0/S01_AXIS]
-    connect_bd_intf_net [get_bd_intf_pins sseg_dma0_rd/cmd] [get_bd_intf_pins control/dma0_rd_seg_cmd]
-    connect_bd_intf_net [get_bd_intf_pins sseg_dma1_rd/cmd] [get_bd_intf_pins control/dma1_rd_seg_cmd]
-    connect_bd_intf_net [get_bd_intf_pins dma_1/S_AXIS_S2MM] [get_bd_intf_pins axis_switch_0/M01_AXIS]
-    connect_bd_intf_net [get_bd_intf_pins dma_0/S_AXIS_S2MM] [get_bd_intf_pins axis_switch_0/M00_AXIS]
-    
-    connect_bd_net [get_bd_ports ap_clk] \
-                   [get_bd_pins dma_0/m_axi_mm2s_aclk] \
-                   [get_bd_pins dma_0/m_axi_s2mm_aclk] \
-                   [get_bd_pins dma_0/m_axis_mm2s_cmdsts_aclk] \
-                   [get_bd_pins dma_0/m_axis_s2mm_cmdsts_awclk] \
-                   [get_bd_pins dma_1/m_axi_mm2s_aclk] \
-                   [get_bd_pins dma_1/m_axi_s2mm_aclk] \
-                   [get_bd_pins dma_1/m_axis_mm2s_cmdsts_aclk] \
-                   [get_bd_pins dma_1/m_axis_s2mm_cmdsts_awclk] \
-                   [get_bd_pins sseg_dma0_rd/ap_clk] \
-                   [get_bd_pins sseg_dma1_rd/ap_clk]
-    connect_bd_net [get_bd_pins control/encore_aresetn] \
-                   [get_bd_pins dma_0/m_axi_mm2s_aresetn] \
-                   [get_bd_pins dma_0/m_axi_s2mm_aresetn] \
-                   [get_bd_pins dma_0/m_axis_mm2s_cmdsts_aresetn] \
-                   [get_bd_pins dma_0/m_axis_s2mm_cmdsts_aresetn] \
-                   [get_bd_pins dma_1/m_axi_mm2s_aresetn] \
-                   [get_bd_pins dma_1/m_axi_s2mm_aresetn] \
-                   [get_bd_pins dma_1/m_axis_mm2s_cmdsts_aresetn] \
-                   [get_bd_pins dma_1/m_axis_s2mm_cmdsts_aresetn] \
-                   [get_bd_pins sseg_dma0_rd/ap_rst_n] \
-                   [get_bd_pins sseg_dma1_rd/ap_rst_n]
-  
-    connect_bd_net -net ap_rst_n [get_bd_pins ap_rst_n] 
-
-
-    # DMAs
-    assign_bd_address -offset 0x00000000 -range 0x00010000000000000000 -target_address_space [get_bd_addr_spaces dma_0/Data] [get_bd_addr_segs m_axi_0/Reg] -force
-    assign_bd_address -offset 0x00000000 -range 0x00010000000000000000 -target_address_space [get_bd_addr_spaces dma_1/Data] [get_bd_addr_segs m_axi_1/Reg] -force
-  } elseif { $externalDMA == 1 } {
     set m_axis_dma0_s2mm [ create_bd_intf_port -mode Master -vlnv xilinx.com:interface:axis_rtl:1.0 m_axis_dma0_s2mm ]
     set_property -dict [ list CONFIG.FREQ_HZ {250000000} ] $m_axis_dma0_s2mm
     set s_axis_dma0_mm2s [ create_bd_intf_port -mode Slave -vlnv xilinx.com:interface:axis_rtl:1.0 s_axis_dma0_mm2s ]

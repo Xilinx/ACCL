@@ -58,7 +58,7 @@ void dma_read(vector<char> &mem, Stream<ap_axiu<104,0,0,DEST_WIDTH> > &cmd, Stre
     axi::Command<64, 23> command = axi::Command<64, 23>(cmd.Pop().data);
     axi::Status status;
     stream_word tmp;
-    logger << log_level::verbose << "DMA Read: Command popped. length: " << command.length << " offset: " << command.address << endl;
+    logger << log_level::verbose << "DMA Read: Command popped. length: " << command.length << " offset: " << command.address << " EOF: " << command.eof << endl;
     int byte_count = 0;
     while(byte_count < command.length){
         tmp.keep = 0;
@@ -67,7 +67,7 @@ void dma_read(vector<char> &mem, Stream<ap_axiu<104,0,0,DEST_WIDTH> > &cmd, Stre
             tmp.keep(i,i) = 1;
             byte_count++;
         }
-        tmp.last = (byte_count >= command.length);
+        tmp.last = command.eof ? (byte_count >= command.length) : 0;
         rdata.Push(tmp);
     }
     status.okay = 1;
@@ -80,7 +80,7 @@ void dma_write(vector<char> &mem, Stream<ap_axiu<104,0,0,DEST_WIDTH> > &cmd, Str
     axi::Command<64, 23> command = axi::Command<64, 23>(cmd.Pop().data);
     axi::Status status;
     stream_word tmp;
-    logger << log_level::verbose << "DMA Write: Command popped. length: " << command.length << " offset: " << command.address << endl;
+    logger << log_level::verbose << "DMA Write: Command popped. length: " << command.length << " offset: " << command.address << " EOF: " << command.eof << endl;
     int byte_count = 0;
     while(byte_count<command.length){
         tmp = wdata.Pop();
@@ -91,6 +91,9 @@ void dma_write(vector<char> &mem, Stream<ap_axiu<104,0,0,DEST_WIDTH> > &cmd, Str
             }
         }
         //end of packet
+        if(command.eof && (byte_count == command.length) && !tmp.last){
+            logger << log_level::critical_warning << "DMA Write: TLAST not asserted at end of EOF command, DMA might fail" << endl;
+        }
         if(tmp.last){
             status.endOfPacket = 1;
             break;
