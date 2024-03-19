@@ -65,45 +65,45 @@ catch { delete_bd_objs [get_bd_intf_ports bscan_0] }
 catch { delete_bd_objs [get_bd_intf_nets s_axi_control_1] }
 catch { delete_bd_objs [get_bd_intf_nets s_axis_call_req_1] }
 catch { delete_bd_objs [get_bd_intf_nets cclo_m_axis_call_ack] }
+catch { delete_bd_objs [get_bd_intf_ports m_axis_dma0_mm2s_cmd] }
+catch { delete_bd_objs [get_bd_intf_ports m_axis_dma1_mm2s_cmd] }
+catch { delete_bd_objs [get_bd_intf_ports m_axis_dma1_s2mm_cmd] }
+catch { delete_bd_objs [get_bd_intf_ports m_axis_dma0_s2mm_cmd] }
+catch { delete_bd_objs [get_bd_intf_ports m_axis_dma1_s2mm] }
+catch { delete_bd_objs [get_bd_intf_ports m_axis_dma0_s2mm] }
+catch { delete_bd_objs [get_bd_intf_ports s_axis_dma1_mm2s] }
+catch { delete_bd_objs [get_bd_intf_ports s_axis_dma0_mm2s] }
+catch { delete_bd_objs [get_bd_intf_ports s_axis_dma0_mm2s_sts] }
+catch { delete_bd_objs [get_bd_intf_ports s_axis_dma0_s2mm_sts] }
+catch { delete_bd_objs [get_bd_intf_ports s_axis_dma1_mm2s_sts] }
+catch { delete_bd_objs [get_bd_intf_ports s_axis_dma1_s2mm_sts] }
 
 create_bd_cell -type ip -vlnv xilinx.com:ACCL:hostctrl:1.0 hostctrl_0
-create_bd_cell -type ip -vlnv xilinx.com:ACCL:hostctrl:1.0 hostctrl_1
 create_bd_cell -type ip -vlnv xilinx.com:ACCL:client_arbiter:1.0 client_arbiter_0
-create_bd_cell -type ip -vlnv xilinx.com:ACCL:client_arbiter:1.0 client_arbiter_1
 create_bd_cell -type ip -vlnv xilinx.com:ip:smartconnect:1.0 smartconnect_0
-set_property -dict [list CONFIG.NUM_MI {3} CONFIG.NUM_SI {1}] [get_bd_cells smartconnect_0]
+set_property -dict [list CONFIG.NUM_MI {2} CONFIG.NUM_SI {1}] [get_bd_cells smartconnect_0]
 connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins smartconnect_0/aresetn]
 connect_bd_net [get_bd_ports ap_clk] [get_bd_pins smartconnect_0/aclk]
 connect_bd_intf_net [get_bd_intf_ports s_axi_control] [get_bd_intf_pins smartconnect_0/S00_AXI]
 connect_bd_intf_net [get_bd_intf_pins smartconnect_0/M00_AXI] [get_bd_intf_pins cclo/s_axi_control]
 connect_bd_intf_net [get_bd_intf_pins smartconnect_0/M01_AXI] [get_bd_intf_pins hostctrl_0/s_axi_control]
-connect_bd_intf_net [get_bd_intf_pins smartconnect_0/M02_AXI] [get_bd_intf_pins hostctrl_1/s_axi_control]
-connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins hostctrl_1/ap_rst_n]
-connect_bd_net [get_bd_ports ap_clk] [get_bd_pins hostctrl_1/ap_clk]
 connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins hostctrl_0/ap_rst_n]
 connect_bd_net [get_bd_ports ap_clk] [get_bd_pins hostctrl_0/ap_clk]
 connect_bd_intf_net [get_bd_intf_pins hostctrl_0/cmd] [get_bd_intf_pins client_arbiter_0/cmd_clients_0]
-connect_bd_intf_net [get_bd_intf_pins hostctrl_1/cmd] [get_bd_intf_pins client_arbiter_0/cmd_clients_1]
-connect_bd_intf_net [get_bd_intf_pins client_arbiter_0/cmd_cclo] [get_bd_intf_pins client_arbiter_1/cmd_clients_0]
-connect_bd_intf_net [get_bd_intf_pins client_arbiter_1/ack_clients_0] [get_bd_intf_pins client_arbiter_0/ack_cclo]
 connect_bd_intf_net [get_bd_intf_pins client_arbiter_0/ack_clients_0] [get_bd_intf_pins hostctrl_0/sts]
-connect_bd_intf_net [get_bd_intf_pins client_arbiter_0/ack_clients_1] [get_bd_intf_pins hostctrl_1/sts]
-connect_bd_intf_net [get_bd_intf_ports s_axis_call_req] [get_bd_intf_pins client_arbiter_1/cmd_clients_1]
-connect_bd_intf_net [get_bd_intf_pins client_arbiter_1/ack_clients_1] [get_bd_intf_ports m_axis_call_ack]
-connect_bd_intf_net [get_bd_intf_pins client_arbiter_1/cmd_cclo] [get_bd_intf_pins cclo/s_axis_call_req]
-connect_bd_intf_net [get_bd_intf_pins cclo/m_axis_call_ack] [get_bd_intf_pins client_arbiter_1/ack_cclo]
+connect_bd_intf_net [get_bd_intf_ports s_axis_call_req] [get_bd_intf_pins client_arbiter_0/cmd_clients_1]
+connect_bd_intf_net [get_bd_intf_pins client_arbiter_0/ack_clients_1] [get_bd_intf_ports m_axis_call_ack]
+connect_bd_intf_net [get_bd_intf_pins client_arbiter_0/cmd_cclo] [get_bd_intf_pins cclo/s_axis_call_req]
+connect_bd_intf_net [get_bd_intf_pins cclo/m_axis_call_ack] [get_bd_intf_pins client_arbiter_0/ack_cclo]
 connect_bd_net [get_bd_ports ap_clk] [get_bd_pins client_arbiter_0/ap_clk]
 connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins client_arbiter_0/ap_rst_n]
-connect_bd_net [get_bd_ports ap_clk] [get_bd_pins client_arbiter_1/ap_clk]
-connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins client_arbiter_1/ap_rst_n]
 
 # enlarge the aperture of the AXI Lite port to enable controlling two hostctrl cores
 set_property CONFIG.ADDR_WIDTH 15 [get_bd_intf_ports /s_axi_control]
 assign_bd_address -offset 0x2000 -range 8K -target_address_space [get_bd_addr_spaces s_axi_control] [get_bd_addr_segs hostctrl_0/s_axi_control/Reg] -force
-assign_bd_address -offset 0x4000 -range 8K -target_address_space [get_bd_addr_spaces s_axi_control] [get_bd_addr_segs hostctrl_1/s_axi_control/Reg] -force
 
 # create hierarchy
-group_bd_cells control [get_bd_cells hostctrl_0] [get_bd_cells hostctrl_1] [get_bd_cells client_arbiter_0] [get_bd_cells smartconnect_0]
+group_bd_cells control [get_bd_cells hostctrl_0] [get_bd_cells client_arbiter_0] [get_bd_cells smartconnect_0]
 
 if { $en_dma != 0 } {
     create_bd_cell -type ip -vlnv xilinx.com:ip:axi_bram_ctrl:4.1 axi_bram_ctrl_0
@@ -128,7 +128,7 @@ if { $en_dma != 0 } {
     connect_bd_intf_net [get_bd_intf_pins axi_bram_ctrl_2/BRAM_PORTB] [get_bd_intf_pins sim_mem_2/MEM_PORT_B]
 
     create_bd_cell -type ip -vlnv xilinx.com:ip:axi_crossbar:2.1 axi_crossbar_0
-    set_property -dict [list CONFIG.NUM_SI {3} CONFIG.NUM_MI {1}] [get_bd_cells axi_crossbar_0]
+    set_property -dict [list CONFIG.NUM_SI {3} CONFIG.NUM_MI {2}] [get_bd_cells axi_crossbar_0]
     connect_bd_intf_net [get_bd_intf_pins axi_crossbar_0/M00_AXI] [get_bd_intf_pins axi_bram_ctrl_0/S_AXI]
     connect_bd_intf_net [get_bd_intf_pins axi_crossbar_0/M01_AXI] [get_bd_intf_pins axi_bram_ctrl_1/S_AXI]
 
@@ -218,7 +218,8 @@ if { $en_dma != 0 } {
     connect_bd_net [get_bd_ports ap_clk] [get_bd_pins axi_bram_ctrl_2/s_axi_aclk]
     connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins axi_bram_ctrl_2/s_axi_aresetn]
 
-    #assign addresses and set ranges
+    # #assign addresses and set ranges
+    save_bd_design
     assign_bd_address
 
     set_property offset [expr { 0*$memsize }] [get_bd_addr_segs {s_axi_data/SEG_axi_bram_ctrl_0_Mem0}]

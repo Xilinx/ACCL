@@ -69,7 +69,7 @@ void dma_read(vector<char> &dmem, vector<char> &hmem, Stream<ap_axiu<104,0,0,DES
             tmp.keep(i,i) = 1;
             byte_count++;
         }
-        tmp.last = (byte_count >= command.length);
+        tmp.last = command.eof ? (byte_count >= command.length) : 0;
         rdata.Push(tmp);
     }
     status.okay = 1;
@@ -99,6 +99,9 @@ void dma_write(vector<char> &dmem, vector<char> &hmem, Stream<ap_axiu<104,0,0,DE
             }
         }
         //end of packet
+        if(command.eof && (byte_count == command.length) && !tmp.last){
+            logger << log_level::critical_warning << "DMA Write: TLAST not asserted at end of EOF command, DMA might fail" << endl;
+        }
         if(tmp.last){
             status.endOfPacket = 1;
             break;
