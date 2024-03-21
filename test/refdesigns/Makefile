@@ -177,13 +177,27 @@ else ifeq (tcp, $(MODE))
 	IPREPO_CMD += --user_ip_repo_paths Vitis_with_100Gbps_TCP-IP/build/fpga-network-stack/iprepo
 	CCLO_STACK_TYPE = TCP
 else ifeq (coyote_tcp, $(MODE))
+	N_DDR_CHAN = 0
+	ifeq (u200,$(findstring u200, $(PLATFORM)))
+		N_DDR_CHAN = 2
+	endif
+	ifeq (u250,$(findstring u250, $(PLATFORM)))
+		N_DDR_CHAN = 2
+	endif
 	OTHER_XO = coyote_shell
-	COYOTE_CONFIG = -DFDEV_NAME=$(BOARD) -DEN_MEM=1 -DEN_STRM=1 -DEN_BPSS=1 -DEN_TCP_0=1 -DN_STRM_AXI=2 -DN_CARD_AXI=2 -DEN_HLS=0 -DACLK_F=250
+	COYOTE_CONFIG = -DFDEV_NAME=$(BOARD) -DEN_MEM=1 -DEN_STRM=1 -DEN_BPSS=1 -DEN_TCP_0=1 -DN_STRM_AXI=2 -DN_CARD_AXI=2 -DEN_HLS=0 -DACLK_F=250 -DN_DDR_CHAN=$(N_DDR_CHAN)
 	CCLO_STACK_TYPE = TCP
 	OUTPUT_PRODUCT = $(CYT_BIT)
 else ifeq (coyote_rdma, $(MODE))
+	N_DDR_CHAN = 0
+	ifeq (u200,$(findstring u200, $(PLATFORM)))
+		N_DDR_CHAN = 2
+	endif
+	ifeq (u250,$(findstring u250, $(PLATFORM)))
+		N_DDR_CHAN = 2
+	endif
 	OTHER_XO = coyote_shell
-	COYOTE_CONFIG = -DFDEV_NAME=$(BOARD) -DEN_MEM=1 -DEN_STRM=1 -DEN_BPSS=1 -DEN_RDMA_0=1 -DEN_RPC=1 -DN_STRM_AXI=3 -DN_CARD_AXI=3 -DEN_HLS=0 -DACLK_F=250 -DTLBL_A=12
+	COYOTE_CONFIG = -DFDEV_NAME=$(BOARD) -DEN_MEM=1 -DEN_STRM=1 -DEN_BPSS=1 -DEN_RDMA_0=1 -DEN_RPC=1 -DN_STRM_AXI=3 -DN_CARD_AXI=3 -DEN_HLS=0 -DACLK_F=250 -DTLBL_A=12 -DN_DDR_CHAN=$(N_DDR_CHAN)
 	CCLO_STACK_TYPE = RDMA
 	OUTPUT_PRODUCT = $(CYT_BIT)
 else
