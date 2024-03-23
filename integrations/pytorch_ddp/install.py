@@ -121,7 +121,7 @@ def install_accl_driver(accl_driver_path: Path):
     subprocess.run(['make'], cwd=accl_driver_path, check=True)
 
 
-def install_accl_process_group(rocm: bool = False, cuda: bool = False):
+def install_accl_process_group(rocm: bool = False, cuda: bool = False, debug: bool = False):
     if not accl_driver_path.exists():
         clone_accl()
     if not accl_driver.exists():
@@ -131,12 +131,13 @@ def install_accl_process_group(rocm: bool = False, cuda: bool = False):
     env = os.environ.copy()
     env['USE_ROCM'] = '1' if rocm else '0'
     env['USE_CUDA'] = '1' if cuda else '0'
+    env['ACCL_DEBUG'] = '1' if debug else '0'
     subprocess.run([python, '-m', 'pip', '-v', 'install', '.'],
                    env=env, cwd=root, check=True)
 
 
 def main(rocm: bool = False, cuda: bool = False,
-         force_accl_process_group: bool = False, force_pytorch: bool = False):
+         force_accl_process_group: bool = False, force_pytorch: bool = False, debug: bool = False):
     packages = test_packages()
 
     if force_pytorch and torch_dir.exists():
@@ -152,7 +153,7 @@ def main(rocm: bool = False, cuda: bool = False,
 
     if not packages['accl-process-group'] or force_accl_process_group:
         print("ACCL Process Group not found, installing...")
-        install_accl_process_group(rocm, cuda)
+        install_accl_process_group(rocm, cuda, debug)
 
 
 if __name__ == '__main__':
@@ -165,21 +166,23 @@ if __name__ == '__main__':
         'ProcessGroup in the current virtual environment.\nWill also install '
         'PyTorch if it isn\'t installed already.')
     gpu_support = parser.add_mutually_exclusive_group()
-    gpu_support.add_argument('--rocm', action='store_true',
+    gpu_support.add_argument('-r','--rocm', action='store_true',
                              help='Installs the Process Group with ROCm '
                              'support.')
-    gpu_support.add_argument('--cuda', action='store_true',
+    gpu_support.add_argument('-c','--cuda', action='store_true',
                              help='Installs the Process Group with CUDA '
                              'support.')
-    parser.add_argument('--force-accl-process-group', action='store_true',
+    parser.add_argument('-a','--force-accl-process-group', action='store_true',
                         help='Force a reinstall of the ACCL Process Group')
-    parser.add_argument('--force-pytorch', action='store_true',
+    parser.add_argument('-t','--force-pytorch', action='store_true',
                         help='Force a reinstall of PyTorch '
                         f'{CURRENT_PYTORCH_VERSION} with the correct CXX11 ABI'
                         ' settings applied.')
     parser.add_argument('-f', '--force', action='store_true',
                         help='Enables both --force-accl-process-group and '
                         '--force-pytorch.')
+    parser.add_argument('-d', '--debug', action='store_true',
+                        help='Will print ACCL debugging info using ACCL_DEBUG=1')
 
     args = parser.parse_args()
     if args.force:
@@ -188,7 +191,7 @@ if __name__ == '__main__':
 
     try:
         main(args.rocm, args.cuda, args.force_accl_process_group,
-             args.force_pytorch)
+             args.force_pytorch, args.debug)
     except KeyboardInterrupt:
         print("Cancelled installation")
         exit(1)

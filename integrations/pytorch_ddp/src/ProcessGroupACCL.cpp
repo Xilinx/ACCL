@@ -651,8 +651,7 @@ void ProcessGroupACCL::initialize() {
       throw std::runtime_error("Coyote configure not implemented");
     }
 
-    accl = std::make_unique<ACCL::ACCL>(cyt_device, ranks_, rank_, size_ + 2,
-                                        bufsize, bufsize, 8388608UL);
+    accl = std::make_unique<ACCL::ACCL>(cyt_device);
     ACCL::debug(std::string("[ACCL coyote] communicator: ") + accl->dump_communicator());
   } else {
     if (!simulator_) {
@@ -1890,9 +1889,6 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
              "TCP ACCL backend; uses EasyNet network kernel on hardware")
       .value("udp", accl_network_utils::acclDesign::UDP,
              "UDP ACCL backend; uses VNx network kernel on hardware")
-      .value("roce", accl_network_utils::acclDesign::ROCE,
-             "Only applicable for hardware; uses UDP ACCL backend and RoCE "
-             "network kernel")
       .value("cyt_tcp", accl_network_utils::acclDesign::CYT_TCP,
              "Only applicable for hardware; uses coyote ACCL backend with a "
              "TCP network kernel")
