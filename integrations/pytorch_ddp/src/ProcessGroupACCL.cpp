@@ -605,11 +605,12 @@ ProcessGroupACCL::ProcessGroupACCL(
   }
 
   ranks_ = convert_ranks(ranks);
+  design_ = design;
 
   if (coyote_enabled) {
-    if (design == accl_network_utils::acclDesign::CYT_TCP) {
+    if (design_ == accl_network_utils::acclDesign::CYT_TCP) {
       cyt_device = new ACCL::CoyoteDevice();
-    } else if (design == accl_network_utils::acclDesign::CYT_RDMA) {
+    } else if (design_ == accl_network_utils::acclDesign::CYT_RDMA) {
       cyt_device = new ACCL::CoyoteDevice(size_);
       cyt::setup_cyt_rdma(ibvQpConn_vec, ranks_, rank_, *cyt_device);
     } else {
