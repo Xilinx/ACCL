@@ -27,15 +27,13 @@ process_group: Optional[ProcessGroupACCL] = None
 
 
 def create_process_group(
-        ranks: list[Rank],
-        xclbin: str, device_index: int, design: ACCLDesign,
+        ranks: list[Rank], design: ACCLDesign,
         *, nbufs: int = 16, bufsize: int = 1024,
         compression: Optional[dict[DataType, DataType]] = None,
         p2p_enabled: bool = False, profiling_ranks: Optional[list[int]] = None,
         profiling_timeout: float = 0.0, rsfec: bool = False,
+        simulation: bool = False,
         initialize: bool = True) -> ProcessGroup:
-    if design == ACCLDesign.cyt_rdma or design == ACCLDesign.cyt_tcp:
-        raise RuntimeError(f"{design} is an incompatible design for XRT")
 
     if compression is None:
         compression = {}
@@ -54,8 +52,7 @@ def create_process_group(
             raise RuntimeError("ACCL ProcessGroup already created, "
                                "can only create one.")
 
-        pg = ProcessGroupACCL(store, rank, size, ranks, False, design,
-                              xclbin=xclbin, device_index=device_index,
+        pg = ProcessGroupACCL(store, rank, size, ranks, simulation, design,
                               bufsize=bufsize, rsfec=rsfec, nbufs=nbufs,
                               compression=compression,
                               p2p_enabled=p2p_enabled,
