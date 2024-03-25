@@ -19,6 +19,7 @@ from __future__ import annotations
 from typing import Optional
 import numpy as np
 import os
+import sys
 from mpi4py.MPI import COMM_WORLD as mpi
 
 import torch
@@ -123,29 +124,29 @@ def test_allreduce():
     print("Test allreduce finished!")
 
 
-def exchange_qp(first_rank, second_rank, rank, ranks):
-    if rank == first_rank:
-        mpi.send(accl.get_local_qp(second_rank), dest=second_rank, tag=23)
-    elif rank == second_rank:
-        accl.set_remote_qp(first_rank, mpi.recv(source=first_rank, tag=23))
+# def exchange_qp(first_rank, second_rank, rank, ranks):
+#     if rank == first_rank:
+#         mpi.send(accl.get_local_qp(second_rank), dest=second_rank, tag=23)
+#     elif rank == second_rank:
+#         accl.set_remote_qp(first_rank, mpi.recv(source=first_rank, tag=23))
 
-    mpi.barrier()
+#     mpi.barrier()
 
-    if rank == second_rank:
-        mpi.send(accl.get_local_qp(first_rank), dest=first_rank, tag=24)
-    elif rank == first_rank:
-        accl.set_remote_qp(second_rank, mpi.recv(source=second_rank, tag=24))
+#     if rank == second_rank:
+#         mpi.send(accl.get_local_qp(first_rank), dest=first_rank, tag=24)
+#     elif rank == first_rank:
+#         accl.set_remote_qp(second_rank, mpi.recv(source=second_rank, tag=24))
 
-    mpi.barrier()
+#     mpi.barrier()
 
 
-def configure_cyt_rdma(ranks):
-    global rank, size
-    for first_rank in range(0, size):
-        for second_rank in range(first_rank + 1, size):
-            exchange_qp(first_rank, second_rank, rank, ranks)
-    accl.initialize()
-    mpi.barrier()
+#def configure_cyt_rdma(ranks):
+#    global rank, size
+#    for first_rank in range(0, size):
+#        for second_rank in range(first_rank + 1, size):
+#            exchange_qp(first_rank, second_rank, rank, ranks)
+#    accl.initialize()
+#    mpi.barrier()
 
 
 
@@ -160,7 +161,16 @@ def start_test(comms: str, simulator: bool):
     ranks = [accl.Rank("127.0.0.1", 5500 + i, i, rxbufsize)
              for i in range(size)]
 
-    accl.create_process_group(ranks, accl.ACCLDesign.cyt_rdma, bufsize=rxbufsize, initialize=True)
+    if comms == 'udp':
+        design = accl.ACCLDesign.udp
+    elif comms == 'tcp':
+        design = accl.ACCLDesign.tcp
+    elif comms == 'cyt_rdma':
+        design = accl.ACCLDesign.cyt_rdma
+    else:
+        sys.exit('Design "' + comms + '" currently not supported')
+
+    accl.create_process_group(ranks, design, bufsize=rxbufsize, initialize=True, simulation=simulator)
     dist.init_process_group("ACCL", rank=rank, world_size=size)
 
     with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
@@ -195,6 +205,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     #if args.comms != 'cyt_rdma' or not args.simulation:
-    if args.comms != 'cyt_rdma':
-        sys.exit('Currently only supports -c cyt_rdma and -s flags')
+    #if args.comms != 'cyt_rdma':
+    #    sys.exit('Currently only supports -c cyt_rdma and -s flags')
     start_test(args.comms, args.simulation)

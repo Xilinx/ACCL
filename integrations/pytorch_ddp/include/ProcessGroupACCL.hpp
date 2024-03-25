@@ -309,6 +309,7 @@ private:
 
   ACCL::CoyoteDevice *cyt_device;
   std::vector<fpga::ibvQpConn*> ibvQpConn_vec;
+  xrt::device xrt_device;
 
   std::unique_ptr<ACCL::ACCL> accl;
   uint64_t bufsize;

@@ -606,15 +606,21 @@ ProcessGroupACCL::ProcessGroupACCL(
 
   ranks_ = convert_ranks(ranks);
   design_ = design;
-
-  if (coyote_enabled) {
-    if (design_ == accl_network_utils::acclDesign::CYT_TCP) {
-      cyt_device = new ACCL::CoyoteDevice();
-    } else if (design_ == accl_network_utils::acclDesign::CYT_RDMA) {
-      cyt_device = new ACCL::CoyoteDevice(size_);
-      cyt::setup_cyt_rdma(ibvQpConn_vec, ranks_, rank_, *cyt_device);
-    } else {
-      throw std::runtime_error("Undefined ACCL design");
+  
+  if (!simulator){
+    if (coyote_enabled) {
+      if (design_ == accl_network_utils::acclDesign::CYT_TCP) {
+        cyt_device = new ACCL::CoyoteDevice();
+      } else if (design_ == accl_network_utils::acclDesign::CYT_RDMA) {
+        cyt_device = new ACCL::CoyoteDevice(size_);
+        cyt::setup_cyt_rdma(ibvQpConn_vec, ranks_, rank_, *cyt_device);
+      } else {
+        throw std::runtime_error("Undefined ACCL design");
+      }
+    }
+    // use xrt
+    else{
+      xrt_device = xrt::device(device_index);
     }
   }
 }
@@ -640,7 +646,6 @@ void ProcessGroupACCL::set_remote_qp(unsigned int rank, std::vector<std::uint8_t
 }
 
 void ProcessGroupACCL::initialize() {
-  xrt::device device;
   if (initialized) {
     throw std::runtime_error("Already initialized process group");
   }
@@ -655,19 +660,18 @@ void ProcessGroupACCL::initialize() {
     accl = std::make_unique<ACCL::ACCL>(cyt_device);
     ACCL::debug(std::string("[ACCL coyote] communicator: ") + accl->dump_communicator());
   } else {
-    if (!simulator_) {
-      device = xrt::device(device_index_);
-    }
-
     accl = accl_network_utils::initialize_accl(ranks_, rank_,
-                                               simulator_, design_, device,
+                                               simulator_, design_, xrt_device,
                                                xclbin_, nbufs_, bufsize, 0,
                                                rsfec_);
+    accl->set_timeout(1e6);
+    accl->set_rendezvous_threshold(16*1024);
+                                      
     int devicemem = accl->devicemem();
     if (!simulator_) {
       // Initialize cache buffers
-      buf0 = xrt::bo(device, bufsize, devicemem);
-      buf1 = xrt::bo(device, bufsize, devicemem);
+      buf0 = xrt::bo(xrt_device, bufsize, devicemem);
+      buf1 = xrt::bo(xrt_device, bufsize, devicemem);
     }
   }
 
