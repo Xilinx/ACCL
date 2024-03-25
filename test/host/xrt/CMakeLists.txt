@@ -19,6 +19,8 @@ cmake_minimum_required(VERSION 3.9)
 project(xrt_test)
 
 set(CMAKE_CXX_STANDARD 17)
+set(ACCL_SIM_NUM_BANKS 2 CACHE STRING "Number of ACCL simulator memory banks (must correspond to simdll)")
+set(ACCL_SIM_MEM_SIZE_KB 262144 CACHE STRING "Size of ACCL simulator memory, in KB (must correspond to simdll)")
 
 #GTest config
 include(FetchContent)

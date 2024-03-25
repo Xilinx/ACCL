@@ -20,5 +20,6 @@
 
 namespace ACCL {
     /* Can't define variable in header */
-    addr_t next_free_address = 0x0;
+    addr_t next_free_host_address = 0x0;
+    addr_t next_free_card_address[ACCL_SIM_NUM_BANKS] = {0x0};
 }

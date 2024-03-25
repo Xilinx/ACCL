@@ -163,11 +163,12 @@ void zmq_client_cfgwrite(zmq_intf_context *ctx, unsigned int offset, unsigned in
     }
 }
 
-void zmq_client_memread(zmq_intf_context *ctx, uint64_t adr, unsigned int size, uint8_t *data){
+void zmq_client_memread(zmq_intf_context *ctx, uint64_t adr, unsigned int size, uint8_t *data, bool host){
     Json::Value request_json;
     request_json["type"] = 2;
     request_json["addr"] = (Json::Value::UInt64)adr;
     request_json["len"] = (Json::Value::UInt64)size;
+    request_json["host"] = host;
     zmqpp::message request;
     to_message(request_json, request);
     ctx->cmd_socket->send(request);
@@ -185,10 +186,11 @@ void zmq_client_memread(zmq_intf_context *ctx, uint64_t adr, unsigned int size, 
     }
 }
 
-void zmq_client_memwrite(zmq_intf_context *ctx, uint64_t adr, unsigned int size, uint8_t *data){
+void zmq_client_memwrite(zmq_intf_context *ctx, uint64_t adr, unsigned int size, uint8_t *data, bool host){
     Json::Value request_json;
     request_json["type"] = 3;
     request_json["addr"] = (Json::Value::UInt64)adr;
+    request_json["host"] = host;
 
     Json::Value array;
     for (size_t i = 0; i < size; ++i) {
@@ -208,11 +210,12 @@ void zmq_client_memwrite(zmq_intf_context *ctx, uint64_t adr, unsigned int size,
     }
 }
 
-void zmq_client_memalloc(zmq_intf_context *ctx, uint64_t adr, unsigned int size){
+void zmq_client_memalloc(zmq_intf_context *ctx, uint64_t adr, unsigned int size, bool host){
     Json::Value request_json;
     request_json["type"] = 4;
     request_json["addr"] = (Json::Value::UInt64)adr;
     request_json["len"] = (Json::Value::UInt64)size;
+    request_json["host"] = host;
 
     zmqpp::message request;
     to_message(request_json, request);

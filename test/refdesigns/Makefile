@@ -110,7 +110,7 @@ VPP_CONFIG := -t $(VPP_TARGET) --config $(CONFIGFILE)
 
 ADV_CMD :=
 IPREPO_CMD :=
-OTHER_XO := $(CCLO_XO) $(HOSTCTRL_XO) $(CLIENT_ARB_XO) $(SUM_XO) $(COMPRESSION_XO) 
+OTHER_XO := $(CCLO_XO) $(HOSTCTRL_XO) $(CLIENT_ARB_XO) $(SUM_XO) $(COMPRESSION_XO) $(EXTERNAL_DMA_XO)
 
 GEN_CONFIG_FLAGS := 
 ifeq (vadd, $(USER_KERNEL))
@@ -126,15 +126,6 @@ ifeq (hw_emu, $(VPP_TARGET))
 	ifneq (axis3x, $(MODE))
 		OTHER_XO += $(HWEMU_XO)
 	endif
-endif
-
-CCLO_EN_DMA = 1
-CCLO_EN_EXT_DMA = 0
-ifeq (1, $(USE_HOSTMEM))
-	GEN_CONFIG_FLAGS += --host
-	OTHER_XO += $(EXTERNAL_DMA_XO)
-	CCLO_EN_DMA = 0
-	CCLO_EN_EXT_DMA = 1
 endif
 
 ifeq (udp,$(MODE))
@@ -188,6 +179,7 @@ else ifeq (coyote_tcp, $(MODE))
 	COYOTE_CONFIG = -DFDEV_NAME=$(BOARD) -DEN_MEM=1 -DEN_STRM=1 -DEN_BPSS=1 -DEN_TCP_0=1 -DN_STRM_AXI=2 -DN_CARD_AXI=2 -DEN_HLS=0 -DACLK_F=250 -DN_DDR_CHAN=$(N_DDR_CHAN)
 	CCLO_STACK_TYPE = TCP
 	OUTPUT_PRODUCT = $(CYT_BIT)
+	USE_HOSTMEM = 1
 else ifeq (coyote_rdma, $(MODE))
 	N_DDR_CHAN = 0
 	ifeq (u200,$(findstring u200, $(PLATFORM)))
@@ -200,8 +192,14 @@ else ifeq (coyote_rdma, $(MODE))
 	COYOTE_CONFIG = -DFDEV_NAME=$(BOARD) -DEN_MEM=1 -DEN_STRM=1 -DEN_BPSS=1 -DEN_RDMA_0=1 -DEN_RPC=1 -DN_STRM_AXI=3 -DN_CARD_AXI=3 -DEN_HLS=0 -DACLK_F=250 -DTLBL_A=12 -DN_DDR_CHAN=$(N_DDR_CHAN)
 	CCLO_STACK_TYPE = RDMA
 	OUTPUT_PRODUCT = $(CYT_BIT)
+	USE_HOSTMEM = 1
 else
 	$(error Unsupported MODE)
+endif
+
+ifeq (1, $(USE_HOSTMEM))
+	GEN_CONFIG_FLAGS += --host
+	NUM_EXTDMA_AXI = 2
 endif
 
 ifneq (none, $(ETH_IF))
@@ -237,7 +235,7 @@ Coyote/hw/build_$(CCLO_STACK_TYPE)/lynx/lynx.xpr:
 
 $(CYT_BIT): coyote_shell
 	$(MAKE) -C ../../kernels/cclo PLATFORM=$(PLATFORM) STACK_TYPE=$(CCLO_STACK_TYPE) MB_DEBUG_LEVEL=$(CCLO_MB_DEBUG_LEVEL) EN_DMA=0 EN_EXT_DMA=1
-	$(MAKE) -C ../../kernels/plugins PLATFORM=$(PLATFORM) DEBUG=$(DEBUG) STACK_TYPE=$(CCLO_STACK_TYPE)
+	$(MAKE) -C ../../kernels/plugins PLATFORM=$(PLATFORM) DEBUG=$(DEBUG) STACK_TYPE=$(CCLO_STACK_TYPE) NUM_EXTDMA_AXI=$(NUM_EXTDMA_AXI)
 	vivado -mode tcl -source tcl/coyote.tcl -tclargs $(CCLO_STACK_TYPE) Coyote/hw/build_$(CCLO_STACK_TYPE)
 	cp hdl/$(MODE)_top.sv Coyote/hw/build_$(CCLO_STACK_TYPE)/lynx/hdl/config_0/user_logic_c0_0.sv
 	$(MAKE) -C Coyote/hw/build_$(CCLO_STACK_TYPE)/ compile
@@ -254,11 +252,11 @@ $(TCP_XO):
 	$(MAKE) -C Vitis_with_100Gbps_TCP-IP/ network_krnl DEVICE=$(PLATFORM) TEMP_DIR=_x.hw.$(XSA)/ XSA=$(XSA)
 
 $(CCLO_XO):
-	$(MAKE) -C ../../kernels/cclo PLATFORM=$(PLATFORM) STACK_TYPE=$(CCLO_STACK_TYPE) MB_DEBUG_LEVEL=$(CCLO_MB_DEBUG_LEVEL) EN_EXT_DMA=$(CCLO_EN_EXT_DMA) EN_DMA=$(CCLO_EN_DMA)
+	$(MAKE) -C ../../kernels/cclo PLATFORM=$(PLATFORM) STACK_TYPE=$(CCLO_STACK_TYPE) MB_DEBUG_LEVEL=$(CCLO_MB_DEBUG_LEVEL)
 
 $(XCLBIN): $(NET_XO) $(CCLO_XO)
 	python3 gen_config.py --board $(BOARD) --poe $(MODE) $(GEN_CONFIG_FLAGS) -o $(CONFIGFILE)
-	$(MAKE) -C ../../kernels/plugins PLATFORM=$(PLATFORM) DEBUG=$(DEBUG) STACK_TYPE=$(CCLO_STACK_TYPE)
+	$(MAKE) -C ../../kernels/plugins PLATFORM=$(PLATFORM) DEBUG=$(DEBUG) STACK_TYPE=$(CCLO_STACK_TYPE) NUM_EXTDMA_AXI=$(NUM_EXTDMA_AXI)
 	v++ --link --platform $(PLATFORM) --kernel_frequency $(FREQUENCY) --save-temps --temp_dir $(BUILD_DIR) $(VPP_CONFIG) $(ADV_CMD) $(IPREPO_CMD) -o $@ $(NET_XO) $(OTHER_XO)
 
 .PHONY: distclean

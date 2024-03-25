@@ -265,7 +265,7 @@ void krnl_endpoint_ingress_port(zmq_intf_context *ctx, Stream<stream_word > &out
 
 }
 
-void serve_zmq(zmq_intf_context *ctx, uint32_t *cfgmem, vector<char> &devicemem, Stream<command_word> cmd[NUM_CTRL_STREAMS], Stream<command_word> sts[NUM_CTRL_STREAMS]){
+void serve_zmq(zmq_intf_context *ctx, uint32_t *cfgmem, vector<char> &devicemem, vector<char> &hostmem, Stream<command_word> cmd[NUM_CTRL_STREAMS], Stream<command_word> sts[NUM_CTRL_STREAMS]){
 
     Json::Reader reader;
     Json::StreamWriterBuilder builder;
@@ -288,6 +288,7 @@ void serve_zmq(zmq_intf_context *ctx, uint32_t *cfgmem, vector<char> &devicemem,
     Json::Value response;
     response["status"] = 0;
     int adr, val, len;
+    bool host;
     uint64_t dma_addr;
     Json::Value dma_wdata;
     unsigned int ctrl_id;
@@ -317,44 +318,76 @@ void serve_zmq(zmq_intf_context *ctx, uint32_t *cfgmem, vector<char> &devicemem,
                 cfgmem[adr/4] = request["wdata"].asUInt();
             }
             break;
-        // Devicemem read request  {"type": 2, "addr": <uint>, "len": <uint>}
+        // Devicemem read request  {"type": 2, "addr": <uint>, "len": <uint>, "host": <bool>}
         // Devicemem read response {"status": OK|ERR, "rdata": <array of uint>}
         case 2:
             adr = request["addr"].asUInt();
             len = request["len"].asUInt();
-            *logger << log_level::debug << "Mem read " << adr << " len: " << len << endl;
-            if((adr+len) > devicemem.size()){
-                response["status"] = 1;
-                response["rdata"][0] = 0;
+            host = request["host"].asUInt();
+            *logger << log_level::debug << (host ? "Host " : "Device ") << " mem read " << adr << " len: " << len << endl;
+            if(host){
+                if((adr+len) > hostmem.size()){
+                    response["status"] = 1;
+                    response["rdata"][0] = 0;
+                    *logger << log_level::error << "Host mem read outside allocated range ("<< hostmem.size()/1024 << "KB) at addr: " << adr << " len: " << len << endl;
+                } else {
+                    for (int i=0; i<len; i++)
+                    {
+                        response["rdata"][i] = hostmem.at(adr+i);
+                    }
+                }
             } else {
-                for (int i=0; i<len; i++)
-                {
-                    response["rdata"][i] = devicemem.at(adr+i);
+                if((adr+len) > devicemem.size()){
+                    response["status"] = 1;
+                    response["rdata"][0] = 0;
+                    *logger << log_level::error << "Device mem read outside allocated range ("<< devicemem.size()/1024 << "KB) at addr: " << adr << " len: " << len << endl;
+                } else {
+                    for (int i=0; i<len; i++)
+                    {
+                        response["rdata"][i] = devicemem.at(adr+i);
+                    }
                 }
             }
             break;
-        // Devicemem write request  {"type": 3, "addr": <uint>, "wdata": <array of uint>}
+        // Devicemem write request  {"type": 3, "addr": <uint>, "wdata": <array of uint>, "host": <bool>}
         // Devicemem write response {"status": OK|ERR}
         case 3:
             adr = request["addr"].asUInt();
             dma_wdata = request["wdata"];
             len = dma_wdata.size();
-            *logger << log_level::debug << "Mem write " << adr << " len: " << len << endl;
-            if((adr+len) > devicemem.size()){
-                devicemem.resize(adr+len);
-            }
-            for(int i=0; i<len; i++){
-                devicemem.at(adr+i) = dma_wdata[i].asUInt();
+            host = request["host"].asUInt();
+            *logger << log_level::debug << (host ? "Host " : "Device ") << " mem write " << adr << " len: " << len << endl;
+            if(host){
+                if((adr+len) > hostmem.size()){
+                    hostmem.resize(adr+len);
+                }
+                for(int i=0; i<len; i++){
+                    hostmem.at(adr+i) = dma_wdata[i].asUInt();
+                }
+            } else {
+                if((adr+len) > devicemem.size()){
+                    devicemem.resize(adr+len);
+                }
+                for(int i=0; i<len; i++){
+                    devicemem.at(adr+i) = dma_wdata[i].asUInt();
+                }
             }
             break;
-        // Devicemem allocate request  {"type": 4, "addr": <uint>, "len": <uint>}
+        // Devicemem allocate request  {"type": 4, "addr": <uint>, "len": <uint>, "host": <bool>}
         // Devicemem allocate response {"status": OK|ERR}
         case 4:
             adr = request["addr"].asUInt();
             len = request["len"].asUInt();
-            *logger << log_level::debug << "Mem allocate " << adr << " len: " << len << endl;
-            if((adr+len) > devicemem.size()){
-                devicemem.resize(adr+len);
+            host = request["host"].asUInt();
+            *logger << log_level::debug << (host ? "Host " : "Device ") << " mem allocate " << adr << " len: " << len << endl;
+            if(host){
+                if((adr+len) > hostmem.size()){
+                    hostmem.resize(adr+len);
+                }
+            } else {
+                if((adr+len) > devicemem.size()){
+                    devicemem.resize(adr+len);
+                }
             }
             break;
         // Call request  {"type": 5, arg names and values}
@@ -439,6 +472,7 @@ void serve_zmq(zmq_intf_context *ctx,
     Json::Value response;
     response["status"] = 0;
     int adr, val, len;
+    bool host;
     uint64_t dma_addr;
     Json::Value dma_wdata;
     ap_uint<64> mem_addr;
@@ -487,17 +521,19 @@ void serve_zmq(zmq_intf_context *ctx,
                 }
             }
             break;
-        // Devicemem read request  {"type": 2, "addr": <uint>, "len": <uint>}
+        // Devicemem read request  {"type": 2, "addr": <uint>, "len": <uint>, "host": <bool>}
         // Devicemem read response {"status": OK|ERR, "rdata": <array of uint>}
         case 2:
             adr = request["addr"].asUInt();
             len = request["len"].asUInt();
+            host = request["host"].asUInt();
             *logger << log_level::debug << "Mem read " << adr << " len: " << len << endl;
-            if((adr+len) > ACCL_SIM_MEM_SIZE_KB*1024){
+            if((adr+len) > (host ? 1 : ACCL_SIM_NUM_BANKS)*ACCL_SIM_MEM_SIZE_KB*1024){
                 response["status"] = 1;
                 response["rdata"][0] = 0;
                 *logger << log_level::error << "Mem read outside available range ("<< ACCL_SIM_MEM_SIZE_KB << "KB) at addr: " << adr << " len: " << len << endl;
             } else {
+                adr += host ? ACCL_SIM_NUM_BANKS*ACCL_SIM_MEM_SIZE_KB*1024 : 0;
                 aximm_rd_addr.Push(adr);
                 aximm_rd_len.Push(len);
                 unsigned int idx = 0;
@@ -513,17 +549,19 @@ void serve_zmq(zmq_intf_context *ctx,
                 }
             }
             break;
-        // Devicemem write request  {"type": 3, "addr": <uint>, "wdata": <array of uint>}
+        // Devicemem write request  {"type": 3, "addr": <uint>, "wdata": <array of uint>, "host": <bool>}
         // Devicemem write response {"status": OK|ERR}
         case 3:
             adr = request["addr"].asUInt();
             dma_wdata = request["wdata"];
             len = dma_wdata.size();
+            host = request["host"].asUInt();
             *logger << log_level::debug << "Mem write " << adr << " len: " << len << endl;
-            if((adr+len) > ACCL_SIM_MEM_SIZE_KB*1024){
+            if((adr+len) > (host ? 1 : ACCL_SIM_NUM_BANKS)*ACCL_SIM_MEM_SIZE_KB*1024){
                 response["status"] = 1;
                 *logger << log_level::error << "Mem write outside available range ("<< ACCL_SIM_MEM_SIZE_KB << "KB) at addr: " << adr << " len: " << len << endl;
             } else{
+                adr += host ? ACCL_SIM_NUM_BANKS*ACCL_SIM_MEM_SIZE_KB*1024 : 0;
                 aximm_wr_addr.Push(adr);
                 aximm_wr_len.Push(len);
                 for(int i=0; i<len; i+=64){
@@ -544,13 +582,14 @@ void serve_zmq(zmq_intf_context *ctx,
                 }
             }
             break;
-        // Devicemem allocate request  {"type": 4, "addr": <uint>, "len": <uint>}
+        // Devicemem allocate request  {"type": 4, "addr": <uint>, "len": <uint>, "host": <bool>}
         // Devicemem allocate response {"status": OK|ERR}
         case 4:
             adr = request["addr"].asUInt();
             len = request["len"].asUInt();
-            *logger << log_level::debug << "Mem allocate " << adr << " len: " << len << endl;
-            if((adr+len) > ACCL_SIM_MEM_SIZE_KB*1024){
+            host = request["host"].asUInt();
+            *logger << log_level::debug << (host ? "Host " : "Device ") << " mem allocate " << adr << " len: " << len << endl;
+            if((adr+len) > (host ? 1 : ACCL_SIM_NUM_BANKS)*ACCL_SIM_MEM_SIZE_KB*1024){
                 response["status"] = 1;
                 *logger << log_level::error << "Mem allocate outside available range ("<< ACCL_SIM_MEM_SIZE_KB << "KB) at addr: " << adr << " len: " << len << endl;
             }
