@@ -16,8 +16,8 @@
 # *******************************************************************************/
 
 DEVICE=xcu250-figd2104-2L-e
-SEGMENTER_IP=build_stream_segmenter/sol1/impl/ip/xilinx_com_hls_stream_segmenter_1_0.zip
-DMA2SEGCMD_IP=build_dma2seg_cmd/sol1/impl/ip/xilinx_com_hls_dma2seg_cmd_1_0.zip
+SEGMENTER_IP=build_stream_segmenter.$(DEVICE)/sol1/impl/ip/xilinx_com_hls_stream_segmenter_1_0.zip
+DMA2SEGCMD_IP=build_dma2seg_cmd.$(DEVICE)/sol1/impl/ip/xilinx_com_hls_dma2seg_cmd_1_0.zip
 TARGET=ip
 
 all: $(SEGMENTER_IP) $(DMA2SEGCMD_IP)

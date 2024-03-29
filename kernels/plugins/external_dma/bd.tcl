@@ -15,10 +15,11 @@
 #
 # *******************************************************************************/
 set fpgapart [lindex $::argv 0]
-set num_dma 2
+set num_dma [lindex $::argv 1]
+set ipname external_dma_${num_dma}port
 
 # create project with correct target
-create_project -force external_dma ./external_dma -part $fpgapart
+create_project -force external_dma ./${ipname} -part $fpgapart
 set_property target_language verilog [current_project]
 set_property simulator_language MIXED [current_project]
 set_property coreContainer.enable false [current_project]
@@ -314,16 +315,16 @@ set_property -dict [ list CONFIG.ASSOCIATED_BUSIF $interfaces ] [get_bd_ports ap
 validate_bd_design
 save_bd_design
 
-add_files -norecurse ./external_dma.v
+add_files -norecurse ./${ipname}.v
 update_compile_order -fileset sources_1
 update_compile_order -fileset sim_1
 
-set bdfile [get_files ./external_dma/external_dma.srcs/sources_1/bd/external_dma_bd/external_dma_bd.bd]
+set bdfile [get_files ./${ipname}/external_dma.srcs/sources_1/bd/external_dma_bd/external_dma_bd.bd]
 generate_target all $bdfile
 export_ip_user_files -of_objects $bdfile -no_script -sync -force -quiet
 create_ip_run $bdfile
 update_compile_order -fileset sources_1
-set_property top external_dma [current_fileset]
+set_property top ${ipname} [current_fileset]
 
 # Package IP
 
@@ -365,10 +366,10 @@ ipx::update_checksums [ipx::current_core]
 ipx::save_core [ipx::current_core]
 
 ## Generate XO
-if {[file exists "external_dma.xo"]} {
-    file delete -force "external_dma.xo"
+if {[file exists "${ipname}.xo"]} {
+    file delete -force "${ipname}.xo"
 }
 
-package_xo -xo_path external_dma.xo -kernel_name external_dma -ip_directory ./packaged_kernel -kernel_xml ./kernel.xml
+package_xo -xo_path ${ipname}.xo -kernel_name ${ipname} -ip_directory ./packaged_kernel -kernel_xml ./${ipname}.xml
 
 close_project -delete

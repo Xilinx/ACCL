@@ -15,7 +15,7 @@
 #
 # *******************************************************************************/
 DEVICE=xcu280-fsvh2892-2L-e
-TCP_STACK_IP=dummy_cyt_rdma_stack.xo
+TCP_STACK_IP=dummy_cyt_rdma_stack_$(DEVICE).xo
 
 TARGET=ip
 

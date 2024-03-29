@@ -16,15 +16,15 @@
 # *******************************************************************************/
 
 DEVICE=xcu280-fsvh2892-2L-e
-TCP_PACKETIZER_IP=build_tcp_packetizer/sol1/impl/ip/xilinx_com_hls_tcp_packetizer_1_0.zip
-TCP_DEPACKETIZER_IP=build_tcp_depacketizer/sol1/impl/ip/xilinx_com_hls_tcp_depacketizer_1_0.zip
-TCP_TXHANDLER_IP=build_tcp_txHandler//sol1/impl/ip/xilinx_com_hls_tcp_txHandler_1_0.zip
-TCP_RXHANDLER_IP=build_tcp_rxHandler//sol1/impl/ip/xilinx_com_hls_tcp_rxHandler_1_0.zip
-UDP_PACKETIZER_IP=build_udp_packetizer/sol1/impl/ip/xilinx_com_hls_udp_packetizer_1_0.zip
-UDP_DEPACKETIZER_IP=build_udp_depacketizer/sol1/impl/ip/xilinx_com_hls_udp_depacketizer_1_0.zip
-RDMA_SQ_HANDLER_IP=build_rdma_sq_handler/sol1/impl/ip/xilinx_com_hls_rdma_sq_handler_1_0.zip
-RDMA_PACKETIZER_IP=build_rdma_packetizer/sol1/impl/ip/xilinx_com_hls_rdma_packetizer_1_0.zip
-RDMA_DEPACKETIZER_IP=build_rdma_depacketizer/sol1/impl/ip/xilinx_com_hls_rdma_depacketizer_1_0.zip
+TCP_PACKETIZER_IP=build_tcp_packetizer.$(DEVICE)/sol1/impl/ip/xilinx_com_hls_tcp_packetizer_1_0.zip
+TCP_DEPACKETIZER_IP=build_tcp_depacketizer.$(DEVICE)/sol1/impl/ip/xilinx_com_hls_tcp_depacketizer_1_0.zip
+TCP_TXHANDLER_IP=build_tcp_txHandler.$(DEVICE)/sol1/impl/ip/xilinx_com_hls_tcp_txHandler_1_0.zip
+TCP_RXHANDLER_IP=build_tcp_rxHandler.$(DEVICE)/sol1/impl/ip/xilinx_com_hls_tcp_rxHandler_1_0.zip
+UDP_PACKETIZER_IP=build_udp_packetizer.$(DEVICE)/sol1/impl/ip/xilinx_com_hls_udp_packetizer_1_0.zip
+UDP_DEPACKETIZER_IP=build_udp_depacketizer.$(DEVICE)/sol1/impl/ip/xilinx_com_hls_udp_depacketizer_1_0.zip
+RDMA_SQ_HANDLER_IP=build_rdma_sq_handler.$(DEVICE)/sol1/impl/ip/xilinx_com_hls_rdma_sq_handler_1_0.zip
+RDMA_PACKETIZER_IP=build_rdma_packetizer.$(DEVICE)/sol1/impl/ip/xilinx_com_hls_rdma_packetizer_1_0.zip
+RDMA_DEPACKETIZER_IP=build_rdma_depacketizer.$(DEVICE)/sol1/impl/ip/xilinx_com_hls_rdma_depacketizer_1_0.zip
 
 TARGET=ip
 

@@ -50,14 +50,14 @@ switch $command {
     }
 }
 
-open_project build_hp_compression
+open_project build_hp_compression.${device}
 
 add_files hp_compression.cpp -cflags "-std=c++14 -I[pwd]/../../../driver/hls/ -DACCL_SYNTHESIS"
 
 set_top hp_compression
 
 open_solution sol1
-config_export -format xo -library ACCL -output [pwd]/hp_compression.xo
+config_export -format xo -library ACCL -output [pwd]/hp_compression_${device}.xo
 
 if {$do_sim} {
     csim_design -clean

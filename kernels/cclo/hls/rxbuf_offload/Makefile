@@ -17,10 +17,10 @@
 
 TARGET=ip
 DEVICE=xcu250-figd2104-2L-e
-RXBUF_DEQUEUE_IP=build_rxbuf_dequeue/sol1/impl/ip/xilinx_com_hls_rxbuf_dequeue_1_0.zip
-RXBUF_ENQUEUE_IP=build_rxbuf_enqueue/sol1/impl/ip/xilinx_com_hls_rxbuf_enqueue_1_0.zip
-RXBUF_SEEK_IP=build_rxbuf_seek/sol1/impl/ip/xilinx_com_hls_rxbuf_seek_1_0.zip
-RXBUF_SESSION_IP=build_rxbuf_session/sol1/impl/ip/xilinx_com_hls_rxbuf_session_1_0.zip
+RXBUF_DEQUEUE_IP=build_rxbuf_dequeue.$(DEVICE)/sol1/impl/ip/xilinx_com_hls_rxbuf_dequeue_1_0.zip
+RXBUF_ENQUEUE_IP=build_rxbuf_enqueue.$(DEVICE)/sol1/impl/ip/xilinx_com_hls_rxbuf_enqueue_1_0.zip
+RXBUF_SEEK_IP=build_rxbuf_seek.$(DEVICE)/sol1/impl/ip/xilinx_com_hls_rxbuf_seek_1_0.zip
+RXBUF_SESSION_IP=build_rxbuf_session.$(DEVICE)/sol1/impl/ip/xilinx_com_hls_rxbuf_session_1_0.zip
 
 all: $(RXBUF_DEQUEUE_IP) $(RXBUF_ENQUEUE_IP) $(RXBUF_SEEK_IP) $(RXBUF_SESSION_IP)
 

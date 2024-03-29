@@ -25,7 +25,7 @@ verilog_wrapper= """
 
 `timescale 1 ns / 1 ps
 
-module external_dma
+module external_dma_{}port
 (
   input ap_clk,
   input ap_rst_n,
@@ -226,13 +226,13 @@ for i in range(args.numdma):
     all_axi_declarations += axi_intf_declaration.format(i)
     all_axi_connections += axi_intf_connection.format(i)
 
-with open("external_dma.v", "w") as f:
-    f.write(verilog_wrapper.format(all_axi_declarations, all_axi_connections))
+with open("external_dma_%dport.v" % args.numdma, "w") as f:
+    f.write(verilog_wrapper.format(args.numdma, all_axi_declarations, all_axi_connections))
 
 kernel_xml = """
 <?xml version="1.0" encoding="UTF-8"?>
 <root versionMajor="1" versionMinor="9">
-<kernel name="external_dma" language="ip" vlnv="Xilinx:ACCL:external_dma:1.0" attributes="" preferredWorkGroupSizeMultiple="0" workGroupSize="1" interrupt="false" hwControlProtocol="user_managed">
+<kernel name="external_dma_{0}port" language="ip" vlnv="Xilinx:ACCL:external_dma_{0}port:1.0" attributes="" preferredWorkGroupSizeMultiple="0" workGroupSize="1" interrupt="false" hwControlProtocol="user_managed">
 <ports>
 <port name="s_axi_control" mode="slave" range="0x10000" dataWidth="32" portType="addressable" base="0x0"/>
 <port name="s_axis_s2mm" mode="read_only" dataWidth="512" portType="stream"/>
@@ -241,7 +241,7 @@ kernel_xml = """
 <port name="s_axis_mm2s_cmd" mode="read_only" dataWidth="104" portType="stream"/>
 <port name="m_axis_s2mm_sts" mode="write_only" dataWidth="32" portType="stream"/>
 <port name="m_axis_mm2s_sts" mode="write_only" dataWidth="8" portType="stream"/>
-{}</ports>
+{1}</ports>
 <args>
 <arg name="s_axis_s2mm" addressQualifier="4" id="0" port="s_axis_s2mm" size="0x4" offset="0x0" hostOffset="0x0" hostSize="0x4" type="void*" />
 <arg name="m_axis_mm2s" addressQualifier="4" id="1" port="m_axis_mm2s" size="0x4" offset="0x0" hostOffset="0x0" hostSize="0x4" type="void*" />
@@ -249,7 +249,7 @@ kernel_xml = """
 <arg name="s_axis_mm2s_cmd" addressQualifier="4" id="3" port="s_axis_mm2s_cmd" size="0x4" offset="0x0" hostOffset="0x0" hostSize="0x4" type="void*" />
 <arg name="m_axis_s2mm_sts" addressQualifier="4" id="4" port="m_axis_s2mm_sts" size="0x4" offset="0x0" hostOffset="0x0" hostSize="0x4" type="void*" />
 <arg name="m_axis_mm2s_sts" addressQualifier="4" id="5" port="m_axis_mm2s_sts" size="0x4" offset="0x0" hostOffset="0x0" hostSize="0x4" type="void*" />
-{}</args>
+{2}</args>
 </kernel></root>
 """
 
@@ -265,5 +265,5 @@ for i in range(args.numdma):
     all_xml_ports += xml_axi_port.format(i)
     all_xml_args += xml_axi_arg.format(i,i+6)
 
-with open("kernel.xml", "w") as f:
-    f.write(kernel_xml.format(all_xml_ports, all_xml_args))
+with open("external_dma_%dport.xml" % args.numdma, "w") as f:
+    f.write(kernel_xml.format(args.numdma, all_xml_ports, all_xml_args))

@@ -52,7 +52,6 @@ TCP_HLS_ROOTDIR ?= $$XILINX_HLS
 TCP_RX_BYPASS ?= 0
 CMAC_TCP_XO=Vitis_with_100Gbps_TCP-IP/_x.hw.$(XSA)/cmac_krnl.xo
 EXTERNAL_DMA_XO=../../kernels/plugins/external_dma/external_dma.xo
-CYT_BIT=Coyote/hw/build_$(CCLO_STACK_TYPE)/bitstreams/cyt_top.bit
 
 HOSTCTRL_XO=../../kernels/plugins/hostctrl/hostctrl.xo
 CLIENT_ARB_XO=../../kernels/plugins/client_arbiter/client_arbiter.xo
@@ -101,8 +100,12 @@ else
 	$(error Unsupported PLATFORM)
 endif
 
-BUILD_DIR := link_$(MODE)_eth_$(ETH_IF)_debug_$(DEBUG)_$(XSA)
+BUILD_DIR := link_$(MODE)_$(XSA)
 XCLBIN=$(BUILD_DIR)/ccl_offload.xclbin
+
+CYT_BUILD_DIR=coyote_build_$(CCLO_STACK_TYPE)_$(BOARD)
+CYT_BIT=$(CYT_BUILD_DIR)/bitstreams/cyt_top.bit
+
 OUTPUT_PRODUCT := $(XCLBIN)
 
 CONFIGFILE := link_config.ini
@@ -211,37 +214,34 @@ all: $(OUTPUT_PRODUCT)
 .PHONY: vnx
 vnx: $(CMAC_UDP_XO) $(UDP_XO)
 
-$(CMAC_UDP_XO) &:
+$(VNX)/Ethernet/_x.%/cmac_$(ETH_IF).xo:
 	git submodule update --init --recursive xup_vitis_network_example
-	$(MAKE) -C xup_vitis_network_example/Ethernet DEVICE=$(PLATFORM) INTERFACE=$(ETH_IF) all
+	$(MAKE) -C xup_vitis_network_example/Ethernet DEVICE=$* INTERFACE=$(ETH_IF) all
 
-$(UDP_XO):
+$(VNX)/NetLayers/_x.%/networklayer.xo:
 	git submodule update --init --recursive xup_vitis_network_example
-	$(MAKE) -C xup_vitis_network_example/NetLayers DEVICE=$(PLATFORM) all
-
-$(CMAC_TCP_XO):
-	git submodule update --init --recursive Vitis_with_100Gbps_TCP-IP
-	$(MAKE) -C Vitis_with_100Gbps_TCP-IP/ cmac_krnl DEVICE=$(PLATFORM) TEMP_DIR=_x.hw.$(XSA)/ XSA=$(XSA)
-
-$(TCP_DUMMY_XO):
-	$(MAKE) -C ../../kernels/plugins/dummy_tcp_stack DEVICE=$(FPGAPART) all
+	$(MAKE) -C xup_vitis_network_example/NetLayers DEVICE=$* all
 
 .PHONY: coyote_shell
-coyote_shell: Coyote/hw/build_$(CCLO_STACK_TYPE)/lynx/lynx.xpr
+coyote_shell: $(CYT_BUILD_DIR)/lynx/lynx.xpr
 
-Coyote/hw/build_$(CCLO_STACK_TYPE)/lynx/lynx.xpr:
-	cd Coyote/hw && mkdir build_$(CCLO_STACK_TYPE) && cd build_$(CCLO_STACK_TYPE) && cmake .. $(COYOTE_CONFIG)
-	$(MAKE) -C Coyote/hw/build_$(CCLO_STACK_TYPE)/ shell
+$(CYT_BUILD_DIR)/lynx/lynx.xpr:
+	mkdir $(CYT_BUILD_DIR) && cd $(CYT_BUILD_DIR) && cmake ../Coyote/hw $(COYOTE_CONFIG)
+	$(MAKE) -C $(CYT_BUILD_DIR) shell
 
 $(CYT_BIT): coyote_shell
-	$(MAKE) -C ../../kernels/cclo PLATFORM=$(PLATFORM) STACK_TYPE=$(CCLO_STACK_TYPE) MB_DEBUG_LEVEL=$(CCLO_MB_DEBUG_LEVEL) EN_DMA=0 EN_EXT_DMA=1
-	$(MAKE) -C ../../kernels/plugins PLATFORM=$(PLATFORM) DEBUG=$(DEBUG) STACK_TYPE=$(CCLO_STACK_TYPE) NUM_EXTDMA_AXI=$(NUM_EXTDMA_AXI)
-	vivado -mode tcl -source tcl/coyote.tcl -tclargs $(CCLO_STACK_TYPE) Coyote/hw/build_$(CCLO_STACK_TYPE)
-	cp hdl/$(MODE)_top.sv Coyote/hw/build_$(CCLO_STACK_TYPE)/lynx/hdl/config_0/user_logic_c0_0.sv
-	$(MAKE) -C Coyote/hw/build_$(CCLO_STACK_TYPE)/ compile
+	$(MAKE) -C ../../kernels/cclo PLATFORM=$(PLATFORM) STACK_TYPE=$(CCLO_STACK_TYPE) MB_DEBUG_LEVEL=$(CCLO_MB_DEBUG_LEVEL)
+	$(MAKE) -C ../../kernels/plugins DEVICE=$(FPGAPART)
+	vivado -mode tcl -source tcl/coyote.tcl -tclargs $(CCLO_STACK_TYPE) $(CYT_BUILD_DIR)
+	cp hdl/$(MODE)_top.sv $(CYT_BUILD_DIR)/lynx/hdl/config_0/user_logic_c0_0.sv
+	$(MAKE) -C $(CYT_BUILD_DIR) compile
 
 .PHONY: tcp_stack
 tcp_stack: $(TCP_XO) $(CMAC_TCP_XO)
+
+Vitis_with_100Gbps_TCP-IP/_x.hw.%/cmac_krnl.xo:
+	git submodule update --init --recursive Vitis_with_100Gbps_TCP-IP
+	$(MAKE) -C Vitis_with_100Gbps_TCP-IP/ cmac_krnl DEVICE=$(PLATFORM) TEMP_DIR=_x.hw.$*/ XSA=$*
 
 $(TCP_XO):
 	git submodule update --init --recursive Vitis_with_100Gbps_TCP-IP
@@ -251,13 +251,18 @@ $(TCP_XO):
 	$(MAKE) -C Vitis_with_100Gbps_TCP-IP/build installip
 	$(MAKE) -C Vitis_with_100Gbps_TCP-IP/ network_krnl DEVICE=$(PLATFORM) TEMP_DIR=_x.hw.$(XSA)/ XSA=$(XSA)
 
+$(TCP_DUMMY_XO):
+	$(MAKE) -C ../../kernels/plugins/dummy_tcp_stack DEVICE=$(FPGAPART) all
+
 $(CCLO_XO):
 	$(MAKE) -C ../../kernels/cclo PLATFORM=$(PLATFORM) STACK_TYPE=$(CCLO_STACK_TYPE) MB_DEBUG_LEVEL=$(CCLO_MB_DEBUG_LEVEL)
 
 $(XCLBIN): $(NET_XO) $(CCLO_XO)
 	python3 gen_config.py --board $(BOARD) --poe $(MODE) $(GEN_CONFIG_FLAGS) -o $(CONFIGFILE)
-	$(MAKE) -C ../../kernels/plugins PLATFORM=$(PLATFORM) DEBUG=$(DEBUG) STACK_TYPE=$(CCLO_STACK_TYPE) NUM_EXTDMA_AXI=$(NUM_EXTDMA_AXI)
-	v++ --link --platform $(PLATFORM) --kernel_frequency $(FREQUENCY) --save-temps --temp_dir $(BUILD_DIR) $(VPP_CONFIG) $(ADV_CMD) $(IPREPO_CMD) -o $@ $(NET_XO) $(OTHER_XO)
+	mkdir -p kernels/$(FPGAPART)
+	cp -ur ../../kernels/plugins kernels/$(FPGAPART) 
+	$(MAKE) -C kernels/$(FPGAPART)/plugins DEVICE=$(FPGAPART)
+	v++ --link --platform $(PLATFORM) $(PROFILE_OPTS) --kernel_frequency $(FREQUENCY) --save-temps --temp_dir $(BUILD_DIR) $(VPP_CONFIG) $(ADV_CMD) $(IPREPO_CMD) -o $@ $(NET_XO) $(OTHER_XO)
 
 .PHONY: distclean
 distclean:

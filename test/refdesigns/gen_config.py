@@ -31,7 +31,9 @@ args = parser.parse_args()
 if args.board == "u50" and args.ethif != 0:
     raise "U50 has a single Ethernet port"
 
+num_extdma_ports = 1
 if args.host:
+    num_extdma_ports = 2
     if args.board == "u280" or args.board == "u50":
         raise "Host memory only supported on U55C/U200/U250"
 
@@ -71,7 +73,7 @@ arb_instantiation = "nk=client_arbiter:{num_inst}:".format(num_inst=num_cclo)
 hc_instantiation = "nk=hostctrl:{num_inst}:".format(num_inst=2*num_cclo)
 reduce_instantiation = "nk=reduce_ops:{num_inst}:".format(num_inst=num_cclo)
 cast_instantiation = "nk=hp_compression:{num_inst}:".format(num_inst=3*num_cclo)
-extdma_instantiation = "nk=external_dma:{num_inst}:".format(num_inst=2*num_cclo)
+extdma_instantiation = "nk=external_dma_{num_ports}ports:{num_inst}:".format(num_inst=2*num_cclo, num_ports=num_extdma_ports)
 
 for i in range(num_cclo):
     endch = "" if i == num_cclo-1 else "."

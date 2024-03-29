@@ -17,7 +17,7 @@
 
 TARGET=ip
 DEVICE=xcu250-figd2104-2L-e
-HOSTCTRL_IP=hostctrl.xo
+HOSTCTRL_IP=hostctrl_$(DEVICE).xo
 
 all: $(HOSTCTRL_IP)
 
