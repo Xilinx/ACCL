@@ -73,7 +73,7 @@ arb_instantiation = "nk=client_arbiter:{num_inst}:".format(num_inst=num_cclo)
 hc_instantiation = "nk=hostctrl:{num_inst}:".format(num_inst=2*num_cclo)
 reduce_instantiation = "nk=reduce_ops:{num_inst}:".format(num_inst=num_cclo)
 cast_instantiation = "nk=hp_compression:{num_inst}:".format(num_inst=3*num_cclo)
-extdma_instantiation = "nk=external_dma_{num_ports}ports:{num_inst}:".format(num_inst=2*num_cclo, num_ports=num_extdma_ports)
+extdma_instantiation = "nk=external_dma_{num_ports}port:{num_inst}:".format(num_inst=2*num_cclo, num_ports=num_extdma_ports)
 
 for i in range(num_cclo):
     endch = "" if i == num_cclo-1 else "."

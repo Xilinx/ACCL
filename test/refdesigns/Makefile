@@ -23,6 +23,25 @@ PLATFORM ?= xilinx_u55c_gen3x16_xdma_3_202210_1
 # U280: xilinx_u280_gen3x16_xdma_1_202211_1
 # U250: xilinx_u250_gen3x16_xdma_4_1_202210_1
 
+ifeq (u250,$(findstring u250, $(PLATFORM)))
+	FPGAPART=xcu250-figd2104-2L-e
+	BOARD=u250
+else ifeq (u280,$(findstring u280, $(PLATFORM)))
+	FPGAPART=xcu280-fsvh2892-2L-e
+	BOARD=u280
+else ifeq (u55c,$(findstring u55c, $(PLATFORM)))
+	FPGAPART=xcu55c-fsvh2892-2L-e
+	BOARD=u55c
+else ifeq (u200,$(findstring u200, $(PLATFORM)))
+	FPGAPART=xcu200-fsgd2104-2-e
+	BOARD=u200
+else ifeq (u50,$(findstring u50, $(PLATFORM)))
+	FPGAPART=xcu50-fsvh2104-2-e
+	BOARD=u50
+else
+	$(error Unsupported PLATFORM)
+endif
+
 XSA := $(strip $(patsubst %.xpfm, % , $(shell basename $(PLATFORM))))
 DEBUG ?= none
 PROFILE ?= none
@@ -31,7 +50,6 @@ USE_HOSTMEM ?= 0
 VPP_TARGET ?= hw
 USER_KERNEL ?= none
 FREQUENCY = 250
-CCLO_XO = ../../kernels/cclo/ccl_offload.xo
 CCLO_MB_DEBUG_LEVEL ?= 0
 
 VNX=xup_vitis_network_example
@@ -45,21 +63,20 @@ FW_SOURCES = $(shell find fw -name '*.c') $(shell find fw -name '*.h') $(shell f
 ETH_IF=0
 CMAC_UDP_XO=$(VNX)/Ethernet/_x.$(PLATFORM)/cmac_$(ETH_IF).xo
 UDP_XO=$(VNX)/NetLayers/_x.$(PLATFORM)/networklayer.xo
-TCP_DUMMY_XO=../../kernels/plugins/dummy_tcp_stack/dummy_tcp_stack.xo
-TCP_XO=Vitis_with_100Gbps_TCP-IP/_x.hw.$(XSA)/network_krnl.xo
+TCP_DUMMY_XO=../../kernels/plugins/dummy_tcp_stack/dummy_tcp_stack_$(FPGAPART).xo
+TCP_XO=tcp_stack.$(XSA)/network_krnl.xo
 TCP_VIVADO_ROOTDIR ?= $$XILINX_VIVADO
 TCP_HLS_ROOTDIR ?= $$XILINX_HLS
 TCP_RX_BYPASS ?= 0
-CMAC_TCP_XO=Vitis_with_100Gbps_TCP-IP/_x.hw.$(XSA)/cmac_krnl.xo
-EXTERNAL_DMA_XO=../../kernels/plugins/external_dma/external_dma.xo
+CMAC_TCP_XO=tcp_stack.$(XSA)/cmac_krnl.xo
 
-HOSTCTRL_XO=../../kernels/plugins/hostctrl/hostctrl.xo
-CLIENT_ARB_XO=../../kernels/plugins/client_arbiter/client_arbiter.xo
-SUM_XO=../../kernels/plugins/reduce_ops/reduce_ops.xo
-COMPRESSION_XO=../../kernels/plugins/hp_compression/hp_compression.xo
-LOOPBACK_XO=../../kernels/plugins/loopback/loopback.xo
-TCP_SESS_XO=../../kernels/plugins/tcp_session_handler/tcp_session_handler.xo
-VADD_XO=../../kernels/plugins/vadd_put/vadd_put.xo
+HOSTCTRL_XO=../../kernels/plugins/hostctrl/hostctrl_$(FPGAPART).xo
+CLIENT_ARB_XO=../../kernels/plugins/client_arbiter/client_arbiter_$(FPGAPART).xo
+SUM_XO=../../kernels/plugins/reduce_ops/reduce_ops_$(FPGAPART).xo
+COMPRESSION_XO=../../kernels/plugins/hp_compression/hp_compression_$(FPGAPART).xo
+LOOPBACK_XO=../../kernels/plugins/loopback/loopback_$(FPGAPART).xo
+TCP_SESS_XO=../../kernels/plugins/tcp_session_handler/tcp_session_handler_$(FPGAPART).xo
+VADD_XO=../../kernels/plugins/vadd_put/vadd_put_$(FPGAPART).xo
 
 HWEMU_MST_XO=$$XILINX_VITIS/data/emulation/XO/sim_ipc_axis_master_512.xo
 HWEMU_SLV_XO=$$XILINX_VITIS/data/emulation/XO/sim_ipc_axis_slave_512.xo
@@ -81,25 +98,6 @@ else
 	$(error Unsupported PROFILE setting)
 endif
 
-ifeq (u250,$(findstring u250, $(PLATFORM)))
-	FPGAPART=xcu250-figd2104-2L-e
-	BOARD=u250
-else ifeq (u280,$(findstring u280, $(PLATFORM)))
-	FPGAPART=xcu280-fsvh2892-2L-e
-	BOARD=u280
-else ifeq (u55c,$(findstring u55c, $(PLATFORM)))
-	FPGAPART=xcu55c-fsvh2892-2L-e
-	BOARD=u55c
-else ifeq (u200,$(findstring u200, $(PLATFORM)))
-	FPGAPART=xcu200-fsgd2104-2-e
-	BOARD=u200
-else ifeq (u50,$(findstring u50, $(PLATFORM)))
-	FPGAPART=xcu50-fsvh2104-2-e
-	BOARD=u50
-else
-	$(error Unsupported PLATFORM)
-endif
-
 BUILD_DIR := link_$(MODE)_$(XSA)
 XCLBIN=$(BUILD_DIR)/ccl_offload.xclbin
 
@@ -113,7 +111,7 @@ VPP_CONFIG := -t $(VPP_TARGET) --config $(CONFIGFILE)
 
 ADV_CMD :=
 IPREPO_CMD :=
-OTHER_XO := $(CCLO_XO) $(HOSTCTRL_XO) $(CLIENT_ARB_XO) $(SUM_XO) $(COMPRESSION_XO) $(EXTERNAL_DMA_XO)
+OTHER_XO := $(HOSTCTRL_XO) $(CLIENT_ARB_XO) $(SUM_XO) $(COMPRESSION_XO) $(EXTERNAL_DMA_XO)
 
 GEN_CONFIG_FLAGS := 
 ifeq (vadd, $(USER_KERNEL))
@@ -161,14 +159,13 @@ else ifeq (axis3x,$(MODE))
 	CCLO_STACK_TYPE = TCP
 	CCLO_MB_DEBUG_LEVEL = 2
 else ifeq (tcp, $(MODE))
-	CMAC_TCP_XO=Vitis_with_100Gbps_TCP-IP/_x.hw.$(XSA)/cmac_krnl.xo
 	NET_XO = $(TCP_XO)
 	ifneq (hw_emu, $(VPP_TARGET))
 		NET_XO += $(CMAC_TCP_XO)
-		ADV_CMD += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/Vitis_with_100Gbps_TCP-IP/scripts/post_sys_link.tcl
+		ADV_CMD += --advanced.param compiler.userPostSysLinkOverlayTcl=$(shell pwd)/tcp_stack.$(XSA)/scripts/post_sys_link.tcl
 	endif
 	OTHER_XO += $(LOOPBACK_XO) $(TCP_SESS_XO)
-	IPREPO_CMD += --user_ip_repo_paths Vitis_with_100Gbps_TCP-IP/build/fpga-network-stack/iprepo
+	IPREPO_CMD += --user_ip_repo_paths tcp_stack.$(XSA)/build/fpga-network-stack/iprepo
 	CCLO_STACK_TYPE = TCP
 else ifeq (coyote_tcp, $(MODE))
 	N_DDR_CHAN = 0
@@ -200,10 +197,18 @@ else
 	$(error Unsupported MODE)
 endif
 
+CCLO_XO = ../../kernels/cclo/$(CCLO_STACK_TYPE)_1111$(CCLO_MB_DEBUG_LEVEL)_$(FPGAPART)/ccl_offload.xo
+OTHER_XO += $(CCLO_XO)
+
 ifeq (1, $(USE_HOSTMEM))
 	GEN_CONFIG_FLAGS += --host
 	NUM_EXTDMA_AXI = 2
+else
+	NUM_EXTDMA_AXI = 1
 endif
+
+EXTERNAL_DMA_XO=../../kernels/plugins/external_dma/external_dma_$(NUM_EXTDMA_AXI)port.xo
+OTHER_XO += $(EXTERNAL_DMA_XO)
 
 ifneq (none, $(ETH_IF))
 	GEN_CONFIG_FLAGS += --ethif $(ETH_IF)
@@ -232,6 +237,7 @@ $(CYT_BUILD_DIR)/lynx/lynx.xpr:
 $(CYT_BIT): coyote_shell
 	$(MAKE) -C ../../kernels/cclo PLATFORM=$(PLATFORM) STACK_TYPE=$(CCLO_STACK_TYPE) MB_DEBUG_LEVEL=$(CCLO_MB_DEBUG_LEVEL)
 	$(MAKE) -C ../../kernels/plugins DEVICE=$(FPGAPART)
+	cp -rf $(CCLO_XO) $(CYT_BUILD_DIR)/iprepo
 	vivado -mode tcl -source tcl/coyote.tcl -tclargs $(CCLO_STACK_TYPE) $(CYT_BUILD_DIR)
 	cp hdl/$(MODE)_top.sv $(CYT_BUILD_DIR)/lynx/hdl/config_0/user_logic_c0_0.sv
 	$(MAKE) -C $(CYT_BUILD_DIR) compile
@@ -239,17 +245,18 @@ $(CYT_BIT): coyote_shell
 .PHONY: tcp_stack
 tcp_stack: $(TCP_XO) $(CMAC_TCP_XO)
 
-Vitis_with_100Gbps_TCP-IP/_x.hw.%/cmac_krnl.xo:
+$(CMAC_TCP_XO):
 	git submodule update --init --recursive Vitis_with_100Gbps_TCP-IP
-	$(MAKE) -C Vitis_with_100Gbps_TCP-IP/ cmac_krnl DEVICE=$(PLATFORM) TEMP_DIR=_x.hw.$*/ XSA=$*
-
-$(TCP_XO):
-	git submodule update --init --recursive Vitis_with_100Gbps_TCP-IP
-	mkdir -p Vitis_with_100Gbps_TCP-IP/build && \
-	cd Vitis_with_100Gbps_TCP-IP/build && \
+	mkdir -p tcp_stack.$(XSA)
+	cp -r Vitis_with_100Gbps_TCP-IP/* tcp_stack.$(XSA)
+	mkdir -p tcp_stack.$(XSA)/build && \
+	cd tcp_stack.$(XSA)/build && \
 	cmake ../ -DFDEV_NAME=$(BOARD) -DVIVADO_HLS_ROOT_DIR=$(TCP_HLS_ROOTDIR) -DVIVADO_ROOT_DIR=$(TCP_VIVADO_ROOTDIR) -DTCP_STACK_EN=1 -DTCP_STACK_RX_DDR_BYPASS_EN=$(TCP_RX_BYPASS) -DDTCP_STACK_WINDOW_SCALING_EN=0
-	$(MAKE) -C Vitis_with_100Gbps_TCP-IP/build installip
-	$(MAKE) -C Vitis_with_100Gbps_TCP-IP/ network_krnl DEVICE=$(PLATFORM) TEMP_DIR=_x.hw.$(XSA)/ XSA=$(XSA)
+	$(MAKE) -C tcp_stack.$(XSA)/build installip
+	$(MAKE) -C tcp_stack.$(XSA)/ cmac_krnl DEVICE=$(PLATFORM) TEMP_DIR=. XSA=$(XSA)
+
+$(TCP_XO): $(CMAC_TCP_XO)
+	$(MAKE) -C tcp_stack.$(XSA)/ network_krnl DEVICE=$(PLATFORM) TEMP_DIR=. XSA=$(XSA)
 
 $(TCP_DUMMY_XO):
 	$(MAKE) -C ../../kernels/plugins/dummy_tcp_stack DEVICE=$(FPGAPART) all
@@ -260,8 +267,7 @@ $(CCLO_XO):
 $(XCLBIN): $(NET_XO) $(CCLO_XO)
 	python3 gen_config.py --board $(BOARD) --poe $(MODE) $(GEN_CONFIG_FLAGS) -o $(CONFIGFILE)
 	mkdir -p kernels/$(FPGAPART)
-	cp -ur ../../kernels/plugins kernels/$(FPGAPART) 
-	$(MAKE) -C kernels/$(FPGAPART)/plugins DEVICE=$(FPGAPART)
+	$(MAKE) -C ../../kernels/plugins DEVICE=$(FPGAPART)
 	v++ --link --platform $(PLATFORM) $(PROFILE_OPTS) --kernel_frequency $(FREQUENCY) --save-temps --temp_dir $(BUILD_DIR) $(VPP_CONFIG) $(ADV_CMD) $(IPREPO_CMD) -o $@ $(NET_XO) $(OTHER_XO)
 
 .PHONY: distclean

@@ -328,10 +328,10 @@ set_property top ${ipname} [current_fileset]
 
 # Package IP
 
-ipx::package_project -root_dir ./packaged_kernel -vendor Xilinx -library ACCL -taxonomy /KernelIP -import_files -set_current false
-ipx::unload_core ./packaged_kernel/component.xml
+ipx::package_project -root_dir ./${ipname}/packaged_kernel -vendor Xilinx -library ACCL -taxonomy /KernelIP -import_files -set_current false
+ipx::unload_core ./${ipname}/packaged_kernel/component.xml
 
-ipx::edit_ip_in_project -upgrade true -name tmp_edit_project -directory ./package ./packaged_kernel/component.xml
+ipx::edit_ip_in_project -upgrade true -name tmp_edit_project -directory ./${ipname}/package ./${ipname}/packaged_kernel/component.xml
 set_property core_revision 1 [ipx::current_core]
 
 foreach up [ipx::get_user_parameters] {
@@ -370,6 +370,6 @@ if {[file exists "${ipname}.xo"]} {
     file delete -force "${ipname}.xo"
 }
 
-package_xo -xo_path ${ipname}.xo -kernel_name ${ipname} -ip_directory ./packaged_kernel -kernel_xml ./${ipname}.xml
+package_xo -xo_path ${ipname}.xo -kernel_name ${ipname} -ip_directory ./${ipname}/packaged_kernel -kernel_xml ./${ipname}.xml
 
 close_project -delete
