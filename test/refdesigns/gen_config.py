@@ -70,7 +70,7 @@ else:
 
 cclo_instantiation = "nk=ccl_offload:{num_inst}:".format(num_inst=num_cclo)
 arb_instantiation = "nk=client_arbiter:{num_inst}:".format(num_inst=num_cclo)
-hc_instantiation = "nk=hostctrl:{num_inst}:".format(num_inst=2*num_cclo)
+hc_instantiation = "nk=hostctrl:{num_inst}:".format(num_inst=num_cclo)
 reduce_instantiation = "nk=reduce_ops:{num_inst}:".format(num_inst=num_cclo)
 cast_instantiation = "nk=hp_compression:{num_inst}:".format(num_inst=3*num_cclo)
 extdma_instantiation = "nk=external_dma_{num_ports}port:{num_inst}:".format(num_inst=2*num_cclo, num_ports=num_extdma_ports)
@@ -79,7 +79,7 @@ for i in range(num_cclo):
     endch = "" if i == num_cclo-1 else "."
     cclo_instantiation += "ccl_offload_{inst_nr}".format(inst_nr=i) + endch
     arb_instantiation += "arb_{inst_nr}".format(inst_nr=i) + endch
-    hc_instantiation += "hostctrl_{inst_nr}_0.hostctrl_{inst_nr}_1".format(inst_nr=i) + endch
+    hc_instantiation += "hostctrl_{inst_nr}_0".format(inst_nr=i) + endch
     reduce_instantiation += "arith_{inst_nr}".format(inst_nr=i) + endch
     cast_instantiation += "compression_{inst_nr}_0.compression_{inst_nr}_1.compression_{inst_nr}_2".format(inst_nr=i) + endch
     extdma_instantiation += "extdma_{num_inst}_0.extdma_{num_inst}_1".format(num_inst=i) + endch
@@ -123,8 +123,7 @@ for i in range(num_cclo):
     slr_constraints += "slr=arb_{inst_nr}:SLR{slr_nr}\nslr=arith_{inst_nr}:SLR{slr_nr}\nslr=ccl_offload_{inst_nr}:SLR{slr_nr}\n".format(inst_nr=i, slr_nr=target_slr)
     for j in range(3):
         slr_constraints += "slr=compression_{inst_nr}_{dp_nr}:SLR{slr_nr}\n".format(inst_nr=i, dp_nr=j, slr_nr=target_slr)
-    for j in range(2):
-        slr_constraints += "slr=hostctrl_{inst_nr}_{dp_nr}:SLR{slr_nr}\n".format(inst_nr=i, dp_nr=j, slr_nr=target_slr)
+    slr_constraints += "slr=hostctrl_{inst_nr}_0:SLR{slr_nr}\n".format(inst_nr=i, slr_nr=target_slr)
     if args.axis3x:
         slr_constraints += "slr=poe_{inst_nr}:SLR{slr_nr}\n".format(inst_nr=i, slr_nr=target_slr)
     else:
@@ -203,11 +202,9 @@ else:
 for i in range(num_cclo):
     # Command interfaces
     stream_connections += "stream_connect=hostctrl_{inst_nr}_0.cmd:arb_{inst_nr}.cmd_clients_0\n".format(inst_nr=i)
-    stream_connections += "stream_connect=hostctrl_{inst_nr}_1.cmd:arb_{inst_nr}.cmd_clients_1\n".format(inst_nr=i)
     stream_connections += "stream_connect=arb_{inst_nr}.cmd_cclo:ccl_offload_{inst_nr}.s_axis_call_req\n".format(inst_nr=i)
     stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_call_ack:arb_{inst_nr}.ack_cclo\n".format(inst_nr=i)
     stream_connections += "stream_connect=arb_{inst_nr}.ack_clients_0:hostctrl_{inst_nr}_0.sts\n".format(inst_nr=i)
-    stream_connections += "stream_connect=arb_{inst_nr}.ack_clients_1:hostctrl_{inst_nr}_1.sts\n".format(inst_nr=i)
     # Plugin interfaces
     stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_arith_op0:arith_{inst_nr}.in0\n".format(inst_nr=i)
     stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_arith_op1:arith_{inst_nr}.in1\n".format(inst_nr=i)
@@ -222,9 +219,13 @@ for i in range(num_cclo):
     if args.vadd:
         stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_krnl:vadd_{inst_nr}_0.data_from_cclo\n".format(inst_nr=i)
         stream_connections += "stream_connect=vadd_{inst_nr}_0.data_to_cclo:ccl_offload_{inst_nr}.s_axis_krnl\n".format(inst_nr=i)
+        stream_connections += "stream_connect=arb_0.ack_clients_1:vadd_{inst_nr}_0.sts_from_cclo:512\n".format(inst_nr=i)
+        stream_connections += "stream_connect=vadd_{inst_nr}_0.cmd_to_cclo:arb_0.cmd_clients_1:512\n".format(inst_nr=i)
     else:
         stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_krnl:lb_user_krnl_{inst_nr}.in\n".format(inst_nr=i)
         stream_connections += "stream_connect=lb_user_krnl_{inst_nr}.out:ccl_offload_{inst_nr}.s_axis_krnl\n".format(inst_nr=i)
+        stream_connections += "stream_connect=arb_0.ack_clients_1:lb_user_krnl_{inst_nr}.sts_from_cclo:512\n".format(inst_nr=i)
+        stream_connections += "stream_connect=lb_user_krnl_{inst_nr}.cmd_to_cclo:arb_0.cmd_clients_1:512\n".format(inst_nr=i)
     # External DMA interface
     stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_dma0_s2mm:extdma_{inst_nr}_0.s_axis_s2mm\n".format(inst_nr=i)
     stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_dma0_mm2s_cmd:extdma_{inst_nr}_0.s_axis_mm2s_cmd\n".format(inst_nr=i)

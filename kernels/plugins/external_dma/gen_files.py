@@ -110,7 +110,7 @@ module external_dma_{}port
 
         .s_axis_s2mm_tdata(s_axis_s2mm_tdata),
         .s_axis_s2mm_tkeep(s_axis_s2mm_tkeep),
-        .s_axis_s2mm_tdest(s_axis_s2mm_tdest),
+        {}
         .s_axis_s2mm_tlast(s_axis_s2mm_tlast),
         .s_axis_s2mm_tready(s_axis_s2mm_tready),
         .s_axis_s2mm_tvalid(s_axis_s2mm_tvalid),
@@ -124,7 +124,7 @@ module external_dma_{}port
         .s_axis_mm2s_cmd_tdata(s_axis_mm2s_cmd_tdata),
         .s_axis_mm2s_cmd_tready(s_axis_mm2s_cmd_tready),
         .s_axis_mm2s_cmd_tvalid(s_axis_mm2s_cmd_tvalid),
-        .s_axis_mm2s_cmd_tdest(s_axis_mm2s_cmd_tdest),
+        {}
 
         .m_axis_mm2s_sts_tdata(m_axis_mm2s_sts_tdata),
         .m_axis_mm2s_sts_tready(m_axis_mm2s_sts_tready),
@@ -135,7 +135,7 @@ module external_dma_{}port
         .s_axis_s2mm_cmd_tdata(s_axis_s2mm_cmd_tdata),
         .s_axis_s2mm_cmd_tready(s_axis_s2mm_cmd_tready),
         .s_axis_s2mm_cmd_tvalid(s_axis_s2mm_cmd_tvalid),
-        .s_axis_s2mm_cmd_tdest(s_axis_s2mm_cmd_tdest),
+        {}
 
         .m_axis_s2mm_sts_tdata(m_axis_s2mm_sts_tdata),
         .m_axis_s2mm_sts_tready(m_axis_s2mm_sts_tready),
@@ -227,7 +227,10 @@ for i in range(args.numdma):
     all_axi_connections += axi_intf_connection.format(i)
 
 with open("external_dma_%dport.v" % args.numdma, "w") as f:
-    f.write(verilog_wrapper.format(args.numdma, all_axi_declarations, all_axi_connections))
+    tdest_1 = '\t\t\t\t.s_axis_s2mm_tdest(s_axis_s2mm_tdest),\n' if args.numdma > 1 else '\n'
+    tdest_2 = '\t\t\t\t.s_axis_mm2s_cmd_tdest(s_axis_mm2s_cmd_tdest),\n' if args.numdma > 1 else '\n'
+    tdest_3 = '\t\t\t\t.s_axis_s2mm_cmd_tdest(s_axis_s2mm_cmd_tdest),\n' if args.numdma > 1 else '\n'
+    f.write(verilog_wrapper.format(args.numdma, all_axi_declarations, all_axi_connections, tdest_1, tdest_2, tdest_3))
 
 kernel_xml = """
 <?xml version="1.0" encoding="UTF-8"?>
