@@ -21,7 +21,6 @@ open_project "$build_dir/lynx/lynx.xpr"
 update_compile_order -fileset sources_1
 create_bd_design "accl_bd"
 update_compile_order -fileset sources_1
-set_property  ip_repo_paths  "$build_dir ../../kernels" [current_project]
 update_ip_catalog
 
 create_bd_cell -type ip -vlnv Xilinx:ACCL:ccl_offload:1.0 ccl_offload_0

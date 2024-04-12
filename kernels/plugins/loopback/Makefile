@@ -17,7 +17,7 @@
 # *******************************************************************************/
 
 DEVICE=xcu250-figd2104-2L-e
-LOOPBACK_IP=loopback.xo
+LOOPBACK_IP=loopback_$(DEVICE).xo
 TARGET=ip
 
 all: $(LOOPBACK_IP)

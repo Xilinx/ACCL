@@ -51,14 +51,14 @@ switch $command {
 }
 
 
-open_project dummy_cyt_rdma_stack
+open_project dummy_cyt_rdma_stack.${device}
 
 add_files dummy_cyt_rdma_stack.cpp -cflags "-std=c++14 -I../../../driver/hls/ -I../../cclo/hls/eth_intf/ -I../../../hlslib/include/hlslib/xilinx -DACCL_SYNTHESIS"
 
 set_top cyt_rdma
 
 open_solution sol1
-config_export -format xo -library ACCL -output [pwd]/dummy_cyt_rdma_stack.xo
+config_export -format xo -library ACCL -output [pwd]/dummy_cyt_rdma_stack_${device}.xo
 
 if {$do_sim} {
     csim_design -clean

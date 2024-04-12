@@ -17,7 +17,7 @@
 
 TARGET=ip
 DEVICE=xcu280-fsvh2892-2L-e
-DMA_MOVER_IP=build_dma_mover/sol1/impl/ip/xilinx_com_hls_dma_mover_1_0.zip
+DMA_MOVER_IP=build_dma_mover.$(DEVICE)/sol1/impl/ip/xilinx_com_hls_dma_mover_1_0.zip
 
 all: $(DMA_MOVER_IP)
 

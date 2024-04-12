@@ -19,6 +19,7 @@ cmake_minimum_required(VERSION 3.9)
 project(accl_simulation)
 
 set(CMAKE_CXX_STANDARD 17)
+set(ACCL_SIM_NUM_BANKS 2 CACHE STRING "Number of ACCL simulator memory banks (must correspond to simdll)")
 set(ACCL_SIM_MEM_SIZE_KB 262144 CACHE STRING "Size of ACCL simulator memory, in KB (must correspond to simdll)")
 
 # Consider using cmake_path from CMake 3.20 (2021) for better error messages:
@@ -51,10 +52,14 @@ target_link_libraries(cclo_sim PUBLIC zmq zmqpp pthread jsoncpp_lib dl rt)
 target_compile_definitions(cclo_sim PUBLIC ZMQ_CALL_VERBOSE NUM_CTRL_STREAMS=3 ACCL_SIM_MEM_SIZE_KB=${ACCL_SIM_MEM_SIZE_KB})
 target_compile_options(cclo_sim PRIVATE -Wno-attributes -fdiagnostics-color=always -g -fmax-errors=3)
 
-set(XSIM_COMPILE_FOLDER ${ACCL_REPO_ROOT}/kernels/cclo/ccl_offload_ex/ccl_offload_ex.sim/sim_1/behav/xsim/)
+set(STACK_TYPE "TCP" CACHE STRING "Type of POE")
+set_property(CACHE STACK_TYPE PROPERTY STRINGS "TCP" "UDP" "RDMA")
+
+set(BUILD_FOLDER ${STACK_TYPE}_sim)
+set(XSIM_COMPILE_FOLDER ${ACCL_REPO_ROOT}/kernels/cclo/${BUILD_FOLDER}/ccl_offload_ex/ccl_offload_ex.sim/sim_1/behav/xsim/)
 
 if (NOT EXISTS ${XSIM_COMPILE_FOLDER})
-    message(FATAL_ERROR "Simulation kernel not build. Run make simdll in ${ACCL_REPO_ROOT}/kernels/cclo")
+    message(FATAL_ERROR "Simulation kernel not built. Run make STACK_TYPE=${STACK_TYPE} MODE=simdll in ${ACCL_REPO_ROOT}/kernels/cclo")
 endif ()
 
 set(SYMLINKS xsim.dir

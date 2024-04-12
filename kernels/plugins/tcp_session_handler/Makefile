@@ -15,7 +15,7 @@
 #
 # *******************************************************************************/
 DEVICE=xcu280-fsvh2892-2L-e
-TCP_STACK_IP=tcp_session_handler.xo
+TCP_STACK_IP=tcp_session_handler_$(DEVICE).xo
 
 TARGET=ip
 

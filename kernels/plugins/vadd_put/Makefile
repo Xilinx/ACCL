@@ -16,7 +16,7 @@
 # *******************************************************************************/
 
 DEVICE=xcu250-figd2104-2L-e
-VADD_IP=vadd_put.xo
+VADD_IP=vadd_put_$(DEVICE).xo
 TARGET=ip
 
 all: $(VADD_IP) 

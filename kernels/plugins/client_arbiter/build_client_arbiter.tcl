@@ -41,14 +41,14 @@ switch $command {
 }
 
 
-open_project build_client_arbiter
+open_project build_client_arbiter.$device
 
 add_files client_arbiter.cpp -cflags "-std=c++14 -I../../../driver/hls/ -DNUM_CTRL_STREAMS=$nclients -DACCL_SYNTHESIS"
 
 set_top client_arbiter
 
 open_solution sol1
-config_export -format xo -library ACCL -output [pwd]/client_arbiter.xo
+config_export -format xo -library ACCL -output [pwd]/client_arbiter_${device}.xo
 
 if {$do_syn} {
     set_part $device

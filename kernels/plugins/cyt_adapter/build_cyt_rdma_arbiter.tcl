@@ -51,7 +51,7 @@ switch $command {
 }
 
 
-open_project build_cyt_rdma_arbiter
+open_project build_cyt_rdma_arbiter.${device}
 
 
 add_files cyt_rdma_arbiter.cpp -cflags "-std=c++14 -I. -I../../cclo/hls/eth_intf -I../../../driver/hls/ -DACCL_SYNTHESIS"
@@ -60,7 +60,7 @@ add_files cyt_rdma_arbiter.cpp -cflags "-std=c++14 -I. -I../../cclo/hls/eth_intf
 set_top cyt_rdma_arbiter
 
 open_solution sol1
-config_export -format xo -library ACCL -output [pwd]/cyt_rdma_arbiter.xo
+config_export -format xo -library ACCL -output [pwd]/cyt_rdma_arbiter_${device}.xo
 
 if {$do_sim} {
     csim_design -clean

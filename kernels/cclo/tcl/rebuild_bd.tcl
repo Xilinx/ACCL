@@ -110,7 +110,7 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
   set control_xbar [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_interconnect:2.1 control_xbar ]
   set_property -dict [ list CONFIG.NUM_MI {2} ] $control_xbar
 
-  source -notrace ./tcl/control_bd.tcl  
+  source -notrace ../tcl/control_bd.tcl  
   set idcode [expr {$commitHash<<8 | $debugLevel<<6 | $enableExtKrnlStream<<5 | $enableCompression<<4 | $enableArithmetic<<3 | $enableDMA<<2 | ($netStackType == "RDMA" ? 2 : $netStackType == "TCP" ? 1 : 0) }]
   create_hier_cell_control [current_bd_instance .] control $debugLevel $idcode
 
@@ -232,8 +232,8 @@ proc create_root_design { netStackType enableDMA enableArithmetic enableCompress
   save_bd_design
 
   # Create network (de)packetizer
-  source -notrace ./tcl/rx_bd.tcl
-  source -notrace ./tcl/tx_bd.tcl
+  source -notrace ../tcl/rx_bd.tcl
+  source -notrace ../tcl/tx_bd.tcl
   if { $netStackType == "TCP" } {
   
     # TCP interfaces
