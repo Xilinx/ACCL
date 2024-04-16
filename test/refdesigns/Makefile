@@ -77,6 +77,10 @@ COMPRESSION_XO=../../kernels/plugins/hp_compression/hp_compression_$(FPGAPART).x
 LOOPBACK_XO=../../kernels/plugins/loopback/loopback_$(FPGAPART).xo
 TCP_SESS_XO=../../kernels/plugins/tcp_session_handler/tcp_session_handler_$(FPGAPART).xo
 VADD_XO=../../kernels/plugins/vadd_put/vadd_put_$(FPGAPART).xo
+CYT_DMA_ADAPTER_XO=../../kernels/plugins/cyt_adapter/cyt_dma_adapter_$(FPGAPART).xo
+CYT_RDMA_ARBITER_XO=../../kernels/plugins/cyt_adapter/cyt_rdma_arbiter_$(FPGAPART).xo
+CYT_RDMA_MUX_XO=../../kernels/plugins/cyt_adapter/cyt_rdma_mux_$(FPGAPART).xo
+CYT_ADAPTER_XO = $(CYT_DMA_ADAPTER_XO) $(CYT_RDMA_ARBITER_XO) $(CYT_RDMA_MUX_XO)
 
 HWEMU_MST_XO=$$XILINX_VITIS/data/emulation/XO/sim_ipc_axis_master_512.xo
 HWEMU_SLV_XO=$$XILINX_VITIS/data/emulation/XO/sim_ipc_axis_slave_512.xo
@@ -111,7 +115,7 @@ VPP_CONFIG := -t $(VPP_TARGET) --config $(CONFIGFILE)
 
 ADV_CMD :=
 IPREPO_CMD :=
-OTHER_XO := $(HOSTCTRL_XO) $(CLIENT_ARB_XO) $(SUM_XO) $(COMPRESSION_XO) $(EXTERNAL_DMA_XO)
+OTHER_XO := $(HOSTCTRL_XO) $(CLIENT_ARB_XO) $(SUM_XO) $(COMPRESSION_XO)
 
 GEN_CONFIG_FLAGS := 
 ifeq (vadd, $(USER_KERNEL))
@@ -175,7 +179,7 @@ else ifeq (coyote_tcp, $(MODE))
 	ifeq (u250,$(findstring u250, $(PLATFORM)))
 		N_DDR_CHAN = 2
 	endif
-	OTHER_XO = coyote_shell
+	OTHER_XO += $(CYT_ADAPTER_XO)
 	COYOTE_CONFIG = -DFDEV_NAME=$(BOARD) -DEN_MEM=1 -DEN_STRM=1 -DEN_BPSS=1 -DEN_TCP_0=1 -DN_STRM_AXI=2 -DN_CARD_AXI=2 -DEN_HLS=0 -DACLK_F=250 -DN_DDR_CHAN=$(N_DDR_CHAN)
 	CCLO_STACK_TYPE = TCP
 	OUTPUT_PRODUCT = $(CYT_BIT)
@@ -188,7 +192,7 @@ else ifeq (coyote_rdma, $(MODE))
 	ifeq (u250,$(findstring u250, $(PLATFORM)))
 		N_DDR_CHAN = 2
 	endif
-	OTHER_XO = coyote_shell
+	OTHER_XO += $(CYT_ADAPTER_XO)
 	COYOTE_CONFIG = -DFDEV_NAME=$(BOARD) -DEN_MEM=1 -DEN_STRM=1 -DEN_BPSS=1 -DEN_RDMA_0=1 -DEN_RPC=1 -DN_STRM_AXI=3 -DN_CARD_AXI=3 -DEN_HLS=0 -DACLK_F=250 -DTLBL_A=12 -DN_DDR_CHAN=$(N_DDR_CHAN)
 	CCLO_STACK_TYPE = RDMA
 	OUTPUT_PRODUCT = $(CYT_BIT)
@@ -237,7 +241,7 @@ $(CYT_BUILD_DIR)/lynx/lynx.xpr:
 $(CYT_BIT): coyote_shell
 	$(MAKE) -C ../../kernels/cclo PLATFORM=$(PLATFORM) STACK_TYPE=$(CCLO_STACK_TYPE) MB_DEBUG_LEVEL=$(CCLO_MB_DEBUG_LEVEL)
 	$(MAKE) -C ../../kernels/plugins DEVICE=$(FPGAPART)
-	cp -rf $(CCLO_XO) $(CYT_BUILD_DIR)/iprepo && cd $(CYT_BUILD_DIR)/iprepo && unzip ccl_offload.xo
+	cp -rf $(OTHER_XO) $(CYT_BUILD_DIR)/iprepo && cd $(CYT_BUILD_DIR)/iprepo && unzip -n '*.xo'
 	vivado -mode tcl -source tcl/coyote.tcl -tclargs $(CCLO_STACK_TYPE) $(CYT_BUILD_DIR)
 	cp hdl/$(MODE)_top.sv $(CYT_BUILD_DIR)/lynx/hdl/config_0/user_logic_c0_0.sv
 	$(MAKE) -C $(CYT_BUILD_DIR) compile
