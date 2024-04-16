@@ -237,7 +237,7 @@ $(CYT_BUILD_DIR)/lynx/lynx.xpr:
 $(CYT_BIT): coyote_shell
 	$(MAKE) -C ../../kernels/cclo PLATFORM=$(PLATFORM) STACK_TYPE=$(CCLO_STACK_TYPE) MB_DEBUG_LEVEL=$(CCLO_MB_DEBUG_LEVEL)
 	$(MAKE) -C ../../kernels/plugins DEVICE=$(FPGAPART)
-	cp -rf $(CCLO_XO) $(CYT_BUILD_DIR)/iprepo
+	cp -rf $(CCLO_XO) $(CYT_BUILD_DIR)/iprepo && cd $(CYT_BUILD_DIR)/iprepo && unzip ccl_offload.xo
 	vivado -mode tcl -source tcl/coyote.tcl -tclargs $(CCLO_STACK_TYPE) $(CYT_BUILD_DIR)
 	cp hdl/$(MODE)_top.sv $(CYT_BUILD_DIR)/lynx/hdl/config_0/user_logic_c0_0.sv
 	$(MAKE) -C $(CYT_BUILD_DIR) compile
