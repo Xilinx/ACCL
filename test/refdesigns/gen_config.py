@@ -120,7 +120,9 @@ else:
 
 for i in range(num_cclo):
     target_slr = min(i,num_slr-1) if args.axis3x else cclo_slr
-    slr_constraints += "slr=arb_{inst_nr}:SLR{slr_nr}\nslr=arith_{inst_nr}:SLR{slr_nr}\nslr=ccl_offload_{inst_nr}:SLR{slr_nr}\n".format(inst_nr=i, slr_nr=target_slr)
+    slr_constraints += "slr=arith_{inst_nr}:SLR{slr_nr}\nslr=ccl_offload_{inst_nr}:SLR{slr_nr}\n".format(inst_nr=i, slr_nr=target_slr)
+    if args.vadd:
+        slr_constraints += "slr=arb_{inst_nr}:SLR{slr_nr}\n".format(inst_nr=i, slr_nr=target_slr)
     for j in range(3):
         slr_constraints += "slr=compression_{inst_nr}_{dp_nr}:SLR{slr_nr}\n".format(inst_nr=i, dp_nr=j, slr_nr=target_slr)
     slr_constraints += "slr=hostctrl_{inst_nr}_0:SLR{slr_nr}\n".format(inst_nr=i, slr_nr=target_slr)
@@ -201,10 +203,14 @@ else:
 # Connect host controllers to arbiter to CCL Offload, and connect plug-ins
 for i in range(num_cclo):
     # Command interfaces
-    stream_connections += "stream_connect=hostctrl_{inst_nr}_0.cmd:arb_{inst_nr}.cmd_clients_0\n".format(inst_nr=i)
-    stream_connections += "stream_connect=arb_{inst_nr}.cmd_cclo:ccl_offload_{inst_nr}.s_axis_call_req\n".format(inst_nr=i)
-    stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_call_ack:arb_{inst_nr}.ack_cclo\n".format(inst_nr=i)
-    stream_connections += "stream_connect=arb_{inst_nr}.ack_clients_0:hostctrl_{inst_nr}_0.sts\n".format(inst_nr=i)
+    if args.vadd:
+        stream_connections += "stream_connect=hostctrl_{inst_nr}_0.cmd:arb_{inst_nr}.cmd_clients_0\n".format(inst_nr=i)
+        stream_connections += "stream_connect=arb_{inst_nr}.cmd_cclo:ccl_offload_{inst_nr}.s_axis_call_req\n".format(inst_nr=i)
+        stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_call_ack:arb_{inst_nr}.ack_cclo\n".format(inst_nr=i)
+        stream_connections += "stream_connect=arb_{inst_nr}.ack_clients_0:hostctrl_{inst_nr}_0.sts\n".format(inst_nr=i)
+    else:
+        stream_connections += "stream_connect=hostctrl_{inst_nr}_0.cmd:ccl_offload_{inst_nr}.s_axis_call_req\n".format(inst_nr=i)
+        stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_call_ack:hostctrl_{inst_nr}_0.sts\n".format(inst_nr=i)
     # Plugin interfaces
     stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_arith_op0:arith_{inst_nr}.in0\n".format(inst_nr=i)
     stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_arith_op1:arith_{inst_nr}.in1\n".format(inst_nr=i)
@@ -219,13 +225,11 @@ for i in range(num_cclo):
     if args.vadd:
         stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_krnl:vadd_{inst_nr}_0.data_from_cclo\n".format(inst_nr=i)
         stream_connections += "stream_connect=vadd_{inst_nr}_0.data_to_cclo:ccl_offload_{inst_nr}.s_axis_krnl\n".format(inst_nr=i)
-        stream_connections += "stream_connect=arb_0.ack_clients_1:vadd_{inst_nr}_0.sts_from_cclo:512\n".format(inst_nr=i)
-        stream_connections += "stream_connect=vadd_{inst_nr}_0.cmd_to_cclo:arb_0.cmd_clients_1:512\n".format(inst_nr=i)
+        stream_connections += "stream_connect=arb_{inst_nr}.ack_clients_1:vadd_{inst_nr}_0.sts_from_cclo:512\n".format(inst_nr=i)
+        stream_connections += "stream_connect=vadd_{inst_nr}_0.cmd_to_cclo:arb_{inst_nr}.cmd_clients_1:512\n".format(inst_nr=i)
     else:
         stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_krnl:lb_user_krnl_{inst_nr}.in\n".format(inst_nr=i)
         stream_connections += "stream_connect=lb_user_krnl_{inst_nr}.out:ccl_offload_{inst_nr}.s_axis_krnl\n".format(inst_nr=i)
-        stream_connections += "stream_connect=arb_0.ack_clients_1:lb_user_krnl_{inst_nr}.sts_from_cclo:512\n".format(inst_nr=i)
-        stream_connections += "stream_connect=lb_user_krnl_{inst_nr}.cmd_to_cclo:arb_0.cmd_clients_1:512\n".format(inst_nr=i)
     # External DMA interface
     stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_dma0_s2mm:extdma_{inst_nr}_0.s_axis_s2mm\n".format(inst_nr=i)
     stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_dma0_mm2s_cmd:extdma_{inst_nr}_0.s_axis_mm2s_cmd\n".format(inst_nr=i)
@@ -267,7 +271,8 @@ with open(args.outfile, "w") as f:
     f.write("[connectivity]\n")
     f.write(cclo_instantiation+"\n")
     f.write(extdma_instantiation+"\n")
-    f.write(arb_instantiation+"\n")
+    if args.vadd:
+        f.write(arb_instantiation+"\n")
     f.write(hc_instantiation+"\n")
     f.write(reduce_instantiation+"\n")
     f.write(cast_instantiation+"\n")
