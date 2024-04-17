@@ -110,7 +110,7 @@ CYT_BIT=$(CYT_BUILD_DIR)/bitstreams/cyt_top.bit
 
 OUTPUT_PRODUCT := $(XCLBIN)
 
-CONFIGFILE := link_config.ini
+CONFIGFILE := $(BUILD_DIR).ini
 VPP_CONFIG := -t $(VPP_TARGET) --config $(CONFIGFILE)
 
 ADV_CMD :=
@@ -270,7 +270,6 @@ $(CCLO_XO):
 
 $(XCLBIN): $(NET_XO) $(CCLO_XO)
 	python3 gen_config.py --board $(BOARD) --poe $(MODE) $(GEN_CONFIG_FLAGS) -o $(CONFIGFILE)
-	mkdir -p kernels/$(FPGAPART)
 	$(MAKE) -C ../../kernels/plugins DEVICE=$(FPGAPART)
 	v++ --link --platform $(PLATFORM) $(PROFILE_OPTS) --kernel_frequency $(FREQUENCY) --save-temps --temp_dir $(BUILD_DIR) $(VPP_CONFIG) $(ADV_CMD) $(IPREPO_CMD) -o $@ $(NET_XO) $(OTHER_XO)
 
