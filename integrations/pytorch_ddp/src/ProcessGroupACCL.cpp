@@ -606,6 +606,14 @@ ProcessGroupACCL::ProcessGroupACCL(
 
   ranks_ = convert_ranks(ranks);
   design_ = design;
+  if(simulator_){
+    ACCL::debug("running on simulator\n");
+    std::cout << "running on simulator\n";
+  }
+  else{
+    ACCL::debug("not running on simulator\n");
+    std::cout << "not running on simulator\n";
+  }
   
   if (!simulator){
     if (coyote_enabled) {
@@ -646,11 +654,12 @@ void ProcessGroupACCL::set_remote_qp(unsigned int rank, std::vector<std::uint8_t
 }
 
 void ProcessGroupACCL::initialize() {
+  std::cout << "PG initialize called\n";
   if (initialized) {
     throw std::runtime_error("Already initialized process group");
   }
 
-  if (coyote_enabled) {
+  if (coyote_enabled && !simulator_) {
     if (design_ == accl_network_utils::acclDesign::CYT_RDMA) {
       cyt::configure_cyt_rdma(ibvQpConn_vec, ranks_, rank_);
     } else {

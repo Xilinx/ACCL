@@ -20,12 +20,16 @@ from typing import Optional
 import numpy as np
 import os
 import sys
+import logging
 from mpi4py.MPI import COMM_WORLD as mpi
 
 import torch
 import torch.distributed as dist
 from torch.profiler import profile, ProfilerActivity
 import accl_process_group as accl
+
+#Configure, which logging messages to display
+logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
 
 rank = 0
 size = 0
@@ -42,6 +46,9 @@ def test_broadcast():
 
     dist.broadcast(x, 0)
 
+    logging.debug('Tensor after broadcast: ' + str(x))
+    print('Tensor after broadcast: ' + str(x))
+    
     np.testing.assert_allclose(x, torch.ones(count))
     print("Test broadcast finished!")
 
@@ -158,6 +165,9 @@ def start_test(comms: str, simulator: bool):
         os.environ['MASTER_PORT'] = '30500'
     rank = mpi.Get_rank()
     size = mpi.Get_size()
+    # size = 2
+    print(f"Starting tests on rank {rank} with size {size}")
+    
     ranks = [accl.Rank("127.0.0.1", 5500 + i, i, rxbufsize)
              for i in range(size)]
 
@@ -166,7 +176,8 @@ def start_test(comms: str, simulator: bool):
     elif comms == 'tcp':
         design = accl.ACCLDesign.tcp
     elif comms == 'cyt_rdma':
-        design = accl.ACCLDesign.cyt_rdma
+        # design = accl.ACCLDesign.cyt_rdma
+        design = accl.ACCLDesign.udp
     else:
         sys.exit('Design "' + comms + '" currently not supported')
 
@@ -201,7 +212,7 @@ if __name__ == '__main__':
                         default=False, help='Use simulation instead of '
                                             'hardware')
     parser.add_argument('-c', '--comms', choices=['udp', 'tcp', 'cyt_rdma'], default='tcp',
-                        help='Run tests over specied communication backend')
+                        help='Run tests over specified communication backend')
     args = parser.parse_args()
 
     #if args.comms != 'cyt_rdma' or not args.simulation:

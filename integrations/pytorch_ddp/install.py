@@ -151,10 +151,14 @@ def main(rocm: bool = False, cuda: bool = False,
               "please rerun with the --force-pytorch flag enabled.")
         exit(1)
 
-    if not packages['accl-process-group'] or force_accl_process_group:
+    if not packages['accl-process-group']:
         print("ACCL Process Group not found, installing...")
         install_accl_process_group(rocm, cuda, debug)
 
+    if force_accl_process_group:
+        print("Forced reinstall of ACCL Process Group ")
+        install_accl_process_group(rocm, cuda, debug)
+        
 
 if __name__ == '__main__':
     import argparse

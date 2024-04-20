@@ -19,6 +19,7 @@ from __future__ import annotations
 from typing import Optional
 from . import ProcessGroupACCL, Rank, DataType, ACCLDesign
 import torch
+import logging
 from torch.distributed import Backend
 from torch.distributed.distributed_c10d import ProcessGroup, Store
 
@@ -52,6 +53,10 @@ def create_process_group(
             raise RuntimeError("ACCL ProcessGroup already created, "
                                "can only create one.")
 
+        # if simulation:
+            #overwrite the design choice in simulation
+            # design = ACCLDesign.udp
+        
         pg = ProcessGroupACCL(store, rank, size, ranks, simulation, design,
                               bufsize=bufsize, rsfec=rsfec, nbufs=nbufs,
                               compression=compression,
