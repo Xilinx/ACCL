@@ -347,8 +347,8 @@ initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
       auto rx_buf_network = new FPGABuffer<int8_t>(
           64 * 1024 * 1024, dataType::int8, device, networkmem);
       auto network_krnl =
-          xrt::kernel(device, xclbin_uuid, "network_krnl:{network_krnl_0}",
-                      xrt::kernel::cu_access_mode::exclusive);
+          xrt::kernel(device, xclbin_uuid, "network_krnl:{poe_0}",
+                    xrt::kernel::cu_access_mode::exclusive);
       auto session_krnl =
           xrt::kernel(device, xclbin_uuid, "tcp_session_handler:{session_handler_0}",
                       xrt::kernel::cu_access_mode::exclusive);
