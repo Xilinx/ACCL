@@ -608,11 +608,9 @@ ProcessGroupACCL::ProcessGroupACCL(
   design_ = design;
   if(simulator_){
     ACCL::debug("running on simulator\n");
-    std::cout << "running on simulator\n";
   }
   else{
     ACCL::debug("not running on simulator\n");
-    std::cout << "not running on simulator\n";
   }
   
   if (!simulator){

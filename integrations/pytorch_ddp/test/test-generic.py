@@ -28,6 +28,13 @@ import torch.distributed as dist
 from torch.profiler import profile, ProfilerActivity
 import accl_process_group as accl
 
+from torch.nn.parallel import DistributedDataParallel as DDP
+import torch.nn as nn
+import torch.optim as optim
+
+from torch.utils.data import Dataset, DataLoader
+from torch.utils.data.distributed import DistributedSampler
+
 #Configure, which logging messages to display
 logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
 
@@ -131,6 +138,66 @@ def test_allreduce():
     print("Test allreduce finished!")
 
 
+class ToyModel(nn.Module):
+    def __init__(self):
+        super(ToyModel, self).__init__()
+        self.net1 = nn.Linear(10, 10)
+        self.relu = nn.ReLU()
+        self.net2 = nn.Linear(10, 5)
+
+    def forward(self, x):
+        return self.net2(self.relu(self.net1(x)))
+
+class MyTrainDataset(Dataset):
+    def __init__(self, size):
+        self.size = size
+        self.data = [(torch.rand(10), torch.rand(5)) for _ in range(size)]
+
+    def __len__(self):
+        return self.size
+    
+    def __getitem__(self, index):
+        return self.data[index]
+    
+
+def prepare_dataloader(dataset: Dataset, batch_size: int):
+    return DataLoader(
+        dataset,
+        batch_size=batch_size,
+        pin_memory=True,
+        shuffle=False,
+        sampler=DistributedSampler(dataset)
+    )    
+    
+def demo_basic(rank: int):
+    model = ToyModel()
+    ddp_model = DDP(model)
+
+    train_set = MyTrainDataset(2048)  # load your dataset
+    batch_size=64
+    train_data = prepare_dataloader(train_set, batch_size)
+    
+    loss_fn = nn.MSELoss()
+    optimizer = optim.SGD(ddp_model.parameters(), lr=0.001)
+
+    max_epochs = 10
+    for epoch in range(max_epochs):
+        batch_size = len(next(iter(train_data))[0])
+        train_data.sampler.set_epoch(epoch)
+        for x, y in train_data:
+            
+            optimizer.zero_grad()
+            outputs = ddp_model(x)
+            loss = loss_fn(outputs, y)
+            loss.backward()
+            optimizer.step()
+
+        print(f"Rank {rank}: Epoch {epoch} | Batchsize: {batch_size} | Steps: {len(train_data)} | Loss: {loss}")
+        
+
+    print("finished training")
+    dist.destroy_process_group()
+
 # def exchange_qp(first_rank, second_rank, rank, ranks):
 #     if rank == first_rank:
 #         mpi.send(accl.get_local_qp(second_rank), dest=second_rank, tag=23)
@@ -157,30 +224,44 @@ def test_allreduce():
 
 
 
-def start_test(comms: str, simulator: bool):
+def start_test(comms: str, simulator: bool, host_file: str, fpga_file: str, ma: str, mp: str):
     global rank, size
-    if 'MASTER_ADDR' not in os.environ:
-        os.environ['MASTER_ADDR'] = 'localhost'
-    if 'MASTER_PORT' not in os.environ:
-        os.environ['MASTER_PORT'] = '30500'
+    os.environ['MASTER_ADDR'] = ma
+    os.environ['MASTER_PORT'] = mp
     rank = mpi.Get_rank()
     size = mpi.Get_size()
     # size = 2
+    print(f"MASTER: {os.environ['MASTER_ADDR']}{os.environ['MASTER_PORT']} ")
     print(f"Starting tests on rank {rank} with size {size}")
+
+    start_port = 5005
     
-    ranks = [accl.Rank("127.0.0.1", 5500 + i, i, rxbufsize)
-             for i in range(size)]
+    if not simulator:
+        with open(host_file, 'r') as hf:
+            host_ips = hf.readlines()
+            
+        with open(fpga_file, 'r') as ff:
+            fpga_ips = ff.readlines()
+
+        if comms == "cyt_rdma":
+            ranks = [accl.Rank(a, start_port, i, rxbufsize) for i, a in enumerate(fpga_ips)]
+        else:
+            ranks = [accl.Rank(a, start_port + i, 0, rxbufsize) for i, a in enumerate(fpga_ips)]            
+    else:
+        ranks = [accl.Rank("127.0.0.1", 5500 + i, i, rxbufsize) for i in range(size)]
 
     if comms == 'udp':
         design = accl.ACCLDesign.udp
     elif comms == 'tcp':
         design = accl.ACCLDesign.tcp
-    elif comms == 'cyt_rdma':
-        # design = accl.ACCLDesign.cyt_rdma
-        design = accl.ACCLDesign.udp
+    elif comms == 'cyt_rdma' and not simulator:
+        design = accl.ACCLDesign.cyt_rdma
     else:
-        sys.exit('Design "' + comms + '" currently not supported')
-
+        if simulator:
+            sys.exit('Design "' + comms + '" currently not supported in simulator mode')
+        else:
+            sys.exit('Design "' + comms + '" currently not supported in hardware mode')
+    
     accl.create_process_group(ranks, design, bufsize=rxbufsize, initialize=True, simulation=simulator)
     dist.init_process_group("ACCL", rank=rank, world_size=size)
 
@@ -200,6 +281,8 @@ def start_test(comms: str, simulator: bool):
         test_reduce()
         mpi.Barrier()
         test_allreduce()
+        mpi.Barrier()
+        demo_basic(rank)
 
     print(prof.key_averages(group_by_input_shape=True)
           .table(sort_by="cpu_time_total", row_limit=15))
@@ -213,9 +296,13 @@ if __name__ == '__main__':
                                             'hardware')
     parser.add_argument('-c', '--comms', choices=['udp', 'tcp', 'cyt_rdma'], default='tcp',
                         help='Run tests over specified communication backend')
+    parser.add_argument('-i', '--host-file', type=str, required=True, help='Specify the file, where the host IPs are listed')
+    parser.add_argument('-f', '--fpga-file', type=str, required=True, help='Specify the file, where the FPGA IPs are listed')
+    parser.add_argument('-a','--master-address', type=str)
+    parser.add_argument('-p','--master-port', type=str)
     args = parser.parse_args()
 
     #if args.comms != 'cyt_rdma' or not args.simulation:
     #if args.comms != 'cyt_rdma':
     #    sys.exit('Currently only supports -c cyt_rdma and -s flags')
-    start_test(args.comms, args.simulation)
+    start_test(args.comms, args.simulation, args.host_file, args.fpga_file, args.master_address, args.master_port)

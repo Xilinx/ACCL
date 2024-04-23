@@ -6,13 +6,20 @@ if [[ $(pwd) != *pytorch_ddp/test ]]; then
 	exit 1
 fi
 
+if [[ -v ACCL_SCRIPT ]]; then
+    SCRIPT_NAME="$ACCL_SCRIPT"
+else
+    SCRIPT_NAME=test-generic.py
+    echo "Variable ACCL_SCRIPT not set. Assuming $SCRIPT_NAME"
+fi
+
 # state variables
 mkdir -p "$(pwd)/accl_log"
 # BUILD_DIR=../build
 # point this to python venv, which has the relevant libraries installed
 VENV_ACTIVATE=$(pwd)/../venv/bin/activate
 SETUP_SH=$(pwd)/../setup.sh
-SCRIPT=$(pwd)/test-generic.py
+SCRIPT=$(pwd)/$SCRIPT_NAME
 HOST_FILE=./accl_log/host
 FPGA_FILE=./accl_log/fpga
 
@@ -26,12 +33,19 @@ if [[ $ACCL_SIM -eq 1 ]]; then
     echo "Starting in simulator mode. Make sure to start the emulator beforehand"
     ARG="-s "
 
+    ACCL_COMMS="udp"
+
+    echo "assuming udp comms in simulator"
+
     if [[ -v ACCL_NP ]]; then
         NUM_PROCESS="$ACCL_NP"
     else
     	echo "Variable ACCL_NP not set. Enter num of processes:"
 	read -a NUM_PROCESS
     fi
+
+    MASTER_IP="localhost"
+    MASTER_PORT="30505"
 
 else
     echo "Starting in hw mode. Make sure to run flow_u55c beforehand."
@@ -42,6 +56,12 @@ else
 	echo "Variable U55C_IDS not set. Enter u55c machine ids (space separated):"
 	read -a SERVID
     fi
+
+    if ! [[ -v ACCL_COMMS ]]; then
+        ACCL_COMMS="cyt_rdma"
+	echo "Assuming cyt_rdma comms in hardware"
+    fi
+	
     RANK_PORT="30501"
     # create ip files
     rm -f $HOST_FILE $FPGA_FILE
@@ -58,14 +78,16 @@ else
 
     #set master address
     MASTER_IP="10.253.74.$(((${SERVID[0]}-1) * 4 + 66))"
-    MASTER_PORT="30501"
+    MASTER_PORT="30505"
 
     echo "Master node set to: $MASTER_IP:$MASTER_PORT"
 
     MPI_ARGS="-f $HOST_FILE --iface ens4f0"
 fi
 
-ARG="$ARG -c cyt_rdma\""
+ARG="$ARG -c $ACCL_COMMS -i $HOST_FILE -f $FPGA_FILE -a $MASTER_IP -p $MASTER_PORT\""
+
+#---------------Running it-------------
 
 echo "Run command: $EXEC $ARG"
 
@@ -73,34 +95,36 @@ echo "Running with $NUM_PROCESS Processes"
 
 rm -f $(pwd)/accl_log/rank*
 
-C="mpirun -n $NUM_PROCESS $MPI_ARGS -outfile-pattern \"$(pwd)/accl_log/rank_%r_M_${MODE}_N_${N}_H_${H}_P_${P}_stdout\" -errfile-pattern \"$(pwd)/accl_log/rank_%r_M_${MODE}_N_${N}_H_${H}_P_${P}_stderr\" $EXEC $ARG"
+C="mpirun -n $NUM_PROCESS $MPI_ARGS -outfile-pattern \"$(pwd)/accl_log/rank_%r_M_${MODE}_N_${N}_H_${H}_P_${P}_stdout\" $EXEC $ARG &"
+# C="mpirun -n $NUM_PROCESS $MPI_ARGS -outfile-pattern \"$(pwd)/accl_log/rank_%r_M_${MODE}_N_${N}_H_${H}_P_${P}_stdout\" -errfile-pattern \"$(pwd)/accl_log/rank_%r_M_${MODE}_N_${N}_H_${H}_P_${P}_stderr\" $EXEC $ARG &"
 # C="mpirun -n $NUM_PROCESS -f $HOST_FILE --iface ens4f0 $EXEC $ARG &"
 echo $C
 
 /bin/sh -c "$C"
 
-if ! [[ $ACCL_SIM -eq 1 ]]; then
-    SLEEPTIME=8
-    echo "Sleep for $SLEEPTIMEs"
-    sleep $SLEEPTIME
-    parallel-ssh -H "$HOST_LIST" "killall -9 test-generic.py"
-    parallel-ssh -H "$HOST_LIST" "dmesg | grep "fpga_tlb_miss_isr" >$(pwd)/accl_log/tlb_miss.log"
-    # done
+if ! [[ -v SLEEPTIME ]]; then
+    SLEEPTIME="16"
+fi
+echo "Sleeping for $SLEEPTIME"
+sleep $SLEEPTIME
 
-    mkdir -p "$(pwd)/accl_results"
-    # Loop through accl log files in the source directory and append to accl_results folder
-    for source_log in "$(pwd)/accl"*.log; do
-	# Extract the log number from the source log file name (assuming the format is acclX.log)
-	log_number=$(basename "${source_log}" | sed 's/accl\([0-9]*\)\.log/\1/')
-	# Create the destination log file path
-	destination_log="$(pwd)/accl_results/accl${log_number}.log"
-	# Append the content of the source log to the destination log
-	cat "${source_log}" >> "${destination_log}"
-	# Remove the tmp log
-	rm ${source_log}
-    done
+if ! [[ $ACCL_SIM -eq 1 ]]; then
+    parallel-ssh -H "$HOST_LIST" "killall -9 $SCRIPT_NAME"
+    parallel-ssh -H "$HOST_LIST" "dmesg | grep "fpga_tlb_miss_isr" >$(pwd)/accl_log/tlb_miss.log"
+else
+    killall -9 $SCRIPT_NAME
+    dmesg | grep "fpga_tlb_miss_isr" >$(pwd)/accl_log/tlb_miss.log
 fi
 
-
-
-
+# mkdir -p "$(pwd)/accl_results"
+# # Loop through accl log files in the source directory and append to accl_results folder
+# for source_log in "$(pwd)/accl"*.log; do
+#     # Extract the log number from the source log file name (assuming the format is acclX.log)
+#     log_number=$(basename "${source_log}" | sed 's/accl\([0-9]*\)\.log/\1/')
+#     # Create the destination log file path
+#     destination_log="$(pwd)/accl_results/accl${log_number}.log"
+#     # Append the content of the source log to the destination log
+#     cat "${source_log}" >> "${destination_log}"
+#     # Remove the tmp log
+#     rm ${source_log}
+# done

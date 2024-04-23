@@ -70,7 +70,7 @@ def create_process_group(
 
         return pg
 
-    Backend.register_backend("ACCL", create_process_group_wrapper)
+    Backend.register_backend("ACCL", create_process_group_wrapper, devices='cpu')
 
 # def create_simulate_process_group(ranks: list[Rank], *,
 #                                   nbufs: int = 16, udp: bool = False,
