@@ -112,7 +112,7 @@ def install_pytorch(rocm: bool = False, cuda: bool = False):
 
 def install_accl_driver(accl_driver_path: Path):
     print("Installing accl driver...")
-    if 'ACCL_DEBUG' in os.environ:
+    if 'ACCL_DEBUG' in os.environ and os.environ["ACCL_DEBUG"]=="1":
         extra_args = ['-DACCL_DEBUG=1']
     else:
         extra_args = []
@@ -131,7 +131,8 @@ def install_accl_process_group(rocm: bool = False, cuda: bool = False, debug: bo
     env = os.environ.copy()
     env['USE_ROCM'] = '1' if rocm else '0'
     env['USE_CUDA'] = '1' if cuda else '0'
-    env['ACCL_DEBUG'] = '1' if debug else '0'
+    if debug:
+        env['ACCL_DEBUG'] = '1'
     subprocess.run([python, '-m', 'pip', '-v', 'install', '.'],
                    env=env, cwd=root, check=True)
 

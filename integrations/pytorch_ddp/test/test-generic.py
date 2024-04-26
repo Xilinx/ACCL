@@ -35,14 +35,22 @@ import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
-#Configure, which logging messages to display
+#Configure logging
 logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
 
+logger = logging.getLogger(__name__)
+
+if "ACCL_DEBUG" in os.environ and os.environ["ACCL_DEBUG"]=="1":
+    logger.setLevel(logging.DEBUG)
+else:
+    logger.setLevel(logging.WARNING)
+    
 rank = 0
 size = 0
 
 count = 1024
-rxbufsize = 1500 * 4
+#As in test.cpp defaults
+rxbufsize = 4096 * 1024
 
 
 def test_broadcast():
@@ -53,7 +61,7 @@ def test_broadcast():
 
     dist.broadcast(x, 0)
 
-    logging.debug('Tensor after broadcast: ' + str(x))
+    logger.debug('Tensor after broadcast: ' + str(x))
     print('Tensor after broadcast: ' + str(x))
     
     np.testing.assert_allclose(x, torch.ones(count))
@@ -198,45 +206,27 @@ def demo_basic(rank: int):
     print("finished training")
     dist.destroy_process_group()
 
-# def exchange_qp(first_rank, second_rank, rank, ranks):
-#     if rank == first_rank:
-#         mpi.send(accl.get_local_qp(second_rank), dest=second_rank, tag=23)
-#     elif rank == second_rank:
-#         accl.set_remote_qp(first_rank, mpi.recv(source=first_rank, tag=23))
-
-#     mpi.barrier()
-
-#     if rank == second_rank:
-#         mpi.send(accl.get_local_qp(first_rank), dest=first_rank, tag=24)
-#     elif rank == first_rank:
-#         accl.set_remote_qp(second_rank, mpi.recv(source=second_rank, tag=24))
-
-#     mpi.barrier()
-
-
-#def configure_cyt_rdma(ranks):
-#    global rank, size
-#    for first_rank in range(0, size):
-#        for second_rank in range(first_rank + 1, size):
-#            exchange_qp(first_rank, second_rank, rank, ranks)
-#    accl.initialize()
-#    mpi.barrier()
-
-
-
-def start_test(comms: str, simulator: bool, host_file: str, fpga_file: str, ma: str, mp: str):
+def start_test(comms: str, simulator: bool, host_file: str=None, fpga_file: str=None, ma: str="localhost", mp: str="30505"):
     global rank, size
+    if ma==None:
+        ma = "localhost"
+    if mp==None:
+        mp = "30505"
     os.environ['MASTER_ADDR'] = ma
     os.environ['MASTER_PORT'] = mp
     rank = mpi.Get_rank()
     size = mpi.Get_size()
-    # size = 2
-    print(f"MASTER: {os.environ['MASTER_ADDR']}{os.environ['MASTER_PORT']} ")
-    print(f"Starting tests on rank {rank} with size {size}")
-
     start_port = 5005
+    print(f"Starting tests with the following parameters:\n\
+Simulation: {simulator}, Communication Backend: {comms}\n\
+Rank: {rank}, World size: {size}\n\
+Host file: {host_file}, FPGA file: {fpga_file}\n\
+Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
     
+
     if not simulator:
+        if host_file==None or fpga_file==None: sys.exit('Host and FPGA file need to be specified in hardware mode')
+            
         with open(host_file, 'r') as hf:
             host_ips = hf.readlines()
             
@@ -250,6 +240,8 @@ def start_test(comms: str, simulator: bool, host_file: str, fpga_file: str, ma: 
     else:
         ranks = [accl.Rank("127.0.0.1", 5500 + i, i, rxbufsize) for i in range(size)]
 
+    logger.debug(f'Ranks: {ranks}')
+
     if comms == 'udp':
         design = accl.ACCLDesign.udp
     elif comms == 'tcp':
@@ -261,6 +253,7 @@ def start_test(comms: str, simulator: bool, host_file: str, fpga_file: str, ma: 
             sys.exit('Design "' + comms + '" currently not supported in simulator mode')
         else:
             sys.exit('Design "' + comms + '" currently not supported in hardware mode')
+
     
     accl.create_process_group(ranks, design, bufsize=rxbufsize, initialize=True, simulation=simulator)
     dist.init_process_group("ACCL", rank=rank, world_size=size)
@@ -278,12 +271,13 @@ def start_test(comms: str, simulator: bool, host_file: str, fpga_file: str, ma: 
         mpi.Barrier()
         test_allgather()
         mpi.Barrier()
-        test_reduce()
-        mpi.Barrier()
-        test_allreduce()
-        mpi.Barrier()
-        demo_basic(rank)
-
+        # test_reduce()
+        # mpi.Barrier()
+        # test_allreduce()
+        # mpi.Barrier()
+        # demo_basic(rank)
+        # mpi.Barrier()
+        
     print(prof.key_averages(group_by_input_shape=True)
           .table(sort_by="cpu_time_total", row_limit=15))
 
@@ -296,8 +290,8 @@ if __name__ == '__main__':
                                             'hardware')
     parser.add_argument('-c', '--comms', choices=['udp', 'tcp', 'cyt_rdma'], default='tcp',
                         help='Run tests over specified communication backend')
-    parser.add_argument('-i', '--host-file', type=str, required=True, help='Specify the file, where the host IPs are listed')
-    parser.add_argument('-f', '--fpga-file', type=str, required=True, help='Specify the file, where the FPGA IPs are listed')
+    parser.add_argument('-i', '--host-file', type=str, help='Specify the file, where the host IPs are listed')
+    parser.add_argument('-f', '--fpga-file', type=str, help='Specify the file, where the FPGA IPs are listed')
     parser.add_argument('-a','--master-address', type=str)
     parser.add_argument('-p','--master-port', type=str)
     args = parser.parse_args()

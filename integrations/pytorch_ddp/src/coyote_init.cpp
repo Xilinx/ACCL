@@ -77,6 +77,7 @@ void setup_cyt_rdma(std::vector<fpga::ibvQpConn *> &ibvQpConn_vec,
                     std::vector<ACCL::rank_t> &ranks, int local_rank,
                     ACCL::CoyoteDevice &device) {
   std::cout << "[ACCL Coyote] Initializing QP..." << std::endl;
+  ACCL::debug("Cyt setup on rank" + std::to_string(local_rank) + "\n");
   // create single page dummy memory space for each qp
   uint32_t n_pages = 1;
   for (int i = 0; i < ranks.size(); i++) {
@@ -88,7 +89,6 @@ void setup_cyt_rdma(std::vector<fpga::ibvQpConn *> &ibvQpConn_vec,
 
 void configure_cyt_rdma(std::vector<fpga::ibvQpConn *> &ibvQpConn_vec,
                         std::vector<ACCL::rank_t> &ranks, int local_rank) {
-  std::cout << "[ACCL Coyote] Test3..." << std::endl;
   std::cout << "[ACCL Coyote] Exchanging QP..." << std::endl;
   for (int first_rank = 0; first_rank < ranks.size(); first_rank++) {
     for (int second_rank = first_rank + 1; second_rank < ranks.size();

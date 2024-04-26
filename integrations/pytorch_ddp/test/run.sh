@@ -83,6 +83,8 @@ else
     echo "Master node set to: $MASTER_IP:$MASTER_PORT"
 
     MPI_ARGS="-f $HOST_FILE --iface ens4f0"
+    # 09 and 10 have other interface names:
+    # MPI_ARGS="-f $HOST_FILE --iface ens4"
 fi
 
 ARG="$ARG -c $ACCL_COMMS -i $HOST_FILE -f $FPGA_FILE -a $MASTER_IP -p $MASTER_PORT\""
@@ -95,9 +97,9 @@ echo "Running with $NUM_PROCESS Processes"
 
 rm -f $(pwd)/accl_log/rank*
 
-C="mpirun -n $NUM_PROCESS $MPI_ARGS -outfile-pattern \"$(pwd)/accl_log/rank_%r_M_${MODE}_N_${N}_H_${H}_P_${P}_stdout\" $EXEC $ARG &"
-# C="mpirun -n $NUM_PROCESS $MPI_ARGS -outfile-pattern \"$(pwd)/accl_log/rank_%r_M_${MODE}_N_${N}_H_${H}_P_${P}_stdout\" -errfile-pattern \"$(pwd)/accl_log/rank_%r_M_${MODE}_N_${N}_H_${H}_P_${P}_stderr\" $EXEC $ARG &"
-# C="mpirun -n $NUM_PROCESS -f $HOST_FILE --iface ens4f0 $EXEC $ARG &"
+# C="mpirun -n $NUM_PROCESS $MPI_ARGS -outfile-pattern \"$(pwd)/accl_log/rank_%r_stdout\" $EXEC $ARG &"
+C="mpirun -n $NUM_PROCESS $MPI_ARGS -outfile-pattern \"$(pwd)/accl_log/rank_%r_stdout\" -errfile-pattern \"$(pwd)/accl_log/rank_%r_stderr\" $EXEC $ARG &"
+# C="mpirun -n $NUM_PROCESS $MPI_ARGS $EXEC $ARG &"
 echo $C
 
 /bin/sh -c "$C"
@@ -108,13 +110,13 @@ fi
 echo "Sleeping for $SLEEPTIME"
 sleep $SLEEPTIME
 
-if ! [[ $ACCL_SIM -eq 1 ]]; then
-    parallel-ssh -H "$HOST_LIST" "killall -9 $SCRIPT_NAME"
-    parallel-ssh -H "$HOST_LIST" "dmesg | grep "fpga_tlb_miss_isr" >$(pwd)/accl_log/tlb_miss.log"
-else
-    killall -9 $SCRIPT_NAME
-    dmesg | grep "fpga_tlb_miss_isr" >$(pwd)/accl_log/tlb_miss.log
-fi
+# if ! [[ $ACCL_SIM -eq 1 ]]; then
+    # parallel-ssh -H "$HOST_LIST" "killall -9 $SCRIPT_NAME"
+    # parallel-ssh -H "$HOST_LIST" "dmesg | grep "fpga_tlb_miss_isr" >$(pwd)/accl_log/tlb_miss.log"
+# else
+    # killall -9 $SCRIPT_NAME
+    # dmesg | grep "fpga_tlb_miss_isr" >$(pwd)/accl_log/tlb_miss.log
+# fi
 
 # mkdir -p "$(pwd)/accl_results"
 # # Loop through accl log files in the source directory and append to accl_results folder

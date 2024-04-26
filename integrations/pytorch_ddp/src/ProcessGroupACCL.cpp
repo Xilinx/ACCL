@@ -606,13 +606,6 @@ ProcessGroupACCL::ProcessGroupACCL(
 
   ranks_ = convert_ranks(ranks);
   design_ = design;
-  if(simulator_){
-    ACCL::debug("running on simulator\n");
-  }
-  else{
-    ACCL::debug("not running on simulator\n");
-  }
-  
   if (!simulator){
     if (coyote_enabled) {
       if (design_ == accl_network_utils::acclDesign::CYT_TCP) {
@@ -665,6 +658,21 @@ void ProcessGroupACCL::initialize() {
     }
 
     accl = std::make_unique<ACCL::ACCL>(cyt_device);
+
+    // eager protocol for now
+    int protoc = 0;
+    // default from test.cpp
+    int segsize = 4096 * 1024;
+    
+    if (protoc == 0){
+      std::cout<<"Eager Protocol"<<std::endl;
+      accl.get()->initialize(ranks_, rank_,
+			     size_+2, bufsize, segsize, 4096*1024*2);
+    } else {
+      std::cout<<"Rendezvous Protocol"<<std::endl;
+      accl.get()->initialize(ranks_, rank_, size_, 64, 64, segsize);
+    }  
+    
     ACCL::debug(std::string("[ACCL coyote] communicator: ") + accl->dump_communicator());
   } else {
     accl = accl_network_utils::initialize_accl(ranks_, rank_,
