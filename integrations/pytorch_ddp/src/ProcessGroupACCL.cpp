@@ -818,9 +818,9 @@ void ProcessGroupACCL::run_broadcast(at::Tensor tensor_original,
     data->sync_to_device();
   }
   // auto start = std::chrono::high_resolution_clock::now();
-  ACCL::ACCLRequest* req = accl.bcast(*data, tensor->numel(), opts.rootRank, ACCL::GLOBAL_COMM, true,
+  ACCL::ACCLRequest* req = accl->bcast(*data, tensor->numel(), opts.rootRank, ACCL::GLOBAL_COMM, true,
               true, get_compressed_type(tensor->scalar_type()));
-  accl.wait(req, 1000ms);
+  accl->wait(req, 1000ms);
   // auto end = std::chrono::high_resolution_clock::now();
   int retcode = accl->get_retcode();
   if (retcode) {
