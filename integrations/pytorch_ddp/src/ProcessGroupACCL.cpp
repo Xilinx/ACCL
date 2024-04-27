@@ -41,6 +41,7 @@
 
 namespace cyt = coyote_init;
 namespace py = pybind11;
+using namespace ACCL;
 
 namespace c10d {
 
@@ -660,7 +661,7 @@ void ProcessGroupACCL::initialize() {
     accl = std::make_unique<ACCL::ACCL>(cyt_device);
 
     // eager protocol for now
-    int protoc = 0;
+    int protoc = 1;
     // default from test.cpp
     int segsize = 4096 * 1024;
     
@@ -816,9 +817,11 @@ void ProcessGroupACCL::run_broadcast(at::Tensor tensor_original,
   if (!coyote_enabled && rank_ == opts.rootRank) {
     data->sync_to_device();
   }
-
-  accl->bcast(*data, tensor->numel(), opts.rootRank, ACCL::GLOBAL_COMM, true,
+  // auto start = std::chrono::high_resolution_clock::now();
+  ACCL::ACCLRequest* req = accl.bcast(*data, tensor->numel(), opts.rootRank, ACCL::GLOBAL_COMM, true,
               true, get_compressed_type(tensor->scalar_type()));
+  accl.wait(req, 1000ms);
+  // auto end = std::chrono::high_resolution_clock::now();
   int retcode = accl->get_retcode();
   if (retcode) {
     TORCH_CHECK(false, ACCL_ERROR(retcode));
@@ -850,11 +853,13 @@ ProcessGroupACCL::broadcast(std::vector<at::Tensor> &tensors,
         // Segment data if necessary
         if (tensor.nbytes() > bufsize) {
           size_t n = bufsize / tensor.itemsize();
+	  ACCL::debug("[Broadcast] Segmenting tensor of size " + std::to_string(tensor.nbytes()) + " into " + std::to_string(n) + "-sized elements ");
           for (size_t i = 0; i < tensor.numel(); i += n) {
             size_t end = std::min(i + n, static_cast<size_t>(tensor.numel()));
             run_broadcast(tensor.slice(0, i, end), opts);
           }
         } else {
+	  ACCL::debug("[Broadcast] Broadcasting entire tensor of size " + std::to_string(tensor.nbytes()) + " without segmentation.");
           run_broadcast(tensor, opts);
         }
       };

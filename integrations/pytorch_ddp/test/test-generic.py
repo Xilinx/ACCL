@@ -228,10 +228,10 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
         if host_file==None or fpga_file==None: sys.exit('Host and FPGA file need to be specified in hardware mode')
             
         with open(host_file, 'r') as hf:
-            host_ips = hf.readlines()
+            host_ips = hf.read().splitlines()
             
         with open(fpga_file, 'r') as ff:
-            fpga_ips = ff.readlines()
+            fpga_ips = ff.read().splitlines()
 
         if comms == "cyt_rdma":
             ranks = [accl.Rank(a, start_port, i, rxbufsize) for i, a in enumerate(fpga_ips)]

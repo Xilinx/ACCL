@@ -35,7 +35,7 @@ if [[ $ACCL_SIM -eq 1 ]]; then
 
     ACCL_COMMS="udp"
 
-    echo "assuming udp comms in simulator"
+    echo "assuming $ACCL_COMMS comms in simulator"
 
     if [[ -v ACCL_NP ]]; then
         NUM_PROCESS="$ACCL_NP"
