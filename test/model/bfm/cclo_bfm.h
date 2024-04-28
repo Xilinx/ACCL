@@ -20,6 +20,7 @@
 #include "accl_hls.h"
 #include "accl/simbuffer.hpp"
 #include <vector>
+#include <thread>
 
 /**
  * @brief Class providing a bus-functional model (at HLS Stream level) of the ACCL CCLO kernel. Connects to the emulator/simulator.

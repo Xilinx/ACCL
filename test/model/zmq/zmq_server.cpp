@@ -33,11 +33,11 @@ zmq_intf_context zmq_server_intf(unsigned int starting_port, unsigned int local_
     zmq_intf_context ctx;
 
     logger = &log;
-    ctx.cmd_socket = std::make_unique<zmqpp::socket>(ctx.context, zmqpp::socket_type::reply);
-    ctx.eth_tx_socket = std::make_unique<zmqpp::socket>(ctx.context, zmqpp::socket_type::pub);
-    ctx.eth_rx_socket = std::make_unique<zmqpp::socket>(ctx.context, zmqpp::socket_type::sub);
-    ctx.krnl_tx_socket = std::make_unique<zmqpp::socket>(ctx.context, zmqpp::socket_type::pub);
-    ctx.krnl_rx_socket = std::make_unique<zmqpp::socket>(ctx.context, zmqpp::socket_type::sub);
+    ctx.cmd_socket = std::make_unique<zmq::socket_t>(ctx.context, zmq::socket_type::rep);
+    ctx.eth_tx_socket = std::make_unique<zmq::socket_t>(ctx.context, zmq::socket_type::pub);
+    ctx.eth_rx_socket = std::make_unique<zmq::socket_t>(ctx.context, zmq::socket_type::sub);
+    ctx.krnl_tx_socket = std::make_unique<zmq::socket_t>(ctx.context, zmq::socket_type::pub);
+    ctx.krnl_rx_socket = std::make_unique<zmq::socket_t>(ctx.context, zmq::socket_type::sub);
 
     const string endpoint_base = "tcp://127.0.0.1:";
 
@@ -57,6 +57,12 @@ zmq_intf_context zmq_server_intf(unsigned int starting_port, unsigned int local_
 
     this_thread::sleep_for(chrono::milliseconds(1000));
 
+    *logger << log_level::verbose << "Rank " << local_rank << " subscribing to " << local_rank << " (ETH)" << endl;
+    // Create a padded version of the rank to prevent subscription to
+    // ranks that have the same starting digits
+    std::stringstream rank_pad;
+    rank_pad << std::setw(DEST_PADDING) << std::setfill('0') << local_rank; 
+
     // connect to the sockets
     for(int i=0; i<world_size; i++){
         *logger << log_level::verbose << "Rank " << local_rank << " connecting to " << eth_endpoints.at(i) << " (ETH)" << endl;
@@ -65,12 +71,8 @@ zmq_intf_context zmq_server_intf(unsigned int starting_port, unsigned int local_
 
     this_thread::sleep_for(chrono::milliseconds(1000));
 
-    *logger << log_level::verbose << "Rank " << local_rank << " subscribing to " << local_rank << " (ETH)" << endl;
-    // Create a padded version of the rank to prevent subscription to
-    // ranks that have the same starting digits
-    std::stringstream rank_pad;
-    rank_pad << std::setw(DEST_PADDING) << std::setfill('0') << local_rank; 
-    ctx.eth_rx_socket->subscribe(rank_pad.str());
+    //TODO use non-deprecated set call: ctx.eth_rx_socket->set(zmq::sockopt::subscribe, rank_pad.str());
+    ctx.eth_rx_socket->setsockopt(ZMQ_SUBSCRIBE, rank_pad.str().c_str(), rank_pad.str().length());
 
     this_thread::sleep_for(chrono::milliseconds(1000));
 
@@ -85,14 +87,18 @@ zmq_intf_context zmq_server_intf(unsigned int starting_port, unsigned int local_
     if(!kernel_loopback){
         krnl_endpoint = endpoint_base + to_string(starting_port+3*world_size+local_rank);
     }
+
+    //subscribing to all (for now)
+    *logger << log_level::verbose << "Rank " << local_rank << " subscribing to all (KRNL)" << endl;
+
     *logger << log_level::verbose << "Rank " << local_rank << " connecting to " << krnl_endpoint << " (KRNL)" << endl;
     ctx.krnl_rx_socket->connect(krnl_endpoint);
     this_thread::sleep_for(chrono::milliseconds(1000));
-    //subscribing to all (for now)
-    *logger << log_level::verbose << "Rank " << local_rank << " subscribing to all (KRNL)" << endl;
-    ctx.krnl_rx_socket->subscribe("");
-    this_thread::sleep_for(chrono::milliseconds(1000));
 
+    //TODO use non-deprecated call: ctx.krnl_rx_socket->set(zmq::sockopt::subscribe, "");
+    ctx.krnl_rx_socket->setsockopt(ZMQ_SUBSCRIBE, "", 0);
+    this_thread::sleep_for(chrono::milliseconds(1000));
+    
     *logger << log_level::info << "ZMQ Context established for rank " << local_rank << endl;
 
     return ctx;
@@ -100,7 +106,6 @@ zmq_intf_context zmq_server_intf(unsigned int starting_port, unsigned int local_
 
 void eth_endpoint_egress_port(zmq_intf_context *ctx, Stream<stream_word > &in, unsigned int local_rank){
 
-    zmqpp::message message;
     Json::Value packet;
     Json::StreamWriterBuilder builder;
 
@@ -125,15 +130,14 @@ void eth_endpoint_egress_port(zmq_intf_context *ctx, Stream<stream_word > &in, u
     std::stringstream dest_pad;
     dest_pad << std::setw(DEST_PADDING) << std::setfill('0') << dest; 
     //first part of the message is the destination port ID
-    message << dest_pad.str();
+    ctx->eth_tx_socket->send(zmq::message_t(dest_pad.str()), zmq::send_flags::sndmore); 
     //second part of the message is the local rank of the sender
-    message << to_string(local_rank);
+    ctx->eth_tx_socket->send(zmq::message_t(to_string(local_rank)), zmq::send_flags::sndmore); 
     //finally package the data
     string str = Json::writeString(builder, packet);
-    message << str;
     *logger << log_level::verbose << "ETH Send " << idx << " bytes to " << dest << endl;
     *logger << log_level::debug << str << endl;
-    ctx->eth_tx_socket->send(message);
+    ctx->eth_tx_socket->send(zmq::message_t(str), zmq::send_flags::none);
     //add some spacing to encourage realistic
     //interleaving between messsages in fabric
     this_thread::sleep_for(chrono::milliseconds(10));
@@ -144,16 +148,18 @@ void eth_endpoint_ingress_port(zmq_intf_context *ctx, Stream<stream_word > &out)
     Json::Reader reader;
 
     // receive the message
-    zmqpp::message message;
-    if(!ctx->eth_rx_socket->receive(message, true)) return;
+    zmq::message_t message;
+    if(!(ctx->eth_rx_socket->recv(message, zmq::recv_flags::dontwait)).has_value()) return;
 
     // decompose the message
-    string msg_text, dst_text, src_text, sender_rank_text;
+    string msg_text, dst_text, sender_rank_text;
 
     //get and check destination ID
-    message >> dst_text;
-    message >> sender_rank_text;
-    message >> msg_text;
+    dst_text = message.to_string();
+    ctx->eth_rx_socket->recv(message);
+    sender_rank_text = message.to_string();
+    ctx->eth_rx_socket->recv(message);
+    msg_text = message.to_string();
 
     //parse msg_text as json
     Json::Value packet, data;
@@ -185,7 +191,6 @@ void eth_endpoint_ingress_port(zmq_intf_context *ctx, Stream<stream_word > &out)
 
 void krnl_endpoint_egress_port(zmq_intf_context *ctx, Stream<stream_word > &in){
 
-    zmqpp::message message;
     Json::Value packet;
     Json::StreamWriterBuilder builder;
 
@@ -208,15 +213,14 @@ void krnl_endpoint_egress_port(zmq_intf_context *ctx, Stream<stream_word > &in){
 
     //first part of the message is the destination port ID
     dest = tmp.dest;
-    message << to_string(dest);
+    ctx->krnl_tx_socket->send(zmq::message_t(to_string(dest)), zmq::send_flags::sndmore);
 
     //finally package the data
     string str = Json::writeString(builder, packet);
-    message << str;
     *logger << log_level::verbose << "CCLO to user kernel: push " << idx << " bytes to dest = " << dest << endl;
     *logger << log_level::debug << str << endl;
     if(!ctx->stop){
-        ctx->krnl_tx_socket->send(message);
+        ctx->krnl_tx_socket->send(zmq::message_t(str), zmq::send_flags::none);
     }
 }
 
@@ -226,15 +230,16 @@ void krnl_endpoint_ingress_port(zmq_intf_context *ctx, Stream<stream_word > &out
     Json::Reader reader;
 
     // receive the message
-    zmqpp::message message;
-    if(!ctx->krnl_rx_socket->receive(message, true)) return;
+    zmq::message_t message;
+    if(!(ctx->krnl_rx_socket->recv(message, zmq::recv_flags::dontwait)).has_value()) return;
 
     // decompose the message
     string msg_text, dst_text;
 
     //get and check destination ID
-    message >> dst_text;
-    message >> msg_text;
+    dst_text = message.to_string();
+    ctx->krnl_rx_socket->recv(message);
+    msg_text = message.to_string();
 
     //parse msg_text as json
     Json::Value packet, data;
@@ -271,12 +276,11 @@ void serve_zmq(zmq_intf_context *ctx, uint32_t *cfgmem, vector<char> &devicemem,
     Json::StreamWriterBuilder builder;
 
     // receive the message
-    zmqpp::message message;
-    if(!ctx->cmd_socket->receive(message, true)) return;
+    zmq::message_t message;
+    if(!(ctx->cmd_socket->recv(message, zmq::recv_flags::dontwait)).has_value()) return;
 
     // decompose the message
-    string msg_text;
-    message >> msg_text; //message now is in a string
+    string msg_text = message.to_string(); //message now is in a string
 
     *logger << log_level::debug << "Received: " << msg_text << endl;
 
@@ -440,7 +444,8 @@ void serve_zmq(zmq_intf_context *ctx, uint32_t *cfgmem, vector<char> &devicemem,
     }
     //return message to client
     string str = Json::writeString(builder, response);
-    ctx->cmd_socket->send(str);
+    zmq::message_t ret_msg(str);
+    ctx->cmd_socket->send(ret_msg, zmq::send_flags::none);
 }
 
 
@@ -455,12 +460,11 @@ void serve_zmq(zmq_intf_context *ctx,
     Json::StreamWriterBuilder builder;
 
     // receive the message
-    zmqpp::message message;
-    if(!ctx->cmd_socket->receive(message, true)) return;
+    zmq::message_t message;
+    if(!(ctx->cmd_socket->recv(message, zmq::recv_flags::dontwait)).has_value()) return;
 
     // decompose the message
-    string msg_text;
-    message >> msg_text;//message now is in a string
+    string msg_text = message.to_string();//message now is in a string
 
     *logger << log_level::debug << "Received: " << msg_text << endl;
 
@@ -712,7 +716,8 @@ void serve_zmq(zmq_intf_context *ctx,
     }
     //return message to client
     string str = Json::writeString(builder, response);
-    ctx->cmd_socket->send(str);
+    zmq::message_t ret_msg(str);
+    ctx->cmd_socket->send(ret_msg, zmq::send_flags::none);
 }
 
 void zmq_cmd_server(zmq_intf_context *ctx,

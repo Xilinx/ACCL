@@ -75,7 +75,7 @@ add_executable(cclo_emu ${EMU_SOURCES})
 
 get_target_property(JSON_INC_PATH jsoncpp_lib INTERFACE_INCLUDE_DIRECTORIES)
 target_include_directories(cclo_emu PUBLIC ${JSON_INC_PATH} ${EMU_INCLUDES})
-target_link_libraries(cclo_emu PUBLIC zmq zmqpp pthread jsoncpp_lib)
+target_link_libraries(cclo_emu PUBLIC zmq pthread jsoncpp_lib)
 target_compile_definitions(cclo_emu PUBLIC MB_FW_EMULATION NUM_CTRL_STREAMS=3)
 if (NOT EXISTS $ENV{XILINX_HLS})
   target_compile_definitions(cclo_emu PUBLIC OSS_HALF_PRECISION)

@@ -84,7 +84,7 @@ get_target_property(JSON_INC_PATH jsoncpp_lib INTERFACE_INCLUDE_DIRECTORIES)
 
 add_library(cclobfm SHARED ${CCLO_BFM_SOURCES})
 target_include_directories(cclobfm PUBLIC ${ACCL_XRTDRV_INCLUDE_PATH} ${ACCL_HLSDRV_INCLUDE_PATH} ${CCLO_BFM_INCLUDE_PATH} ${HLSLIB_INCLUDE} ${HLS_INCLUDES} ${JSON_INC_PATH} $ENV{XILINX_XRT}/include)
-target_link_libraries(cclobfm PUBLIC jsoncpp_lib zmqpp zmq pthread)
+target_link_libraries(cclobfm PUBLIC jsoncpp_lib zmq pthread)
 
 set_target_properties(cclobfm PROPERTIES
     VERSION ${PROJECT_VERSION}
