@@ -18,18 +18,16 @@
 #include "zmq_common.h"
 #include <string>
 
-Json::Value to_json(zmqpp::message &message) {
-    std::string message_txt;
-    message >> message_txt;
+Json::Value to_json(zmq::message_t &message) {
     Json::Reader reader;
     Json::Value json;
-    reader.parse(message_txt, json);
+    reader.parse(message.to_string(), json);
     return json;
 }
 
-void to_message(Json::Value &request_json, zmqpp::message &request){
+zmq::message_t to_message(Json::Value &request_json){
     Json::StreamWriterBuilder builder;
     builder["indentation"] = ""; // minimize output
     const std::string message = Json::writeString(builder, request_json);
-    request << message;
+    return zmq::message_t(message);
 }

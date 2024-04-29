@@ -10,7 +10,7 @@ git submodule update --init --recursive
 The project has been tested with Xilinx Vitis 2022.1 on Ubuntu 20.04.
 ```sh
 sudo apt update
-sudo apt install python3 cmake libzmqpp-dev libjsoncpp-dev libtclap-dev libopenmpi-dev xvfb
+sudo apt install python3 cmake libzmq3-dev libjsoncpp-dev libtclap-dev libopenmpi-dev xvfb
 ```
 Install the Xilinx Run-Time libraries (XRT)
 ```
@@ -64,7 +64,7 @@ First start up either the emulator or simulator:
   ```sh
   cd "kernels/cclo"
   source <VIVADO_INSTALL>/settings64.sh
-  make STACK_TYPE=TCP EN_FANIN=1 simdll
+  make STACK_TYPE=TCP MODE=simdll
   cd "../../test/model/simulator"
   source <VITIS_INSTALL>/settings64.sh
   /bin/cmake .
