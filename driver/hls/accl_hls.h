@@ -21,7 +21,7 @@
 #include "ap_axi_sdata.h"
 
 #ifdef ACCL_SYNTHESIS
-#include "ap_utils.h"
+#include "etc/autopilot_ssdm_op.h"
 #else
 #define ap_wait() 
 #endif
