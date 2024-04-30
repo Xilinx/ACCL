@@ -40,6 +40,7 @@ void tcp_session_handler(
 #pragma HLS INTERFACE axis register both port=open_connection
 #pragma HLS INTERFACE axis register both port=close_connection
 #pragma HLS INTERFACE axis register both port=open_status
+#pragma HLS INTERFACE s_axilite port=return
 
     //first open port, unless the instruction is to close
     if(!close){

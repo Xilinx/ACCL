@@ -16,7 +16,7 @@
 # *******************************************************************************/
 #pragma once
 #include <json/json.h>
-#include <zmqpp/zmqpp.hpp>
+#include <zmq.hpp>
 #include <memory>
 
 /**
@@ -24,12 +24,12 @@
  *
  */
 struct zmq_intf_context{
-    zmqpp::context context;
-    std::unique_ptr<zmqpp::socket> cmd_socket;
-    std::unique_ptr<zmqpp::socket> eth_tx_socket;
-    std::unique_ptr<zmqpp::socket> eth_rx_socket;
-    std::unique_ptr<zmqpp::socket> krnl_tx_socket;
-    std::unique_ptr<zmqpp::socket> krnl_rx_socket;
+    zmq::context_t context;
+    std::unique_ptr<zmq::socket_t> cmd_socket;
+    std::unique_ptr<zmq::socket_t> eth_tx_socket;
+    std::unique_ptr<zmq::socket_t> eth_rx_socket;
+    std::unique_ptr<zmq::socket_t> krnl_tx_socket;
+    std::unique_ptr<zmq::socket_t> krnl_rx_socket;
     bool stop = false;
     zmq_intf_context() : context() {}
 };
@@ -40,12 +40,12 @@ struct zmq_intf_context{
  * @param message Reference to the ZMQ message, as received from the socket
  * @return Json::Value The JSON equivalent
  */
-Json::Value to_json(zmqpp::message &message);
+Json::Value to_json(zmq::message_t &message);
 
 /**
  * @brief Convert a JSON to a ZMQ message
  *
  * @param request_json The JSON input
- * @param request Reference to the ZMQ message, ready for sending
+ * @return zmq::message_t The ZMQ message
  */
-void to_message(Json::Value &request_json, zmqpp::message &request);
+zmq::message_t to_message(Json::Value &request_json);
