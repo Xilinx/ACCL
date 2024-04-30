@@ -211,13 +211,15 @@ void configure_tcp(FPGABuffer<int8_t> &tx_buf_network, FPGABuffer<int8_t> &rx_bu
      << std::dec << std::endl;
   log_debug(ss.str());
 
+  MPI_Barrier(MPI_COMM_WORLD);
+
   //set up sessions for ranks
   for(size_t i = 0; i < ranks.size(); ++i){
     bool success;
     if (i == static_cast<size_t>(local_rank)) {
       continue;
     }
-    session_krnl(ranks[i].ip, ranks[i].port, false, 	
+    session_krnl(ip_encode(ranks[i].ip), ranks[i].port, false, 	
                   &(ranks[i].session_id), &success);
     if(!success){
       throw std::runtime_error("Failed to establish session for IP:"+
