@@ -48,7 +48,7 @@ else:
 rank = 0
 size = 0
 
-count = 1024
+count = 512
 #As in test.cpp defaults
 rxbufsize = 4096 * 1024
 
@@ -277,10 +277,14 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
         # mpi.Barrier()
         # demo_basic(rank)
         # mpi.Barrier()
+
+
+        # add destroy 
         
     print(prof.key_averages(group_by_input_shape=True)
           .table(sort_by="cpu_time_total", row_limit=15))
 
+    dist.destroy_process_group()
 
 if __name__ == '__main__':
     import argparse

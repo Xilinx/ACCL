@@ -660,15 +660,14 @@ void ProcessGroupACCL::initialize() {
 
     accl = std::make_unique<ACCL::ACCL>(cyt_device);
 
-    // eager protocol for now
+    // Rendezvous protocol for now
     int protoc = 1;
     // default from test.cpp
     int segsize = 4096 * 1024;
     
     if (protoc == 0){
       std::cout<<"Eager Protocol"<<std::endl;
-      accl.get()->initialize(ranks_, rank_,
-			     size_+2, bufsize, segsize, 4096*1024*2);
+      accl.get()->initialize(ranks_, rank_, size_+2, bufsize, segsize, 4096*1024*2);
     } else {
       std::cout<<"Rendezvous Protocol"<<std::endl;
       accl.get()->initialize(ranks_, rank_, size_, 64, 64, segsize);
@@ -810,25 +809,56 @@ void ProcessGroupACCL::run_broadcast(at::Tensor tensor_original,
     }
   }
 
-  // Run broadcast
-  ACCL::debug("Starting broadcast of " + std::to_string(tensor->numel()) +
-              " items");
+  // int num_prints = std::max((int64_t) 3, tensor->numel());
 
+  // ACCL::debug("First " + std::to_string(num_prints) + " elements before bcast:");
+  
+  // for(int i = 0; i < num_prints; i++){
+    // ACCL::debug(std::to_string(data.get()->buffer()[i]));
+  // }
+
+  // Run broadcast
+
+  //check wether this is needed, with hostmem
   if (!coyote_enabled && rank_ == opts.rootRank) {
     data->sync_to_device();
   }
+
+  ACCL::debug("[Broadcast] Entering pre-bcast barrier");
+
+  //add mpi barrier
+  accl->barrier();
+  
+  ACCL::debug("Starting broadcast of " + std::to_string(tensor->numel()) + " items");
+
   // auto start = std::chrono::high_resolution_clock::now();
   ACCL::ACCLRequest* req = accl->bcast(*data, tensor->numel(), opts.rootRank, ACCL::GLOBAL_COMM, true,
               true, get_compressed_type(tensor->scalar_type()));
-  accl->wait(req, 1000ms);
-  // auto end = std::chrono::high_resolution_clock::now();
-  int retcode = accl->get_retcode();
-  if (retcode) {
-    TORCH_CHECK(false, ACCL_ERROR(retcode));
-  }
+  // not sure if this is supported in other modes
+  // ACCL::debug("First " + std::to_string(num_prints) + " elements after bcast:");
+    ACCL::debug("After request");
+
 
   if (!coyote_enabled && rank_ != opts.rootRank) {
     data->sync_from_device();
+  }
+
+  // for(int i = 0; i < num_prints; i++){
+    // ACCL::debug(std::to_string(data.get()->buffer()[i]));
+  // }
+  
+  if(coyote_enabled){
+    ACCL::debug("Waiting for request to complete.");
+    accl->wait(req, 1000ms);
+  }
+  ACCL::debug("After wait");
+  // auto end = std::chrono::high_resolution_clock::now();
+  int retcode = accl->get_retcode();
+
+  ACCL::debug("Returncode: " + std::to_string(retcode));  
+  if (retcode) {
+    // add deconstruction
+    TORCH_CHECK(false, ACCL_ERROR(retcode));
   }
 
   // Copy results back to GPU if necessary
@@ -846,6 +876,7 @@ void ProcessGroupACCL::run_broadcast(at::Tensor tensor_original,
 c10::intrusive_ptr<Work>
 ProcessGroupACCL::broadcast(std::vector<at::Tensor> &tensors,
                             const BroadcastOptions &opts) {
+  debug(accl->dump_eager_rx_buffers(false));
   checkSingleTensor(tensors);
   std::function<void(std::unique_ptr<WorkEntry> &)> runFunc =
       [opts, this](std::unique_ptr<WorkEntry> &entry) {

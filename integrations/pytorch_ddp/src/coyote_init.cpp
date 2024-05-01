@@ -18,6 +18,9 @@
 #include "coyote_init.hpp"
 #include <arpa/inet.h>
 #include <iostream>
+#include <mpi.h>
+
+using namespace ACCL;
 
 namespace {
 inline void swap_endianness(uint32_t *ip) {
@@ -42,33 +45,98 @@ std::string ip_decode(uint32_t ip) {
   return std::string(buffer, INET_ADDRSTRLEN);
 }
 
-void exchange_qp(unsigned int first_rank, unsigned int second_rank,
-                 unsigned int local_rank,
-                 std::vector<fpga::ibvQpConn *> &ibvQpConn_vec,
-                 std::vector<ACCL::rank_t> &ranks) {
-  // write established connection to hardware and perform arp lookup
-  if (local_rank == first_rank) {
-    int connection =
-        (ibvQpConn_vec[second_rank]->getQpairStruct()->local.qpn & 0xFFFF) |
-        ((ibvQpConn_vec[second_rank]->getQpairStruct()->remote.qpn & 0xFFFF)
-         << 16);
-    ibvQpConn_vec[second_rank]->setConnection(connection);
-    ibvQpConn_vec[second_rank]->writeContext(ranks[second_rank].port);
-    ibvQpConn_vec[second_rank]->doArpLookup();
-    ranks[second_rank].session_id =
-        ibvQpConn_vec[second_rank]->getQpairStruct()->local.qpn;
-  } else if (local_rank == second_rank) {
-    int connection =
-        (ibvQpConn_vec[first_rank]->getQpairStruct()->local.qpn & 0xFFFF) |
-        ((ibvQpConn_vec[first_rank]->getQpairStruct()->remote.qpn & 0xFFFF)
-         << 16);
-    ibvQpConn_vec[first_rank]->setConnection(connection);
-    ibvQpConn_vec[first_rank]->writeContext(ranks[first_rank].port);
-    ibvQpConn_vec[first_rank]->doArpLookup();
-    ranks[first_rank].session_id =
-        ibvQpConn_vec[first_rank]->getQpairStruct()->local.qpn;
-  }
+void exchange_qp(unsigned int master_rank, unsigned int slave_rank, unsigned int local_rank, std::vector<fpga::ibvQpConn*> &ibvQpConn_vec, std::vector<rank_t> &ranks)
+{
+  	
+	if (local_rank == master_rank)
+	{
+		std::cout<<"Local rank "<<local_rank<<" sending local QP to remote rank "<<slave_rank<<std::endl;
+		// Send the local queue pair information to the slave rank
+		MPI_Send(&(ibvQpConn_vec[slave_rank]->getQpairStruct()->local), sizeof(fpga::ibvQ), MPI_CHAR, slave_rank, 0, MPI_COMM_WORLD);
+	}
+	else if (local_rank == slave_rank)
+	{
+		std::cout<<"Local rank "<<local_rank<<" receiving remote QP from remote rank "<<master_rank<<std::endl;
+		// Receive the queue pair information from the master rank
+		fpga::ibvQ received_q;
+		MPI_Recv(&received_q, sizeof(fpga::ibvQ), MPI_CHAR, master_rank, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+		// Copy the received data to the remote queue pair
+		ibvQpConn_vec[master_rank]->getQpairStruct()->remote = received_q;
+	}
+
+	// Synchronize after the first exchange to avoid race conditions
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	if (local_rank == slave_rank)
+	{
+		std::cout<<"Local rank "<<local_rank<<" sending local QP to remote rank "<<master_rank<<std::endl;
+		// Send the local queue pair information to the master rank
+		MPI_Send(&(ibvQpConn_vec[master_rank]->getQpairStruct()->local), sizeof(fpga::ibvQ), MPI_CHAR, master_rank, 0, MPI_COMM_WORLD);
+	}
+	else if (local_rank == master_rank)
+	{
+		std::cout<<"Local rank "<<local_rank<<" receiving remote QP from remote rank "<<slave_rank<<std::endl;
+		// Receive the queue pair information from the slave rank
+		fpga::ibvQ received_q;
+		MPI_Recv(&received_q, sizeof(fpga::ibvQ), MPI_CHAR, slave_rank, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+		// Copy the received data to the remote queue pair
+		ibvQpConn_vec[slave_rank]->getQpairStruct()->remote = received_q;
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	// write established connection to hardware and perform arp lookup
+	if (local_rank == master_rank)
+	{
+		int connection = (ibvQpConn_vec[slave_rank]->getQpairStruct()->local.qpn & 0xFFFF) | ((ibvQpConn_vec[slave_rank]->getQpairStruct()->remote.qpn & 0xFFFF) << 16);
+		ibvQpConn_vec[slave_rank]->getQpairStruct()->print();
+		ibvQpConn_vec[slave_rank]->setConnection(connection);
+		ibvQpConn_vec[slave_rank]->writeContext(ranks[slave_rank].port);
+		ibvQpConn_vec[slave_rank]->doArpLookup();
+		ranks[slave_rank].session_id = ibvQpConn_vec[slave_rank]->getQpairStruct()->local.qpn;
+	} else if (local_rank == slave_rank) 
+	{
+		int connection = (ibvQpConn_vec[master_rank]->getQpairStruct()->local.qpn & 0xFFFF) | ((ibvQpConn_vec[master_rank]->getQpairStruct()->remote.qpn & 0xFFFF) << 16);
+		ibvQpConn_vec[master_rank]->getQpairStruct()->print();
+		ibvQpConn_vec[master_rank]->setConnection(connection);
+		ibvQpConn_vec[master_rank]->writeContext(ranks[master_rank].port);
+		ibvQpConn_vec[master_rank]->doArpLookup();
+		ranks[master_rank].session_id = ibvQpConn_vec[master_rank]->getQpairStruct()->local.qpn;
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
 }
+
+  
+// void exchange_qp(unsigned int first_rank, unsigned int second_rank,
+//                  unsigned int local_rank,
+//                  std::vector<fpga::ibvQpConn *> &ibvQpConn_vec,
+//                  std::vector<ACCL::rank_t> &ranks) {
+//   // write established connection to hardware and perform arp lookup
+//   if (local_rank == first_rank) {
+//     int connection =
+//         (ibvQpConn_vec[second_rank]->getQpairStruct()->local.qpn & 0xFFFF) |
+//         ((ibvQpConn_vec[second_rank]->getQpairStruct()->remote.qpn & 0xFFFF)
+//          << 16);
+//     ibvQpConn_vec[second_rank]->setConnection(connection);
+//     ibvQpConn_vec[second_rank]->writeContext(ranks[second_rank].port);
+//     ibvQpConn_vec[second_rank]->doArpLookup();
+//     ranks[second_rank].session_id =
+//         ibvQpConn_vec[second_rank]->getQpairStruct()->local.qpn;
+//   } else if (local_rank == second_rank) {
+//     int connection =
+//         (ibvQpConn_vec[first_rank]->getQpairStruct()->local.qpn & 0xFFFF) |
+//         ((ibvQpConn_vec[first_rank]->getQpairStruct()->remote.qpn & 0xFFFF)
+//          << 16);
+//     ibvQpConn_vec[first_rank]->setConnection(connection);
+//     ibvQpConn_vec[first_rank]->writeContext(ranks[first_rank].port);
+//     ibvQpConn_vec[first_rank]->doArpLookup();
+//     ranks[first_rank].session_id =
+//         ibvQpConn_vec[first_rank]->getQpairStruct()->local.qpn;
+//   }
+// }
 
 } // namespace
 
