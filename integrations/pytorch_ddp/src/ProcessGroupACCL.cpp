@@ -809,56 +809,33 @@ void ProcessGroupACCL::run_broadcast(at::Tensor tensor_original,
     }
   }
 
-  // int num_prints = std::max((int64_t) 3, tensor->numel());
-
-  // ACCL::debug("First " + std::to_string(num_prints) + " elements before bcast:");
-  
-  // for(int i = 0; i < num_prints; i++){
-    // ACCL::debug(std::to_string(data.get()->buffer()[i]));
-  // }
-
-  // Run broadcast
-
   //check wether this is needed, with hostmem
   if (!coyote_enabled && rank_ == opts.rootRank) {
     data->sync_to_device();
   }
 
-  ACCL::debug("[Broadcast] Entering pre-bcast barrier");
-
-  //add mpi barrier
+  ACCL::debug("[Broadcast] Entering barrier");
   accl->barrier();
   
   ACCL::debug("Starting broadcast of " + std::to_string(tensor->numel()) + " items");
 
-  // auto start = std::chrono::high_resolution_clock::now();
   ACCL::ACCLRequest* req = accl->bcast(*data, tensor->numel(), opts.rootRank, ACCL::GLOBAL_COMM, true,
               true, get_compressed_type(tensor->scalar_type()));
-  // not sure if this is supported in other modes
-  // ACCL::debug("First " + std::to_string(num_prints) + " elements after bcast:");
-    ACCL::debug("After request");
 
-
-  if (!coyote_enabled && rank_ != opts.rootRank) {
-    data->sync_from_device();
-  }
-
-  // for(int i = 0; i < num_prints; i++){
-    // ACCL::debug(std::to_string(data.get()->buffer()[i]));
-  // }
-  
   if(coyote_enabled){
     ACCL::debug("Waiting for request to complete.");
     accl->wait(req, 1000ms);
   }
-  ACCL::debug("After wait");
-  // auto end = std::chrono::high_resolution_clock::now();
-  int retcode = accl->get_retcode();
+  ACCL::debug("Finished waiting");
 
-  ACCL::debug("Returncode: " + std::to_string(retcode));  
-  if (retcode) {
+  // ACCL::debug("Returncode: " + std::to_string(retcode));  
+  // if (retcode) {
     // add deconstruction
-    TORCH_CHECK(false, ACCL_ERROR(retcode));
+    // TORCH_CHECK(false, ACCL_ERROR(retcode));
+  // }
+  
+  if (!coyote_enabled && rank_ != opts.rootRank) {
+    data->sync_from_device();
   }
 
   // Copy results back to GPU if necessary
@@ -939,18 +916,25 @@ void ProcessGroupACCL::run_allreduce(at::Tensor tensor_original,
   }
 
   // Run allreduce
-  ACCL::debug("Starting allreduce of " + std::to_string(tensor->numel()) +
-              " items");
   if (!coyote_enabled) {
     data->sync_to_device();
   }
-  accl->allreduce(*data, *result, tensor->numel(), acclOp.at(opts.reduceOp),
+
+  ACCL::debug("[AllReduce] Entering barrier");
+  accl->barrier();
+
+  ACCL::debug("Starting allreduce of " + std::to_string(tensor->numel()) +
+              " items");
+  ACCL::ACCLRequest* req = accl->allreduce(*data, *result, tensor->numel(), acclOp.at(opts.reduceOp),
                   ACCL::GLOBAL_COMM, true, true,
                   get_compressed_type(tensor->scalar_type()));
-  int retcode = accl->get_retcode();
-  if (retcode) {
-    TORCH_CHECK(false, ACCL_ERROR(retcode));
+
+  if(coyote_enabled){
+    ACCL::debug("Waiting for request to complete.");
+    accl->wait(req, 1000ms);
   }
+  
+  ACCL::debug("Finished waiting");
 
   if (!coyote_enabled) {
     result->sync_from_device();
@@ -1055,18 +1039,24 @@ void ProcessGroupACCL::run_reduce(at::Tensor tensor_original,
   }
 
   // Run reduce
-  ACCL::debug("Starting reduce of " + std::to_string(tensor->numel()) +
-              " items");
   if (!coyote_enabled) {
     data->sync_to_device();
   }
-  accl->reduce(*data, *result, tensor->numel(), opts.rootRank,
+  
+  ACCL::debug("[Reduce] Entering barrier");
+  accl->barrier();
+
+  ACCL::debug("Starting reduce of " + std::to_string(tensor->numel()) +
+              " items");
+  ACCL::ACCLRequest* req = accl->reduce(*data, *result, tensor->numel(), opts.rootRank,
                acclOp.at(opts.reduceOp), ACCL::GLOBAL_COMM, true, true,
                get_compressed_type(tensor->scalar_type()));
-  int retcode = accl->get_retcode();
-  if (retcode) {
-    TORCH_CHECK(false, ACCL_ERROR(retcode));
+
+  if(coyote_enabled){
+    ACCL::debug("Waiting for request to complete.");
+    accl->wait(req, 1000ms);
   }
+  ACCL::debug("Finished waiting");
 
   if (!coyote_enabled && rank_ == opts.rootRank) {
     result->sync_from_device();
@@ -1179,18 +1169,24 @@ void ProcessGroupACCL::run_allgather(
   }
 
   // Run allgather
-  ACCL::debug("Starting allgather of " + std::to_string(srctensor->numel()) +
-              " items");
   if (!coyote_enabled) {
     srcdata->sync_to_device();
   }
-  accl->allgather(*srcdata, *dstdata, srctensor->numel(), ACCL::GLOBAL_COMM,
+
+  ACCL::debug("[Allgather] Entering barrier");
+  accl->barrier();
+
+  ACCL::debug("Starting allgather of " + std::to_string(srctensor->numel()) +
+              " items");
+  ACCL::ACCLRequest* req = accl->allgather(*srcdata, *dstdata, srctensor->numel(), ACCL::GLOBAL_COMM,
                   true, true, get_compressed_type(srctensor->scalar_type()));
 
-  int retcode = accl->get_retcode();
-  if (retcode) {
-    TORCH_CHECK(false, ACCL_ERROR(retcode));
+  if(coyote_enabled){
+    ACCL::debug("Waiting for request to complete.");
+    accl->wait(req, 1000ms);
   }
+  ACCL::debug("Finished waiting");
+  
   if (!coyote_enabled) {
     dstdata->sync_from_device();
   }
@@ -1328,22 +1324,25 @@ void ProcessGroupACCL::run_gather(at::Tensor srctensor_original,
   }
 
   // Run gather
-  ACCL::debug("Starting gather of " + std::to_string(srctensor->numel()) +
-              " items");
-
   if (!coyote_enabled) {
     srcdata->sync_to_device();
   }
 
-  accl->gather(*srcdata, *dstdata, srctensor->numel(), opts.rootRank,
+  ACCL::debug("[Gather] Entering barrier");
+  accl->barrier();
+
+  ACCL::debug("Starting gather of " + std::to_string(srctensor->numel()) +
+              " items");
+  ACCL::ACCLRequest* req = accl->gather(*srcdata, *dstdata, srctensor->numel(), opts.rootRank,
                ACCL::GLOBAL_COMM, true, true,
                get_compressed_type(srctensor->scalar_type()));
 
-  int retcode = accl->get_retcode();
-  if (retcode) {
-    TORCH_CHECK(false, ACCL_ERROR(retcode));
+  if(coyote_enabled){
+    ACCL::debug("Waiting for request to complete.");
+    accl->wait(req, 1000ms);
   }
-
+  ACCL::debug("Finished waiting");
+  
   if (!coyote_enabled && rank_ == opts.rootRank) {
     dstdata->sync_from_device();
   }
@@ -1435,30 +1434,28 @@ void ProcessGroupACCL::run_scatter(std::vector<at::Tensor> &srctensorvec,
   // Create new input buffer, since srctensorvec is not continuous in memory
   if (rank_ == opts.rootRank) {
     at::Tensor srctensor;
-    if (rank_ == opts.rootRank) {
-      if (p2p_applicable(*accl, srctensorvec[0], p2p_enabled)) {
-        srcdata = create_buffer_p2p(
-            *accl, dsttensor->numel() * static_cast<size_t>(size_),
-            dsttensor->scalar_type());
-      } else if (coyote_enabled) {
-        srcdata = create_coyotebuffer(*accl,
-                                dsttensor->numel() * static_cast<size_t>(size_),
-                                dsttensor->scalar_type());
-        std::vector<int64_t> sizes = {static_cast<int64_t>(dsttensor->numel()) *
-                                      size_};
-        srctensor =
-            torch::from_blob(srcdata->byte_array(), sizes,
-                             dsttensor->options().device(c10::DeviceType::CPU));
-      } else {
-        srcdata = create_buffer(*accl,
-                                dsttensor->numel() * static_cast<size_t>(size_),
-                                dsttensor->scalar_type());
-        std::vector<int64_t> sizes = {static_cast<int64_t>(dsttensor->numel()) *
-                                      size_};
-        srctensor =
-            torch::from_blob(srcdata->byte_array(), sizes,
-                             dsttensor->options().device(c10::DeviceType::CPU));
-      }
+    if (p2p_applicable(*accl, srctensorvec[0], p2p_enabled)) {
+      srcdata = create_buffer_p2p(
+				  *accl, dsttensor->numel() * static_cast<size_t>(size_),
+				  dsttensor->scalar_type());
+    } else if (coyote_enabled) {
+      srcdata = create_coyotebuffer(*accl,
+				    dsttensor->numel() * static_cast<size_t>(size_),
+				    dsttensor->scalar_type());
+      std::vector<int64_t> sizes = {static_cast<int64_t>(dsttensor->numel()) *
+				    size_};
+      srctensor =
+	torch::from_blob(srcdata->byte_array(), sizes,
+			 dsttensor->options().device(c10::DeviceType::CPU));
+    } else {
+      srcdata = create_buffer(*accl,
+			      dsttensor->numel() * static_cast<size_t>(size_),
+			      dsttensor->scalar_type());
+      std::vector<int64_t> sizes = {static_cast<int64_t>(dsttensor->numel()) *
+				    size_};
+      srctensor =
+	torch::from_blob(srcdata->byte_array(), sizes,
+			 dsttensor->options().device(c10::DeviceType::CPU));
     }
 
     // Copy data to input buffer
@@ -1504,25 +1501,33 @@ void ProcessGroupACCL::run_scatter(std::vector<at::Tensor> &srctensorvec,
     }
   }
 
-  // Run scatter
-  ACCL::debug("Starting scatter of " + std::to_string(dsttensor->numel()) +
-              " items");
-
   if (!coyote_enabled && rank_ == opts.rootRank) {
     srcdata->sync_to_device();
   }
 
-  accl->scatter(*srcdata, *dstdata, dsttensor->numel(), opts.rootRank,
+  ACCL::debug("[Scatter] Entering barrier");
+  accl->barrier();
+
+
+  ACCL::debug("Starting scatter of " + std::to_string(dsttensor->numel()) +
+              " items");
+  // Run scatter
+  ACCL::ACCLRequest* req = accl->scatter(*srcdata, *dstdata, dsttensor->numel(), opts.rootRank,
                 ACCL::GLOBAL_COMM, true, true,
                 get_compressed_type(dsttensor->scalar_type()));
-  int retcode = accl->get_retcode();
-  if (retcode) {
-    TORCH_CHECK(false, ACCL_ERROR(retcode));
+
+  if(coyote_enabled){
+    ACCL::debug("Waiting for request to complete.");
+    accl->wait(req, 1000ms);
   }
+
+  ACCL::debug("Finished wait");
 
   if (!coyote_enabled) {
     dstdata->sync_from_device();
   }
+
+
 
   // Copy result back to GPU if necessary
   if (p2p_applicable(*accl, dsttensor_original, p2p_enabled)) {
@@ -1650,18 +1655,25 @@ void ProcessGroupACCL::run_alltoall(at::Tensor srctensor_original,
   }
 
   // Run alltoall
-  ACCL::debug("Starting alltoall of " + std::to_string(srctensor->numel()) +
-              " items");
   if (!coyote_enabled) {
     srcdata->sync_to_device();
   }
-  accl->alltoall(*srcdata, *dstdata, srctensor->numel(),
+
+  ACCL::debug("[AlltoAll] Entering barrier");
+  accl->barrier();
+
+  ACCL::debug("Starting alltoall of " + std::to_string(srctensor->numel()) +
+              " items");
+  ACCL::ACCLRequest* req = accl->alltoall(*srcdata, *dstdata, srctensor->numel(),
                   ACCL::GLOBAL_COMM, true, true,
                   get_compressed_type(srctensor->scalar_type()));
-  int retcode = accl->get_retcode();
-  if (retcode) {
-    TORCH_CHECK(false, ACCL_ERROR(retcode));
+
+  if(coyote_enabled){
+    ACCL::debug("Waiting for request to complete.");
+    accl->wait(req, 1000ms);
   }
+  ACCL::debug("Finished waiting");
+  
   if (!coyote_enabled) {
     dstdata->sync_from_device();
   }
@@ -1772,18 +1784,25 @@ void ProcessGroupACCL::run_send(at::Tensor tensor_original, int dstRank,
   }
 
   // Run send
-  ACCL::debug("Starting send of " + std::to_string(tensor->numel()) +
-              " items to " + std::to_string(dstRank));
   if (!coyote_enabled) {
     data->sync_to_device();
   }
-  accl->send(*data, tensor->numel(), dstRank, tag, ACCL::GLOBAL_COMM, true,
+
+  ACCL::debug("[Send] Entering barrier");
+  accl->barrier();
+  
+  ACCL::debug("Starting send of " + std::to_string(tensor->numel()) +
+              " items to " + std::to_string(dstRank));
+  
+  ACCL::ACCLRequest* req = accl->send(*data, tensor->numel(), dstRank, tag, ACCL::GLOBAL_COMM, true,
              get_compressed_type(tensor->scalar_type()));
 
-  int retcode = accl->get_retcode();
-  if (retcode) {
-    TORCH_CHECK(false, ACCL_ERROR(retcode));
+  if(coyote_enabled){
+    ACCL::debug("Waiting for request to complete.");
+    accl->wait(req, 1000ms);
   }
+  ACCL::debug("Finished waiting");
+  
 }
 
 c10::intrusive_ptr<Work>
@@ -1848,16 +1867,21 @@ void ProcessGroupACCL::run_recv(at::Tensor tensor_original, int srcRank,
   }
 
   // Run recieve
-  ACCL::debug("Starting recieve of " + std::to_string(tensor->numel()) +
+
+  ACCL::debug("[Receive] Entering barrier");
+  accl->barrier();
+  
+  ACCL::debug("Starting receive of " + std::to_string(tensor->numel()) +
               " items from " + std::to_string(srcRank));
-  accl->recv(*data, tensor->numel(), srcRank, tag, ACCL::GLOBAL_COMM, true,
+  ACCL::ACCLRequest* req = accl->recv(*data, tensor->numel(), srcRank, tag, ACCL::GLOBAL_COMM, true,
              get_compressed_type(tensor->scalar_type()));
 
-  int retcode = accl->get_retcode();
-  if (retcode) {
-    TORCH_CHECK(false, ACCL_ERROR(retcode));
+  if(coyote_enabled){
+    ACCL::debug("Waiting for request to complete.");
+    accl->wait(req, 1000ms);
   }
-
+  ACCL::debug("Finished waiting");
+  
   if (!coyote_enabled) {
     data->sync_from_device();
   }
