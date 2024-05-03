@@ -193,7 +193,7 @@ void configure_vnx(vnx::CMAC &cmac, vnx::Networklayer &network_layer,
 
 void configure_tcp(FPGABuffer<int8_t> &tx_buf_network, FPGABuffer<int8_t> &rx_buf_network,
                    xrt::kernel &network_krnl, xrt::kernel &session_krnl,
-                   const std::vector<rank_t> &ranks, int local_rank) {
+                   std::vector<rank_t> &ranks, int local_rank) {
   tx_buf_network.sync_to_device();
   rx_buf_network.sync_to_device();
 
@@ -213,25 +213,59 @@ void configure_tcp(FPGABuffer<int8_t> &tx_buf_network, FPGABuffer<int8_t> &rx_bu
 
   MPI_Barrier(MPI_COMM_WORLD);
 
-  //set up sessions for ranks
-  for(size_t i = 0; i < ranks.size(); ++i){
-    bool success;
-    if (i == static_cast<size_t>(local_rank)) {
-      continue;
+  // Set up ports for each [other] rank on each rank
+  for (int i = 0; i < ranks.size(); i++) {
+    uint8_t tmp_ret_code = 0;
+    uint16_t tmp_session_id = static_cast<uint16_t>(ranks[i].session_id);
+    xrt::run run = session_krnl(
+      static_cast<uint32_t>(ip_encode(ranks[i].ip)), 
+      static_cast<uint16_t>(ranks[i].port), 
+      &tmp_session_id, 
+      &tmp_ret_code,
+      tcpSessionHandlerOperation::OPEN_PORT
+    );
+    run.wait();
+    uint8_t ret_code = session_krnl.read_register(0x30);
+    if(!ret_code){
+      throw std::runtime_error(
+        "Failed to open port: " + std::to_string(ranks[i].port) + 
+        " from local rank: " + std::to_string(local_rank)
+      );
+    } else {
+      std::cout << "Successfully opened port: " << std::to_string(ranks[i].port) << 
+        " from local rank: " << std::to_string(local_rank) << std::endl;
     }
-    session_krnl(ip_encode(ranks[i].ip), ranks[i].port, false, 	
-                  &(ranks[i].session_id), &success);
-    if(!success){
-      throw std::runtime_error("Failed to establish session for IP:"+
-                                ranks[i].ip+
-                                " port: "+
-                                std::to_string(ranks[i].port));
-    }
-    std::ostringstream ss;
-    ss << "Established session ID: " << ranks[i].session_id << std::endl;
-    log_debug(ss.str());
   }
 
+  MPI_Barrier(MPI_COMM_WORLD);
+
+  // Open TCP connections
+  for (int i = 0; i < ranks.size(); i++) {
+    if (i == local_rank) continue;
+    uint8_t tmp_ret_code = 0;
+    uint16_t tmp_session_id = static_cast<uint16_t>(ranks[i].session_id);
+    xrt::run run = session_krnl(
+      static_cast<uint32_t>(ip_encode(ranks[i].ip)), 
+      static_cast<uint16_t>(ranks[i].port),
+      &tmp_session_id, 
+      &tmp_ret_code,
+      tcpSessionHandlerOperation::OPEN_CONNECTION
+    );
+    run.wait();
+    uint8_t ret_code = session_krnl.read_register(0x30);
+    uint8_t updated_sesion = session_krnl.read_register(0x28);
+    if(!ret_code){
+      throw std::runtime_error(
+        "Failed to establish session for IP: " + ranks[i].ip +
+        " port: "+ std::to_string(ranks[i].port) + 
+        " from local rank: " + std::to_string(local_rank)
+      );
+    } else {
+      std::cout << "Successfully opened session: " << updated_sesion << 
+        "with IP address: " << std::to_string(ranks[i].port) << 
+        " from local rank: " << std::to_string(local_rank) << std::endl;
+    }
+  }
 }
 
 std::vector<std::string> get_ips(fs::path config_file) {
@@ -292,7 +326,7 @@ std::vector<rank_t> generate_ranks(bool local, int local_rank, int world_size,
 }
 
 std::unique_ptr<ACCL::ACCL>
-initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
+initialize_accl(std::vector<rank_t> &ranks, int local_rank,
                 bool simulator, acclDesign design, xrt::device device,
                 fs::path xclbin, int nbufs, addr_t bufsize, addr_t segsize,
                 bool rsfec) {
