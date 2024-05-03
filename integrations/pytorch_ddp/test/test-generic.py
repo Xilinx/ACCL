@@ -275,15 +275,16 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
         # mpi.Barrier()
         # test_allreduce()
         # mpi.Barrier()
-        # demo_basic(rank)
-        # mpi.Barrier()
+        demo_basic(rank)
+        mpi.Barrier()
 
-
-        # add destroy 
+    print("Finished testing")
+    logger.debug('Finished testing')
         
     print(prof.key_averages(group_by_input_shape=True)
           .table(sort_by="cpu_time_total", row_limit=15))
 
+    logger.debug('Destroying ACCL Process Group')
     dist.destroy_process_group()
 
 if __name__ == '__main__':
