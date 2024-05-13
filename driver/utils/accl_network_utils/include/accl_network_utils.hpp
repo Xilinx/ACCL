@@ -51,7 +51,7 @@ std::vector<ACCL::rank_t> generate_ranks(bool local, int local_rank,
 // Initialize accl and required network kernels
 // If segsize == 0, the bufsize will be used as segment size instead
 std::unique_ptr<ACCL::ACCL>
-initialize_accl(const std::vector<ACCL::rank_t> &ranks, int local_rank,
+initialize_accl(std::vector<ACCL::rank_t> &ranks, int local_rank,
                 bool simulator, acclDesign design,
                 xrt::device device = xrt::device(),
                 std::filesystem::path xclbin = "", int nbufs = 16,
@@ -66,7 +66,7 @@ void configure_vnx(vnx::CMAC &cmac, vnx::Networklayer &network_layer,
 // Configure the TCP kernel, this function is called by initialize_accl
 void configure_tcp(ACCL::BaseBuffer &tx_buf_network, ACCL::BaseBuffer &rx_buf_network, 
                    xrt::kernel &network_krnl, xrt::kernel &session_krnl,
-                   const std::vector<ACCL::rank_t> &ranks, int local_rank);
+                   std::vector<ACCL::rank_t> &ranks, int local_rank);
 
 // Get IPs from config file, this function is called by generate_ranks
 std::vector<std::string> get_ips(std::filesystem::path config_file);

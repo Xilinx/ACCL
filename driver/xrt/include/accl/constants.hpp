@@ -383,6 +383,12 @@ enum class errorCode {
   DMA_TAG_MISMATCH_ERROR = 1 << 26
 };
 
+enum class tcpSessionHandlerOperation {
+  OPEN_PORT = 1,
+  OPEN_CONNECTION = 2,
+  CLOSE_CONNECTION = 3
+};
+
 /** Amount of bits used for error codes. */
 const size_t error_code_bits = 26;
 
