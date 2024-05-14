@@ -50,7 +50,7 @@ size = 0
 
 count = 512
 #As in test.cpp defaults
-rxbufsize = 4096 * 1024
+rxbufsize = 4096# * 1024
 
 
 def test_broadcast():
@@ -61,8 +61,8 @@ def test_broadcast():
 
     dist.broadcast(x, 0)
 
-    logger.debug('Tensor after broadcast: ' + str(x))
-    print('Tensor after broadcast: ' + str(x))
+    # logger.debug('Tensor after broadcast: ' + str(x))
+    # print('Tensor after broadcast: ' + str(x))
     
     np.testing.assert_allclose(x, torch.ones(count))
     print("Test broadcast finished!")
@@ -145,6 +145,25 @@ def test_allreduce():
     np.testing.assert_allclose(x, [size for _ in range(count)])
     print("Test allreduce finished!")
 
+def test_alltoall():
+    input = torch.arange(4, dtype=torch.float) + float(rank) * 4.
+
+    logger.debug("All-to-all input:")
+    logger.debug(str(input)) 
+
+    output = torch.ones(4)
+    # output = torch.empty([4], dtype=torch.int64)
+
+    logger.debug("All-to-all output:")
+    logger.debug(str(output)) 
+    
+    dist.all_to_all_single(output, input)
+    
+    logger.debug("All-to-all output:")
+    logger.debug(str(output)) 
+
+    print("Test allreduce finished!")
+    
 
 class ToyModel(nn.Module):
     def __init__(self):
@@ -204,7 +223,7 @@ def demo_basic(rank: int):
         
 
     print("finished training")
-    dist.destroy_process_group()
+    # dist.destroy_process_group()
 
 def start_test(comms: str, simulator: bool, host_file: str=None, fpga_file: str=None, ma: str="localhost", mp: str="30505"):
     global rank, size
@@ -217,7 +236,7 @@ def start_test(comms: str, simulator: bool, host_file: str=None, fpga_file: str=
     rank = mpi.Get_rank()
     size = mpi.Get_size()
     start_port = 5005
-    print(f"Starting tests with the following parameters:\n\
+    logger.debug(f"Starting tests with the following parameters:\n\
 Simulation: {simulator}, Communication Backend: {comms}\n\
 Rank: {rank}, World size: {size}\n\
 Host file: {host_file}, FPGA file: {fpga_file}\n\
@@ -225,6 +244,8 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
     
 
     if not simulator:
+        #default from test.cpp
+        rxbufsize = 4096 * 1024
         if host_file==None or fpga_file==None: sys.exit('Host and FPGA file need to be specified in hardware mode')
             
         with open(host_file, 'r') as hf:
@@ -236,8 +257,10 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
         if comms == "cyt_rdma":
             ranks = [accl.Rank(a, start_port, i, rxbufsize) for i, a in enumerate(fpga_ips)]
         else:
-            ranks = [accl.Rank(a, start_port + i, 0, rxbufsize) for i, a in enumerate(fpga_ips)]            
+            ranks = [accl.Rank(a, start_port + i, 0, rxbufsize) for i, a in enumerate(fpga_ips)]
     else:
+        # Somehow the simulator gets stuck if I use the same rxbufsize
+        rxbufsize = 4096# * 1024
         ranks = [accl.Rank("127.0.0.1", 5500 + i, i, rxbufsize) for i in range(size)]
 
     logger.debug(f'Ranks: {ranks}')
@@ -246,13 +269,13 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
         design = accl.ACCLDesign.udp
     elif comms == 'tcp':
         design = accl.ACCLDesign.tcp
-    elif comms == 'cyt_rdma' and not simulator:
+    elif comms == 'cyt_rdma': # and not simulator:
         design = accl.ACCLDesign.cyt_rdma
-    else:
-        if simulator:
-            sys.exit('Design "' + comms + '" currently not supported in simulator mode')
-        else:
-            sys.exit('Design "' + comms + '" currently not supported in hardware mode')
+    # else:
+        # if simulator:
+            # sys.exit('Design "' + comms + '" currently not supported in simulator mode')
+        # else:
+            # sys.exit('Design "' + comms + '" currently not supported in hardware mode')
 
     
     accl.create_process_group(ranks, design, bufsize=rxbufsize, initialize=True, simulation=simulator)
@@ -271,13 +294,17 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
         mpi.Barrier()
         test_allgather()
         mpi.Barrier()
-        # test_reduce()
-        # mpi.Barrier()
-        # test_allreduce()
-        # mpi.Barrier()
+        test_reduce()
+        mpi.Barrier()
+        test_allreduce()
+        mpi.Barrier()
         demo_basic(rank)
         mpi.Barrier()
-
+        # run_training()
+        # mpi.Barrier()
+        # test_alltoall()
+        # mpi.Barrier()
+        
     print("Finished testing")
     logger.debug('Finished testing')
         

@@ -84,6 +84,7 @@ def create_process_group(
         return pg
 
     #CPU only for now
+    logger.debug('Registering ACCL Backend')
     Backend.register_backend("ACCL", create_process_group_wrapper, devices='cpu')
 
 def initialize() -> None:

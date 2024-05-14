@@ -23,6 +23,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <signal.h>
 
 #ifdef ACCL_PROCESS_GROUP_HIP_ENABLED
 #include "hip/hip_runtime.h"
@@ -55,6 +56,16 @@ namespace c10d {
     defined(ACCL_PROCESS_GROUP_CUDA_ENABLED)
 #error Cannot compile Process Group with both HIP and CUDA support
 #endif // ACCL_PROCESS_GROUP_HIP_ENABLED && ACCL_PROCESS_GROUP_CUDA_ENABLED
+
+// Activate Parameter printing:
+#define DO_PARA_PRINT
+
+#if defined(DO_PARA_PRINT)
+  #define PARA_PRINT(x)							\
+    ACCL::debug("#x size: " + std::to_string(x.numel()) + " of type: " + string_of_accl_datatype(convert_datatype_from_torch(x.scalar_type())))
+#else
+  #define PARA_PRINT(x)
+#endif
 
 namespace {
 
@@ -198,6 +209,25 @@ const char *convert_datatype_to_torch(ACCL::dataType torch_type) {
   }
 }
 
+const char *string_of_accl_datatype(ACCL::dataType accl_type) {
+  switch (accl_type) {
+  case ACCL::dataType::float16:
+    return "ACCL::dataType::float16";
+  case ACCL::dataType::float32:
+    return "ACCL::dataType::float32";
+  case ACCL::dataType::float64:
+    return "ACCL::dataType::float64";
+  case ACCL::dataType::int32:
+    return "ACCL::dataType::int32";
+  case ACCL::dataType::int64:
+    return "ACCL::dataType::int64";
+  default:
+    return "unknown";
+  }
+}
+
+
+  
 std::map<ACCL::dataType, ACCL::dataType> convert_compression_from_dict(
     const std::map<std::string, std::string> &dictionary) {
   std::map<ACCL::dataType, ACCL::dataType> map;
@@ -581,6 +611,23 @@ std::vector<ACCL::rank_t> convert_ranks(
   return accl_ranks;
 }
 
+// just for the sa_handler
+std::unique_ptr<::ACCL::ACCL>* global_accl;  
+
+void accl_sa_handler(int)
+{
+	static bool once = true;
+	if(once) {
+		global_accl->reset();
+		// std::cout << "Error! Signal received. Finalizing MPI..." << std::endl;
+		// MPI_Finalize();
+		// std::cout << "Done. Terminating..." << std::endl;
+		once = false;
+	}
+	exit(EXIT_FAILURE);
+}  
+  
+
 // Initialize ACCL
 ProcessGroupACCL::ProcessGroupACCL(
     const c10::intrusive_ptr<::c10d::Store> &store, int rank, int size,
@@ -599,6 +646,15 @@ ProcessGroupACCL::ProcessGroupACCL(
         || design == accl_network_utils::acclDesign::CYT_TCP),
       compression(compression), initialized(false) {
 
+  ACCL::debug("Process Group constructor called");
+  
+  // struct sigaction sa;
+  // memset(&sa, 0, sizeof(sa));
+  // sa.sa_handler = accl_sa_handler;
+  // sigfillset(&sa.sa_mask);
+  // sigaction(SIGINT,&sa,NULL);
+  // sigaction(SIGSEGV, &sa, NULL);
+  
   if (std::find(profiling_ranks.begin(), profiling_ranks.end(), rank) !=
       profiling_ranks.end()) {
     std::this_thread::sleep_for(
@@ -613,6 +669,7 @@ ProcessGroupACCL::ProcessGroupACCL(
         cyt_device = new ACCL::CoyoteDevice();
       } else if (design_ == accl_network_utils::acclDesign::CYT_RDMA) {
         cyt_device = new ACCL::CoyoteDevice(size_);
+	ACCL::debug("Starting QP-exchange");
         cyt::setup_cyt_rdma(ibvQpConn_vec, ranks_, rank_, *cyt_device);
       } else {
         throw std::runtime_error("Undefined ACCL design");
@@ -659,11 +716,13 @@ void ProcessGroupACCL::initialize() {
     }
 
     accl = std::make_unique<ACCL::ACCL>(cyt_device);
+    // global_accl = &accl;
 
     // Rendezvous protocol for now
     int protoc = 1;
     // default from test.cpp
     int segsize = 4096 * 1024;
+
     
     if (protoc == 0){
       std::cout<<"Eager Protocol"<<std::endl;
@@ -675,10 +734,12 @@ void ProcessGroupACCL::initialize() {
     
     ACCL::debug(std::string("[ACCL coyote] communicator: ") + accl->dump_communicator());
   } else {
+    ACCL::debug(std::string("Performing standard initialization"));
     accl = accl_network_utils::initialize_accl(ranks_, rank_,
                                                simulator_, design_, xrt_device,
                                                xclbin_, nbufs_, bufsize, 0,
                                                rsfec_);
+    ACCL::debug(std::string("Setting timeout and Threshold"));
     accl->set_timeout(1e6);
     accl->set_rendezvous_threshold(16*1024);
                                       
@@ -694,6 +755,7 @@ void ProcessGroupACCL::initialize() {
   // Start the worker thread accepting ACCL calls
   workerThread_ = std::thread(&ProcessGroupACCL::runLoop, this);
   initialized = true;
+  ACCL::debug(std::string("Finished Initialization"));
 }
 
 ProcessGroupACCL::~ProcessGroupACCL() { destroy(); }
@@ -1618,6 +1680,9 @@ void ProcessGroupACCL::run_alltoall(at::Tensor srctensor_original,
   std::unique_ptr<ACCL::BaseBuffer> srcdata;
   std::unique_ptr<ACCL::BaseBuffer> dstdata;
 
+  ACCL::debug("Running alltoall");
+  PARA_PRINT(srctensor_original);
+
   // Reserve device
   c10::DeviceGuard guard(srctensor->device());
   std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
@@ -1627,32 +1692,54 @@ void ProcessGroupACCL::run_alltoall(at::Tensor srctensor_original,
   if (p2p_applicable(*accl, srctensor_original, p2p_enabled)) {
     srcdata = create_and_copy_p2p_buffer(*accl, srctensor_original);
   } else {
-    if (accl->is_simulated() || coyote_enabled) {
-      srcdata = create_buffer(*accl, srctensor->numel(), srctensor->scalar_type());
-    } else {
-      srcdata = wrap_buffer(*accl, buf0, srctensor->numel(), srctensor->scalar_type());
+    if (coyote_enabled) {
+      srcdata = create_coyotebuffer(*accl, srctensor->numel(), srctensor->scalar_type());
+      ACCL::debug("Copying data to CPU tensor of size " +
+                  std::to_string(srctensor_original.numel()));
+      empty_srctensor = torch::from_blob(
+          srcdata->byte_array(), srctensor_original.sizes(),
+          srctensor_original.options().device(c10::DeviceType::CPU));
+      srctensor = &empty_srctensor;
+      srctensor->copy_(srctensor_original);
     }
-    ACCL::debug("Copying data to aligned CPU tensor of size " +
-                std::to_string(srctensor_original.numel()));
-    empty_srctensor = torch::from_blob(
-        srcdata->byte_array(), srctensor_original.sizes(),
-        srctensor_original.options().device(c10::DeviceType::CPU));
-    srctensor = &empty_srctensor;
-    srctensor->copy_(srctensor_original);
-    ACCL::debug("Creating extra result buffer of size " +
-                std::to_string(srctensor_original.numel()));
+    else if (srctensor_original.device().type() != c10::DeviceType::CPU) {
+      srcdata = create_buffer(*accl, srctensor->numel(), srctensor->scalar_type());
+      ACCL::debug("Copying data to CPU tensor of size " +
+                  std::to_string(srctensor_original.numel()));
+      empty_srctensor = torch::from_blob(
+          srcdata->byte_array(), srctensor_original.sizes(),
+          srctensor_original.options().device(c10::DeviceType::CPU));
+      srctensor = &empty_srctensor;
+      srctensor->copy_(srctensor_original);
+    }
+    else {
+      srcdata = create_buffer(*accl, *srctensor);
+    }
   }
 
-  // Create output buffer
   if (p2p_applicable(*accl, dsttensor_original, p2p_enabled)) {
-    dstdata = create_and_copy_p2p_buffer(*accl, dsttensor_original);
+    dstdata = create_buffer_p2p(*accl, srctensor->numel(), srctensor->scalar_type());
+  } else if (coyote_enabled) {
+    dstdata = create_coyotebuffer(*accl, srctensor->numel(),srctensor->scalar_type());
+    torch::from_blob(dstdata->byte_array(), srctensor_original.sizes(),
+        srctensor_original.options().device(c10::DeviceType::CPU));
+    dsttensor = &empty_dsttensor;
   } else {
-    if (accl->is_simulated() || coyote_enabled) {
-      dstdata = create_buffer(*accl, dsttensor->numel(), dsttensor->scalar_type());
-    } else {
-      dstdata = wrap_buffer(*accl, buf0, dsttensor->numel(), dsttensor->scalar_type());
-    }
+    dstdata = create_buffer(*accl, srctensor->numel(), srctensor->scalar_type());
+    empty_dsttensor = torch::from_blob(dstdata->byte_array(), srctensor_original.sizes(), srctensor_original.options().device(c10::DeviceType::CPU));
+    dsttensor = &empty_dsttensor;
   }
+  
+  // Create output buffer
+  // if (p2p_applicable(*accl, dsttensor_original, p2p_enabled)) {
+    // dstdata = create_and_copy_p2p_buffer(*accl, dsttensor_original);
+  // } else {
+    // if (accl->is_simulated() || coyote_enabled) {
+      // dstdata = create_buffer(*accl, dsttensor->numel(), dsttensor->scalar_type());
+    // } else {
+      // dstdata = wrap_buffer(*accl, buf0, dsttensor->numel(), dsttensor->scalar_type());
+    // }
+  // }
 
   // Run alltoall
   if (!coyote_enabled) {
@@ -1664,14 +1751,17 @@ void ProcessGroupACCL::run_alltoall(at::Tensor srctensor_original,
 
   ACCL::debug("Starting alltoall of " + std::to_string(srctensor->numel()) +
               " items");
+
+  // ACCL::ACCLRequest* req = accl->bcast(*srcdata, srctensor->numel(), 0, ACCL::GLOBAL_COMM, true,
+              // true, get_compressed_type(srctensor->scalar_type()));
   ACCL::ACCLRequest* req = accl->alltoall(*srcdata, *dstdata, srctensor->numel(),
                   ACCL::GLOBAL_COMM, true, true,
                   get_compressed_type(srctensor->scalar_type()));
 
-  if(coyote_enabled){
-    ACCL::debug("Waiting for request to complete.");
-    accl->wait(req, 1000ms);
-  }
+  // if(coyote_enabled){
+  ACCL::debug("Waiting for request to complete.");
+  accl->wait(req, 1000ms);
+  // }
   ACCL::debug("Finished waiting");
   
   if (!coyote_enabled) {
@@ -1694,6 +1784,7 @@ c10::intrusive_ptr<Work> ProcessGroupACCL::alltoall_base(
     at::Tensor &outputTensor, at::Tensor &inputTensor,
     std::vector<int64_t> &outputSplitSizes,
     std::vector<int64_t> &inputSplitSizes, const AllToAllOptions &opts) {
+  ACCL::debug("alltoall base variant called");
   if (outputSplitSizes.size() == 0 && inputSplitSizes.size() == 0) {
     // We can use alltoall
     TORCH_CHECK(
@@ -1708,8 +1799,8 @@ c10::intrusive_ptr<Work> ProcessGroupACCL::alltoall_base(
         [opts, this](std::unique_ptr<WorkEntry>& entry) {
           auto srctensor = (entry->src)[0];
           auto dsttensor = (entry->dst)[0];
-          c10::DeviceGuard guard(srctensor.device());
-          std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
+          // c10::DeviceGuard guard(srctensor.device());
+          // std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
           // Segment data if necessary
           if (dsttensor.nbytes() > bufsize) {
             ACCL::debug("dsttensor to large!");
@@ -1721,6 +1812,7 @@ c10::intrusive_ptr<Work> ProcessGroupACCL::alltoall_base(
               run_alltoall(srctensor.slice(0, i, end), dsttensor.slice(0, i, end), opts);
             }
           } else {
+	    ACCL::debug("Running without segmentation");
             run_alltoall(srctensor, dsttensor, opts);
           }
         };
@@ -1741,6 +1833,7 @@ c10::intrusive_ptr<Work>
 ProcessGroupACCL::alltoall(std::vector<at::Tensor> &outputTensors,
                            std::vector<at::Tensor> &inputTensors,
                            const AllToAllOptions &opts) {
+  ACCL::debug("ProcessGroupACCL does not support alltoall");
   TORCH_CHECK(false, "ProcessGroupACCL does not support alltoall");
 }
 
