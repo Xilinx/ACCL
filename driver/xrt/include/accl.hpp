@@ -24,9 +24,9 @@
 #include "accl/cclo.hpp"
 #include "accl/communicator.hpp"
 #include "accl/constants.hpp"
-#include "accl/fpgabuffer.hpp"
-#include "accl/fpgabufferp2p.hpp"
-#include "accl/fpgadevice.hpp"
+#include "accl/xrtbuffer.hpp"
+#include "accl/xrtbufferp2p.hpp"
+#include "accl/xrtdevice.hpp"
 #include "accl/simbuffer.hpp"
 #include "accl/simdevice.hpp"
 #include "accl/coyotebuffer.hpp"
@@ -799,8 +799,8 @@ ACCLRequest *barrier(communicatorId comm_id = GLOBAL_COMM,
       return std::unique_ptr<Buffer<dtype>>(new SimBuffer<dtype>(
           length, type, static_cast<SimDevice *>(cclo)->get_context()));
     } else if (cclo->get_device_type() == CCLO::xrt_device) {
-      return std::unique_ptr<Buffer<dtype>>(new FPGABuffer<dtype>(
-          length, type, *(static_cast<FPGADevice *>(cclo)->get_device()), (xrt::memory_group)mem_grp));
+      return std::unique_ptr<Buffer<dtype>>(new XRTBuffer<dtype>(
+          length, type, *(static_cast<XRTDevice *>(cclo)->get_device()), (xrt::memory_group)mem_grp));
     } else {
       return std::unique_ptr<Buffer<dtype>>(new CoyoteBuffer<dtype>(
           length, type, cclo));
@@ -865,8 +865,8 @@ ACCLRequest *barrier(communicatorId comm_id = GLOBAL_COMM,
           new SimBuffer<dtype>(host_buffer, length, type,
                                static_cast<SimDevice *>(cclo)->get_context()));
     } else if(cclo->get_device_type() == CCLO::xrt_device ){
-      return std::unique_ptr<Buffer<dtype>>(new FPGABuffer<dtype>(
-          host_buffer, length, type, *(static_cast<FPGADevice *>(cclo)->get_device()), (xrt::memory_group)mem_grp));
+      return std::unique_ptr<Buffer<dtype>>(new XRTBuffer<dtype>(
+          host_buffer, length, type, *(static_cast<XRTDevice *>(cclo)->get_device()), (xrt::memory_group)mem_grp));
     }
     return std::unique_ptr<Buffer<dtype>>(nullptr);
   }
@@ -898,7 +898,7 @@ ACCLRequest *barrier(communicatorId comm_id = GLOBAL_COMM,
                                static_cast<SimDevice *>(cclo)->get_context()));
     } else {
       return std::unique_ptr<Buffer<dtype>>(
-          new FPGABuffer<dtype>(bo, length, type));
+          new XRTBuffer<dtype>(bo, length, type));
     }
   }
 
@@ -947,8 +947,8 @@ ACCLRequest *barrier(communicatorId comm_id = GLOBAL_COMM,
       return std::unique_ptr<Buffer<dtype>>(new SimBuffer<dtype>(
           length, type, static_cast<SimDevice *>(cclo)->get_context()));
     } else if(cclo->get_device_type() == CCLO::xrt_device ){
-      return std::unique_ptr<Buffer<dtype>>(new FPGABufferP2P<dtype>(
-          length, type, *(static_cast<FPGADevice *>(cclo)->get_device()), (xrt::memory_group)mem_grp));
+      return std::unique_ptr<Buffer<dtype>>(new XRTBufferP2P<dtype>(
+          length, type, *(static_cast<XRTDevice *>(cclo)->get_device()), (xrt::memory_group)mem_grp));
     } else {
       //for Coyote there's no concept of a p2p buffer
       throw std::runtime_error("p2p buffers not supported in Coyote");
@@ -979,7 +979,7 @@ ACCLRequest *barrier(communicatorId comm_id = GLOBAL_COMM,
                                static_cast<SimDevice *>(cclo)->get_context()));
     } else {
       return std::unique_ptr<Buffer<dtype>>(
-          new FPGABufferP2P<dtype>(bo, length, type));
+          new XRTBufferP2P<dtype>(bo, length, type));
     }
   }
 

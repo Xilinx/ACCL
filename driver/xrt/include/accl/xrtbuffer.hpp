@@ -24,7 +24,7 @@
 #include <xrt/xrt_bo.h>
 #include <xrt/xrt_device.h>
 
-/** @file fpgabuffer.hpp */
+/** @file xrtbuffer.hpp */
 
 namespace ACCL {
 /**
@@ -37,10 +37,10 @@ namespace ACCL {
  *
  * @tparam dtype Datatype of the buffer.
  */
-template <typename dtype> class FPGABuffer : public Buffer<dtype> {
+template <typename dtype> class XRTBuffer : public Buffer<dtype> {
 public:
   /**
-   * Construct a new FPGABuffer object from an existing host pointer.
+   * Construct a new XRTBuffer object from an existing host pointer.
    *
    * If a non-aligned host pointer is provided, ACCL will keep it's own aligned
    * host buffer, and copy between the unaligned and aligned host buffers when
@@ -53,7 +53,7 @@ public:
    * @param device  Device to allocate the buffer on.
    * @param mem_grp Memory bank on the device to allocate the buffer on.
    */
-  FPGABuffer(dtype *buffer, addr_t length, dataType type, xrt::device &device,
+  XRTBuffer(dtype *buffer, addr_t length, dataType type, xrt::device &device,
              xrt::memory_group mem_grp)
       : Buffer<dtype>(nullptr, length, type, 0x0),
         _bo(device, get_aligned_buffer(buffer, length * sizeof(dtype)),
@@ -62,7 +62,7 @@ public:
   }
 
   /**
-   * Construct a new FPGABuffer object from an existing BO buffer.
+   * Construct a new XRTBuffer object from an existing BO buffer.
    *
    * No new buffer is allocated when using this constructor, instead ACCL will
    * use the existing BO buffer.
@@ -71,13 +71,13 @@ public:
    * @param length Amount of elements to allocate for.
    * @param type   ACCL datatype of buffer.
    */
-  FPGABuffer(xrt::bo &bo, addr_t length, dataType type)
+  XRTBuffer(xrt::bo &bo, addr_t length, dataType type)
       : Buffer<dtype>(bo.map<dtype *>(), length, type, bo.address()), _bo(bo) {
     set_buffer();
   }
 
   /**
-   * Construct a new FPGABuffer object without an existing host pointer.
+   * Construct a new XRTBuffer object without an existing host pointer.
    *
    * This constructor will allocate a buffer on both the host and the FPGA.
    *
@@ -86,7 +86,7 @@ public:
    * @param device  Device to allocate the FPGA buffer on.
    * @param mem_grp Memory bank of the device to allocate the FPGA buffer on.
    */
-  FPGABuffer(addr_t length, dataType type, xrt::device &device,
+  XRTBuffer(addr_t length, dataType type, xrt::device &device,
              xrt::memory_group mem_grp)
       : Buffer<dtype>(nullptr, length, type, 0x0), is_aligned(true),
         _bo(device, length * sizeof(dtype), mem_grp) {
@@ -99,7 +99,7 @@ public:
    * Copy construct of an FPGA buffer for internal use only.
    *
    */
-  FPGABuffer(xrt::bo bo_, addr_t length, dataType type, bool is_aligned_,
+  XRTBuffer(xrt::bo bo_, addr_t length, dataType type, bool is_aligned_,
              dtype *unaligned_buffer_)
       : Buffer<dtype>(nullptr, length, type, 0x0), is_aligned(is_aligned_),
         _bo(bo_), aligned_buffer(_bo.map<dtype *>()),
@@ -108,10 +108,10 @@ public:
   }
 
   /**
-   * Destroy the FPGABuffer object
+   * Destroy the XRTBuffer object
    *
    */
-  virtual ~FPGABuffer() {
+  virtual ~XRTBuffer() {
     // Only free the aligned buffer if it exists and we own it (might not be
     // the case if this is a slice).
     if (!is_aligned && own_unaligned) {
@@ -144,7 +144,7 @@ public:
   /**
    * Sync the data from the device back to the host. Will copy the data from
    * the aligned buffer to the unaligned buffer if an unaligned buffer was used
-   * during construction of the FPGABuffer.
+   * during construction of the XRTBuffer.
    *
    */
   void sync_from_device() override {
@@ -157,7 +157,7 @@ public:
   /**
    * Sync the data from the host to the device. Will copy the data from the
    * unaligned buffer to the aligned buffer first if an unaligned buffer was
-   * used during construction of the FPGABuffer.
+   * used during construction of the XRTBuffer.
    *
    */
   void sync_to_device() override {
@@ -178,7 +178,7 @@ public:
       offset_unaligned_buffer = &unaligned_buffer[start];
     }
 
-    return std::unique_ptr<BaseBuffer>(new FPGABuffer(
+    return std::unique_ptr<BaseBuffer>(new XRTBuffer(
         xrt::bo(_bo, end_bytes - start_bytes, start_bytes), end - start,
         this->_type, this->is_aligned, offset_unaligned_buffer));
   }

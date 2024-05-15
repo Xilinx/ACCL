@@ -32,7 +32,7 @@
 
 #define ALIGNMENT 4096
 
-/** @file fpgabufferp2p.hpp */
+/** @file xrtbufferp2p.hpp */
 
 namespace ACCL {
 /**
@@ -41,29 +41,29 @@ namespace ACCL {
  *
  * @tparam dtype Datatype of the buffer.
  */
-template <typename dtype> class FPGABufferP2P : public Buffer<dtype> {
+template <typename dtype> class XRTBufferP2P : public Buffer<dtype> {
 public:
   /**
-   * Construct a new FPGABufferP2P object from an existing P2P BO buffer.
+   * Construct a new XRTBufferP2P object from an existing P2P BO buffer.
    *
    * @param bo     An existing P2P BO buffer.
    * @param length Amount of elements in the P2P buffer.
    * @param type   ACCL datatype of the P2P buffer.
    */
-  FPGABufferP2P(xrt::bo &bo, addr_t length, dataType type)
+  XRTBufferP2P(xrt::bo &bo, addr_t length, dataType type)
       : Buffer<dtype>(bo.map<dtype *>(), length, type, bo.address()), _bo(bo) {
     set_buffer();
   }
 
   /**
-   * Construct a new FPGABufferP2P object without any existing buffer.
+   * Construct a new XRTBufferP2P object without any existing buffer.
    *
    * @param length  Amount of elements to allocate for.
    * @param type    ACCL datatype of the P2P buffer.
    * @param device  Device to allocate the P2P buffer on.
    * @param mem_grp Memory bank on device to allocate the P2P buffer on.
    */
-  FPGABufferP2P(addr_t length, dataType type, xrt::device &device,
+  XRTBufferP2P(addr_t length, dataType type, xrt::device &device,
                 xrt::memory_group mem_grp)
       : Buffer<dtype>(nullptr, length, type, 0x0),
         _bo(device, length * sizeof(dtype), xrt::bo::flags::p2p, mem_grp) {
@@ -74,16 +74,16 @@ public:
    * Copy construct of a P2P buffer for internal use only.
    *
    */
-  FPGABufferP2P(xrt::bo bo_, addr_t length, dataType type)
+  XRTBufferP2P(xrt::bo bo_, addr_t length, dataType type)
       : Buffer<dtype>(nullptr, length, type, 0x0), _bo(bo_) {
     set_buffer();
   }
 
   /**
-   * Destroy the FPGABufferP2P object
+   * Destroy the XRTBufferP2P object
    *
    */
-  virtual ~FPGABufferP2P() {}
+  virtual ~XRTBufferP2P() {}
 
   /**
    * Return the underlying P2P BO buffer.
@@ -129,7 +129,7 @@ public:
     size_t end_bytes = end * sizeof(dtype);
 
     return std::unique_ptr<BaseBuffer>(
-        new FPGABufferP2P(xrt::bo(_bo, end_bytes - start_bytes, start_bytes),
+        new XRTBufferP2P(xrt::bo(_bo, end_bytes - start_bytes, start_bytes),
                           end - start, this->_type));
   }
 
