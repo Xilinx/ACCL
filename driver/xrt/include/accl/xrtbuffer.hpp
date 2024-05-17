@@ -51,6 +51,24 @@ public:
    * @param length  Amount of elements in the host buffer.
    * @param type    ACCL datatype of buffer.
    * @param device  Device to allocate the buffer on.
+   * @param flags   BO flags
+   * @param mem_grp Memory bank on the device to allocate the buffer on.
+   */
+  XRTBuffer(dtype *buffer, addr_t length, dataType type, xrt::device &device,
+             xrt::bo::flags flags, xrt::memory_group mem_grp)
+      : Buffer<dtype>(nullptr, length, type, 0x0),
+        _bo(device, get_aligned_buffer(buffer, length * sizeof(dtype)),
+            length * sizeof(dtype), flags, mem_grp) {
+    set_buffer();
+  }
+
+  /**
+   * Construct a new device-side XRTBuffer object from an existing host pointer.
+   *
+   * @param buffer  The host pointer containing the data.
+   * @param length  Amount of elements in the host buffer.
+   * @param type    ACCL datatype of buffer.
+   * @param device  Device to allocate the buffer on.
    * @param mem_grp Memory bank on the device to allocate the buffer on.
    */
   XRTBuffer(dtype *buffer, addr_t length, dataType type, xrt::device &device,
@@ -79,7 +97,25 @@ public:
   /**
    * Construct a new XRTBuffer object without an existing host pointer.
    *
-   * This constructor will allocate a buffer on both the host and the FPGA.
+   * This constructor will allocate on host and/or FPGA depending on flags.
+   *
+   * @param length  Amount of elements to allocate the buffers for.
+   * @param type    ACCL datatype of the buffer.
+   * @param device  Device to allocate the FPGA buffer on.
+   * @param flags   BO flags
+   * @param mem_grp Memory bank of the device to allocate the FPGA buffer on.
+   */
+  XRTBuffer(addr_t length, dataType type, xrt::device &device,
+             xrt::bo::flags flags, xrt::memory_group mem_grp)
+      : Buffer<dtype>(nullptr, length, type, 0x0), is_aligned(true),
+        _bo(device, length * sizeof(dtype), flags, mem_grp) {
+    set_buffer();
+    // Initialize memory to zero
+    std::memset(this->_buffer, 0, this->_size);
+  }
+
+  /**
+   * Construct a new XRTBuffer object on the FPGA without an existing host pointer.
    *
    * @param length  Amount of elements to allocate the buffers for.
    * @param type    ACCL datatype of the buffer.
@@ -148,6 +184,8 @@ public:
    *
    */
   void sync_from_device() override {
+    auto flags = _bo.get_flags();
+    if(flags == xrt::bo::flags::p2p) return;
     _bo.sync(xclBOSyncDirection::XCL_BO_SYNC_BO_FROM_DEVICE);
     if (!is_aligned) {
       std::memcpy(unaligned_buffer, aligned_buffer, this->size());
@@ -161,6 +199,8 @@ public:
    *
    */
   void sync_to_device() override {
+    auto flags = _bo.get_flags();
+    if(flags == xrt::bo::flags::p2p) return;
     if (!is_aligned) {
       std::memcpy(aligned_buffer, unaligned_buffer, this->size());
     }

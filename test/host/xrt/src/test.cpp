@@ -34,6 +34,8 @@ TEST_F(ACCLTest, test_copy){
   unsigned int count = options.count;
   auto op_buf = accl->create_buffer<float>(count, dataType::float32);
   auto res_buf = accl->create_buffer<float>(count, dataType::float32);
+  EXPECT_FALSE(op_buf->is_host_only());
+  EXPECT_FALSE(res_buf->is_host_only());
   random_array(op_buf->buffer(), count);
 
   accl->copy(*op_buf, *res_buf, count);
@@ -81,6 +83,84 @@ TEST_F(ACCLTest, test_copy_p2p) {
 
   for (unsigned int i = 0; i < count; ++i) {
     EXPECT_FLOAT_EQ((*op_buf)[i], (*p2p_buf)[i]);
+  }
+}
+
+TEST_F(ACCLTest, test_copy_d2h) {
+  if(::size > 1){
+    GTEST_SKIP() << "Skipping single-node test on multi-node setup";
+  }
+  unsigned int count = options.count;
+  auto op_buf = accl->create_buffer<float>(count, dataType::float32);
+  EXPECT_FALSE(op_buf->is_host_only());
+  std::unique_ptr<ACCL::Buffer<float>> res_buf;
+  try {
+    res_buf = accl->create_buffer_host<float>(count, dataType::float32);
+    EXPECT_TRUE(res_buf->is_host_only());
+  } catch (const std::bad_alloc &e) {
+    std::cout << "Can't allocate host buffer (" << e.what() << "). "
+              << "This probably means HOST mem is disabled.\n"
+              << "Skipping host buffer test..." << std::endl;
+    return;
+  }
+  random_array(op_buf->buffer(), count);
+
+  accl->copy(*op_buf, *res_buf, count);
+
+  for (unsigned int i = 0; i < count; ++i) {
+    EXPECT_FLOAT_EQ((*op_buf)[i], (*res_buf)[i]);
+  }
+}
+
+TEST_F(ACCLTest, test_copy_h2d) {
+  if(::size > 1){
+    GTEST_SKIP() << "Skipping single-node test on multi-node setup";
+  }
+  unsigned int count = options.count;
+  auto res_buf = accl->create_buffer<float>(count, dataType::float32);
+  EXPECT_FALSE(res_buf->is_host_only());
+  std::unique_ptr<ACCL::Buffer<float>> op_buf;
+  try {
+    op_buf = accl->create_buffer_host<float>(count, dataType::float32);
+    EXPECT_TRUE(op_buf->is_host_only());
+  } catch (const std::bad_alloc &e) {
+    std::cout << "Can't allocate host buffer (" << e.what() << "). "
+              << "This probably means HOST mem is disabled.\n"
+              << "Skipping host buffer test..." << std::endl;
+    return;
+  }
+  random_array(op_buf->buffer(), count);
+
+  accl->copy(*op_buf, *res_buf, count);
+
+  for (unsigned int i = 0; i < count; ++i) {
+    EXPECT_FLOAT_EQ((*op_buf)[i], (*res_buf)[i]);
+  }
+}
+
+TEST_F(ACCLTest, test_copy_h2h) {
+  if(::size > 1){
+    GTEST_SKIP() << "Skipping single-node test on multi-node setup";
+  }
+  unsigned int count = options.count;
+  std::unique_ptr<ACCL::Buffer<float>> op_buf, res_buf;
+  try {
+    op_buf = accl->create_buffer_host<float>(count, dataType::float32);
+    EXPECT_TRUE(op_buf->is_host_only());
+    res_buf = accl->create_buffer_host<float>(count, dataType::float32);
+    EXPECT_TRUE(res_buf->is_host_only());
+  } catch (const std::bad_alloc &e) {
+    std::cout << "Can't allocate host buffer (" << e.what() << "). "
+              << "This probably means HOST mem is disabled.\n"
+              << "Skipping host buffer test..." << std::endl;
+    return;
+  }
+  random_array(op_buf->buffer(), count);
+
+  accl->copy(*op_buf, *res_buf, count);
+
+  for (unsigned int i = 0; i < count; ++i) {
+    EXPECT_FLOAT_EQ((*op_buf)[i], (*res_buf)[i]);
   }
 }
 

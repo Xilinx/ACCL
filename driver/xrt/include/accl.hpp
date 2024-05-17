@@ -25,7 +25,6 @@
 #include "accl/communicator.hpp"
 #include "accl/constants.hpp"
 #include "accl/xrtbuffer.hpp"
-#include "accl/xrtbufferp2p.hpp"
 #include "accl/xrtdevice.hpp"
 #include "accl/simbuffer.hpp"
 #include "accl/simdevice.hpp"
@@ -760,7 +759,7 @@ ACCLRequest *barrier(communicatorId comm_id = GLOBAL_COMM,
                                      int local_rank);
 
   /**
-   * Construct a new buffer object without an existing host buffer.
+   * Construct a new device buffer object without an existing host buffer.
    *
    * Note that when running in simulated mode, this constructor will not create
    * an underlying simulated BO buffer. If you need this functionality, use
@@ -774,6 +773,31 @@ ACCLRequest *barrier(communicatorId comm_id = GLOBAL_COMM,
   template <typename dtype>
   std::unique_ptr<Buffer<dtype>> create_buffer(size_t length, dataType type) {
     return create_buffer<dtype>(length, type, _devicemem);
+  }
+
+  /**
+   * Construct a new host buffer object.
+   *
+   * Note that when running in simulated mode, this constructor will not create
+   * an underlying simulated BO buffer. If you need this functionality, use
+   * create_buffer(xrt::bo &, size_t, dataType).
+   *
+   * @tparam dtype              Datatype of the buffer.
+   * @param length              Amount of elements to allocate for.
+   * @param type                ACCL datatype of the buffer.
+   * @return std::unique_ptr<Buffer<dtype>> The allocated buffer.
+   */
+  template <typename dtype>
+  std::unique_ptr<Buffer<dtype>> create_buffer_host(size_t length, dataType type) {
+    if (sim_mode) {
+      return std::unique_ptr<Buffer<dtype>>(new SimBuffer<dtype>(
+          length, type, static_cast<SimDevice *>(cclo)->get_context(), true));
+    } else if (cclo->get_device_type() == CCLO::xrt_device) {
+      return std::unique_ptr<Buffer<dtype>>(new XRTBuffer<dtype>(
+          length, type, *(static_cast<XRTDevice *>(cclo)->get_device()), xrt::bo::flags::host_only, (xrt::memory_group)0));
+    } else {
+      return std::unique_ptr<Buffer<dtype>>(new CoyoteBuffer<dtype>(length, type, cclo));
+    }
   }
 
   /**
@@ -797,7 +821,7 @@ ACCLRequest *barrier(communicatorId comm_id = GLOBAL_COMM,
   std::unique_ptr<Buffer<dtype>> create_buffer(size_t length, dataType type, unsigned mem_grp) {
     if (sim_mode) {
       return std::unique_ptr<Buffer<dtype>>(new SimBuffer<dtype>(
-          length, type, static_cast<SimDevice *>(cclo)->get_context()));
+          length, type, static_cast<SimDevice *>(cclo)->get_context(), false, mem_grp));
     } else if (cclo->get_device_type() == CCLO::xrt_device) {
       return std::unique_ptr<Buffer<dtype>>(new XRTBuffer<dtype>(
           length, type, *(static_cast<XRTDevice *>(cclo)->get_device()), (xrt::memory_group)mem_grp));
@@ -863,7 +887,7 @@ ACCLRequest *barrier(communicatorId comm_id = GLOBAL_COMM,
     if (sim_mode) {
       return std::unique_ptr<Buffer<dtype>>(
           new SimBuffer<dtype>(host_buffer, length, type,
-                               static_cast<SimDevice *>(cclo)->get_context()));
+                               static_cast<SimDevice *>(cclo)->get_context(), false, mem_grp));
     } else if(cclo->get_device_type() == CCLO::xrt_device ){
       return std::unique_ptr<Buffer<dtype>>(new XRTBuffer<dtype>(
           host_buffer, length, type, *(static_cast<XRTDevice *>(cclo)->get_device()), (xrt::memory_group)mem_grp));
@@ -947,39 +971,11 @@ ACCLRequest *barrier(communicatorId comm_id = GLOBAL_COMM,
       return std::unique_ptr<Buffer<dtype>>(new SimBuffer<dtype>(
           length, type, static_cast<SimDevice *>(cclo)->get_context()));
     } else if(cclo->get_device_type() == CCLO::xrt_device ){
-      return std::unique_ptr<Buffer<dtype>>(new XRTBufferP2P<dtype>(
-          length, type, *(static_cast<XRTDevice *>(cclo)->get_device()), (xrt::memory_group)mem_grp));
+      return std::unique_ptr<Buffer<dtype>>(new XRTBuffer<dtype>(
+          length, type, *(static_cast<XRTDevice *>(cclo)->get_device()), xrt::bo::flags::p2p, (xrt::memory_group)mem_grp));
     } else {
       //for Coyote there's no concept of a p2p buffer
       throw std::runtime_error("p2p buffers not supported in Coyote");
-    }
-  }
-
-  /**
-   * Construct a new p2p buffer object from an existing P2P BO buffer.
-   *
-   * If you do not pass a non-P2P BO buffer, data will not be copied correctly
-   * from and to the FPGA.
-   *
-   * Will create a normal buffer when running in simulated mode. See the notes
-   * of create_buffer(xrt::bo &, size_t, dataType) about using BO buffers in
-   * simulated mode.
-   *
-   * @tparam dtype              Datatype of the buffer.
-   * @param length              Amount of elements to allocate for.
-   * @param type                ACCL datatype of the buffer.
-   * @return std::unique_ptr<Buffer<dtype>> The allocated P2P buffer.
-   */
-  template <typename dtype>
-  std::unique_ptr<Buffer<dtype>> create_buffer_p2p(xrt::bo &bo, size_t length,
-                                                   dataType type) {
-    if (sim_mode) {
-      return std::unique_ptr<Buffer<dtype>>(
-          new SimBuffer<dtype>(bo, *(static_cast<SimDevice *>(cclo)->get_device()), length, type,
-                               static_cast<SimDevice *>(cclo)->get_context()));
-    } else {
-      return std::unique_ptr<Buffer<dtype>>(
-          new XRTBufferP2P<dtype>(bo, length, type));
     }
   }
 
