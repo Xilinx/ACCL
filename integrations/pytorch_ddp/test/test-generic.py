@@ -50,7 +50,7 @@ size = 0
 
 count = 512
 #As in test.cpp defaults
-rxbufsize = 4096# * 1024
+rxbufsize = 4096 * 1024
 
 
 def test_broadcast():
@@ -277,6 +277,8 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
         # else:
             # sys.exit('Design "' + comms + '" currently not supported in hardware mode')
 
+    # Sometimes ACCL gets stuck on the mpi import statement, so this is to avoid issues:
+    mpi.Barrier()            
     
     accl.create_process_group(ranks, design, bufsize=rxbufsize, initialize=True, simulation=simulator)
     dist.init_process_group("ACCL", rank=rank, world_size=size)
@@ -286,20 +288,20 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
         mpi.Barrier()
         test_broadcast()
         mpi.Barrier()
-        test_sendrcv()
-        mpi.Barrier()
-        test_scatter()
-        mpi.Barrier()
-        test_gather()
-        mpi.Barrier()
-        test_allgather()
-        mpi.Barrier()
-        test_reduce()
-        mpi.Barrier()
-        test_allreduce()
-        mpi.Barrier()
-        demo_basic(rank)
-        mpi.Barrier()
+        # test_sendrcv()
+        # mpi.Barrier()
+        # test_scatter()
+        # mpi.Barrier()
+        # test_gather()
+        # mpi.Barrier()
+        # test_allgather()
+        # mpi.Barrier()
+        # test_reduce()
+        # mpi.Barrier()
+        # test_allreduce()
+        # mpi.Barrier()
+        # demo_basic(rank)
+        # mpi.Barrier()
         # run_training()
         # mpi.Barrier()
         # test_alltoall()

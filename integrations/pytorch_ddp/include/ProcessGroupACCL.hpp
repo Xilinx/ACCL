@@ -292,6 +292,9 @@ protected:
   // Global states
   static void initACCLOnce();
   static void acclExit();
+  void init_input_tensor(at::Tensor &tensor_original, at::Tensor &tensor, std::unique_ptr<ACCL::BaseBuffer> &data, bool do_on_root, bool do_on_others, int opts_root_rank = 0);
+  void init_output_tensor(at::Tensor &tensor,  at::Tensor &tensor_original, std::unique_ptr<ACCL::BaseBuffer> &dstdata, int out_tensor_size, bool do_on_root, bool do_on_others, int opts_root_rank = 0);
+  void copy_back_tensor(at::Tensor tensor_original, std::unique_ptr<ACCL::BaseBuffer> &data, bool do_on_root, bool do_on_others, int opts_root_rank = 0);
   static std::once_flag onceFlagInitACCL;
 
   static std::mutex pgGlobalMutex_;
