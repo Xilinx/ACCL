@@ -266,17 +266,17 @@ protected:
 
   void run_send(at::Tensor tensor, int dstRank, int tag);
   void run_recv(at::Tensor tensor, int rcvRank, int tag);
-  void run_broadcast(at::Tensor tensor, const BroadcastOptions &opts);
-  void run_allreduce(at::Tensor tensor, const AllreduceOptions &opts);
-  void run_reduce(at::Tensor tensor, const ReduceOptions &opts);
-  void run_allgather(at::Tensor srctensor,
+  void run_broadcast(at::Tensor in_tensor, const BroadcastOptions &opts);
+  void run_allreduce(at::Tensor in_tensor, const AllreduceOptions &opts);
+  void run_reduce(at::Tensor in_tensor, const ReduceOptions &opts);
+  void run_allgather(at::Tensor in_tensor,
                      const std::vector<at::Tensor> &dsttensors);
-  void run_gather(at::Tensor srctensor,
+  void run_gather(at::Tensor in_tensor,
                   const std::vector<at::Tensor> &dsttensors,
                   const GatherOptions &opts);
-  void run_scatter(std::vector<at::Tensor> &srctensors, at::Tensor dsttensor,
+  void run_scatter(std::vector<at::Tensor> &in_tensors, at::Tensor dsttensor,
                    const ScatterOptions &opts);
-  void run_alltoall(at::Tensor srctensor, at::Tensor dsttensor, const AllToAllOptions &opts);
+  void run_alltoall(at::Tensor in_tensor, at::Tensor dsttensor, const AllToAllOptions &opts);
 
   ACCL::dataType get_compressed_type(c10::ScalarType datatype);
 
@@ -292,9 +292,19 @@ protected:
   // Global states
   static void initACCLOnce();
   static void acclExit();
-  void init_input_tensor(at::Tensor &tensor_original, at::Tensor &tensor, std::unique_ptr<ACCL::BaseBuffer> &data, bool do_on_root, bool do_on_others, int opts_root_rank = 0);
-  void init_output_tensor(at::Tensor &tensor,  at::Tensor &tensor_original, std::unique_ptr<ACCL::BaseBuffer> &dstdata, int out_tensor_size, bool do_on_root, bool do_on_others, int opts_root_rank = 0);
+  
+  void init_input_tensor(at::Tensor &tensor, std::unique_ptr<ACCL::BaseBuffer> &data, bool do_on_root, bool do_on_others, int opts_root_rank = 0);
+
+  void init_input_data_vec(std::vector<at::Tensor> &tensor_vec, std::unique_ptr<ACCL::BaseBuffer> &data, const at::TensorOptions &options, bool do_on_root, bool do_on_others, int opts_root_rank = 0);
+  
+  void init_output_data(at::Tensor &tensor_original, std::unique_ptr<ACCL::BaseBuffer> &dstdata, int out_tensor_size, c10::ScalarType type, bool do_on_root, bool do_on_others, int opts_root_rank = 0);
+  
+  void init_output_tensor(const at::Tensor &tensor_original, at::Tensor &dsttensor, std::unique_ptr<ACCL::BaseBuffer> &dstdata, int out_tensor_size, c10::ScalarType type, bool do_on_root, bool do_on_others, int opts_root_rank = 0);
+  
   void copy_back_tensor(at::Tensor tensor_original, std::unique_ptr<ACCL::BaseBuffer> &data, bool do_on_root, bool do_on_others, int opts_root_rank = 0);
+
+  void copy_back_tensorvec(const std::vector<at::Tensor> &dsttensorvec, std::unique_ptr<ACCL::BaseBuffer> &data, at::Tensor &dsttensor, int numel, bool do_on_root, bool do_on_others, int opts_root_rank = 0);
+  
   static std::once_flag onceFlagInitACCL;
 
   static std::mutex pgGlobalMutex_;

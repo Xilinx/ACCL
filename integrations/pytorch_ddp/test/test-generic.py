@@ -48,7 +48,7 @@ else:
 rank = 0
 size = 0
 
-count = 512
+count = 16
 #As in test.cpp defaults
 rxbufsize = 4096 * 1024
 
@@ -92,10 +92,13 @@ def test_scatter():
         x = [torch.full((count,), float(i)) for i in range(size)]
     else:
         x = None
-    y = torch.empty(count)
+    y = torch.full((count,), float(0))
 
     dist.scatter(y, x, 0)
 
+    print(y)
+    print(rank)
+    
     np.testing.assert_allclose(y, torch.full((count,), float(rank)))
     print("Test scatter finished!")
 
@@ -290,16 +293,16 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
         mpi.Barrier()
         # test_sendrcv()
         # mpi.Barrier()
-        # test_scatter()
-        # mpi.Barrier()
-        # test_gather()
-        # mpi.Barrier()
-        # test_allgather()
-        # mpi.Barrier()
-        # test_reduce()
-        # mpi.Barrier()
-        # test_allreduce()
-        # mpi.Barrier()
+        test_scatter()
+        mpi.Barrier()
+        test_gather()
+        mpi.Barrier()
+        test_allgather()
+        mpi.Barrier()
+        test_reduce()
+        mpi.Barrier()
+        test_allreduce()
+        mpi.Barrier()
         # demo_basic(rank)
         # mpi.Barrier()
         # run_training()
