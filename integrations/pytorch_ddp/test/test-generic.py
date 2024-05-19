@@ -149,21 +149,28 @@ def test_allreduce():
     print("Test allreduce finished!")
 
 def test_alltoall():
-    input = torch.arange(4, dtype=torch.float) + float(rank) * 4.
+    
+    input = torch.arange(count, dtype=torch.float) + float(rank) * count
 
     logger.debug("All-to-all input:")
     logger.debug(str(input)) 
 
-    output = torch.ones(4)
-    # output = torch.empty([4], dtype=torch.int64)
+    output = torch.ones(count)
 
-    logger.debug("All-to-all output:")
-    logger.debug(str(output)) 
-    
     dist.all_to_all_single(output, input)
     
     logger.debug("All-to-all output:")
-    logger.debug(str(output)) 
+    logger.debug(str(output))
+
+    test = torch.zeros(count)
+
+    section_size = int(count/size)
+
+    for section in range(size):
+        for el in range(section_size):
+            test[section * section_size + el] = float(rank) * section_size + section * count + el
+
+    np.testing.assert_allclose(output, test)
 
     print("Test allreduce finished!")
     
@@ -291,8 +298,8 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
         mpi.Barrier()
         test_broadcast()
         mpi.Barrier()
-        # test_sendrcv()
-        # mpi.Barrier()
+        test_sendrcv()
+        mpi.Barrier()
         test_scatter()
         mpi.Barrier()
         test_gather()
@@ -303,12 +310,12 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
         mpi.Barrier()
         test_allreduce()
         mpi.Barrier()
-        # demo_basic(rank)
-        # mpi.Barrier()
+        demo_basic(rank)
+        mpi.Barrier()
         # run_training()
         # mpi.Barrier()
-        # test_alltoall()
-        # mpi.Barrier()
+        test_alltoall()
+        mpi.Barrier()
         
     print("Finished testing")
     logger.debug('Finished testing')
