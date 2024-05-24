@@ -351,6 +351,18 @@ void sim_bd(zmq_intf_context *ctx, string comm_backend, unsigned int local_rank,
 
     unsigned int max_words_per_pkt = (use_cyt_rdma ? 4096 : MAX_PACKETSIZE)/DATAPATH_WIDTH_BYTES;
 
+    SetName(cmd_fifos[CMD_CALL_RETRY], "cmd_call_retry");
+    SetName(sts_fifos[STS_CALL_RETRY], "sts_call_retry");
+    SetName(cmd_fifos[CMD_DMA_MOVE], "cmd_dma_move");
+    SetName(sts_fifos[STS_DMA_MOVE], "sts_dma_move");
+    SetName(cmd_fifos[CMD_RNDZV], "cmd_rndzv");
+    SetName(sts_fifos[STS_RNDZV], "sts_rndzv");
+    SetName(cmd_fifos[CMD_RNDZV_PENDING], "cmd_rndzv_pending");
+    SetName(sts_fifos[STS_RNDZV_PENDING], "sts_rndzv_pending");
+    SetName(cmd_fifos[CMD_CALL], "cmd_call");
+    SetName(sts_fifos[STS_CALL], "sts_call");
+
+
     // Dataflow functions running in parallel
     HLSLIB_DATAFLOW_INIT();
     //DMA0

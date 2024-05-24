@@ -367,8 +367,6 @@ int rendezvous_get_any_completion(unsigned int *target_rank, uint64_t *target_ad
             putd(CMD_RNDZV_PENDING, addrh);
             putd(CMD_RNDZV_PENDING, host);
             putd(CMD_RNDZV_PENDING, count);
-            putd(CMD_RNDZV_PENDING, host);
-            putd(CMD_RNDZV_PENDING, count);
         } else {
             num_rndzv_pending--;
             *target_rank = rank;
