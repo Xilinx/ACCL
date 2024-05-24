@@ -54,8 +54,8 @@ std::unique_ptr<ACCL::ACCL>
 initialize_accl(std::vector<ACCL::rank_t> &ranks, int local_rank,
                 bool simulator, acclDesign design,
                 xrt::device device = xrt::device(),
-                std::filesystem::path xclbin = "", int nbufs = 16,
-                ACCL::addr_t bufsize = 1024, ACCL::addr_t segsize = 0,
+                std::filesystem::path xclbin = "", unsigned int nbufs = 16,
+                unsigned int bufsize = 1024, unsigned int egrsize = 0,
                 bool rsfec = false);
 
 // Configure the VNX kernel, this function is called by initialize_accl

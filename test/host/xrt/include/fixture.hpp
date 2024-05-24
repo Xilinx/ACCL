@@ -86,10 +86,9 @@ class TestEnvironment : public ::testing::Environment {
 
       accl = initialize_accl(
           ranks, ::rank, !options.hardware, design, dev, options.xclbin, options.rxbuf_count,
-          options.rxbuf_size, options.segment_size, options.rsfec);
+          options.rxbuf_size, options.max_eager_count, options.rsfec);
       std::cout << "Setting up TestEnvironment" << std::endl;
       accl->set_timeout(1e6);
-      accl->set_rendezvous_threshold(options.max_eager_count);
 
     }
 

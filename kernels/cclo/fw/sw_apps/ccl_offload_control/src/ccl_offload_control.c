@@ -1588,6 +1588,8 @@ int reduce( unsigned int count,
                 while(rendezvous_get_addr(root_rank, &buf_addr, &dst_host, count, TAG_ANY) == NOT_READY_ERROR);
                 if(dst_host){
                     host |= RES_HOST;
+                } else {
+                    host &= ~RES_HOST;
                 }
                 //do a RDMA write to the remote address 
                 return move(

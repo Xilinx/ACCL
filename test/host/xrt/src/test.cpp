@@ -346,7 +346,7 @@ TEST_P(ACCLSegmentationTest, test_sendrcv_segmentation){
   if(::size == 1){
     GTEST_SKIP() << "Skipping send/recv test on single-node setup";
   }
-  unsigned int count_per_segment = options.segment_size / (dataTypeSize.at(dataType::float32) / 8);
+  unsigned int count_per_segment = options.rxbuf_size / (dataTypeSize.at(dataType::float32) / 8);
   unsigned int multiplier = std::get<0>(GetParam());
   int offset = std::get<1>(GetParam());
   unsigned int count;
@@ -860,6 +860,34 @@ TEST_P(ACCLRootFuncTest, test_reduce) {
   }
 }
 
+TEST_F(ACCLTest, test_reduce_h2h) {
+  int root = 0;
+  reduceFunction function = reduceFunction::SUM;
+
+  unsigned int count = options.count;
+  unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
+
+  auto op_buf = accl->create_buffer_host<float>(count, dataType::float32);
+  auto tmp_buf = accl->create_buffer_host<float>(count, dataType::float32);
+  auto res_buf = accl->create_buffer_host<float>(count, dataType::float32);
+  random_array(op_buf->buffer(), count);
+
+  test_debug("Reduce data to " + std::to_string(root) + "...", options);
+  accl->reduce(*op_buf, *tmp_buf, count, root, function);
+  accl->reduce((::rank == root) ? *tmp_buf : *op_buf, *res_buf, count, root, function);
+
+  float res, ref;
+  if (::rank == root) {
+    for (unsigned int i = 0; i < count; ++i) {
+      res = (*res_buf)[i];
+      ref = (*op_buf)[i] * (2*::size-1);
+      EXPECT_FLOAT_EQ(res, ref);
+    }
+  } else {
+    EXPECT_TRUE(true);
+  }
+}
+
 TEST_P(ACCLRootFuncTest, test_reduce_compressed) {
   int root = std::get<0>(GetParam());
   reduceFunction function = std::get<1>(GetParam());
@@ -1059,6 +1087,25 @@ TEST_P(ACCLFuncTest, test_allreduce) {
   }
 }
 
+TEST_F(ACCLTest, test_allreduce_h2h) {
+  reduceFunction function = reduceFunction::SUM;
+
+  unsigned int count = options.count;
+  auto op_buf = accl->create_buffer_host<float>(count, dataType::float32);
+  auto res_buf = accl->create_buffer_host<float>(count, dataType::float32);
+  random_array(op_buf->buffer(), count);
+
+  test_debug("Reducing data...", options);
+  accl->allreduce(*op_buf, *res_buf, count, function);
+
+  float res, ref;
+  for (unsigned int i = 0; i < count; ++i) {
+    res = (*res_buf)[i];
+    ref = (*op_buf)[i] *::size;
+    EXPECT_FLOAT_EQ(res, ref);
+  }
+}
+
 TEST_P(ACCLFuncTest, test_allreduce_compressed) {
   reduceFunction function = GetParam();
   if((function != reduceFunction::SUM) && (function != reduceFunction::MAX)){
@@ -1157,7 +1204,7 @@ options_t parse_options(int argc, char *argv[]) {
                                           false, "", "string");
   TCLAP::ValueArg<unsigned int> max_eager_arg("", "max-eager-count",
                                             "Maximum byte count for eager mode", false,
-                                            16*1024, "positive integer");
+                                            0, "positive integer");
   cmd.add(max_eager_arg);
   try {
     cmd.parse(argc, argv);
@@ -1180,7 +1227,6 @@ options_t parse_options(int argc, char *argv[]) {
   opts.count = count_arg.getValue();
   opts.rxbuf_count = bufcount_arg.getValue();
   opts.rxbuf_size = bufsize_arg.getValue() * 1024; // convert to bytes
-  opts.segment_size = std::min((unsigned)opts.rxbuf_size, (unsigned)4*1024*1024); //min of rxbuf_size and max_btt
   opts.debug = debug_arg.getValue();
   opts.hardware = hardware_arg.getValue();
   opts.axis3 = axis3_arg.getValue();

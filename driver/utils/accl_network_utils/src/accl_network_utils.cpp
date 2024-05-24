@@ -15,6 +15,7 @@
 #
 *******************************************************************************/
 #include <fstream>
+#include <algorithm>
 #include <json/json.h>
 
 #ifdef ACCL_NETWORK_UTILS_MPI
@@ -328,13 +329,15 @@ std::vector<rank_t> generate_ranks(bool local, int local_rank, int world_size,
 std::unique_ptr<ACCL::ACCL>
 initialize_accl(std::vector<rank_t> &ranks, int local_rank,
                 bool simulator, acclDesign design, xrt::device device,
-                fs::path xclbin, int nbufs, addr_t bufsize, addr_t segsize,
-                bool rsfec) {
+                fs::path xclbin, unsigned int nbufs, unsigned int bufsize, 
+                unsigned int egrsize, bool rsfec) {
   std::size_t world_size = ranks.size();
   std::unique_ptr<ACCL::ACCL> accl;
 
-  if (segsize == 0) {
-    segsize = bufsize;
+  if (egrsize == 0) {
+    egrsize = bufsize;
+  } else if(egrsize > bufsize){
+    bufsize = egrsize;
   }
 
   if (simulator) {
@@ -394,7 +397,7 @@ initialize_accl(std::vector<rank_t> &ranks, int local_rank,
 
     accl = std::make_unique<ACCL::ACCL>(device, cclo_ip, hostctrl_ip, devicemem, rxbufmem);
   }
-  accl.get()->initialize(ranks, local_rank,	nbufs, bufsize, segsize);
+  accl.get()->initialize(ranks, local_rank,	nbufs, bufsize, egrsize, std::min(nbufs*bufsize, (unsigned int)4*1024*1024));
   return accl;
 }
 } // namespace accl_network_utils

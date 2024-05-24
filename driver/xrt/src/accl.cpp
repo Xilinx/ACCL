@@ -104,22 +104,6 @@ ACCLRequest *ACCL::set_timeout(unsigned int value, bool run_async,
   return handle;
 }
 
-ACCLRequest *ACCL::set_rendezvous_threshold(unsigned int value, bool run_async,
-                        std::vector<ACCLRequest *> waitfor) {
-  CCLO::Options options{};
-  options.scenario = operation::config;
-  options.count = value;
-  options.cfg_function = cfgFunc::set_max_eager_msg_size;
-  ACCLRequest *handle = call_async(options);
-
-  if (!run_async) {
-    wait(handle);
-    check_return_value("set_max_eager_msg_size", handle);
-  }
-
-  return handle;
-}
-
 ACCLRequest *ACCL::nop(bool run_async, std::vector<ACCLRequest *> waitfor) {
   CCLO::Options options{};
   options.scenario = operation::nop;
