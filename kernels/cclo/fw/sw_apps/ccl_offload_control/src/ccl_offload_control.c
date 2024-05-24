@@ -1770,13 +1770,13 @@ int reduce_scatter(
         //copy the OP0_HOST flag over RES_HOST 
         //because we're broadcasting from the allreduce result buffer
         unsigned int r_host = (host & OP0_HOST) | ((host & OP0_HOST) << 2);
-        unsigned int r_buftype = (buftype & 0xFFFFFF00) | (r_host & 0xFF);
+        unsigned int r_buftype = (buftype & 0xFFFF00FF) | ((r_host & 0xFF) << 8);
         //reduce step - we reduce back into src_buf_addr
         while(reduce(count*world.size, func, 0, src_buf_addr, src_buf_addr, comm_offset, arcfg_offset, compression, r_buftype) == NOT_READY_ERROR);
         //copy the RES_HOST flag over OP0_HOST 
         //because we're broadcasting from the allreduce result buffer
         host = (host & RES_HOST) | ((host & RES_HOST) >> 2);
-        buftype = (buftype & 0xFFFFFF00) | (host & 0xFF);
+        buftype = (buftype & 0xFFFF00FF) | ((host & 0xFF) << 8);
         //broadcast step
         while(scatter(count, 0, src_buf_addr, dst_buf_addr, comm_offset, arcfg_offset, compression, buftype) == NOT_READY_ERROR);
     } else {
@@ -1882,7 +1882,7 @@ int allreduce(
         //copy the RES_HOST flag over OP0_HOST 
         //because we're broadcasting from the allreduce result buffer
         host = (host & RES_HOST) | ((host & RES_HOST) >> 2);
-        buftype = (buftype & 0xFFFFFF00) | (host & 0xFF);
+        buftype = (buftype & 0xFFFF00FF) | ((host & 0xFF) << 8);
         //broadcast step
         while(broadcast(count, 0, dst_buf_addr, comm_offset, arcfg_offset, compression, buftype) == NOT_READY_ERROR);
     } else {

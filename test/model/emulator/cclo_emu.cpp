@@ -362,6 +362,36 @@ void sim_bd(zmq_intf_context *ctx, string comm_backend, unsigned int local_rank,
     SetName(cmd_fifos[CMD_CALL], "cmd_call");
     SetName(sts_fifos[STS_CALL], "sts_call");
 
+    SetName(dma_write_cmd_int[1], "dma_write_cmd_int_0");
+    SetName(dma_write_cmd_int[0], "dma_write_cmd_int_1");
+    SetName(dma_read_cmd_int[1], "dma_read_cmd_int_0");
+    SetName(dma_read_cmd_int[0], "dma_read_cmd_int_1");
+    SetName(dma_write_sts_int[1], "dma_write_sts_int_0");
+    SetName(dma_write_sts_int[0], "dma_write_sts_int_1");
+    SetName(dma_read_sts_int[1], "dma_read_sts_int_0");
+    SetName(dma_read_sts_int[0], "dma_read_sts_int_1");
+    SetName(dma_read_data[1], "dma_read_data_0");
+    SetName(dma_read_data[0], "dma_read_data_1");
+
+    SetName(switch_s[7], "switch_s_7");
+    SetName(switch_s[6], "switch_s_6");
+    SetName(switch_s[5], "switch_s_5");
+    SetName(switch_s[4], "switch_s_4");
+    SetName(switch_s[3], "switch_s_3");
+    SetName(switch_s[2], "switch_s_2");
+    SetName(switch_s[1], "switch_s_1");
+    SetName(switch_s[0], "switch_s_0");
+
+    SetName(switch_m[9], "switch_m_9");
+    SetName(switch_m[8], "switch_m_8");
+    SetName(switch_m[7], "switch_m_7");
+    SetName(switch_m[6], "switch_m_6");
+    SetName(switch_m[5], "switch_m_5");
+    SetName(switch_m[4], "switch_m_4");
+    SetName(switch_m[3], "switch_m_3");
+    SetName(switch_m[2], "switch_m_2");
+    SetName(switch_m[1], "switch_m_1");
+    SetName(switch_m[0], "switch_m_0");
 
     // Dataflow functions running in parallel
     HLSLIB_DATAFLOW_INIT();
