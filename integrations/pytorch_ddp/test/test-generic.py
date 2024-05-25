@@ -96,8 +96,8 @@ def test_scatter():
 
     dist.scatter(y, x, 0)
 
-    print(y)
-    print(rank)
+    # print(y)
+    # print(rank)
     
     np.testing.assert_allclose(y, torch.full((count,), float(rank)))
     print("Test scatter finished!")
@@ -152,16 +152,11 @@ def test_alltoall():
     
     input = torch.arange(count, dtype=torch.float) + float(rank) * count
 
-    logger.debug("All-to-all input:")
-    logger.debug(str(input)) 
 
     output = torch.ones(count)
 
     dist.all_to_all_single(output, input)
     
-    logger.debug("All-to-all output:")
-    logger.debug(str(output))
-
     test = torch.zeros(count)
 
     section_size = int(count/size)
@@ -188,7 +183,18 @@ class ToyModel(nn.Module):
 class MyTrainDataset(Dataset):
     def __init__(self, size):
         self.size = size
-        self.data = [(torch.rand(10), torch.rand(5)) for _ in range(size)]
+
+        self.data = []
+        for i in range(size):
+            in_feature = torch.zeros(10)
+            out_feature = torch.zeros(5)
+            for j in range(10):
+                in_feature[j] = float((i^2  + j) % 5)
+                out_feature[j//2] = out_feature[j//2] + float(((i^2 + j) % 5) * 3 * ( -1 ** (j % 2)))
+            self.data.append((in_feature, out_feature))
+                
+                
+        
 
     def __len__(self):
         return self.size
@@ -215,9 +221,9 @@ def demo_basic(rank: int):
     train_data = prepare_dataloader(train_set, batch_size)
     
     loss_fn = nn.MSELoss()
-    optimizer = optim.SGD(ddp_model.parameters(), lr=0.001)
+    optimizer = optim.Adam(ddp_model.parameters(), lr=0.005)
 
-    max_epochs = 10
+    max_epochs = 20
     for epoch in range(max_epochs):
         batch_size = len(next(iter(train_data))[0])
         train_data.sampler.set_epoch(epoch)
@@ -233,6 +239,8 @@ def demo_basic(rank: int):
         
 
     print("finished training")
+    print("final params:")
+    print(ddp_model)
     # dist.destroy_process_group()
 
 def start_test(comms: str, simulator: bool, host_file: str=None, fpga_file: str=None, ma: str="localhost", mp: str="30505"):
@@ -293,35 +301,35 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
     accl.create_process_group(ranks, design, bufsize=rxbufsize, initialize=True, simulation=simulator)
     dist.init_process_group("ACCL", rank=rank, world_size=size)
 
-    with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
-                 profile_memory=True, record_shapes=True) as prof:
-        mpi.Barrier()
-        test_broadcast()
-        mpi.Barrier()
-        test_sendrcv()
-        mpi.Barrier()
-        test_scatter()
-        mpi.Barrier()
-        test_gather()
-        mpi.Barrier()
-        test_allgather()
-        mpi.Barrier()
-        test_reduce()
-        mpi.Barrier()
-        test_allreduce()
-        mpi.Barrier()
-        demo_basic(rank)
-        mpi.Barrier()
-        # run_training()
-        # mpi.Barrier()
-        test_alltoall()
-        mpi.Barrier()
+    # with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+                 # profile_memory=True, record_shapes=True) as prof:
+    # mpi.Barrier()
+    # test_broadcast()
+    # mpi.Barrier()
+    # test_sendrcv()
+    # mpi.Barrier()
+    # test_scatter()
+    # mpi.Barrier()
+    # test_gather()
+    # mpi.Barrier()
+    # test_allgather()
+    # mpi.Barrier()
+    # test_reduce()
+    # mpi.Barrier()
+    # test_allreduce()
+    mpi.Barrier()
+    # demo_basic(rank)
+    # mpi.Barrier()
+    # run_training()
+    # mpi.Barrier()
+    test_alltoall()
+    mpi.Barrier()
         
     print("Finished testing")
     logger.debug('Finished testing')
         
-    print(prof.key_averages(group_by_input_shape=True)
-          .table(sort_by="cpu_time_total", row_limit=15))
+    # print(prof.key_averages(group_by_input_shape=True)
+          # .table(sort_by="cpu_time_total", row_limit=15))
 
     logger.debug('Destroying ACCL Process Group')
     dist.destroy_process_group()

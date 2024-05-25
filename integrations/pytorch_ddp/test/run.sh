@@ -9,7 +9,7 @@ fi
 if [[ -v ACCL_SCRIPT ]]; then
     SCRIPT_NAME="$ACCL_SCRIPT"
 else
-    SCRIPT_NAME=test-generic.py
+    SCRIPT_NAME=test-mnist.py
     echo "Variable ACCL_SCRIPT not set. Assuming $SCRIPT_NAME"
 fi
 
@@ -31,7 +31,7 @@ EXEC="bash -c \"source $VENV_ACTIVATE && source $SETUP_SH  && python $SCRIPT"
 #---------------Setting up vars-------------
 if [[ $ACCL_SIM -eq 1 ]]; then
     echo "Starting in simulator mode. Make sure to start the emulator beforehand"
-    ARG="-s "
+    ARG="-s -d True"
 
     ACCL_COMMS="udp"
 
@@ -98,8 +98,8 @@ echo "Running with $NUM_PROCESS Processes"
 rm -f $(pwd)/accl_log/rank*
 
 # C="mpirun -n $NUM_PROCESS $MPI_ARGS -outfile-pattern \"$(pwd)/accl_log/rank_%r_stdout\" $EXEC $ARG &"
-# C="mpirun -n $NUM_PROCESS $MPI_ARGS -outfile-pattern \"$(pwd)/accl_log/rank_%r_stdout\" -errfile-pattern \"$(pwd)/accl_log/rank_%r_stderr\" $EXEC $ARG &"
-C="mpirun -n $NUM_PROCESS $MPI_ARGS $EXEC $ARG &"
+C="mpirun -n $NUM_PROCESS $MPI_ARGS -outfile-pattern \"$(pwd)/accl_log/rank_%r_stdout\" -errfile-pattern \"$(pwd)/accl_log/rank_%r_stderr\" $EXEC $ARG &"
+# C="mpirun -n $NUM_PROCESS $MPI_ARGS $EXEC $ARG &"
 echo $C
 
 exit 0
