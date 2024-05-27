@@ -652,7 +652,9 @@ void ProcessGroupACCL::init_input_tensor(at::Tensor &tensor, std::unique_ptr<ACC
   if DO_COND {
     int64_t tens_size = static_cast<size_t>(tensor_vec[0].numel());
     int64_t total_size = tens_size * static_cast<size_t>(size_);
-    std::vector<int64_t> sizes = {total_size};
+    std::vector<int64_t> sizes = tensor_vec[0].sizes().vec();
+    // Prepend another dimension for vector length
+    sizes.insert(sizes.begin(), tensor_vec.size());
       
     if (p2p_applicable(*accl, tensor_vec[0], p2p_enabled)) {
       data = create_buffer_p2p( *accl, total_size, tensor_vec[0].scalar_type());
@@ -668,7 +670,7 @@ void ProcessGroupACCL::init_input_tensor(at::Tensor &tensor, std::unique_ptr<ACC
 	auto slice = data->slice(i * tens_size, (i + 1) * tens_size);
 	copy_to_p2p_buffer(*slice, tensor_vec[i]);
       } else {
-	auto slice = wrapper_tensor.slice(0, i * tens_size, (i + 1) * tens_size);
+	auto slice = wrapper_tensor[i];
 	slice.copy_(tensor_vec[i]);
       }
     }
@@ -697,19 +699,26 @@ void ProcessGroupACCL::init_output_data(at::Tensor &tensor_original, std::unique
   }
 }
 
-void ProcessGroupACCL::init_output_tensor(const at::Tensor &tensor_original, at::Tensor &dsttensor, std::unique_ptr<ACCL::BaseBuffer> &dstdata, int out_tensor_size, c10::ScalarType type, bool do_on_root, bool do_on_others, int opts_root_rank) {
+    void ProcessGroupACCL::init_output_tensor(const at::Tensor &tensor_original, at::Tensor &dsttensor, std::unique_ptr<ACCL::BaseBuffer> &dstdata, int num_tensors, c10::ScalarType type, bool do_on_root, bool do_on_others, int opts_root_rank) {
     if DO_COND {
+	int64_t num_tensors_s = static_cast<size_t>(num_tensors);
+	std::vector<int64_t> sizes = tensor_original.sizes().vec();
+	int64_t total_size = static_cast<size_t>(tensor_original.numel());
+	if  (num_tensors != 0) {
+	    // Prepend another dimension for vector length
+	    sizes.insert(sizes.begin(), num_tensors_s);
+	    total_size = total_size * num_tensors_s;
+	}
 	if (p2p_applicable(*accl, tensor_original, p2p_enabled)) {
-	  dstdata = create_buffer_p2p(*accl, out_tensor_size, type);
+	  dstdata = create_buffer_p2p(*accl, total_size, type);
 	} else if (coyote_enabled) {
-	    dstdata = create_coyotebuffer(*accl, out_tensor_size, type);
-	    std::vector<int64_t> sizes = {static_cast<int64_t>(out_tensor_size)};
+	    dstdata = create_coyotebuffer(*accl, total_size, type);
+	    // std::vector<int64_t> sizes = {static_cast<int64_t>(out_tensor_size)};
 	    dsttensor = torch::from_blob(dstdata->byte_array(), sizes, tensor_original.options().device(c10::DeviceType::CPU));
 	    // This should not be necessary:
 	    // dsttensor.copy_(tensor_original);
 	} else {
-	    dstdata = create_buffer(*accl, out_tensor_size, type);
-	    std::vector<int64_t> sizes = {static_cast<int64_t>(out_tensor_size)};
+	    dstdata = create_buffer(*accl, total_size, type);
 	    dsttensor = torch::from_blob(dstdata->byte_array(), sizes, tensor_original.options().device(c10::DeviceType::CPU));
 	    // This should not be necessary:
 	    // dsttensor.copy_(tensor_original);
@@ -747,7 +756,7 @@ void ProcessGroupACCL::copy_back_tensor(at::Tensor tensor_original, std::unique_
 	  // data->slice(i * numel, (i + 1) * numel);
 	// copy_back_p2p_buffer(*slice, dsttensorvec[i]);
       // } else {
-	dsttensorvec[i].copy_(dsttensor.slice(0, i * numel, (i + 1) * numel));
+	dsttensorvec[i].copy_(dsttensor[i]);
       // }
     }
   }
@@ -981,7 +990,6 @@ void ProcessGroupACCL::run_broadcast(at::Tensor in_tensor,
 c10::intrusive_ptr<Work>
 ProcessGroupACCL::broadcast(std::vector<at::Tensor> &tensors,
                             const BroadcastOptions &opts) {
-  debug(accl->dump_eager_rx_buffers(false));
   checkSingleTensor(tensors);
   std::function<void(std::unique_ptr<WorkEntry> &)> runFunc =
       [opts, this](std::unique_ptr<WorkEntry> &entry) {
@@ -1118,7 +1126,7 @@ void ProcessGroupACCL::run_allgather(
   c10::DeviceGuard guard(in_tensor.device());
   std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
 
-  init_output_tensor(dsttensorvec[0], dsttensor, dstdata, in_tensor.numel() * static_cast<size_t>(size_), in_tensor.scalar_type(), true, true);
+  init_output_tensor(in_tensor, dsttensor, dstdata, size_, in_tensor.scalar_type(), true, true);
   
   PRE_REQUEST(Allgather,in_tensor)
 
@@ -1194,7 +1202,7 @@ void ProcessGroupACCL::run_gather(at::Tensor in_tensor,
   c10::DeviceGuard guard(in_tensor.device());
   std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
 
-  init_output_tensor(in_tensor, dsttensor, dstdata, in_tensor.numel() * static_cast<size_t>(size_), in_tensor.scalar_type(), true, false, opts.rootRank);
+  init_output_tensor(in_tensor, dsttensor, dstdata, size_, in_tensor.scalar_type(), true, false, opts.rootRank);
 
   PRE_REQUEST(Gather, in_tensor)
 
@@ -1278,7 +1286,7 @@ void ProcessGroupACCL::run_scatter(std::vector<at::Tensor> &in_tensor_vec,
   init_input_data_vec(in_tensor_vec, in_data, out_tensor.options().device(c10::DeviceType::CPU), true, false, opts.rootRank);
 
   
-  init_output_tensor(out_tensor, dsttensor, out_data, out_tensor.numel(), out_tensor.scalar_type(), true, true, opts.rootRank);
+  init_output_tensor(out_tensor, dsttensor, out_data, 0, out_tensor.scalar_type(), true, true, opts.rootRank);
 
   PRE_REQUEST(Scatter, dsttensor)
   

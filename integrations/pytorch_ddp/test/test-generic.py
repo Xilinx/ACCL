@@ -49,29 +49,31 @@ rank = 0
 size = 0
 
 count = 16
+shape = (6,4)
+num_el = 6 * 4
 #As in test.cpp defaults
 rxbufsize = 4096 * 1024
 
 
 def test_broadcast():
     if rank == 0:
-        x = torch.ones(count)
+        x = torch.ones(shape)
     else:
-        x = torch.zeros(count)
+        x = torch.zeros(shape)
 
     dist.broadcast(x, 0)
 
     # logger.debug('Tensor after broadcast: ' + str(x))
     # print('Tensor after broadcast: ' + str(x))
     
-    np.testing.assert_allclose(x, torch.ones(count))
+    np.testing.assert_allclose(x, torch.ones(shape))
     print("Test broadcast finished!")
 
 
 def test_sendrcv():
-    x = torch.full((count,), float(rank))
+    x = torch.full(shape, float(rank))
 
-    y = torch.empty(count)
+    y = torch.empty(shape)
 
     prev_rank = (rank - 1) % size
     next_rank = (rank + 1) % size
@@ -83,31 +85,29 @@ def test_sendrcv():
         dist.recv(y, prev_rank)
         dist.send(x, next_rank)
 
-    np.testing.assert_allclose(y, torch.full((count,), prev_rank))
+    np.testing.assert_allclose(y, torch.full(shape, prev_rank))
     print("Test sendrcv finished!")
 
 
 def test_scatter():
     if rank == 0:
-        x = [torch.full((count,), float(i)) for i in range(size)]
+        x = [torch.full(shape, float(i+1)) for i in range(size)]
     else:
         x = None
-    y = torch.full((count,), float(0))
+    y = torch.full(shape, float(0))
 
-    dist.scatter(y, x, 0)
-
-    # print(y)
-    # print(rank)
     
-    np.testing.assert_allclose(y, torch.full((count,), float(rank)))
+    dist.scatter(y, x, 0)
+    
+    np.testing.assert_allclose(y, torch.full(shape, float(rank+1)))
     print("Test scatter finished!")
 
 
 def test_gather():
-    x = torch.full((count,), float(rank))
+    x = torch.full(shape, float(rank))
 
     if rank == 0:
-        y = [torch.empty(count) for _ in range(size)]
+        y = [torch.empty(shape) for _ in range(size)]
     else:
         y = None
 
@@ -115,37 +115,37 @@ def test_gather():
 
     if rank == 0:
         for i, c in enumerate(y):
-            np.testing.assert_allclose(c, torch.full((count,), float(i)))
+            np.testing.assert_allclose(c, torch.full(shape, float(i)))
     print("Test gather finished!")
 
 
 def test_allgather():
-    x = torch.full((count,), float(rank))
-    y = [torch.empty(count) for _ in range(size)]
+    x = torch.full(shape, float(rank))
+    y = [torch.empty(shape) for _ in range(size)]
 
     dist.all_gather(y, x)
 
     for i, c in enumerate(y):
-        np.testing.assert_allclose(c, torch.full((count,), float(i)))
+        np.testing.assert_allclose(c, torch.full(shape, float(i)))
     print("Test allgather finished!")
 
 
 def test_reduce():
-    x = torch.ones(count)
+    x = torch.ones(shape)
 
     dist.reduce(x, 0, dist.ReduceOp.SUM)
 
     if rank == 0:
-        np.testing.assert_allclose(x, [size for _ in range(count)])
+        np.testing.assert_allclose(x, torch.full(shape, float(size)))
     print("Test reduce finished!")
 
 
 def test_allreduce():
-    x = torch.ones(count)
+    x = torch.ones(shape)
 
     dist.all_reduce(x, dist.ReduceOp.SUM)
 
-    np.testing.assert_allclose(x, [size for _ in range(count)])
+    np.testing.assert_allclose(x, torch.full(shape, float(size)))
     print("Test allreduce finished!")
 
 def test_alltoall():
@@ -167,7 +167,7 @@ def test_alltoall():
 
     np.testing.assert_allclose(output, test)
 
-    print("Test allreduce finished!")
+    print("Test alltoall finished!")
     
 
 class ToyModel(nn.Module):
@@ -239,8 +239,8 @@ def demo_basic(rank: int):
         
 
     print("finished training")
-    print("final params:")
-    print(ddp_model)
+    # print("final params:")
+    # print(ddp_model)
     # dist.destroy_process_group()
 
 def start_test(comms: str, simulator: bool, host_file: str=None, fpga_file: str=None, ma: str="localhost", mp: str="30505"):
@@ -303,24 +303,22 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
 
     # with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
                  # profile_memory=True, record_shapes=True) as prof:
-    # mpi.Barrier()
-    # test_broadcast()
-    # mpi.Barrier()
-    # test_sendrcv()
-    # mpi.Barrier()
-    # test_scatter()
-    # mpi.Barrier()
-    # test_gather()
-    # mpi.Barrier()
-    # test_allgather()
-    # mpi.Barrier()
-    # test_reduce()
-    # mpi.Barrier()
-    # test_allreduce()
+    mpi.Barrier()
+    test_broadcast()
+    mpi.Barrier()
+    test_sendrcv()
+    mpi.Barrier()
+    test_scatter()
+    mpi.Barrier()
+    test_gather()
+    mpi.Barrier()
+    test_allgather()
+    mpi.Barrier()
+    test_reduce()
+    mpi.Barrier()
+    test_allreduce()
     mpi.Barrier()
     # demo_basic(rank)
-    # mpi.Barrier()
-    # run_training()
     # mpi.Barrier()
     test_alltoall()
     mpi.Barrier()
