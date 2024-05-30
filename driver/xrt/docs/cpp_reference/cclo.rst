@@ -22,10 +22,18 @@ ACCL::ArithConfig
    :members:
 
 **********************************
-ACCL::FPGADevice
+ACCL::XRTDevice
 **********************************
 
-.. doxygenclass:: ACCL::FPGADevice
+.. doxygenclass:: ACCL::XRTDevice
+   :project: ACCL
+   :members:
+
+**********************************
+ACCL::CoyoteDevice
+**********************************
+
+.. doxygenclass:: ACCL::CoyoteDevice
    :project: ACCL
    :members:
 

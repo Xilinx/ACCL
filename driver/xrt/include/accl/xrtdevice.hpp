@@ -25,7 +25,7 @@
 #include <string>
 #include <xrt/xrt_kernel.h>
 
-/** @file fpgadevice.hpp */
+/** @file xrtdevice.hpp */
 
 namespace ACCL {
 /**
@@ -64,22 +64,22 @@ public:
  * Implementation of CCLO that uses a CCLO kernel on a FPGA.
  *
  */
-class FPGADevice : public CCLO {
+class XRTDevice : public CCLO {
 public:
   /**
-   * Construct a new FPGADevice object
+   * Construct a new XRTDevice object
    *
    * @param cclo_ip      The CCLO kernel to use.
    * @param hostctrl_ip  The hostctrl kernel to use.
    * @param device       Xrt device;
    */
-  FPGADevice(xrt::ip &cclo_ip, xrt::kernel &hostctrl_ip, xrt::device &device);
+  XRTDevice(xrt::ip &cclo_ip, xrt::kernel &hostctrl_ip, xrt::device &device);
 
   /**
-   * Destroy the FPGADevice object
+   * Destroy the XRTDevice object
    *
    */
-  virtual ~FPGADevice() {}
+  virtual ~XRTDevice() {}
 
   ACCLRequest *call(const Options &options) override;
 

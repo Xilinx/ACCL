@@ -32,7 +32,7 @@ ACCL::ACCL(xrt::device &device, xrt::ip &cclo_ip, xrt::kernel &hostctrl_ip,
            const arithConfigMap &arith_config)
     : arith_config(arith_config), sim_mode(false),
       _devicemem(devicemem), rxbufmem(rxbufmem) {
-  cclo = new FPGADevice(cclo_ip, hostctrl_ip, device);
+  cclo = new XRTDevice(cclo_ip, hostctrl_ip, device);
 }
 
 // Simulation constructor
@@ -99,22 +99,6 @@ ACCLRequest *ACCL::set_timeout(unsigned int value, bool run_async,
   if (!run_async) {
     wait(handle);
     check_return_value("set_timeout", handle);
-  }
-
-  return handle;
-}
-
-ACCLRequest *ACCL::set_rendezvous_threshold(unsigned int value, bool run_async,
-                        std::vector<ACCLRequest *> waitfor) {
-  CCLO::Options options{};
-  options.scenario = operation::config;
-  options.count = value;
-  options.cfg_function = cfgFunc::set_max_eager_msg_size;
-  ACCLRequest *handle = call_async(options);
-
-  if (!run_async) {
-    wait(handle);
-    check_return_value("set_max_eager_msg_size", handle);
   }
 
   return handle;
@@ -1156,7 +1140,7 @@ void ACCL::setup_eager_rx_buffers(size_t n_egr_rx_bufs, addr_t egr_rx_buf_size,
       buf = new SimBuffer(new int8_t[eager_rx_buffer_size](), eager_rx_buffer_size, dataType::int8,
                           static_cast<SimDevice *>(cclo)->get_context());
     } else if(cclo->get_device_type() == CCLO::xrt_device ){
-      buf = new FPGABuffer<int8_t>(eager_rx_buffer_size, dataType::int8, *(static_cast<FPGADevice *>(cclo)->get_device()), devicemem[i % devicemem.size()]);
+      buf = new XRTBuffer<int8_t>(eager_rx_buffer_size, dataType::int8, *(static_cast<XRTDevice *>(cclo)->get_device()), devicemem[i % devicemem.size()]);
     } else if(cclo->get_device_type() == CCLO::coyote_device){
       buf = new CoyoteBuffer<int8_t>(eager_rx_buffer_size, dataType::int8, static_cast<CoyoteDevice *>(cclo));
     }
@@ -1195,8 +1179,8 @@ void ACCL::setup_rendezvous_spare_buffers(addr_t rndzv_spare_buf_size, const std
       buf = new SimBuffer(new int8_t[max_rndzv_msg_size](), max_rndzv_msg_size, dataType::int8,
                         static_cast<SimDevice *>(cclo)->get_context());
     } else if(cclo->get_device_type() == CCLO::xrt_device ){
-      buf = new FPGABuffer<int8_t>(max_rndzv_msg_size, dataType::int8,
-                        *(static_cast<FPGADevice *>(cclo)->get_device()), devicemem[i % devicemem.size()]);
+      buf = new XRTBuffer<int8_t>(max_rndzv_msg_size, dataType::int8,
+                        *(static_cast<XRTDevice *>(cclo)->get_device()), devicemem[i % devicemem.size()]);
     } else if(cclo->get_device_type() == CCLO::coyote_device){
       buf = new CoyoteBuffer<int8_t>(max_rndzv_msg_size, dataType::int8, static_cast<CoyoteDevice *>(cclo));
     }

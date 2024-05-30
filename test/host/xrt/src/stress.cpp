@@ -92,7 +92,7 @@ options_t parse_options(int argc, char *argv[]) {
   opts.count = count_arg.getValue();
   opts.rxbuf_count = bufcount_arg.getValue();
   opts.rxbuf_size = bufsize_arg.getValue() * 1024; // convert to bytes
-  opts.segment_size = opts.rxbuf_size;
+  opts.max_eager_count = opts.rxbuf_size;
   opts.debug = debug_arg.getValue();
   opts.hardware = hardware_arg.getValue();
   opts.axis3 = axis3_arg.getValue();

@@ -113,7 +113,7 @@ options_t parse_options(int argc, char *argv[]) {
   opts.count = count_arg.getValue();
   opts.rxbuf_size = 4*opts.count; // 4 MB by default
   opts.rxbuf_count = 16;
-  opts.segment_size = opts.rxbuf_size;
+  opts.max_eager_count = opts.rxbuf_size;
   opts.axis3 = axis3_arg.getValue();
 
   opts.benchmark = true;

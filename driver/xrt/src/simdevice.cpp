@@ -50,12 +50,14 @@ void SimRequest::start() {
     function = static_cast<int>(options.reduce_function);
   }
 
+  uint32_t flags = static_cast<uint32_t>(options.host_flags) << 8 | static_cast<uint32_t>(options.stream_flags);
+
   zmq_client_startcall(
       reinterpret_cast<SimDevice *>(cclo_ptr)->get_context(),
       static_cast<int>(options.scenario), options.tag, options.count,
       options.comm, options.root_src_dst, function, options.arithcfg_addr,
       static_cast<int>(options.compression_flags),
-      static_cast<int>(options.stream_flags),
+      static_cast<int>(flags),
       options.addr_0->address(), options.addr_1->address(),
       options.addr_2->address());
 

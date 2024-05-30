@@ -28,15 +28,15 @@ ACCL::Buffer
 Hardware buffers
 **********************************
 
-ACCL::FPGABuffer
+ACCL::XRTBuffer
 ==================================
-.. doxygenclass:: ACCL::FPGABuffer
+.. doxygenclass:: ACCL::XRTBuffer
    :project: ACCL
    :members:
 
-ACCL::FPGABufferP2P
+ACCL::XRTBufferP2P
 ==================================
-.. doxygenclass:: ACCL::FPGABufferP2P
+.. doxygenclass:: ACCL::XRTBufferP2P
    :project: ACCL
    :members:
 

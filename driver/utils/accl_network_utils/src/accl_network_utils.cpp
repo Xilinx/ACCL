@@ -15,6 +15,7 @@
 #
 *******************************************************************************/
 #include <fstream>
+#include <algorithm>
 #include <json/json.h>
 
 #ifdef ACCL_NETWORK_UTILS_MPI
@@ -191,7 +192,7 @@ void configure_vnx(vnx::CMAC &cmac, vnx::Networklayer &network_layer,
   }
 }
 
-void configure_tcp(FPGABuffer<int8_t> &tx_buf_network, FPGABuffer<int8_t> &rx_buf_network,
+void configure_tcp(XRTBuffer<int8_t> &tx_buf_network, XRTBuffer<int8_t> &rx_buf_network,
                    xrt::kernel &network_krnl, xrt::kernel &session_krnl,
                    std::vector<rank_t> &ranks, int local_rank) {
   tx_buf_network.sync_to_device();
@@ -328,13 +329,15 @@ std::vector<rank_t> generate_ranks(bool local, int local_rank, int world_size,
 std::unique_ptr<ACCL::ACCL>
 initialize_accl(std::vector<rank_t> &ranks, int local_rank,
                 bool simulator, acclDesign design, xrt::device device,
-                fs::path xclbin, int nbufs, addr_t bufsize, addr_t segsize,
-                bool rsfec) {
+                fs::path xclbin, unsigned int nbufs, unsigned int bufsize, 
+                unsigned int egrsize, bool rsfec) {
   std::size_t world_size = ranks.size();
   std::unique_ptr<ACCL::ACCL> accl;
 
-  if (segsize == 0) {
-    segsize = bufsize;
+  if (egrsize == 0) {
+    egrsize = bufsize;
+  } else if(egrsize > bufsize){
+    bufsize = egrsize;
   }
 
   if (simulator) {
@@ -378,9 +381,9 @@ initialize_accl(std::vector<rank_t> &ranks, int local_rank,
       // Tx and Rx buffers will not be cleaned up properly and leak memory.
       // They need to live at least as long as ACCL so for now this is the best
       // we can do without requiring the users to allocate the buffers manually.
-      auto tx_buf_network = new FPGABuffer<int8_t>(
+      auto tx_buf_network = new XRTBuffer<int8_t>(
           64 * 1024 * 1024, dataType::int8, device, networkmem);
-      auto rx_buf_network = new FPGABuffer<int8_t>(
+      auto rx_buf_network = new XRTBuffer<int8_t>(
           64 * 1024 * 1024, dataType::int8, device, networkmem);
       auto network_krnl =
           xrt::kernel(device, xclbin_uuid, "network_krnl:{poe_0}",
@@ -394,7 +397,7 @@ initialize_accl(std::vector<rank_t> &ranks, int local_rank,
 
     accl = std::make_unique<ACCL::ACCL>(device, cclo_ip, hostctrl_ip, devicemem, rxbufmem);
   }
-  accl.get()->initialize(ranks, local_rank,	nbufs, bufsize, segsize);
+  accl.get()->initialize(ranks, local_rank,	nbufs, bufsize, egrsize, std::min(nbufs*bufsize, (unsigned int)4*1024*1024));
   return accl;
 }
 } // namespace accl_network_utils
