@@ -15,7 +15,7 @@ runs:
       run: |
         sudo apt-get update
         DEBIAN_FRONTEND=noninteractive sudo apt-get install -y --no-install-recommends wget
-        wget --no-check-certificate https://www.xilinx.com/bin/public/openDownload?filename=xrt_202220.2.14.354_20.04-amd64-xrt.deb -O xrt.deb
+        wget --no-check-certificate -U 'Mozilla' https://www.xilinx.com/bin/public/openDownload?filename=xrt_202220.2.14.354_20.04-amd64-xrt.deb -O xrt.deb
       shell: bash
 
     - name: Save XRT
