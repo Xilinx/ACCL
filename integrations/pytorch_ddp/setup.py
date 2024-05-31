@@ -63,6 +63,7 @@ compile_args = ['-Wno-reorder',
                 '-Wno-sign-compare',
                 '-Wno-unused-but-set-variable',
                 '-DACCL_HARDWARE_SUPPORT',
+                '-DACCL_NETWORK_UTILS_MPI',
                 '-std=c++17',
                 '-g']
 

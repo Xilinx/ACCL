@@ -879,7 +879,7 @@ void ProcessGroupACCL::initialize() {
                                                rsfec_);
     ACCL::debug(std::string("Setting timeout and Threshold"));
     accl->set_timeout(1e6);
-    accl->set_rendezvous_threshold(16*1024);
+    // accl->set_rendezvous_threshold(16*1024);
                                       
     int devicemem = accl->devicemem();
     if (!simulator_) {
