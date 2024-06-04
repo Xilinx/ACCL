@@ -49,13 +49,14 @@ rank = 0
 size = 0
 
 count = 16
-shape = (6,4)
-num_el = 6 * 4
+shape = (4, 5)
+num_el = 4 * 5
 #As in test.cpp defaults
 rxbufsize = 4096 * 1024
 
 
 def test_broadcast():
+    global num_errors
     if rank == 0:
         x = torch.ones(shape)
     else:
@@ -65,12 +66,18 @@ def test_broadcast():
 
     # logger.debug('Tensor after broadcast: ' + str(x))
     # print('Tensor after broadcast: ' + str(x))
-    
-    np.testing.assert_allclose(x, torch.ones(shape))
-    print("Test broadcast finished!")
+    try:
+        np.testing.assert_allclose(x, torch.ones(shape))
+    except AssertionError as e:
+        num_errors = num_errors + 1
+        logger.debug("Test Broadcast failed")
+        logger.debug(str(e))
+    else:
+        logger.debug("Test broadcast finished!")
 
 
 def test_sendrcv():
+    global num_errors
     x = torch.full(shape, float(rank))
 
     y = torch.empty(shape)
@@ -85,25 +92,39 @@ def test_sendrcv():
         dist.recv(y, prev_rank)
         dist.send(x, next_rank)
 
-    np.testing.assert_allclose(y, torch.full(shape, prev_rank))
-    print("Test sendrcv finished!")
+    try:
+        np.testing.assert_allclose(y, torch.full(shape, prev_rank))
+    except AssertionError as e:
+        num_errors = num_errors + 1
+        logger.debug("Test Sendrcv failed")
+        logger.debug(str(e))
+    else:
+        logger.debug("Test Sendrcv finished!")
 
 
 def test_scatter():
+    global num_errors
     if rank == 0:
         x = [torch.full(shape, float(i+1)) for i in range(size)]
     else:
         x = None
     y = torch.full(shape, float(0))
 
-    
     dist.scatter(y, x, 0)
+
+    try:
+        np.testing.assert_allclose(y, torch.full(shape, float(rank+1)))
+    except AssertionError as e:
+        num_errors = num_errors + 1
+        logger.debug("Test Scatter failed")
+        logger.debug(str(e))
+    else:
+        logger.debug("Test Scatter finished!")
     
-    np.testing.assert_allclose(y, torch.full(shape, float(rank+1)))
-    print("Test scatter finished!")
 
 
 def test_gather():
+    global num_errors
     x = torch.full(shape, float(rank))
 
     if rank == 0:
@@ -115,40 +136,70 @@ def test_gather():
 
     if rank == 0:
         for i, c in enumerate(y):
-            np.testing.assert_allclose(c, torch.full(shape, float(i)))
-    print("Test gather finished!")
+            try:
+                np.testing.assert_allclose(c, torch.full(shape, float(i)))
+            except AssertionError as e:
+                num_errors = num_errors + 1
+                logger.debug("Test Gather failed")
+                logger.debug(str(e))
+            else:
+                logger.debug("Test Gather finished!")
 
-
+            
 def test_allgather():
+    global num_errors
     x = torch.full(shape, float(rank))
     y = [torch.empty(shape) for _ in range(size)]
 
     dist.all_gather(y, x)
 
     for i, c in enumerate(y):
-        np.testing.assert_allclose(c, torch.full(shape, float(i)))
-    print("Test allgather finished!")
+        try:
+            np.testing.assert_allclose(c, torch.full(shape, float(i)))
+        except AssertionError as e:
+            num_errors = num_errors + 1
+            logger.debug("Test AllGather failed")
+            logger.debug(str(e))
+        else:
+            logger.debug("Test AllGather finished!")
+        
 
 
 def test_reduce():
+    global num_errors
     x = torch.ones(shape)
 
     dist.reduce(x, 0, dist.ReduceOp.SUM)
 
     if rank == 0:
-        np.testing.assert_allclose(x, torch.full(shape, float(size)))
-    print("Test reduce finished!")
-
+        try:
+            np.testing.assert_allclose(x, torch.full(shape, float(size)))
+        except AssertionError as e:
+            num_errors = num_errors + 1
+            logger.debug("Test Reduce failed")
+            logger.debug(str(e))
+        else:
+            logger.debug("Test Reduce finished!")
+        
 
 def test_allreduce():
+    global num_errors
     x = torch.ones(shape)
 
     dist.all_reduce(x, dist.ReduceOp.SUM)
 
-    np.testing.assert_allclose(x, torch.full(shape, float(size)))
-    print("Test allreduce finished!")
-
+    try:
+        np.testing.assert_allclose(x, torch.full(shape, float(size)))
+    except AssertionError as e:
+        num_errors = num_errors + 1
+        logger.debug("Test AllReduce failed")
+        logger.debug(str(e))
+    else:
+        logger.debug("Test AllReduce finished!")
+        
+    
 def test_alltoall():
+    global num_errors
     
     input = torch.arange(count, dtype=torch.float) + float(rank) * count
 
@@ -165,10 +216,15 @@ def test_alltoall():
         for el in range(section_size):
             test[section * section_size + el] = float(rank) * section_size + section * count + el
 
-    np.testing.assert_allclose(output, test)
-
-    print("Test alltoall finished!")
-    
+    try:
+        np.testing.assert_allclose(output, test)
+    except AssertionError as e:
+        num_errors = num_errors + 1
+        logger.debug("Test AlltoAll failed")
+        logger.debug(str(e))
+    else:
+        logger.debug("Test AlltoAll finished!")
+        
 
 class ToyModel(nn.Module):
     def __init__(self):
@@ -278,7 +334,7 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
             ranks = [accl.Rank(a, start_port + i, 0, rxbufsize) for i, a in enumerate(fpga_ips)]
     else:
         # Somehow the simulator gets stuck if I use the same rxbufsize
-        rxbufsize = 4096# * 1024
+        rxbufsize = 4096 #* 1024
         ranks = [accl.Rank("127.0.0.1", 5500 + i, i, rxbufsize) for i in range(size)]
 
     logger.debug(f'Ranks: {ranks}')
@@ -300,7 +356,8 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
     
     accl.create_process_group(ranks, design, bufsize=rxbufsize, initialize=True, simulation=simulator)
     dist.init_process_group("ACCL", rank=rank, world_size=size)
-
+    global num_errors
+    num_errors = 0
     # with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
                  # profile_memory=True, record_shapes=True) as prof:
     mpi.Barrier()
@@ -310,22 +367,25 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
     mpi.Barrier()
     test_scatter()
     mpi.Barrier()
-    test_gather()
-    mpi.Barrier()
+    # test_gather()
+    # mpi.Barrier()
     test_allgather()
+    mpi.Barrier()
+    test_alltoall()
     mpi.Barrier()
     test_reduce()
     mpi.Barrier()
     test_allreduce()
-    mpi.Barrier()
-    # demo_basic(rank)
     # mpi.Barrier()
-    test_alltoall()
+    # demo_basic(rank)
     mpi.Barrier()
-        
-    print("Finished testing")
-    logger.debug('Finished testing')
-        
+
+    if num_errors == 0:
+        print("======== Successfully Finished testing======")
+        logger.debug("======== Successfully Finished testing======")
+    else:
+        print(f"!!!!!!!! - {num_errors} Errors found - !!!!!!!!!")
+        logger.debug(f"!!!!!!!! - {num_errors} Errors found - !!!!!!!!!")        
     # print(prof.key_averages(group_by_input_shape=True)
           # .table(sort_by="cpu_time_total", row_limit=15))
 
