@@ -648,7 +648,7 @@ void instruction_decode(
                 STREAM_WRITE(eth_insn, pkt_wr);
                 ack_insn.check_eth_tx = true;
                 //if we're not sending to a remote stream, update sequence number
-                if(!pkt_wr.to_stream){
+                if(!pkt_wr.to_stream && !pkt_wr.rendezvous){
                     if(pkt_wr.len <= pkt_wr.max_seg_len){
                         nsegments = 1;
                     } else{
