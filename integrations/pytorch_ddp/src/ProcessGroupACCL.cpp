@@ -47,6 +47,43 @@ using namespace ACCL;
 
 namespace c10d {
 
+// Toggles to run Collectives via OpenMPI instead(To sidestep any issues with them in ACCL)
+#define BROADCAST_SIDESTEP
+#define SCATTER_SIDESTEP
+#define GATHER_SIDESTEP
+    
+// Used in sidestepping
+#define MPI_CHECK(cmd)                                                   \
+  do {                                                                   \
+    int mpiStatus = cmd;                                                 \
+    if (mpiStatus != MPI_SUCCESS) {                                      \
+      std::string err = "MPI error in: " + std::string(__FILE__) + ":" + \
+          std::to_string(__LINE__) +                                     \
+          ", with error code: " + std::to_string(mpiStatus);             \
+      TORCH_CHECK(false, err);                                           \
+    }                                                                    \
+  } while (0)    
+
+// Used in sidestepping    
+// Op mapping
+std::map<ReduceOp::RedOpType, MPI_Op> mpiOp = {
+    {ReduceOp::MIN, MPI_MIN},
+    {ReduceOp::MAX, MPI_MAX},
+    {ReduceOp::SUM, MPI_SUM},
+    {ReduceOp::PRODUCT, MPI_PROD},
+};
+// Used in sidestepping
+// Type mapping
+std::map<at::ScalarType, MPI_Datatype> mpiDatatype = {
+    {at::kByte, MPI_UNSIGNED_CHAR},
+    {at::kChar, MPI_CHAR},
+    {at::kDouble, MPI_DOUBLE},
+    {at::kFloat, MPI_FLOAT},
+    {at::kInt, MPI_INT},
+    {at::kLong, MPI_LONG},
+    {at::kShort, MPI_SHORT},
+};
+    
 #define CEIL_DIV(x, y) ((x) / (y) + ((x) % (y) != 0))
 
 #define ACCL_ERROR(status)                                                     \
@@ -993,19 +1030,34 @@ ProcessGroupACCL::broadcast(std::vector<at::Tensor> &tensors,
   checkSingleTensor(tensors);
   std::function<void(std::unique_ptr<WorkEntry> &)> runFunc =
       [opts, this](std::unique_ptr<WorkEntry> &entry) {
-        at::Tensor &tensor = (entry->src)[0];
+	#ifdef BROADCAST_SIDESTEP
+	auto data = (entry->src)[0];
+	ACCL::debug("[Broadcast] -- Sidestepped using OpenMPI --");
+	c10::DeviceGuard guard(data.device());
+        std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
+        MPI_CHECK(MPI_Bcast(
+            data.data_ptr(),
+            data.numel(),
+            mpiDatatype.at(data.scalar_type()),
+            opts.rootRank,
+            MPI_COMM_WORLD));
+	#else
+	at::Tensor &tensor = (entry->src)[0];
         // Segment data if necessary
         if (tensor.nbytes() > bufsize) {
-          size_t n = bufsize / tensor.itemsize();
+	  size_t non_zero_dim_count = tensor.numel() / tensor.size(0);
+          size_t n = bufsize / tensor.itemsize() / non_zero_dim_count;
 	  ACCL::debug("[Broadcast] Segmenting tensor of size " + std::to_string(tensor.nbytes()) + " into " + std::to_string(n) + "-sized elements ");
-          for (size_t i = 0; i < tensor.numel(); i += n) {
-            size_t end = std::min(i + n, static_cast<size_t>(tensor.numel()));
+          for (size_t i = 0; i < tensor.size(0); i += n) {
+	    ACCL::debug("part " + std::to_string(i) + "!");
+            size_t end = std::min(i + n, static_cast<size_t>(tensor.size(0)));
             run_broadcast(tensor.slice(0, i, end), opts);
           }
         } else {
 	  ACCL::debug("[Broadcast] Broadcasting entire tensor of size " + std::to_string(tensor.nbytes()) + " without segmentation.");
           run_broadcast(tensor, opts);
         }
+	#endif
       };
   auto entry =
       std::make_unique<WorkEntry>(&tensors, &tensors, std::move(runFunc));
@@ -1240,6 +1292,38 @@ ProcessGroupACCL::gather(std::vector<std::vector<at::Tensor>> &outputTensors,
 
   std::function<void(std::unique_ptr<WorkEntry> &)> runFunc =
       [opts, this](std::unique_ptr<WorkEntry> &entry) {
+	#ifdef GATHER_SIDESTEP
+	ACCL::debug("[Gather] -- Sidestepped using OpenMPI --");
+	  auto data = (entry->src)[0];
+        void* recvbuf = nullptr;
+        at::Tensor flatOutputTensor;
+
+        std::vector<at::Tensor> dstdata = entry->dst;
+        if (rank_ == opts.rootRank) {
+          flatOutputTensor = newLikeFlat(dstdata);
+          recvbuf = flatOutputTensor.data_ptr();
+        }
+
+        c10::DeviceGuard guard(data.device());
+        std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
+        MPI_CHECK(MPI_Gather(
+            data.data_ptr(),
+            data.numel(),
+            mpiDatatype.at(data.scalar_type()),
+            recvbuf,
+            data.numel(),
+            mpiDatatype.at(data.scalar_type()),
+            opts.rootRank,
+            MPI_COMM_WORLD));
+
+        if (rank_ == opts.rootRank) {
+          const std::vector<at::Tensor>& outputDataVec = entry->dst;
+          // copy the flattened output tensors to the outputs
+          for (const auto i : c10::irange(outputDataVec.size())) {
+            outputDataVec.at(i).copy_(flatOutputTensor[i]);
+          }
+        }
+	#else
         auto srctensor = (entry->src)[0];
         auto &dsttensors = entry->dst;
         // Segment data if necessary
@@ -1257,6 +1341,7 @@ ProcessGroupACCL::gather(std::vector<std::vector<at::Tensor>> &outputTensors,
         } else {
           run_gather(srctensor, dsttensors, opts);
         }
+      #endif
       };
 
   if (rank_ == opts.rootRank) {
@@ -1322,16 +1407,46 @@ ProcessGroupACCL::scatter(std::vector<at::Tensor> &outputTensors,
 
   std::function<void(std::unique_ptr<WorkEntry> &)> runFunc =
       [opts, this](std::unique_ptr<WorkEntry> &entry) {
+        #ifdef SCATTER_SIDESTEP
+	ACCL::debug("[Scatter] -- Sidestepped using OpenMPI --");
+	auto data = (entry->dst)[0];
+        void* sendbuf = nullptr;
+        at::Tensor flatInputTensor;
+
+        if (rank_ == opts.rootRank) {
+          std::vector<at::Tensor>& inputDataVec = entry->src;
+          flatInputTensor = newLikeFlat(inputDataVec);
+          sendbuf = flatInputTensor.data_ptr();
+
+          // copy the input tensors to the flatten large send buffer
+          for (const auto i : c10::irange(inputDataVec.size())) {
+            flatInputTensor[i].copy_(inputDataVec.at(i));
+          }
+        }
+
+        c10::DeviceGuard guard(data.device());
+        std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
+        MPI_CHECK(MPI_Scatter(
+            sendbuf,
+            data.numel(),
+            mpiDatatype.at(data.scalar_type()),
+            data.data_ptr(),
+            data.numel(),
+            mpiDatatype.at(data.scalar_type()),
+            opts.rootRank,
+            MPI_COMM_WORLD));
+        #else
         auto &srctensors = entry->src;
         auto dsttensor = (entry->dst)[0];
         // Segment data if necessary
         if (dsttensor.nbytes() > bufsize) {
           ACCL::debug("dsttensor to large!");
-          size_t n = bufsize / dsttensor.itemsize();
-          for (size_t i = 0; i < dsttensor.numel(); i += n) {
+	  size_t non_zero_dim_count = dsttensor.numel() / dsttensor.size(0);
+          size_t n = bufsize / dsttensor.itemsize() / non_zero_dim_count;
+          for (size_t i = 0; i < dsttensor.size(0); i += n) {
             ACCL::debug("part " + std::to_string(i) + "!");
             size_t end =
-                std::min(i + n, static_cast<size_t>(dsttensor.numel()));
+                std::min(i + n, static_cast<size_t>(dsttensor.size(0)));
             std::vector<at::Tensor> srctensorslices;
             srctensorslices.reserve(srctensors.size());
             for (auto &srctensor : srctensors) {
@@ -1342,6 +1457,7 @@ ProcessGroupACCL::scatter(std::vector<at::Tensor> &outputTensors,
         } else {
           run_scatter(srctensors, dsttensor, opts);
         }
+        #endif
       };
 
   if (rank_ == opts.rootRank) {
