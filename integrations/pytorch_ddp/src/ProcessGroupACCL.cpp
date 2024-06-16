@@ -115,14 +115,31 @@ std::map<at::ScalarType, MPI_Datatype> mpiDatatype = {
 #define PRE_REQUEST(opname, tensor)					\
   ACCL::debug("[" #opname "] Entering barrier");				\
   accl->barrier();							\
-  ACCL::debug("Starting " #opname " of " + std::to_string(tensor.numel()) + " items");
+  ACCL::debug("Starting " #opname " of " + std::to_string(tensor.numel()) + " items"); \
+  auto start = std::chrono::high_resolution_clock::now();
 
 #define POST_REQUEST					\
 if(coyote_enabled){					\
+  double durationUs = 0.0;				\
   ACCL::debug("Waiting for request to complete.");	\
-  accl->wait(req, 1000ms);				\
-}							\
+  bool ret = accl->wait(req, 20000ms);			\
+  if(ret == false){					\
+      ACCL::debug("!!!!!!! Timeout !!!!!!!");		\
+  }							\
+  auto end = std::chrono::high_resolution_clock::now();			\
+  durationUs = (std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() / 1000.0); \
+  ACCL::debug("host measured durationUs:" + std::to_string(durationUs)); \
+  std::this_thread::sleep_for(10ms);					\
+  durationUs = (double)accl->get_duration(req)/1000.0;			\
+  if(durationUs > 1.0){							\
+      ACCL::debug("ACCL measured durationUs:" + std::to_string(durationUs)); \
+  }									\
+}									\
 ACCL::debug("Finished waiting");
+
+// Better logging
+// accl_log(mpi_rank, format_log("bcast", options, durationUs, 0));	\
+
   
 namespace {
 

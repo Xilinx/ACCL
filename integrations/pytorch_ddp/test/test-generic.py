@@ -49,25 +49,28 @@ rank = 0
 size = 0
 
 count = 16
-shape = (4, 5)
-num_el = 4 * 5
+shape = (64,)
+num_el = 64
 #As in test.cpp defaults
 rxbufsize = 4096 * 1024
 
 
-def test_broadcast():
-    global num_errors
-    if rank == 0:
-        x = torch.ones(shape)
-    else:
-        x = torch.zeros(shape)
+def test_broadcast_segment():
+    with torch.profiler.record_function("test bcast segmented"):
+        global num_errors
+        shape_segment = (1024 * 1024,)
+        if rank == 0:
+            x = torch.ones(shape_segment, dtype=torch.float)
+        else:
+            x = torch.zeros(shape_segment, dtype=torch.float)
 
-    dist.broadcast(x, 0)
+        dist.broadcast(x, 0)
 
-    # logger.debug('Tensor after broadcast: ' + str(x))
-    # print('Tensor after broadcast: ' + str(x))
+        mpi.Barrier()            
+        # logger.debug('Tensor after broadcast: ' + str(x))
+        # print('Tensor after broadcast: ' + str(x))
     try:
-        np.testing.assert_allclose(x, torch.ones(shape))
+        np.testing.assert_allclose(x, torch.ones(shape_segment, dtype=torch.float))
     except AssertionError as e:
         num_errors = num_errors + 1
         logger.debug("Test Broadcast failed")
@@ -75,23 +78,71 @@ def test_broadcast():
     else:
         logger.debug("Test broadcast finished!")
 
+def test_broadcast():
+    with torch.profiler.record_function("test bcast double prec"):
+        global num_errors
+        if rank == 0:
+            x = torch.ones(shape, dtype=torch.double)
+        else:
+            x = torch.zeros(shape, dtype=torch.double)
 
-def test_sendrcv():
-    global num_errors
-    x = torch.full(shape, float(rank))
+        dist.broadcast(x, 0)
 
-    y = torch.empty(shape)
-
-    prev_rank = (rank - 1) % size
-    next_rank = (rank + 1) % size
-
-    if rank % 2:
-        dist.send(x, next_rank)
-        dist.recv(y, prev_rank)
+        mpi.Barrier()            
+        
+    # logger.debug('Tensor after broadcast: ' + str(x))
+    # print('Tensor after broadcast: ' + str(x))
+    try:
+        np.testing.assert_allclose(x, torch.ones(shape, dtype=torch.double))
+    except AssertionError as e:
+        num_errors = num_errors + 1
+        logger.debug("Test Broadcast failed")
+        logger.debug(str(e))
     else:
-        dist.recv(y, prev_rank)
-        dist.send(x, next_rank)
+        logger.debug("Test broadcast finished!")
 
+def test_broadcast_2():
+    with torch.profiler.record_function("test bcast float prec"):
+        test_type = torch.float
+        shape_2 = (204, 2)
+        global num_errors
+        if rank == 0:
+            x = torch.ones(shape_2, dtype=test_type)
+        else:
+            x = torch.zeros(shape_2, dtype=test_type)
+
+        dist.broadcast(x, 0)
+        mpi.Barrier()            
+
+    # logger.debug('Tensor after broadcast: ' + str(x))
+    # print('Tensor after broadcast: ' + str(x))
+    try:
+        np.testing.assert_allclose(x, torch.ones(shape_2, dtype=test_type))
+    except AssertionError as e:
+        num_errors = num_errors + 1
+        logger.debug("Test Broadcast failed")
+        logger.debug(str(e))
+    else:
+        logger.debug("Test broadcast finished!")
+
+        
+def test_sendrcv():
+    with torch.profiler.record_function("test_sendrcv"):
+        global num_errors
+        x = torch.full(shape, float(rank))
+
+        y = torch.empty(shape)
+
+        prev_rank = (rank - 1) % size
+        next_rank = (rank + 1) % size
+
+        if rank % 2:
+            dist.send(x, next_rank)
+            dist.recv(y, prev_rank)
+        else:
+            dist.recv(y, prev_rank)
+            dist.send(x, next_rank)
+        mpi.Barrier()
     try:
         np.testing.assert_allclose(y, torch.full(shape, prev_rank))
     except AssertionError as e:
@@ -103,15 +154,16 @@ def test_sendrcv():
 
 
 def test_scatter():
-    global num_errors
-    if rank == 0:
-        x = [torch.full(shape, float(i+1)) for i in range(size)]
-    else:
-        x = None
-    y = torch.full(shape, float(0))
+    with torch.profiler.record_function("test_scatter"):
+        global num_errors
+        if rank == 0:
+            x = [torch.full(shape, float(i+1)) for i in range(size)]
+        else:
+            x = None
+        y = torch.full(shape, float(0))
 
-    dist.scatter(y, x, 0)
-
+        dist.scatter(y, x, 0)
+        mpi.Barrier()
     try:
         np.testing.assert_allclose(y, torch.full(shape, float(rank+1)))
     except AssertionError as e:
@@ -124,16 +176,17 @@ def test_scatter():
 
 
 def test_gather():
-    global num_errors
-    x = torch.full(shape, float(rank))
+    with torch.profiler.record_function("test_gather"):
+        global num_errors
+        x = torch.full(shape, float(rank))
 
-    if rank == 0:
-        y = [torch.empty(shape) for _ in range(size)]
-    else:
-        y = None
+        if rank == 0:
+            y = [torch.empty(shape) for _ in range(size)]
+        else:
+            y = None
 
-    dist.gather(x, y, 0)
-
+        dist.gather(x, y, 0)
+        mpi.Barrier()
     if rank == 0:
         for i, c in enumerate(y):
             try:
@@ -147,15 +200,17 @@ def test_gather():
 
             
 def test_allgather():
-    global num_errors
-    x = torch.full(shape, float(rank))
-    y = [torch.empty(shape) for _ in range(size)]
+    with torch.profiler.record_function("test_allgather"):
+        global num_errors
+        shape_gather = (1,)
+        x = torch.full(shape_gather, float(rank), dtype=torch.double)
+        y = [torch.empty(shape_gather, dtype=torch.double) for _ in range(size)]
 
-    dist.all_gather(y, x)
-
+        dist.all_gather(y, x)
+        mpi.Barrier()
     for i, c in enumerate(y):
         try:
-            np.testing.assert_allclose(c, torch.full(shape, float(i)))
+            np.testing.assert_allclose(c, torch.full(shape_gather, float(i), dtype=torch.double))
         except AssertionError as e:
             num_errors = num_errors + 1
             logger.debug("Test AllGather failed")
@@ -166,11 +221,12 @@ def test_allgather():
 
 
 def test_reduce():
-    global num_errors
-    x = torch.ones(shape)
+    with torch.profiler.record_function("test_reduce"):
+        global num_errors
+        x = torch.ones(shape)
 
-    dist.reduce(x, 0, dist.ReduceOp.SUM)
-
+        dist.reduce(x, 0, dist.ReduceOp.SUM)
+        mpi.Barrier()            
     if rank == 0:
         try:
             np.testing.assert_allclose(x, torch.full(shape, float(size)))
@@ -183,11 +239,13 @@ def test_reduce():
         
 
 def test_allreduce():
-    global num_errors
-    x = torch.ones(shape)
+    with torch.profiler.record_function("test_allreduce"):
+        global num_errors
+        x = torch.ones(shape)
 
-    dist.all_reduce(x, dist.ReduceOp.SUM)
-
+        dist.all_reduce(x, dist.ReduceOp.SUM)
+        mpi.Barrier()
+        
     try:
         np.testing.assert_allclose(x, torch.full(shape, float(size)))
     except AssertionError as e:
@@ -199,15 +257,18 @@ def test_allreduce():
         
     
 def test_alltoall():
-    global num_errors
-    
-    input = torch.arange(count, dtype=torch.float) + float(rank) * count
+    with torch.profiler.record_function("test_alltoall"):
+        global num_errors
+
+        input = torch.arange(count, dtype=torch.float) + float(rank) * count
 
 
-    output = torch.ones(count)
+        output = torch.ones(count)
 
-    dist.all_to_all_single(output, input)
-    
+        dist.all_to_all_single(output, input)
+
+        mpi.Barrier()
+
     test = torch.zeros(count)
 
     section_size = int(count/size)
@@ -269,32 +330,36 @@ def prepare_dataloader(dataset: Dataset, batch_size: int):
     )    
     
 def demo_basic(rank: int):
-    model = ToyModel()
-    ddp_model = DDP(model)
 
-    train_set = MyTrainDataset(2048)  # load your dataset
-    batch_size=64
-    train_data = prepare_dataloader(train_set, batch_size)
-    
-    loss_fn = nn.MSELoss()
-    optimizer = optim.Adam(ddp_model.parameters(), lr=0.005)
-
-    max_epochs = 20
-    for epoch in range(max_epochs):
-        batch_size = len(next(iter(train_data))[0])
-        train_data.sampler.set_epoch(epoch)
-        for x, y in train_data:
-            
-            optimizer.zero_grad()
-            outputs = ddp_model(x)
-            loss = loss_fn(outputs, y)
-            loss.backward()
-            optimizer.step()
-
-        print(f"Rank {rank}: Epoch {epoch} | Batchsize: {batch_size} | Steps: {len(train_data)} | Loss: {loss}")
+    with torch.profiler.record_function("basic 2 Layer NN"):
+        model = ToyModel()
+        ddp_model = DDP(model)
+        # ddp_model = DDP(model, bucket_cap_mb=4, broadcast_buffers=False)
         
+        train_set = MyTrainDataset(2048)  # load your dataset
+        batch_size=64
+        train_data = prepare_dataloader(train_set, batch_size)
 
-    print("finished training")
+        loss_fn = nn.MSELoss()
+        optimizer = optim.Adam(ddp_model.parameters(), lr=0.005)
+
+        max_epochs = 20
+        for epoch in range(max_epochs):
+            batch_size = len(next(iter(train_data))[0])
+            train_data.sampler.set_epoch(epoch)
+            for x, y in train_data:
+
+                optimizer.zero_grad()
+                outputs = ddp_model(x)
+                loss = loss_fn(outputs, y)
+                loss.backward()
+                optimizer.step()
+
+            print(f"Rank {rank}: Epoch {epoch} | Batchsize: {batch_size} | Steps: {len(train_data)} | Loss: {loss}")
+
+
+        print("finished training")
+        mpi.Barrier()
     # print("final params:")
     # print(ddp_model)
     # dist.destroy_process_group()
@@ -358,27 +423,23 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
     dist.init_process_group("ACCL", rank=rank, world_size=size)
     global num_errors
     num_errors = 0
-    # with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
-                 # profile_memory=True, record_shapes=True) as prof:
-    mpi.Barrier()
-    test_broadcast()
-    mpi.Barrier()
-    test_sendrcv()
-    mpi.Barrier()
-    test_scatter()
-    mpi.Barrier()
-    # test_gather()
-    # mpi.Barrier()
-    test_allgather()
-    mpi.Barrier()
-    test_alltoall()
-    mpi.Barrier()
-    test_reduce()
-    mpi.Barrier()
-    test_allreduce()
-    # mpi.Barrier()
-    # demo_basic(rank)
-    mpi.Barrier()
+    with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+                 profile_memory=True, record_shapes=True) as prof:
+
+        # test_allgather()
+        # test_broadcast_segment()
+        test_broadcast()
+        # test_broadcast()
+        # test_broadcast_2()
+        # test_sendrcv()
+        test_scatter()
+        test_gather()
+        # test_allgather()
+        # test_alltoall()
+        # test_reduce()
+        # test_allreduce()
+        # demo_basic(rank)
+        # mpi.Barrier()
 
     if num_errors == 0:
         print("======== Successfully Finished testing======")
@@ -386,8 +447,8 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
     else:
         print(f"!!!!!!!! - {num_errors} Errors found - !!!!!!!!!")
         logger.debug(f"!!!!!!!! - {num_errors} Errors found - !!!!!!!!!")        
-    # print(prof.key_averages(group_by_input_shape=True)
-          # .table(sort_by="cpu_time_total", row_limit=15))
+    print(prof.key_averages(group_by_input_shape=True)
+          .table(sort_by="cpu_time_total", row_limit=15))
 
     logger.debug('Destroying ACCL Process Group')
     dist.destroy_process_group()
