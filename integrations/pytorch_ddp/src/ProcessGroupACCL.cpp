@@ -48,9 +48,12 @@ using namespace ACCL;
 namespace c10d {
 
 // Toggles to run Collectives via OpenMPI instead(To sidestep any issues with them in ACCL)
-#define BROADCAST_SIDESTEP
-#define SCATTER_SIDESTEP
-#define GATHER_SIDESTEP
+// The sidestep-code is copied from the ProcessGroupMPI
+// #define BROADCAST_SIDESTEP
+// #define SCATTER_SIDESTEP
+// #define GATHER_SIDESTEP
+// #define ALLGATHER_SIDESTEP
+// #define ALLREDUCE_SIDESTEP
     
 // Used in sidestepping
 #define MPI_CHECK(cmd)                                                   \
@@ -1111,6 +1114,18 @@ ProcessGroupACCL::allreduce(std::vector<at::Tensor> &tensors,
 
   std::function<void(std::unique_ptr<WorkEntry> &)> runFunc =
       [opts, this](std::unique_ptr<WorkEntry> &entry) {
+        #ifdef ALLREDUCE_SIDESTEP
+	auto data = (entry->src)[0];
+        c10::DeviceGuard guard(data.device());
+        std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
+        MPI_CHECK(MPI_Allreduce(
+            MPI_IN_PLACE,
+            data.data_ptr(),
+            data.numel(),
+            mpiDatatype.at(data.scalar_type()),
+            mpiOp.at(opts.reduceOp),
+            MPI_COMM_WORLD));
+        #else
         auto tensor = (entry->src)[0];
         // Segment data if necessary
         if (tensor.nbytes() > bufsize) {
@@ -1122,6 +1137,7 @@ ProcessGroupACCL::allreduce(std::vector<at::Tensor> &tensors,
         } else {
           run_allreduce(tensor, opts);
         }
+      #endif
       };
   auto entry =
       std::make_unique<WorkEntry>(&tensors, &tensors, std::move(runFunc));
@@ -1226,6 +1242,27 @@ ProcessGroupACCL::allgather(std::vector<std::vector<at::Tensor>> &outputTensors,
 
   std::function<void(std::unique_ptr<WorkEntry> &)> runFunc =
       [this](std::unique_ptr<WorkEntry> &entry) {
+        #ifdef ALLGATHER_SIDESTEP
+	ACCL::debug("[AllGather] -- Sidestepped using OpenMPI --");
+	auto data = (entry->src)[0];
+        std::vector<at::Tensor> outputDataVec = entry->dst;
+        auto flatOutputTensor = newLikeFlat(outputDataVec);
+
+        c10::DeviceGuard guard(data.device());
+        std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
+        MPI_CHECK(MPI_Allgather(
+            data.data_ptr(),
+            data.numel(),
+            mpiDatatype.at(data.scalar_type()),
+            flatOutputTensor.data_ptr(),
+            data.numel(),
+            mpiDatatype.at(data.scalar_type()),
+            MPI_COMM_WORLD));
+
+        for (const auto i : c10::irange(outputDataVec.size())) {
+          outputDataVec[i].copy_(flatOutputTensor[i]);
+        }
+        #else
         auto srctensor = (entry->src)[0];
         auto &dsttensors = entry->dst;
         // Segment data if necessary
@@ -1244,6 +1281,7 @@ ProcessGroupACCL::allgather(std::vector<std::vector<at::Tensor>> &outputTensors,
         } else {
           run_allgather(srctensor, dsttensors);
         }
+      #endif
       };
   auto entry = std::make_unique<WorkEntry>(&inputTensors, &outputTensors[0],
                                            std::move(runFunc));
