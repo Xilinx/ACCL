@@ -122,13 +122,13 @@ std::map<at::ScalarType, MPI_Datatype> mpiDatatype = {
   auto start = std::chrono::high_resolution_clock::now();
 
 #define POST_REQUEST					\
-if(coyote_enabled){					\
-  double durationUs = 0.0;				\
-  ACCL::debug("Waiting for request to complete.");	\
-  bool ret = accl->wait(req, 20000ms);			\
-  if(ret == false){					\
-      ACCL::debug("!!!!!!! Timeout !!!!!!!");		\
-  }							\
+double durationUs = 0.0;				\
+ACCL::debug("Waiting for request to complete.");	\
+bool ret = accl->wait(req, 20000ms);			\
+if(ret == false){					\
+    ACCL::debug("!!!!!!! Timeout !!!!!!!");		\
+}									\
+if(coyote_enabled){							\
   auto end = std::chrono::high_resolution_clock::now();			\
   durationUs = (std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() / 1000.0); \
   ACCL::debug("host measured durationUs:" + std::to_string(durationUs)); \
