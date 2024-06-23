@@ -42,8 +42,32 @@ source venv/bin/activate
 </details>
 
 ## Running the plugin
+
 Make sure to source the `setup.sh` script in this directory to load the ACCL plugin before starting a Python script.
 Example usage can be found in the various test files under [`test/`](test).
 
 Do make sure not to run python from within the root directory of `pytorch_ddp`, because Python will try to import the
 local incomplete [`accl_process_group/`](accl_process_group) folder instead of the actual installation.
+
+The provided test/run.sh will launch a testscript via mpirun
+
+## Setup overview
+
+- The whole Processgroup is wrapped in OpenMPI, which is used for initialization
+- You can use the OpenMPI implementation of certain collectives using the "sidestep" flags in the ProcessGroupACCL.cpp
+- Compilation using `./install` or `pip install .` can be very slow, you can run `python setup.py build_ext --inplace` and then copy the binary or other files directly. `cp accl_process_group/_c/ProcessGroupACCL.cpython-38-x86_64-linux-gnu.so ~/.local/lib/python3.8/site-packages/accl_process_group/_c/`
+- The `install.py` script will not reinstall the driver in case of ACCL updates. You will need to rebuild it yourself
+- Set `ACCL_DEBUG=1` if you want more output(also set during build). Stdout is sometimes not complete(in simulator), so best log most things in stderr
+- ACCL only supports sizes up to 4MB, If you give it tensors of higher sizes, the PG will try to segment it in first dim. Not all collectives correctly handle multi-dimensional tensors yet. 
+- Setting up the simulator with 4MB takes long, better set it lower.
+
+### How to install torchvision
+
+- install torch using the script
+- clone vision, go to the fitting version v0.16.0
+- clone libpng, configure with prefix set to local directory
+- add the bin to the path
+- not sure if needed: supply the path of the library and include to torchvision as in their development doc
+- disable the version check in torchvision setup.py, because it doesn't correctly parse the version.
+- run vision setup.py with debug, include, library and use png flags
+
