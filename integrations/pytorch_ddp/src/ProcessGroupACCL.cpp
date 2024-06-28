@@ -1312,10 +1312,11 @@ ProcessGroupACCL::allgather(std::vector<std::vector<at::Tensor>> &outputTensors,
         auto &dsttensors = entry->dst;
         // Segment data if necessary
         if (srctensor.nbytes() > bufsize) {
-          size_t n = bufsize / srctensor.itemsize();
-          for (size_t i = 0; i < srctensor.numel(); i += n) {
+	  size_t non_zero_dim_count = srctensor.numel() / srctensor.size(0);
+          size_t n = bufsize / srctensor.itemsize() / non_zero_dim_count;
+          for (size_t i = 0; i < srctensor.size(0); i += n) {
             size_t end =
-                std::min(i + n, static_cast<size_t>(srctensor.numel()));
+                std::min(i + n, static_cast<size_t>(srctensor.size(0)));
             std::vector<at::Tensor> dsttensorslices;
             dsttensorslices.reserve(dsttensors.size());
             for (auto &dsttensor : dsttensors) {
@@ -1428,10 +1429,12 @@ ProcessGroupACCL::gather(std::vector<std::vector<at::Tensor>> &outputTensors,
         auto &dsttensors = entry->dst;
         // Segment data if necessary
         if (srctensor.nbytes() > bufsize) {
-          size_t n = bufsize / srctensor.itemsize();
-          for (size_t i = 0; i < srctensor.numel(); i += n) {
+	  size_t non_zero_dim_count = srctensor.numel() / srctensor.size(0);
+          size_t n = bufsize / srctensor.itemsize() / non_zero_dim_count;
+	  ACCL::debug("[Gather] Segmenting tensor of size " + std::to_string(tensor.nbytes()) + " into " + std::to_string(n * non_zero_dim_count) + "-sized elements ");
+          for (size_t i = 0; i < srctensor.size(0); i += n) {
             size_t end =
-                std::min(i + n, static_cast<size_t>(srctensor.numel()));            std::vector<at::Tensor> dsttensorslices;
+                std::min(i + n, static_cast<size_t>(srctensor.size(0)));            std::vector<at::Tensor> dsttensorslices;
             dsttensorslices.reserve(dsttensors.size());
             for (auto &dsttensor : dsttensors) {
               dsttensorslices.emplace_back(dsttensor.slice(0, i, end));
