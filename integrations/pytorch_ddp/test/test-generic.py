@@ -21,6 +21,7 @@ import numpy as np
 import os
 import sys
 import logging
+import time
 from mpi4py.MPI import COMM_WORLD as mpi
 
 import torch
@@ -49,21 +50,22 @@ rank = 0
 size = 0
 
 count = 16
-shape = (64,)
-num_el = 64
+num_el = 256
+shape = (num_el,)
 #As in test.cpp defaults
 rxbufsize = 4096 * 1024
 
 
 def test_broadcast_segment():
-    with torch.profiler.record_function("test bcast segmented"):
-        global num_errors
-        shape_segment = (1024 * 1024,)
-        if rank == 0:
-            x = torch.ones(shape_segment, dtype=torch.float)
-        else:
-            x = torch.zeros(shape_segment, dtype=torch.float)
+    global num_errors
+    shape_segment = (1024 * 1024,)
+    if rank == 0:
+        x = torch.ones(shape_segment, dtype=torch.float)
+    else:
+        x = torch.zeros(shape_segment, dtype=torch.float)
 
+    with torch.profiler.record_function("test bcast segmented"):
+            
         dist.broadcast(x, 0)
 
         mpi.Barrier()            
@@ -79,21 +81,37 @@ def test_broadcast_segment():
         logger.debug("Test broadcast finished!")
 
 def test_broadcast():
-    with torch.profiler.record_function("test bcast double prec"):
-        global num_errors
-        if rank == 0:
-            x = torch.ones(shape, dtype=torch.double)
-        else:
-            x = torch.zeros(shape, dtype=torch.double)
+    global num_errors
+    if rank == 0:
+        x = torch.ones(shape)
+    else:
+        x = torch.zeros(shape)
 
-        dist.broadcast(x, 0)
+    for i in range(10):
+        with torch.profiler.record_function("test bcast " + str(i)):
 
-        mpi.Barrier()            
-        
+            start_time = time.perf_counter()
+
+            dist.broadcast(x, 0)
+
+            end_time = time.perf_counter()
+            
+            measured_time = (end_time - start_time) * 1000000
+            
+            logger.debug("Directly measured time us 1:" + str(measured_time))
+            
+            mpi.Barrier()
+
+            end_time = time.perf_counter()
+
+            measured_time = (end_time - start_time) * 1000000
+
+            logger.debug("Directly measured time us 2:" + str(measured_time))
+
     # logger.debug('Tensor after broadcast: ' + str(x))
     # print('Tensor after broadcast: ' + str(x))
     try:
-        np.testing.assert_allclose(x, torch.ones(shape, dtype=torch.double))
+        np.testing.assert_allclose(x, torch.ones(shape))
     except AssertionError as e:
         num_errors = num_errors + 1
         logger.debug("Test Broadcast failed")
@@ -102,15 +120,15 @@ def test_broadcast():
         logger.debug("Test broadcast finished!")
 
 def test_broadcast_2():
-    with torch.profiler.record_function("test bcast float prec"):
-        test_type = torch.float
-        shape_2 = (204, 2)
-        global num_errors
-        if rank == 0:
-            x = torch.ones(shape_2, dtype=test_type)
-        else:
-            x = torch.zeros(shape_2, dtype=test_type)
+    test_type = torch.float
+    shape_2 = (204, 2)
+    global num_errors
+    if rank == 0:
+        x = torch.ones(shape_2, dtype=test_type)
+    else:
+        x = torch.zeros(shape_2, dtype=test_type)
 
+    with torch.profiler.record_function("test bcast float prec"):
         dist.broadcast(x, 0)
         mpi.Barrier()            
 
@@ -127,14 +145,16 @@ def test_broadcast_2():
 
         
 def test_sendrcv():
+    global num_errors
+    x = torch.full(shape, float(rank))
+
+    y = torch.empty(shape)
+
+    prev_rank = (rank - 1) % size
+    next_rank = (rank + 1) % size
+
+
     with torch.profiler.record_function("test_sendrcv"):
-        global num_errors
-        x = torch.full(shape, float(rank))
-
-        y = torch.empty(shape)
-
-        prev_rank = (rank - 1) % size
-        next_rank = (rank + 1) % size
 
         if rank % 2:
             dist.send(x, next_rank)
@@ -154,14 +174,15 @@ def test_sendrcv():
 
 
 def test_scatter():
-    with torch.profiler.record_function("test_scatter"):
-        global num_errors
-        if rank == 0:
-            x = [torch.full(shape, float(i+1)) for i in range(size)]
-        else:
-            x = None
-        y = torch.full(shape, float(0))
+    global num_errors
+    if rank == 0:
+        x = [torch.full(shape, float(i+1)) for i in range(size)]
+    else:
+        x = None
+    y = torch.full(shape, float(0))
 
+    with torch.profiler.record_function("test_scatter"):
+        
         dist.scatter(y, x, 0)
         mpi.Barrier()
     try:
@@ -176,15 +197,16 @@ def test_scatter():
 
 
 def test_gather():
+    global num_errors
+    x = torch.full(shape, float(rank))
+
+    if rank == 0:
+        y = [torch.empty(shape) for _ in range(size)]
+    else:
+        y = None
+
     with torch.profiler.record_function("test_gather"):
-        global num_errors
-        x = torch.full(shape, float(rank))
-
-        if rank == 0:
-            y = [torch.empty(shape) for _ in range(size)]
-        else:
-            y = None
-
+            
         dist.gather(x, y, 0)
         mpi.Barrier()
     if rank == 0:
@@ -200,12 +222,14 @@ def test_gather():
 
             
 def test_allgather():
-    with torch.profiler.record_function("test_allgather"):
-        global num_errors
-        shape_gather = (1,)
-        x = torch.full(shape_gather, float(rank), dtype=torch.double)
-        y = [torch.empty(shape_gather, dtype=torch.double) for _ in range(size)]
+    global num_errors
+    shape_gather = (1,)
+    x = torch.full(shape_gather, float(rank), dtype=torch.double)
+    y = [torch.empty(shape_gather, dtype=torch.double) for _ in range(size)]
 
+    with torch.profiler.record_function("test_allgather"):
+        
+        
         dist.all_gather(y, x)
         mpi.Barrier()
     for i, c in enumerate(y):
@@ -221,9 +245,10 @@ def test_allgather():
 
 
 def test_reduce():
+    global num_errors
+    x = torch.ones(shape)
+
     with torch.profiler.record_function("test_reduce"):
-        global num_errors
-        x = torch.ones(shape)
 
         dist.reduce(x, 0, dist.ReduceOp.SUM)
         mpi.Barrier()            
@@ -239,10 +264,11 @@ def test_reduce():
         
 
 def test_allreduce():
-    with torch.profiler.record_function("test_allreduce"):
-        global num_errors
-        x = torch.ones(shape)
+    global num_errors
+    x = torch.ones(shape)
 
+    with torch.profiler.record_function("test_allreduce"):
+        
         dist.all_reduce(x, dist.ReduceOp.SUM)
         mpi.Barrier()
         
@@ -257,14 +283,14 @@ def test_allreduce():
         
     
 def test_alltoall():
+    global num_errors
+
+    input = torch.arange(count, dtype=torch.float) + float(rank) * count
+
+    output = torch.ones(count)
+
     with torch.profiler.record_function("test_alltoall"):
-        global num_errors
-
-        input = torch.arange(count, dtype=torch.float) + float(rank) * count
-
-
-        output = torch.ones(count)
-
+        
         dist.all_to_all_single(output, input)
 
         mpi.Barrier()
@@ -307,6 +333,7 @@ class MyTrainDataset(Dataset):
             out_feature = torch.zeros(5)
             for j in range(10):
                 in_feature[j] = float((i^2  + j) % 5)
+                # try to learn a linear function of the input, to make sure it's parameterizable
                 out_feature[j//2] = out_feature[j//2] + float(((i^2 + j) % 5) * 3 * ( -1 ** (j % 2)))
             self.data.append((in_feature, out_feature))
                 
@@ -333,7 +360,7 @@ def demo_basic(rank: int):
 
     with torch.profiler.record_function("basic 2 Layer NN"):
         model = ToyModel()
-        ddp_model = DDP(model)
+        ddp_model = DDP(model, bucket_cap_mb=4)
         # ddp_model = DDP(model, bucket_cap_mb=4, broadcast_buffers=False)
         
         train_set = MyTrainDataset(2048)  # load your dataset
@@ -343,7 +370,7 @@ def demo_basic(rank: int):
         loss_fn = nn.MSELoss()
         optimizer = optim.Adam(ddp_model.parameters(), lr=0.005)
 
-        max_epochs = 20
+        max_epochs = 200
         for epoch in range(max_epochs):
             batch_size = len(next(iter(train_data))[0])
             train_data.sampler.set_epoch(epoch)
@@ -420,6 +447,7 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
     mpi.Barrier()            
     
     accl.create_process_group(ranks, design, bufsize=rxbufsize, initialize=True, simulation=simulator)
+    # dist.init_process_group("mpi", rank=rank, world_size=size)    
     dist.init_process_group("ACCL", rank=rank, world_size=size)
     global num_errors
     num_errors = 0
@@ -428,18 +456,27 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
 
         # test_allgather()
         # test_broadcast_segment()
-        test_broadcast()
+        # test_broadcast()
+        # test_broadcast()
+        # test_broadcast()
+        # test_broadcast()
         # test_broadcast()
         # test_broadcast_2()
         # test_sendrcv()
-        test_scatter()
-        test_gather()
+        # test_scatter()
+        # test_gather()
         # test_allgather()
         # test_alltoall()
-        # test_reduce()
         # test_allreduce()
-        # demo_basic(rank)
-        # mpi.Barrier()
+        # test_allreduce()
+        # test_allreduce()
+        # test_allreduce()
+
+        test_reduce()
+        demo_basic(rank)
+
+
+        mpi.Barrier()
 
     if num_errors == 0:
         print("======== Successfully Finished testing======")
