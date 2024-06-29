@@ -85,7 +85,7 @@ def train(num_epochs, cnn, loaders):
             optimizer.step()                
             
             # if (i+1) % 100 == 0:
-            # if True:
+            if True:
                 print ('Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}' 
                        .format(epoch + 1, num_epochs, i + 1, total_step, loss.item()))
         
@@ -99,8 +99,12 @@ def test():
         for images, labels in loaders['test']:
             test_output, last_layer = cnn(images)
             pred_y = torch.max(test_output, 1)[1].data.squeeze()
-            accuracy = (pred_y == labels).sum().item() / float(labels.size(0))
-    print('Test Accuracy of the model on the 10000 test images: %.2f' % accuracy)
+            correct_current = (pred_y == labels).sum().item()
+            total += labels.size(0)
+            correct += correct_current
+            
+            print(f'Test Batch accuracy: {correct_current}/{labels.size(0)} {correct_current/float(label.size(0))}')
+    print(f'Total accuracy: {correct}/{total} {correct/float(total)}')
     
 if __name__ == "__main__":
 
@@ -161,7 +165,7 @@ if __name__ == "__main__":
                 ranks = [accl.Rank(a, start_port + i, 0, rxbufsize) for i, a in enumerate(fpga_ips)]
         else:
             # Somehow the simulator gets stuck if I use the same rxbufsize
-            rxbufsize = 4096# * 1024
+            rxbufsize = 4096 * 1024
             ranks = [accl.Rank("127.0.0.1", 5500 + i, i, rxbufsize) for i in range(size)]
 
         logger.debug(f'Ranks: {ranks}')
@@ -208,7 +212,7 @@ if __name__ == "__main__":
     }
 
     cnn = CNN()
-    if args.d : cnn = DDP(cnn)
+    if args.d : cnn = DDP(cnn, bucket_cap_mb=4)
 
     loss_func = nn.CrossEntropyLoss()   
 
