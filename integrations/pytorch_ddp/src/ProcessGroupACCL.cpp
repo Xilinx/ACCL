@@ -135,12 +135,6 @@ if(coyote_enabled){							\
   auto end = std::chrono::high_resolution_clock::now();			\
   durationUs = (std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() / 1000.0); \
   ACCL::debug("host measured durationUs:" + std::to_string(durationUs)); \
-  std::this_thread::sleep_for(10ms);					\
-  durationUs = (double)accl->get_duration(req)/1000.0;			\
-  if(durationUs > 1.0){							\
-      ACCL::debug("ACCL measured durationUs:" + std::to_string(durationUs)); \
-      accl_pg_log(rank_, format_log(opname, size_, rank_, durationUs, n_bytes)); \
-  }									\
 }									\
 ACCL::debug("Finished waiting");
 
