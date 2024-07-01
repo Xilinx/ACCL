@@ -1425,10 +1425,11 @@ ProcessGroupACCL::gather(std::vector<std::vector<at::Tensor>> &outputTensors,
         if (srctensor.nbytes() > bufsize) {
 	  size_t non_zero_dim_count = srctensor.numel() / srctensor.size(0);
           size_t n = bufsize / srctensor.itemsize() / non_zero_dim_count;
-	  ACCL::debug("[Gather] Segmenting tensor of size " + std::to_string(tensor.nbytes()) + " into " + std::to_string(n * non_zero_dim_count) + "-sized elements ");
+	  ACCL::debug("[Gather] Segmenting tensor of size " + std::to_string(srctensor.nbytes()) + " into " + std::to_string(n * non_zero_dim_count) + "-sized elements ");
           for (size_t i = 0; i < srctensor.size(0); i += n) {
             size_t end =
-                std::min(i + n, static_cast<size_t>(srctensor.size(0)));            std::vector<at::Tensor> dsttensorslices;
+                std::min(i + n, static_cast<size_t>(srctensor.size(0)));
+            std::vector<at::Tensor> dsttensorslices;
             dsttensorslices.reserve(dsttensors.size());
             for (auto &dsttensor : dsttensors) {
               dsttensorslices.emplace_back(dsttensor.slice(0, i, end));
@@ -1607,6 +1608,32 @@ void ProcessGroupACCL::run_alltoall(at::Tensor in_tensor,
   
 }
 
+    
+void ProcessGroupACCL::run_alltoall_vec(std::vector<at::Tensor> &in_tensor_vec,
+                                    std::vector<at::Tensor> &out_tensor_vec,
+                                    const AllToAllOptions &opts) {
+  std::unique_ptr<ACCL::BaseBuffer> in_data;
+  std::unique_ptr<ACCL::BaseBuffer> out_data;
+  at::Tensor dsttensor;
+
+  // Reserve device
+  c10::DeviceGuard guard(in_tensor_vec[0].device());
+  std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
+
+  init_input_data_vec(in_tensor_vec, in_data, out_tensor_vec[0].options().device(c10::DeviceType::CPU), true, true);
+
+  init_output_tensor(in_tensor_vec[0], dsttensor, out_data, size_, in_tensor_vec[0].scalar_type(), true, true);
+  
+  PRE_REQUEST(AlltoAll, in_tensor_vec[0])
+
+  ACCL::ACCLRequest* req = accl->alltoall(*in_data, *out_data, in_tensor_vec[0].numel(), ACCL::GLOBAL_COMM, true, true, get_compressed_type(in_tensor_vec[0].scalar_type()));
+
+  POST_REQUEST("alltoall", in_tensor_vec[0].nbytes())
+
+  copy_back_tensorvec(out_tensor_vec, out_data, dsttensor, in_tensor_vec[0].numel(), true, true);
+      
+}
+
 c10::intrusive_ptr<Work> ProcessGroupACCL::alltoall_base(
     at::Tensor &outputTensor, at::Tensor &inputTensor,
     std::vector<int64_t> &outputSplitSizes,
@@ -1626,17 +1653,37 @@ c10::intrusive_ptr<Work> ProcessGroupACCL::alltoall_base(
         [opts, this](std::unique_ptr<WorkEntry>& entry) {
           auto srctensor = (entry->src)[0];
           auto dsttensor = (entry->dst)[0];
+
+
           // c10::DeviceGuard guard(srctensor.device());
           // std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
           // Segment data if necessary
           if (dsttensor.nbytes() > bufsize) {
             ACCL::debug("dsttensor to large!");
-            size_t n = bufsize / dsttensor.itemsize();
-            for (size_t i = 0; i < dsttensor.numel(); i += n) {
+
+	    // Split individual entries
+	    size_t non_zero_dim_count = dsttensor.numel() / dsttensor.size(0);
+	    size_t n = bufsize / dsttensor.itemsize() / size_ / non_zero_dim_count;
+	    size_t entry_size = dsttensor.numel() / size_ / non_zero_dim_count;
+            for (size_t i = 0; i < entry_size; i += n) {
               ACCL::debug("part " + std::to_string(i) + "!");
-              size_t end =
-                  std::min(i + n, static_cast<size_t>(dsttensor.numel()));
-              run_alltoall(srctensor.slice(0, i, end), dsttensor.slice(0, i, end), opts);
+              size_t end = std::min(i + n, static_cast<size_t>(entry_size));
+
+	      std::vector<at::Tensor> srctensorslices;
+	      srctensorslices.reserve(size_);
+	      ACCL::debug("dsttensorslices:");
+	      for (int j = 0; j < size_; j++) {
+		  int bufpos = j * entry_size;
+		  srctensorslices.emplace_back(srctensor.slice(0, i + bufpos, end + bufpos));
+	      }
+	      std::vector<at::Tensor> dsttensorslices;
+	      dsttensorslices.reserve(size_);
+	      ACCL::debug("dsttensorslices:");
+	      for (int j = 0; j < size_; j++) {
+		  int bufpos = j * entry_size;
+		  dsttensorslices.emplace_back(dsttensor.slice(0, i + bufpos, end + bufpos));
+	      }
+              run_alltoall_vec(srctensorslices, dsttensorslices, opts);
             }
           } else {
 	    ACCL::debug("Running without segmentation");

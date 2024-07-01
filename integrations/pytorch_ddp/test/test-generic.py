@@ -49,9 +49,9 @@ else:
 rank = 0
 size = 0
 
-count = 16
-num_el = 256
-shape = (num_el,)
+count = 256 * 1024
+num_el = 256 * 1024
+shape = (256,1024)
 #As in test.cpp defaults
 rxbufsize = 4096 * 1024
 
@@ -285,26 +285,31 @@ def test_allreduce():
 def test_alltoall():
     global num_errors
 
-    input = torch.arange(count, dtype=torch.float) + float(rank) * count
+    input = torch.arange(num_el, dtype=torch.float) + float(rank) * num_el
 
-    output = torch.ones(count)
+    input_shaped = input.reshape(shape)
+
+    output = torch.ones(num_el)
+
+    output_shaped = output.reshape(shape)
 
     with torch.profiler.record_function("test_alltoall"):
         
-        dist.all_to_all_single(output, input)
+        dist.all_to_all_single(output_shaped, input_shaped)
 
         mpi.Barrier()
 
-    test = torch.zeros(count)
+    test = torch.zeros(num_el)
 
-    section_size = int(count/size)
+    section_size = int(num_el/size)
 
     for section in range(size):
         for el in range(section_size):
-            test[section * section_size + el] = float(rank) * section_size + section * count + el
+            test[section * section_size + el] = float(rank) * section_size + section * num_el + el
 
+    test_shaped = test.reshape(shape)
     try:
-        np.testing.assert_allclose(output, test)
+        np.testing.assert_allclose(output_shaped, test_shaped)
     except AssertionError as e:
         num_errors = num_errors + 1
         logger.debug("Test AlltoAll failed")
@@ -312,7 +317,6 @@ def test_alltoall():
     else:
         logger.debug("Test AlltoAll finished!")
         
-
 class ToyModel(nn.Module):
     def __init__(self):
         super(ToyModel, self).__init__()
@@ -456,7 +460,7 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
 
         # test_allgather()
         # test_broadcast_segment()
-        # test_broadcast()
+        test_broadcast()
         # test_broadcast()
         # test_broadcast()
         # test_broadcast()
@@ -472,8 +476,10 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
         # test_allreduce()
         # test_allreduce()
 
-        test_reduce()
-        demo_basic(rank)
+        # test_reduce()
+
+        
+        # demo_basic(rank)
 
 
         mpi.Barrier()
