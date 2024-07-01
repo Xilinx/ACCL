@@ -742,6 +742,7 @@ void ProcessGroupACCL::init_input_tensor(at::Tensor &tensor, std::unique_ptr<ACC
     }
     ACCL::debug("Copying data to CPU tensor of size " + std::to_string(total_size));
     at::Tensor wrapper_tensor = torch::from_blob(data->byte_array(), sizes, options);
+
     for (const auto i : c10::irange(tensor_vec.size())) {
       if (p2p_applicable(*accl, tensor_vec[0], p2p_enabled)) {
 	auto slice = data->slice(i * tens_size, (i + 1) * tens_size);
@@ -786,6 +787,7 @@ void ProcessGroupACCL::init_output_data(at::Tensor &tensor_original, std::unique
 	    sizes.insert(sizes.begin(), num_tensors_s);
 	    total_size = total_size * num_tensors_s;
 	}
+	
 	if (p2p_applicable(*accl, tensor_original, p2p_enabled)) {
 	  dstdata = create_buffer_p2p(*accl, total_size, type);
 	} else if (coyote_enabled) {
@@ -1046,6 +1048,8 @@ c10::intrusive_ptr<Work> ProcessGroupACCL::enqueue(
 void ProcessGroupACCL::run_broadcast(at::Tensor in_tensor,
                                      const BroadcastOptions &opts) {
 
+  std::chrono::time_point<std::chrono::high_resolution_clock> start_inner  = std::chrono::high_resolution_clock::now();
+
   STANDARD_DECL
 
   //Should be split to output on non-root sometime
@@ -1065,6 +1069,8 @@ void ProcessGroupACCL::run_broadcast(at::Tensor in_tensor,
   ACCL::debug("init tensor durationUs:" + std::to_string(durationUs_init));
   
   // Reserve device
+
+  std::chrono::time_point<std::chrono::high_resolution_clock> start_lock  = std::chrono::high_resolution_clock::now();
   c10::DeviceGuard guard(in_tensor.device());
   std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
 
@@ -1081,6 +1087,9 @@ void ProcessGroupACCL::run_broadcast(at::Tensor in_tensor,
   ACCL::debug("Copy tensor durationUs:" + std::to_string(durationUs_copy));
 
   
+  auto end_inner = std::chrono::high_resolution_clock::now();
+  double durationUs_inner = (std::chrono::duration_cast<std::chrono::nanoseconds>(end_inner-start_inner).count() / 1000.0);
+  ACCL::debug("Inner total tensor durationUs:" + std::to_string(durationUs_inner));  
 }
 
 c10::intrusive_ptr<Work>
@@ -1116,6 +1125,9 @@ ProcessGroupACCL::broadcast(std::vector<at::Tensor> &tensors,
 	  ACCL::debug("[Broadcast] Broadcasting entire tensor of size " + std::to_string(tensor.nbytes()) + " without segmentation.");
           run_broadcast(tensor, opts);
         }
+	auto end = std::chrono::high_resolution_clock::now();
+	double durationUs = (std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() / 1000.0);
+        ACCL::debug("Total bcast durationUs:" + std::to_string(durationUs));
 	#endif
       };
   auto entry =

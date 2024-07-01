@@ -9,7 +9,8 @@ fi
 if [[ -v ACCL_SCRIPT ]]; then
     SCRIPT_NAME="$ACCL_SCRIPT"
 else
-    # SCRIPT_NAME=test-mnist.py # MNIST
+    # SCRIPT_NAME="test-mnist.py -d True -n 2" # MNIST
+    # SCRIPT_NAME="test-imagenet.py -d True"
     SCRIPT_NAME=test-generic.py
     echo "Variable ACCL_SCRIPT not set. Assuming $SCRIPT_NAME"
 fi
@@ -71,7 +72,7 @@ else
     for ID in ${SERVID[@]}; do
 	echo "10.253.74.$(((ID-1) * 4 + 66))">>$HOST_FILE
 	echo "10.253.74.$(((ID-1) * 4 + 68))">>$FPGA_FILE
-	NUM_PROCESS=$((NUM_PROCESS+1))
+ 	NUM_PROCESS=$((NUM_PROCESS+1))
 	HOST_LIST+="alveo-u55c-$(printf "%02d" $ID) "
 	HOST_PORT_LIST+="alveo-u55c-$(printf "%02d" $ID):$RANK_PORT "
     done
@@ -84,9 +85,9 @@ else
 
     echo "Master node set to: $MASTER_IP:$MASTER_PORT"
 
-    MPI_ARGS="-f $HOST_FILE --iface ens4f0"
     # 09 and 10 have other interface names:
-    # MPI_ARGS="-f $HOST_FILE --iface ens4"
+    # MPI_ARGS="-f $HOST_FILE --iface ens4f0"
+    MPI_ARGS="-f $HOST_FILE --iface ens4"
 fi
 
 ARG="$ARG -c $ACCL_COMMS -i $HOST_FILE -f $FPGA_FILE -a $MASTER_IP -p $MASTER_PORT\""
@@ -98,6 +99,7 @@ echo "Run command: $EXEC $ARG"
 echo "Running with $NUM_PROCESS Processes"
 
 rm -f $(pwd)/accl_log/rank*
+rm -f $(pwd)/accl_log/accl_pg_*
 
 # C="mpirun -n $NUM_PROCESS $MPI_ARGS -outfile-pattern \"$(pwd)/accl_log/rank_%r_stdout\" $EXEC $ARG &"
 C="mpirun -n $NUM_PROCESS $MPI_ARGS -outfile-pattern \"$(pwd)/accl_log/rank_%r_stdout\" -errfile-pattern \"$(pwd)/accl_log/rank_%r_stderr\" $EXEC $ARG &"
@@ -109,7 +111,7 @@ exit 0
 /bin/sh -c "$C"
 
 if ! [[ -v SLEEPTIME ]]; then
-    SLEEPTIME="16"
+    SLEEPTIME="32"
 fi
 echo "Sleeping for $SLEEPTIME"
 sleep $SLEEPTIME
