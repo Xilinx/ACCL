@@ -68,6 +68,12 @@ void configure_tcp(ACCL::BaseBuffer &tx_buf_network, ACCL::BaseBuffer &rx_buf_ne
                    xrt::kernel &network_krnl, xrt::kernel &session_krnl,
                    std::vector<ACCL::rank_t> &ranks, int local_rank);
 
+// Configure TCP engine on Coyote
+void configure_cyt_rdma(std::vector<ACCL::rank_t> &ranks, int local_rank, ACCL::CoyoteDevice* device);
+
+// Configure RDMA engine on Coyote
+void configure_cyt_tcp(std::vector<ACCL::rank_t> &ranks, int local_rank, ACCL::CoyoteDevice* device);
+
 // Get IPs from config file, this function is called by generate_ranks
 std::vector<std::string> get_ips(std::filesystem::path config_file);
 // Generate IPs in private subnet, this function is called by generate_ranks

@@ -269,6 +269,128 @@ void configure_tcp(XRTBuffer<int8_t> &tx_buf_network, XRTBuffer<int8_t> &rx_buf_
   }
 }
 
+void exchange_qp(unsigned int master_rank, unsigned int slave_rank, unsigned int local_rank, std::vector<fpga::ibvQpConn*> &ibvQpConn_vec, std::vector<ACCL::rank_t> &ranks){
+  	
+	if (local_rank == master_rank)
+	{
+		std::cout<<"Local rank "<<local_rank<<" sending local QP to remote rank "<<slave_rank<<std::endl;
+		// Send the local queue pair information to the slave rank
+		MPI_Send(&(ibvQpConn_vec[slave_rank]->getQpairStruct()->local), sizeof(fpga::ibvQ), MPI_CHAR, slave_rank, 0, MPI_COMM_WORLD);
+	}
+	else if (local_rank == slave_rank)
+	{
+		std::cout<<"Local rank "<<local_rank<<" receiving remote QP from remote rank "<<master_rank<<std::endl;
+		// Receive the queue pair information from the master rank
+		fpga::ibvQ received_q;
+		MPI_Recv(&received_q, sizeof(fpga::ibvQ), MPI_CHAR, master_rank, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+		// Copy the received data to the remote queue pair
+		ibvQpConn_vec[master_rank]->getQpairStruct()->remote = received_q;
+	}
+
+	// Synchronize after the first exchange to avoid race conditions
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	if (local_rank == slave_rank)
+	{
+		std::cout<<"Local rank "<<local_rank<<" sending local QP to remote rank "<<master_rank<<std::endl;
+		// Send the local queue pair information to the master rank
+		MPI_Send(&(ibvQpConn_vec[master_rank]->getQpairStruct()->local), sizeof(fpga::ibvQ), MPI_CHAR, master_rank, 0, MPI_COMM_WORLD);
+	}
+	else if (local_rank == master_rank)
+	{
+		std::cout<<"Local rank "<<local_rank<<" receiving remote QP from remote rank "<<slave_rank<<std::endl;
+		// Receive the queue pair information from the slave rank
+		fpga::ibvQ received_q;
+		MPI_Recv(&received_q, sizeof(fpga::ibvQ), MPI_CHAR, slave_rank, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+		// Copy the received data to the remote queue pair
+		ibvQpConn_vec[slave_rank]->getQpairStruct()->remote = received_q;
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	// write established connection to hardware and perform arp lookup
+	if (local_rank == master_rank)
+	{
+		int connection = (ibvQpConn_vec[slave_rank]->getQpairStruct()->local.qpn & 0xFFFF) | ((ibvQpConn_vec[slave_rank]->getQpairStruct()->remote.qpn & 0xFFFF) << 16);
+		ibvQpConn_vec[slave_rank]->getQpairStruct()->print();
+		ibvQpConn_vec[slave_rank]->setConnection(connection);
+		ibvQpConn_vec[slave_rank]->writeContext(ranks[slave_rank].port);
+		ibvQpConn_vec[slave_rank]->doArpLookup();
+		ranks[slave_rank].session_id = ibvQpConn_vec[slave_rank]->getQpairStruct()->local.qpn;
+	} else if (local_rank == slave_rank) 
+	{
+		int connection = (ibvQpConn_vec[master_rank]->getQpairStruct()->local.qpn & 0xFFFF) | ((ibvQpConn_vec[master_rank]->getQpairStruct()->remote.qpn & 0xFFFF) << 16);
+		ibvQpConn_vec[master_rank]->getQpairStruct()->print();
+		ibvQpConn_vec[master_rank]->setConnection(connection);
+		ibvQpConn_vec[master_rank]->writeContext(ranks[master_rank].port);
+		ibvQpConn_vec[master_rank]->doArpLookup();
+		ranks[master_rank].session_id = ibvQpConn_vec[master_rank]->getQpairStruct()->local.qpn;
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+}
+
+void configure_cyt_rdma(std::vector<ACCL::rank_t> &ranks, int local_rank, ACCL::CoyoteDevice* device){
+
+	std::cout<<"Initializing QP connections..."<<std::endl;
+	// create queue pair connections
+	std::vector<fpga::ibvQpConn*> ibvQpConn_vec;
+	// create single page dummy memory space for each qp
+	uint32_t n_pages = 1;
+	for(int i=0; i<ranks.size(); i++)
+	{
+		fpga::ibvQpConn* qpConn = new fpga::ibvQpConn(device->coyote_qProc_vec[i], ranks[local_rank].ip, n_pages);
+		ibvQpConn_vec.push_back(qpConn);
+		// qpConn->getQpairStruct()->print();
+	}
+
+	std::cout<<"Exchanging QP..."<<std::endl;
+	for(int i=0; i<ranks.size(); i++)
+	{
+		for(int j=i+1; j<ranks.size();j++)
+		{
+			exchange_qp(i, j, local_rank, ibvQpConn_vec, ranks);
+		}
+	}
+}
+
+void configure_cyt_tcp(std::vector<ACCL::rank_t> &ranks, int local_rank, ACCL::CoyoteDevice* device){
+	std::cout<<"Configuring Coyote TCP..."<<std::endl;
+	// arp lookup
+    for(int i=0; i<ranks.size(); i++){
+        if(local_rank != i){
+            device->get_device()->doArpLookup(ip_encode(ranks[i].ip));
+        }
+    }
+
+	//open port 
+    for (int i=0; i<ranks.size(); i++)
+    {
+        uint32_t dstPort = ranks[i].port;
+        bool open_port_status = device->get_device()->tcpOpenPort(dstPort);
+    }
+
+	std::this_thread::sleep_for(10ms);
+
+	//open con
+    for (int i=0; i<ranks.size(); i++)
+    {
+        uint32_t dstPort = ranks[i].port;
+        uint32_t dstIp = ip_encode(ranks[i].ip);
+        uint32_t dstRank = i;
+		uint32_t session = 0;
+        if (local_rank != dstRank)
+        {
+            bool success = device->get_device()->tcpOpenCon(dstIp, dstPort, &session);
+			ranks[i].session_id = session;
+        }
+    }
+
+}
+
+
 std::vector<std::string> get_ips(fs::path config_file) {
   std::vector<std::string> ips{};
   Json::Value config;
