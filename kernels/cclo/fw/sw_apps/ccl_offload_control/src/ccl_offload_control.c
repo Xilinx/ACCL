@@ -1874,7 +1874,7 @@ int allreduce(
 
     if(world.size == 1){
         //corner-case copy for when running a single-node reduction
-        return copy(count, src_buf_addr, dst_buf_addr, arcfg_offset, compression, stream);
+        return copy(count, src_buf_addr, dst_buf_addr, arcfg_offset, compression, buftype);
     } else if((bytes_count > max_eager_size) && (compression == NO_COMPRESSION) && (stream == NO_STREAM)){
         //allreduce via reduction+broadcast
         //reduce step
@@ -2136,7 +2136,7 @@ int all_to_all(
 
     if(world.size == 1){
         //corner-case single-node alltoall
-        return copy(count, src_buf_addr, dst_buf_addr, arcfg_offset, compression, stream);
+        return copy(count, src_buf_addr, dst_buf_addr, arcfg_offset, compression, buftype);
     } else if(/*(bytes_count > max_eager_size) && */(compression == NO_COMPRESSION) && (stream == NO_STREAM)){
         //alltoall via simultaneous broadcast
         //since in alltoall each endpoint must receive P-1 messages (where P is the world size)
