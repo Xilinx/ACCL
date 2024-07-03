@@ -1204,7 +1204,7 @@ options_t parse_options(int argc, char *argv[]) {
                                           false, "", "string");
   TCLAP::ValueArg<unsigned int> max_eager_arg("", "max-eager-count",
                                             "Maximum byte count for eager mode", false,
-                                            0, "positive integer");
+                                            3*1024, "positive integer");
   cmd.add(max_eager_arg);
   try {
     cmd.parse(argc, argv);
