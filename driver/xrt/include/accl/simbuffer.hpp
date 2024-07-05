@@ -332,7 +332,7 @@ public:
     }
 
     return std::unique_ptr<BaseBuffer>(new SimBuffer(
-        &this->_buffer[start], end - start, this->_type, this->zmq_ctx,
+					   &this->_buffer[start], end - start, this->type(), this->zmq_ctx,
         this->_address + start, bo_slice, _device, bo_valid, this->host, this->memgrp, true));
   }
 };

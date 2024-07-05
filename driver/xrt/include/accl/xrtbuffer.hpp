@@ -220,7 +220,7 @@ public:
 
     return std::unique_ptr<BaseBuffer>(new XRTBuffer(
         xrt::bo(_bo, end_bytes - start_bytes, start_bytes), end - start,
-        this->_type, this->is_aligned, offset_unaligned_buffer));
+        this->type(), this->is_aligned, offset_unaligned_buffer));
   }
 
 private:

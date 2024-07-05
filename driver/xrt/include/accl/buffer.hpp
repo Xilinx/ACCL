@@ -140,10 +140,25 @@ public:
    */
   virtual std::unique_ptr<BaseBuffer> slice(size_t start, size_t end) = 0;
 
+  /**
+   * Change the type of the device buffer in-place. Doesn't cast any of the contents
+   *
+   * @param new_type   The new type of the device buffer
+   * @return BaseBuffer  The Buffer
+   */
+   BaseBuffer& change_type(dataType new_type) {
+
+       this->_type = new_type;
+       
+       return *this;
+   }
+
+private:
+  dataType _type;
+    
 protected:
   void *_byte_array;
   const size_t _size;
-  const dataType _type;
   addr_t _address;
 };
 
