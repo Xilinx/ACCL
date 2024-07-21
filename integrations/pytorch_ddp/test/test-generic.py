@@ -49,16 +49,16 @@ else:
 rank = 0
 size = 0
 
-count = 256 * 1024
-num_el = 256 * 1024
-shape = (256,1024)
+count = 16 * 1
+num_el = 16 * 1
+shape = (16 , 1)
 #As in test.cpp defaults
 rxbufsize = 4096 * 1024
 
 
 def test_broadcast_segment():
     global num_errors
-    shape_segment = (1024 * 1024,)
+    shape_segment = (1024 * 1,)
     if rank == 0:
         x = torch.ones(shape_segment, dtype=torch.float)
     else:
@@ -87,7 +87,7 @@ def test_broadcast():
     else:
         x = torch.zeros(shape)
 
-    for i in range(10):
+    for i in range(1):
         with torch.profiler.record_function("test bcast " + str(i)):
 
             start_time = time.perf_counter()
@@ -120,8 +120,8 @@ def test_broadcast():
         logger.debug("Test broadcast finished!")
 
 def test_broadcast_2():
-    test_type = torch.float
-    shape_2 = (204, 2)
+    test_type = torch.double
+    shape_2 = (2, 2)
     global num_errors
     if rank == 0:
         x = torch.ones(shape_2, dtype=test_type)
@@ -224,8 +224,8 @@ def test_gather():
 def test_allgather():
     global num_errors
     shape_gather = (1,)
-    x = torch.full(shape_gather, float(rank), dtype=torch.double)
-    y = [torch.empty(shape_gather, dtype=torch.double) for _ in range(size)]
+    x = torch.full(shape_gather, float(rank), dtype=torch.float)
+    y = [torch.empty(shape_gather, dtype=torch.float) for _ in range(size)]
 
     with torch.profiler.record_function("test_allgather"):
         
@@ -234,7 +234,7 @@ def test_allgather():
         mpi.Barrier()
     for i, c in enumerate(y):
         try:
-            np.testing.assert_allclose(c, torch.full(shape_gather, float(i), dtype=torch.double))
+            np.testing.assert_allclose(c, torch.full(shape_gather, float(i), dtype=torch.float))
         except AssertionError as e:
             num_errors = num_errors + 1
             logger.debug("Test AllGather failed")
@@ -374,7 +374,7 @@ def demo_basic(rank: int):
         loss_fn = nn.MSELoss()
         optimizer = optim.Adam(ddp_model.parameters(), lr=0.005)
 
-        max_epochs = 200
+        max_epochs = 10
         for epoch in range(max_epochs):
             batch_size = len(next(iter(train_data))[0])
             train_data.sampler.set_epoch(epoch)
@@ -430,7 +430,7 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
             ranks = [accl.Rank(a, start_port + i, 0, rxbufsize) for i, a in enumerate(fpga_ips)]
     else:
         # Somehow the simulator gets stuck if I use the same rxbufsize
-        rxbufsize = 4096 #* 1024
+        rxbufsize = 4096 # * 1024
         ranks = [accl.Rank("127.0.0.1", 5500 + i, i, rxbufsize) for i in range(size)]
 
     logger.debug(f'Ranks: {ranks}')
@@ -449,40 +449,44 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
 
     # Sometimes ACCL gets stuck on the mpi import statement, so this is to avoid issues:
     mpi.Barrier()            
+
+
+    # dist.init_process_group("mpi", rank=rank, world_size=size)
+
     
     accl.create_process_group(ranks, design, bufsize=rxbufsize, initialize=True, simulation=simulator)
-    # dist.init_process_group("mpi", rank=rank, world_size=size)    
     dist.init_process_group("ACCL", rank=rank, world_size=size)
+    
     global num_errors
     num_errors = 0
-    with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
-                 profile_memory=True, record_shapes=True) as prof:
+    # with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+                 # profile_memory=True, record_shapes=True) as prof:
 
-        # test_allgather()
-        # test_broadcast_segment()
-        test_broadcast()
-        # test_broadcast()
-        # test_broadcast()
-        # test_broadcast()
-        # test_broadcast()
-        # test_broadcast_2()
-        # test_sendrcv()
-        # test_scatter()
-        # test_gather()
-        # test_allgather()
-        # test_alltoall()
-        # test_allreduce()
-        # test_allreduce()
-        # test_allreduce()
-        # test_allreduce()
+    test_broadcast_segment()
+    # test_broadcast()
+    # test_broadcast()
+    test_broadcast()
+    # test_broadcast()
+    # test_broadcast()
+    test_broadcast_2()
+    test_sendrcv()
+    test_scatter()
+    test_gather()
+    test_allgather()
+    test_alltoall()
+    test_allreduce()
+    test_allgather()
+    # test_allreduce()
+    # test_allreduce()
+    # test_allreduce()
 
-        # test_reduce()
+    # test_reduce()
 
         
-        # demo_basic(rank)
+    demo_basic(rank)
 
 
-        mpi.Barrier()
+    mpi.Barrier()
 
     if num_errors == 0:
         print("======== Successfully Finished testing======")
@@ -490,8 +494,8 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
     else:
         print(f"!!!!!!!! - {num_errors} Errors found - !!!!!!!!!")
         logger.debug(f"!!!!!!!! - {num_errors} Errors found - !!!!!!!!!")        
-    print(prof.key_averages(group_by_input_shape=True)
-          .table(sort_by="cpu_time_total", row_limit=15))
+    # print(prof.key_averages(group_by_input_shape=True)
+          # .table(sort_by="cpu_time_total", row_limit=15))
 
     logger.debug('Destroying ACCL Process Group')
     dist.destroy_process_group()

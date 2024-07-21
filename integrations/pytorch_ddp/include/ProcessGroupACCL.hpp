@@ -298,7 +298,9 @@ protected:
   static void acclExit();
   
   void init_input_tensor(at::Tensor &tensor, std::unique_ptr<ACCL::BaseBuffer> &data, bool do_on_root, bool do_on_others, int opts_root_rank = 0);
-
+  
+  void init_input_tensor_new(at::Tensor &tensor, ACCL::BaseBuffer *data, bool do_on_root, bool do_on_others, int opts_root_rank = 0);
+  
   void init_input_data_vec(std::vector<at::Tensor> &tensor_vec, std::unique_ptr<ACCL::BaseBuffer> &data, const at::TensorOptions &options, bool do_on_root, bool do_on_others, int opts_root_rank = 0);
   
   void init_output_data(at::Tensor &tensor_original, std::unique_ptr<ACCL::BaseBuffer> &dstdata, int out_tensor_size, c10::ScalarType type, bool do_on_root, bool do_on_others, int opts_root_rank = 0);
@@ -336,6 +338,9 @@ private:
   bool initialized;
   xrt::bo buf0;
   xrt::bo buf1;
+
+  std::unique_ptr<ACCL::BaseBuffer> in_buf;
+  std::unique_ptr<ACCL::BaseBuffer> out_buf;
 };
 
 } // namespace c10d

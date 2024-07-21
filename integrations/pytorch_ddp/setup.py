@@ -41,13 +41,11 @@ driver_dir = root / 'accl' / 'driver'
 accl_utils_dir = driver_dir / 'utils' / 'accl_network_utils'
 vnx_dir = root / 'accl' / 'test' / 'refdesigns' / 'xup_vitis_network_example' \
     / 'xrt_host_api'
-roce_dir = root / 'accl' / 'test' / 'refdesigns' / 'HiveNet' \
-    / 'network' / 'roce_v2' / 'xrt_utils'
 
 include_dirs = [root / 'include',  driver_dir / 'xrt' / 'include',
                 accl_utils_dir / 'include', xrt_dir / 'include',
                 root / 'accl' / 'test' / 'model' / 'zmq',
-                vnx_dir / 'include', roce_dir / 'include',
+                vnx_dir / 'include',
                 root / 'accl' / 'test' / 'refdesigns' / 'Coyote' / 'sw' / 'include',
                 '/pub/scratch/zhe/mpich/install/include',
                 '/usr/include/jsoncpp']
@@ -56,7 +54,6 @@ libraries = ['accl', 'jsoncpp', 'zmq']
 sources = [root / 'src' / 'ProcessGroupACCL.cpp',
            root / 'src' / 'coyote_init.cpp',
            vnx_dir / 'src' / 'cmac.cpp', vnx_dir / 'src' / 'networklayer.cpp',
-           roce_dir / 'src' / 'cmac.cpp', roce_dir / 'src' / 'hivenet.cpp',
            accl_utils_dir / 'src' / 'accl_network_utils.cpp']
 
 compile_args = ['-Wno-reorder',

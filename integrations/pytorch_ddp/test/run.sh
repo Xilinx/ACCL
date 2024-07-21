@@ -10,8 +10,8 @@ if [[ -v ACCL_SCRIPT ]]; then
     SCRIPT_NAME="$ACCL_SCRIPT"
 else
     # SCRIPT_NAME="test-mnist.py -d True -n 2" # MNIST
-    # SCRIPT_NAME="test-imagenet.py -d True"
-    SCRIPT_NAME=test-generic.py
+    SCRIPT_NAME="test-imagenet.py -d True"
+    # SCRIPT_NAME=test-generic.py
     echo "Variable ACCL_SCRIPT not set. Assuming $SCRIPT_NAME"
 fi
 
@@ -86,8 +86,8 @@ else
     echo "Master node set to: $MASTER_IP:$MASTER_PORT"
 
     # 09 and 10 have other interface names:
-    # MPI_ARGS="-f $HOST_FILE --iface ens4f0"
-    MPI_ARGS="-f $HOST_FILE --iface ens4"
+    MPI_ARGS="-f $HOST_FILE --iface ens4f0"
+    # MPI_ARGS="-f $HOST_FILE --iface ens4"
 fi
 
 ARG="$ARG -c $ACCL_COMMS -i $HOST_FILE -f $FPGA_FILE -a $MASTER_IP -p $MASTER_PORT\""
