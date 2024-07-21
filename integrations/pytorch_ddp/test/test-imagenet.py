@@ -36,6 +36,10 @@ else:
     logger.setLevel(logging.WARNING)
 
 # Run via ACCL
+global best_model_params_path
+
+best_model_params_path = './best_model_params.pt'
+
 
 class CNN(nn.Module):
     def __init__(self):
@@ -69,9 +73,9 @@ class CNN(nn.Module):
 def train(model, criterion, optimizer, scheduler, num_epochs=25):
     since = time.time()
 
+    global rank
     # Create a temporary directory to save training checkpoints
     with TemporaryDirectory() as tempdir:
-        best_model_params_path = os.path.join(tempdir, 'best_model_params.pt')
 
         torch.save(model.state_dict(), best_model_params_path)
         best_acc = 0.0
@@ -91,6 +95,8 @@ def train(model, criterion, optimizer, scheduler, num_epochs=25):
                 running_corrects = 0
 
                 # Iterate over data.
+                count = 0
+                
                 for inputs, labels in dataloaders[phase]:
                     inputs = inputs.to(device)
                     labels = labels.to(device)
@@ -113,6 +119,16 @@ def train(model, criterion, optimizer, scheduler, num_epochs=25):
                     # statistics
                     running_loss += loss.item() * inputs.size(0)
                     running_corrects += torch.sum(preds == labels.data)
+
+                    print(f'{phase} RunningLoss: {running_loss:.4f}')
+                    logger.debug(f'{phase} RunningLoss: {running_loss:.4f}')
+                    
+                    if count % 5 == 0 and rank == 0:
+                        print("saving model to " + best_model_params_path)
+                        torch.save(model.state_dict(), best_model_params_path)
+                    
+                    count += 1
+                    
                 if phase == 'train':
                     scheduler.step()
 
@@ -120,7 +136,7 @@ def train(model, criterion, optimizer, scheduler, num_epochs=25):
                 epoch_acc = running_corrects.double() / dataset_sizes[phase]
 
                 print(f'{phase} Loss: {epoch_loss:.4f} Acc: {epoch_acc:.4f}')
-
+                logger.debug(f'{phase} Loss: {epoch_loss:.4f} Acc: {epoch_acc:.4f}')
                 # deep copy the model
                 if phase == 'val' and epoch_acc > best_acc:
                     best_acc = epoch_acc
@@ -268,6 +284,10 @@ if __name__ == "__main__":
     exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=7, gamma=0.1)
 
     loss_func = nn.CrossEntropyLoss()
+
+    best_model_params_path = './best_model_params.pt'
+
+    # model_ft.load_state_dict(torch.load(best_model_params_path))
 
     model_ft = train(model_ft, criterion, optimizer_ft, exp_lr_scheduler,
                        num_epochs=25)
