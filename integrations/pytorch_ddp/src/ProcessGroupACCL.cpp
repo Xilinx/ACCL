@@ -863,11 +863,11 @@ ProcessGroupACCL::ProcessGroupACCL(
     if (coyote_enabled) {
       if (design_ == accl_network_utils::acclDesign::CYT_TCP) {
         cyt_device = new ACCL::CoyoteDevice();
+	accl_network_utils::configure_cyt_tcp(ranks_, rank_, cyt_device);
       } else if (design_ == accl_network_utils::acclDesign::CYT_RDMA) {
 	ACCL::debug("Creating CoyoteDevice");
         cyt_device = new ACCL::CoyoteDevice(size_);
-	ACCL::debug("Starting QP-exchange");
-        cyt::setup_cyt_rdma(ibvQpConn_vec, ranks_, rank_, *cyt_device);
+	accl_network_utils::configure_cyt_rdma(ranks_, rank_, cyt_device);
       } else {
         throw std::runtime_error("Undefined ACCL design");
       }
@@ -909,11 +909,6 @@ void ProcessGroupACCL::initialize() {
   }
 
   if (coyote_enabled && !simulator_) {
-    if (design_ == accl_network_utils::acclDesign::CYT_RDMA) {
-      cyt::configure_cyt_rdma(ibvQpConn_vec, ranks_, rank_);
-    } else {
-      throw std::runtime_error("Coyote configure not implemented");
-    }
 
     accl = std::make_unique<ACCL::ACCL>(cyt_device);
     global_accl = &accl;
@@ -929,13 +924,12 @@ void ProcessGroupACCL::initialize() {
       accl.get()->initialize(ranks_, rank_, size_+2, bufsize, segsize, 4096*1024*2);
     } else {
       std::cout<<"Rendezvous Protocol"<<std::endl;
-      accl.get()->initialize(ranks_, rank_, size_, 64, 64, segsize);
+      accl.get()->initialize(ranks_, rank_, 16, 1024, RDVZ_THRESHOLD);
     }  
     
     ACCL::debug(std::string("[ACCL coyote] communicator: ") + accl->dump_communicator());
 
-    in_buf = accl->create_coyotebuffer<float_t>(bufsize/sizeof(float), ACCL::dataType::float32);
-    out_buf = accl->create_coyotebuffer<float_t>(bufsize/sizeof(float), ACCL::dataType::float32);
+
 
   } else {
     ACCL::debug(std::string("Performing standard initialization"));
