@@ -49,11 +49,11 @@ namespace c10d {
 
 // Toggles to run Collectives via OpenMPI instead(To sidestep any issues with them in ACCL)
 // The sidestep-code is copied from the ProcessGroupMPI
-// #define BROADCAST_SIDESTEP
-// #define SCATTER_SIDESTEP
-// #define GATHER_SIDESTEP
-// #define ALLGATHER_SIDESTEP
-// #define ALLREDUCE_SIDESTEP
+#define BROADCAST_SIDESTEP
+#define SCATTER_SIDESTEP
+#define GATHER_SIDESTEP
+#define ALLGATHER_SIDESTEP
+    
 #define ALLREDUCE_SIDESTEP false
 // #define ALLREDUCE_SIDESTEP true
 
@@ -133,10 +133,6 @@ std::map<at::ScalarType, MPI_Datatype> mpiDatatype = {
 #define POST_REQUEST(opname, n_bytes)				\
 double durationUs = 0.0;				\
 ACCL::debug("Waiting for request to complete.");	\
-bool ret = accl->wait(req, 20000ms);			\
-if(ret == false){					\
-    ACCL::debug("!!!!!!! Timeout !!!!!!!");		\
-}									\
 if(coyote_enabled){							\
   auto end = std::chrono::high_resolution_clock::now();			\
   durationUs = (std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() / 1000.0); \
@@ -712,7 +708,9 @@ void ProcessGroupACCL::init_input_tensor(at::Tensor &tensor, std::unique_ptr<ACC
 	wrapper_tensor.copy_(tensor);
 
 	//TODO check if necessary in coyote
-      data->sync_to_device();
+	if (!coyote_enabled) {
+	    data->sync_to_device();
+	}
 	
     }
     // don't sync if no rank initializes, we will fill content and sync later
@@ -947,17 +945,19 @@ void ProcessGroupACCL::initialize() {
                                       
     int devicemem = accl->devicemem();
 
-    in_buf = accl->create_buffer<float_t>(bufsize/sizeof(float), ACCL::dataType::float32);
-    out_buf = accl->create_buffer<float_t>(bufsize/sizeof(float), ACCL::dataType::float32);
-
     // Not sure if this is needed:
     // Initialize cache buffers
-    if (!simulator_){
-	buf0 = xrt::bo(xrt_device, bufsize, devicemem);
-	buf1 = xrt::bo(xrt_device, bufsize, devicemem);
-    }
+    // if (!simulator_){
+	// buf0 = xrt::bo(xrt_device, bufsize, devicemem);
+	// buf1 = xrt::bo(xrt_device, bufsize, devicemem);
+    // }
+    
 	    
   }
+
+  in_buf = accl->create_buffer_host<float>(bufsize/sizeof(float), ACCL::dataType::float32);
+  out_buf = accl->create_buffer_host<float>(bufsize/sizeof(float), ACCL::dataType::float32);
+  
   accl->set_timeout(1e8);
   // Start the worker thread accepting ACCL calls
   workerThread_ = std::thread(&ProcessGroupACCL::runLoop, this);
@@ -1070,11 +1070,11 @@ void ProcessGroupACCL::run_broadcast(at::Tensor in_tensor,
 
   PRE_REQUEST(Broadcast,in_tensor)
 
-  ACCL::ACCLRequest* req = accl->bcast(*in_buf, in_tensor.numel(), opts.rootRank, ACCL::GLOBAL_COMM, true, true, get_compressed_type(in_tensor.scalar_type()));
+  accl->bcast(*in_buf, in_tensor.numel(), opts.rootRank);
 
   POST_REQUEST("bcast", in_tensor.nbytes())
 
-  in_buf->sync_from_device();
+  // in_buf->sync_from_device();
   // for(int i = 0; i<in_tensor.numel(); i++){
       // ACCL::debug(std::to_string(((double *) in_buf->byte_array())[i]));
   // }
@@ -1148,8 +1148,14 @@ void ProcessGroupACCL::run_allreduce(at::Tensor in_tensor,
   std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
 
   PRE_REQUEST(Allreduce,in_tensor)  
+
+
+  // It seems to have issues with non-even numbers, so we round to 256
+  // int rounded_count = (in_tensor.numel() + 255) & ~255;
+  // int rounded_count = 32768;
+
   
-  ACCL::ACCLRequest* req = accl->allreduce(*in_buf, *out_buf, in_tensor.numel(), acclOp.at(opts.reduceOp), ACCL::GLOBAL_COMM, true, true, get_compressed_type(in_tensor.scalar_type()));
+  accl->allreduce(*in_buf, *out_buf, in_tensor.numel(), acclOp.at(opts.reduceOp));      
 
   POST_REQUEST("allreduce", in_tensor.nbytes())
 
@@ -1213,7 +1219,7 @@ void ProcessGroupACCL::run_reduce(at::Tensor in_tensor,
 
   PRE_REQUEST(Reduce,in_tensor)  
 
-  ACCL::ACCLRequest* req = accl->reduce(*in_buf, *out_buf, in_tensor.numel(), opts.rootRank, acclOp.at(opts.reduceOp), ACCL::GLOBAL_COMM, true, true, get_compressed_type(in_tensor.scalar_type()));
+  accl->reduce(*in_buf, *out_buf, in_tensor.numel(), opts.rootRank, acclOp.at(opts.reduceOp));
 
   POST_REQUEST("reduce", in_tensor.nbytes())
 
@@ -1261,8 +1267,7 @@ void ProcessGroupACCL::run_allgather(
   
   PRE_REQUEST(Allgather,in_tensor)
 
-  ACCL::ACCLRequest* req = accl->allgather(*in_buf, *out_buf, in_tensor.numel(), ACCL::GLOBAL_COMM,
-                  true, true, get_compressed_type(in_tensor.scalar_type()));
+  accl->allgather(*in_buf, *out_buf, in_tensor.numel());
 
   POST_REQUEST("allgather", in_tensor.nbytes())
 
@@ -1358,9 +1363,7 @@ void ProcessGroupACCL::run_gather(at::Tensor in_tensor,
 
   PRE_REQUEST(Gather, in_tensor)
 
-  ACCL::ACCLRequest* req = accl->gather(*in_buf, *out_buf, in_tensor.numel(), opts.rootRank,
-               ACCL::GLOBAL_COMM, true, true,
-               get_compressed_type(in_tensor.scalar_type()));
+  accl->gather(*in_buf, *out_buf, in_tensor.numel(), opts.rootRank);
 
   POST_REQUEST("gather", in_tensor.nbytes())
 
@@ -1476,7 +1479,7 @@ void ProcessGroupACCL::run_scatter(std::vector<at::Tensor> &in_tensor_vec,
   PRE_REQUEST(Scatter, dsttensor)
   
   // Run scatter
-  ACCL::ACCLRequest* req = accl->scatter(*in_buf, *out_buf, out_tensor.numel(), opts.rootRank, ACCL::GLOBAL_COMM, true, true, get_compressed_type(dsttensor.scalar_type()));
+  accl->scatter(*in_buf, *out_buf, out_tensor.numel(), opts.rootRank);
 
   POST_REQUEST("scatter", out_tensor.nbytes())
 
@@ -1597,7 +1600,7 @@ void ProcessGroupACCL::run_alltoall(at::Tensor in_tensor,
 
   PRE_REQUEST(AlltoAll, in_tensor)
 
-  ACCL::ACCLRequest* req = accl->alltoall(*in_buf, *out_buf, in_tensor.numel()/size_, ACCL::GLOBAL_COMM, true, true, get_compressed_type(in_tensor.scalar_type()));
+  accl->alltoall(*in_buf, *out_buf, in_tensor.numel()/size_);
 
   POST_REQUEST("alltoall", in_tensor.nbytes()/size_)
 
@@ -1621,7 +1624,7 @@ void ProcessGroupACCL::run_alltoall_vec(std::vector<at::Tensor> &in_tensor_vec,
   
   PRE_REQUEST(AlltoAll, in_tensor_vec[0])
 
-  ACCL::ACCLRequest* req = accl->alltoall(*in_buf, *out_buf, in_tensor_vec[0].numel(), ACCL::GLOBAL_COMM, true, true, get_compressed_type(in_tensor_vec[0].scalar_type()));
+  accl->alltoall(*in_buf, *out_buf, in_tensor_vec[0].numel());
 
   POST_REQUEST("alltoall", in_tensor_vec[0].nbytes())
 
@@ -1717,8 +1720,7 @@ void ProcessGroupACCL::run_send(at::Tensor in_tensor, int dstRank,
 
   PRE_REQUEST(Send,in_tensor)
   
-  ACCL::ACCLRequest* req = accl->send(*in_buf, in_tensor.numel(), dstRank, tag, ACCL::GLOBAL_COMM, true,
-             get_compressed_type(in_tensor.scalar_type()));
+  ACCL::ACCLRequest* req = accl->send(*in_buf, in_tensor.numel(), dstRank, tag);
 
   POST_REQUEST("send", in_tensor.nbytes())
 }
@@ -1759,7 +1761,7 @@ void ProcessGroupACCL::run_recv(at::Tensor out_tensor, int srcRank,
 
   PRE_REQUEST(Receive, out_tensor)  
   
-  ACCL::ACCLRequest* req = accl->recv(*out_buf, out_tensor.numel(), srcRank, tag, ACCL::GLOBAL_COMM, true, get_compressed_type(out_tensor.scalar_type()));
+  ACCL::ACCLRequest* req = accl->recv(*out_buf, out_tensor.numel(), srcRank, tag);
 
   POST_REQUEST("recv", out_tensor.nbytes())
 

@@ -80,6 +80,9 @@ def train(model, criterion, optimizer, scheduler, num_epochs=25):
         torch.save(model.state_dict(), best_model_params_path)
         best_acc = 0.0
 
+        print("train len: " + str(len(dataloaders['train'])))
+        print("val len: " + str(len(dataloaders['val'])))
+        
         for epoch in range(num_epochs):
             print(f'Epoch {epoch}/{num_epochs - 1}')
             print('-' * 10)
@@ -96,6 +99,7 @@ def train(model, criterion, optimizer, scheduler, num_epochs=25):
 
                 # Iterate over data.
                 count = 0
+
                 
                 for inputs, labels in dataloaders[phase]:
                     inputs = inputs.to(device)
@@ -120,8 +124,8 @@ def train(model, criterion, optimizer, scheduler, num_epochs=25):
                     running_loss += loss.item() * inputs.size(0)
                     running_corrects += torch.sum(preds == labels.data)
 
-                    print(f'{phase} RunningLoss: {running_loss:.4f}')
-                    logger.debug(f'{phase} RunningLoss: {running_loss:.4f}')
+                    print(f'{phase} batch Loss: {loss.item():.4f}')
+                    logger.debug(f'{phase} batch Loss: {loss.item():.4f}')
                     
                     if count % 5 == 0 and rank == 0:
                         print("saving model to " + best_model_params_path)

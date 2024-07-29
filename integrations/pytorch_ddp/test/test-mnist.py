@@ -134,6 +134,11 @@ if __name__ == "__main__":
         print("Assung DDP setup")
         args.d = True
 
+
+    host_file = args.host_file
+    fpga_file = args.fpga_file
+    comms = args.comms
+    start_port = 5005
     
     global rank, size
     if args.master_address==None:
@@ -212,7 +217,7 @@ if __name__ == "__main__":
     }
 
     cnn = CNN()
-    if args.d : cnn = DDP(cnn, bucket_cap_mb=4)
+    if args.d : cnn = DDP(cnn, bucket_cap_mb=2)
 
     loss_func = nn.CrossEntropyLoss()   
 

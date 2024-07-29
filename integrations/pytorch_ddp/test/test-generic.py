@@ -49,9 +49,12 @@ else:
 rank = 0
 size = 0
 
-count = 16 * 1
-num_el = 16 * 1
-shape = (16 , 1)
+x = 128
+y = 2
+
+count = x * y
+num_el = x * y
+shape = (x , y)
 #As in test.cpp defaults
 rxbufsize = 4096 * 1024
 
@@ -264,22 +267,27 @@ def test_reduce():
         
 
 def test_allreduce():
-    global num_errors
-    x = torch.ones(shape)
 
-    with torch.profiler.record_function("test_allreduce"):
-        
-        dist.all_reduce(x, dist.ReduceOp.SUM)
-        mpi.Barrier()
-        
-    try:
-        np.testing.assert_allclose(x, torch.full(shape, float(size)))
-    except AssertionError as e:
-        num_errors = num_errors + 1
-        logger.debug("Test AllReduce failed")
-        logger.debug(str(e))
-    else:
-        logger.debug("Test AllReduce finished!")
+    for i in range(8,21):
+    # if True:
+    
+        shape = (28938,)
+        global num_errors
+        x = torch.ones(shape)
+
+        with torch.profiler.record_function("test_allreduce"):
+
+            dist.all_reduce(x, dist.ReduceOp.SUM)
+            mpi.Barrier()
+
+        try:
+            np.testing.assert_allclose(x, torch.full(shape, float(size)))
+        except AssertionError as e:
+            num_errors = num_errors + 1
+            logger.debug("Test AllReduce failed")
+            logger.debug(str(e))
+        else:
+            logger.debug("Test AllReduce finished!")
         
     
 def test_alltoall():
@@ -462,20 +470,20 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
     # with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
                  # profile_memory=True, record_shapes=True) as prof:
 
-    test_broadcast_segment()
+    # test_broadcast_segment()
     # test_broadcast()
     # test_broadcast()
-    test_broadcast()
     # test_broadcast()
     # test_broadcast()
-    test_broadcast_2()
-    test_sendrcv()
-    test_scatter()
-    test_gather()
-    test_allgather()
-    test_alltoall()
+    # test_broadcast()
+    # test_broadcast_2()
+    # test_sendrcv()
+    # test_scatter()
+    # test_gather()
+    # test_allgather()
+    # test_alltoall()
     test_allreduce()
-    test_allgather()
+    # test_allgather()
     # test_allreduce()
     # test_allreduce()
     # test_allreduce()
@@ -483,7 +491,7 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
     # test_reduce()
 
         
-    demo_basic(rank)
+    # demo_basic(rank)
 
 
     mpi.Barrier()
