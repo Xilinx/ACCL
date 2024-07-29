@@ -54,6 +54,10 @@ namespace c10d {
 // #define GATHER_SIDESTEP
 // #define ALLGATHER_SIDESTEP
 // #define ALLREDUCE_SIDESTEP
+#define ALLREDUCE_SIDESTEP false
+// #define ALLREDUCE_SIDESTEP true
+
+#define RDVZ_THRESHOLD 64
     
 // Used in sidestepping
 #define MPI_CHECK(cmd)                                                   \
@@ -1159,30 +1163,31 @@ ProcessGroupACCL::allreduce(std::vector<at::Tensor> &tensors,
 
   std::function<void(std::unique_ptr<WorkEntry> &)> runFunc =
       [opts, this](std::unique_ptr<WorkEntry> &entry) {
-        #ifdef ALLREDUCE_SIDESTEP
-	auto data = (entry->src)[0];
-        c10::DeviceGuard guard(data.device());
-        std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
-        MPI_CHECK(MPI_Allreduce(
-            MPI_IN_PLACE,
-            data.data_ptr(),
-            data.numel(),
-            mpiDatatype.at(data.scalar_type()),
-            mpiOp.at(opts.reduceOp),
-            MPI_COMM_WORLD));
-        #else
-        auto tensor = (entry->src)[0];
-        // Segment data if necessary
-        if (tensor.nbytes() > bufsize) {
-          size_t n = bufsize / tensor.itemsize();
-          for (size_t i = 0; i < tensor.numel(); i += n) {
-            size_t end = std::min(i + n, static_cast<size_t>(tensor.numel()));
-            run_allreduce(tensor.slice(0, i, end), opts);
-          }
-        } else {
-          run_allreduce(tensor, opts);
-        }
-      #endif
+	// sidestep eager allreduce
+	if (((entry->src)[0]).nbytes() <= RDVZ_THRESHOLD || ALLREDUCE_SIDESTEP){
+	    auto data = (entry->src)[0];
+	    c10::DeviceGuard guard(data.device());
+	    std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
+	    MPI_CHECK(MPI_Allreduce(
+			  MPI_IN_PLACE,
+			  data.data_ptr(),
+			  data.numel(),
+			  mpiDatatype.at(data.scalar_type()),
+			  mpiOp.at(opts.reduceOp),
+			  MPI_COMM_WORLD));
+	} else {
+	    auto tensor = (entry->src)[0];
+	    // Segment data if necessary
+	    if (tensor.nbytes() > bufsize) {
+		size_t n = bufsize / tensor.itemsize();
+		for (size_t i = 0; i < tensor.numel(); i += n) {
+		    size_t end = std::min(i + n, static_cast<size_t>(tensor.numel()));
+		    run_allreduce(tensor.slice(0, i, end), opts);
+		}
+	    } else {
+		run_allreduce(tensor, opts);
+	    }
+      }
       };
   auto entry =
       std::make_unique<WorkEntry>(&tensors, &tensors, std::move(runFunc));
