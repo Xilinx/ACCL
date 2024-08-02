@@ -49,10 +49,13 @@ namespace c10d {
 
 // Toggles to run Collectives via OpenMPI instead(To sidestep any issues with them in ACCL)
 // The sidestep-code is copied from the ProcessGroupMPI
-#define BROADCAST_SIDESTEP
 #define SCATTER_SIDESTEP
 #define GATHER_SIDESTEP
-#define ALLGATHER_SIDESTEP
+// #define ALLGATHER_SIDESTEP
+
+#define BROADCAST_SIDESTEP false
+// #define BROADCAST_SIDESTEP true
+
     
 #define ALLREDUCE_SIDESTEP false
 // #define ALLREDUCE_SIDESTEP true
@@ -1097,9 +1100,11 @@ ProcessGroupACCL::broadcast(std::vector<at::Tensor> &tensors,
   checkSingleTensor(tensors);
   std::function<void(std::unique_ptr<WorkEntry> &)> runFunc =
       [opts, this](std::unique_ptr<WorkEntry> &entry) {
-	#ifdef BROADCAST_SIDESTEP
+	// if (((entry->src)[0]).numel() <= RDVZ_THRESHOLD || BROADCAST_SIDESTEP){
+	if (BROADCAST_SIDESTEP){
+	    
 	auto data = (entry->src)[0];
-	ACCL::debug("[Broadcast] -- Sidestepped using OpenMPI --");
+	ACCL::debug("[Broadcast] -- Sidestepped using OpenMPI -- size " + std::to_string(data.numel()));
 	c10::DeviceGuard guard(data.device());
         std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
         MPI_CHECK(MPI_Bcast(
@@ -1108,7 +1113,7 @@ ProcessGroupACCL::broadcast(std::vector<at::Tensor> &tensors,
             mpiDatatype.at(data.scalar_type()),
             opts.rootRank,
             MPI_COMM_WORLD));
-	#else
+	} else {
 	std::chrono::time_point<std::chrono::high_resolution_clock> start  = std::chrono::high_resolution_clock::now();
 	at::Tensor &tensor = (entry->src)[0];
         // Segment data if necessary
@@ -1128,7 +1133,7 @@ ProcessGroupACCL::broadcast(std::vector<at::Tensor> &tensors,
 	auto end = std::chrono::high_resolution_clock::now();
 	double durationUs = (std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() / 1000.0);
         ACCL::debug("Total bcast durationUs:" + std::to_string(durationUs));
-	#endif
+	}
       };
   auto entry =
       std::make_unique<WorkEntry>(&tensors, &tensors, std::move(runFunc));
@@ -1170,8 +1175,10 @@ ProcessGroupACCL::allreduce(std::vector<at::Tensor> &tensors,
   std::function<void(std::unique_ptr<WorkEntry> &)> runFunc =
       [opts, this](std::unique_ptr<WorkEntry> &entry) {
 	// sidestep eager allreduce
-	if (((entry->src)[0]).nbytes() <= RDVZ_THRESHOLD || ALLREDUCE_SIDESTEP){
+	// if (((entry->src)[0]).numel() <= RDVZ_THRESHOLD || ALLREDUCE_SIDESTEP){
+	  if (ALLREDUCE_SIDESTEP){
 	    auto data = (entry->src)[0];
+	    ACCL::debug("[Allreduce] -- Sidestepped using OpenMPI -- size " + std::to_string(data.numel()));
 	    c10::DeviceGuard guard(data.device());
 	    std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
 	    MPI_CHECK(MPI_Allreduce(
@@ -1184,10 +1191,13 @@ ProcessGroupACCL::allreduce(std::vector<at::Tensor> &tensors,
 	} else {
 	    auto tensor = (entry->src)[0];
 	    // Segment data if necessary
-	    if (tensor.nbytes() > bufsize) {
-		size_t n = bufsize / tensor.itemsize();
-		for (size_t i = 0; i < tensor.numel(); i += n) {
-		    size_t end = std::min(i + n, static_cast<size_t>(tensor.numel()));
+	    if (tensor.nbytes() > bufsize/2) {
+		size_t non_zero_dim_count = tensor.numel() / tensor.size(0);
+		size_t n = bufsize / 2 / tensor.itemsize() / non_zero_dim_count;
+		ACCL::debug("[Allreduce] Segmenting tensor of size " + std::to_string(tensor.nbytes()) + " into " + std::to_string(n * non_zero_dim_count) + "-sized elements ");
+		for (size_t i = 0; i < tensor.size(0); i += n) {
+		    ACCL::debug("part " + std::to_string(i) + "!");
+		    size_t end = std::min(i + n, static_cast<size_t>(tensor.size(0)));
 		    run_allreduce(tensor.slice(0, i, end), opts);
 		}
 	    } else {

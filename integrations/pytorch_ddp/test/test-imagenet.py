@@ -277,7 +277,7 @@ if __name__ == "__main__":
 
     model_ft.fc = nn.Linear(num_ftrs, 2)
 
-    if args.d : model_ft = DDP(model_ft, bucket_cap_mb=4)
+    if args.d : model_ft = DDP(model_ft, bucket_cap_mb=2)
 
     criterion = nn.CrossEntropyLoss()
 
