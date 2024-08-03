@@ -1156,11 +1156,10 @@ void ProcessGroupACCL::run_allreduce(at::Tensor in_tensor,
 
 
   // It seems to have issues with non-even numbers, so we round to 256
-  // int rounded_count = (in_tensor.numel() + 255) & ~255;
-  // int rounded_count = 32768;
+  int rounded_count = (in_tensor.numel() + 255) & ~255;
 
   
-  accl->allreduce(*in_buf, *out_buf, in_tensor.numel(), acclOp.at(opts.reduceOp));      
+  accl->allreduce(*in_buf, *out_buf, rounded_count, acclOp.at(opts.reduceOp));      
 
   POST_REQUEST("allreduce", in_tensor.nbytes())
 
