@@ -61,7 +61,35 @@ namespace c10d {
 // #define ALLREDUCE_SIDESTEP true
 
 #define RDVZ_THRESHOLD 64
-    
+
+#define MICRO_BENCH_FINE 1
+
+#define MICRO_BENCH_COARSE 1
+
+#if MICRO_BENCH_FINE
+#define START_FINE(name) \
+  std::chrono::time_point<std::chrono::high_resolution_clock> start_##name  = std::chrono::high_resolution_clock::now();
+#define STOP_FINE(name) \
+  auto end_##name = std::chrono::high_resolution_clock::now();		\
+  double durationUs_##name = (std::chrono::duration_cast<std::chrono::nanoseconds>(end_##name-start_##name).count() / 1000.0); \
+  ACCL::debug(#name "_tensor durationUs:" + std::to_string(durationUs_##name));
+#else
+#define START_FINE(name)
+#define STOP_FINE(name)
+#endif
+
+#if MICRO_BENCH_COARSE
+#define START_COARSE(name) \
+  std::chrono::time_point<std::chrono::high_resolution_clock> start_##name  = std::chrono::high_resolution_clock::now();
+#define STOP_COARSE(name) \
+  auto end_##name = std::chrono::high_resolution_clock::now();		\
+  double durationUs_##name = (std::chrono::duration_cast<std::chrono::nanoseconds>(end_##name-start_##name).count() / 1000.0); \
+  ACCL::debug(#name "_tensor durationUs:" + std::to_string(durationUs_##name));
+#else
+#define START_COARSE(name)
+#define STOP_COARSE(name)
+#endif
+
 // Used in sidestepping
 #define MPI_CHECK(cmd)                                                   \
   do {                                                                   \
@@ -123,25 +151,19 @@ std::map<at::ScalarType, MPI_Datatype> mpiDatatype = {
 #define DO_COND ((do_on_root && opts_root_rank == rank_) || (do_on_others && opts_root_rank != rank_))
 
 #define PRE_REQUEST(opname, tensor)					\
-    in_buf->change_type(convert_datatype_from_torch(tensor.scalar_type()));	\
-  out_buf->change_type(convert_datatype_from_torch(tensor.scalar_type()));	\
-  ACCL::debug("[" #opname "] Entering barrier");				\
+  START_FINE(type)    \						      
+  in_buf->change_type(convert_datatype_from_torch(tensor.scalar_type())); \
+  out_buf->change_type(convert_datatype_from_torch(tensor.scalar_type()));   \
+  STOP_FINE(type)						\  
+  ACCL::debug("[" #opname "] Entering barrier");			\
+  START_FINE(barrier)    \
   accl->barrier();							\
-  ACCL::debug("Starting " #opname " of " + std::to_string(tensor.numel()) + " items"); \
-  std::chrono::time_point<std::chrono::high_resolution_clock> start;	\
-  if(coyote_enabled){							\
-      start = std::chrono::high_resolution_clock::now();		\
-  }									
+  STOP_FINE(barrier)							\
+  ACCL::debug("Performing " #opname " of " + std::to_string(tensor.numel()) + " items"); \
+  START_FINE(lib)							
 
 #define POST_REQUEST(opname, n_bytes)				\
-double durationUs = 0.0;				\
-ACCL::debug("Waiting for request to complete.");	\
-if(coyote_enabled){							\
-  auto end = std::chrono::high_resolution_clock::now();			\
-  durationUs = (std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() / 1000.0); \
-  ACCL::debug("host measured durationUs:" + std::to_string(durationUs)); \
-}									\
-ACCL::debug("Finished waiting");
+STOP_FINE(lib)						
 
 #define TIMER_WRAP()
     
@@ -1053,7 +1075,7 @@ void ProcessGroupACCL::run_broadcast(at::Tensor in_tensor,
 
   // This case split is necessary, because otherwise data will be set to a nullptr
 
-  std::chrono::time_point<std::chrono::high_resolution_clock> start_init  = std::chrono::high_resolution_clock::now();
+  START_FINE(init)
       
   if (opts.rootRank == rank_){
       init_input_tensor(in_tensor, in_buf, true, false, opts.rootRank);
@@ -1061,16 +1083,17 @@ void ProcessGroupACCL::run_broadcast(at::Tensor in_tensor,
   // else{
       // init_output_data(in_tensor, in_buf, in_tensor.numel(), in_tensor.scalar_type(), false, true, opts.rootRank);
   // }
-  auto end_init = std::chrono::high_resolution_clock::now();
-  double durationUs_init = (std::chrono::duration_cast<std::chrono::nanoseconds>(end_init-start_init).count() / 1000.0);
-  ACCL::debug("init tensor durationUs:" + std::to_string(durationUs_init));
+
+  STOP_FINE(init)
   
   // Reserve device
 
-  std::chrono::time_point<std::chrono::high_resolution_clock> start_lock  = std::chrono::high_resolution_clock::now();
+      
+  START_FINE(lock)
   c10::DeviceGuard guard(in_tensor.device());
   std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
-
+  STOP_FINE(lock)
+  
   PRE_REQUEST(Broadcast,in_tensor)
 
   accl->bcast(*in_buf, in_tensor.numel(), opts.rootRank);
@@ -1081,17 +1104,9 @@ void ProcessGroupACCL::run_broadcast(at::Tensor in_tensor,
   // for(int i = 0; i<in_tensor.numel(); i++){
       // ACCL::debug(std::to_string(((double *) in_buf->byte_array())[i]));
   // }
-      
-  std::chrono::time_point<std::chrono::high_resolution_clock> start_copy  = std::chrono::high_resolution_clock::now();
+  START_FINE(copy)
   copy_back_tensor(in_tensor, in_buf, true, true, opts.rootRank);
-  auto end_copy = std::chrono::high_resolution_clock::now();
-  double durationUs_copy = (std::chrono::duration_cast<std::chrono::nanoseconds>(end_copy-start_copy).count() / 1000.0);
-  ACCL::debug("Copy tensor durationUs:" + std::to_string(durationUs_copy));
-
-  
-  auto end_inner = std::chrono::high_resolution_clock::now();
-  double durationUs_inner = (std::chrono::duration_cast<std::chrono::nanoseconds>(end_inner-start_inner).count() / 1000.0);
-  ACCL::debug("Inner total tensor durationUs:" + std::to_string(durationUs_inner));  
+  STOP_FINE(copy)
 }
 
 c10::intrusive_ptr<Work>
@@ -1100,6 +1115,7 @@ ProcessGroupACCL::broadcast(std::vector<at::Tensor> &tensors,
   checkSingleTensor(tensors);
   std::function<void(std::unique_ptr<WorkEntry> &)> runFunc =
       [opts, this](std::unique_ptr<WorkEntry> &entry) {
+	ACCL::debug("Starting Broadcast");
 	// if (((entry->src)[0]).numel() <= RDVZ_THRESHOLD || BROADCAST_SIDESTEP){
 	if (BROADCAST_SIDESTEP){
 	    
@@ -1114,7 +1130,7 @@ ProcessGroupACCL::broadcast(std::vector<at::Tensor> &tensors,
             opts.rootRank,
             MPI_COMM_WORLD));
 	} else {
-	std::chrono::time_point<std::chrono::high_resolution_clock> start  = std::chrono::high_resolution_clock::now();
+	START_COARSE(total)    
 	at::Tensor &tensor = (entry->src)[0];
         // Segment data if necessary
         if (tensor.nbytes() > bufsize) {
@@ -1130,9 +1146,7 @@ ProcessGroupACCL::broadcast(std::vector<at::Tensor> &tensors,
 	  ACCL::debug("[Broadcast] Broadcasting entire tensor of size " + std::to_string(tensor.nbytes()) + " without segmentation.");
           run_broadcast(tensor, opts);
         }
-	auto end = std::chrono::high_resolution_clock::now();
-	double durationUs = (std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() / 1000.0);
-        ACCL::debug("Total bcast durationUs:" + std::to_string(durationUs));
+	STOP_COARSE(total)    
 	}
       };
   auto entry =
@@ -1144,13 +1158,18 @@ ProcessGroupACCL::broadcast(std::vector<at::Tensor> &tensors,
 void ProcessGroupACCL::run_allreduce(at::Tensor in_tensor,
                                      const AllreduceOptions &opts) {
 
-  STANDARD_DECL
+  START_FINE(init)
+  
+  init_input_tensor(in_tensor, in_buf, true, true);
 
-  init_input_tensor(in_tensor, in_buf, true, true);    
+  STOP_FINE(init)
 
+
+  START_FINE(lock)      
   // Reserve device
   c10::DeviceGuard guard(in_tensor.device());
   std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
+  STOP_FINE(lock)      
 
   PRE_REQUEST(Allreduce,in_tensor)  
 
@@ -1163,7 +1182,9 @@ void ProcessGroupACCL::run_allreduce(at::Tensor in_tensor,
 
   POST_REQUEST("allreduce", in_tensor.nbytes())
 
+  START_FINE(copy)      
   copy_back_tensor(in_tensor, out_buf, true, true);
+  STOP_FINE(copy)
 }
 
 c10::intrusive_ptr<Work>
@@ -1173,6 +1194,7 @@ ProcessGroupACCL::allreduce(std::vector<at::Tensor> &tensors,
 
   std::function<void(std::unique_ptr<WorkEntry> &)> runFunc =
       [opts, this](std::unique_ptr<WorkEntry> &entry) {
+	ACCL::debug("Starting Allreduce");
 	// sidestep eager allreduce
 	// if (((entry->src)[0]).numel() <= RDVZ_THRESHOLD || ALLREDUCE_SIDESTEP){
 	  if (ALLREDUCE_SIDESTEP){
@@ -1188,6 +1210,7 @@ ProcessGroupACCL::allreduce(std::vector<at::Tensor> &tensors,
 			  mpiOp.at(opts.reduceOp),
 			  MPI_COMM_WORLD));
 	} else {
+	    START_COARSE(total)    
 	    auto tensor = (entry->src)[0];
 	    // Segment data if necessary
 	    if (tensor.nbytes() > bufsize/2) {
@@ -1202,6 +1225,7 @@ ProcessGroupACCL::allreduce(std::vector<at::Tensor> &tensors,
 	    } else {
 		run_allreduce(tensor, opts);
 	    }
+	    STOP_COARSE(total)    
       }
       };
   auto entry =
@@ -1599,11 +1623,16 @@ c10::intrusive_ptr<Work> ProcessGroupACCL::reduce_scatter(
 void ProcessGroupACCL::run_alltoall(at::Tensor in_tensor,
                                     at::Tensor out_tensor,
                                     const AllToAllOptions &opts) {
-  init_input_tensor(in_tensor, in_buf, true, true); 
+
+  START_FINE(init)
+  init_input_tensor(in_tensor, in_buf, true, true);
+  STOP_FINE(init)
 
   // Reserve device
+  START_FINE(lock)      
   c10::DeviceGuard guard(in_tensor.device());
   std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
+  STOP_FINE(lock)
 
   // init_output_data(out_tensor, dstdata, out_tensor.numel(), out_tensor.scalar_type(), true, true);
 
@@ -1613,8 +1642,9 @@ void ProcessGroupACCL::run_alltoall(at::Tensor in_tensor,
 
   POST_REQUEST("alltoall", in_tensor.nbytes()/size_)
 
+  START_FINE(copy)      
   copy_back_tensor(out_tensor, out_buf, true, true);    
-  
+  STOP_FINE(copy)
 }
 
     
@@ -1645,7 +1675,7 @@ c10::intrusive_ptr<Work> ProcessGroupACCL::alltoall_base(
     at::Tensor &outputTensor, at::Tensor &inputTensor,
     std::vector<int64_t> &outputSplitSizes,
     std::vector<int64_t> &inputSplitSizes, const AllToAllOptions &opts) {
-  ACCL::debug("alltoall base variant called");
+    ACCL::debug("Starting AlltoAll");
   if (outputSplitSizes.size() == 0 && inputSplitSizes.size() == 0) {
     // We can use alltoall
     TORCH_CHECK(
@@ -1658,6 +1688,7 @@ c10::intrusive_ptr<Work> ProcessGroupACCL::alltoall_base(
 
     std::function<void(std::unique_ptr<WorkEntry>&)> runFunc =
         [opts, this](std::unique_ptr<WorkEntry>& entry) {
+	  START_COARSE(total)    
           auto srctensor = (entry->src)[0];
           auto dsttensor = (entry->dst)[0];
 
@@ -1696,6 +1727,7 @@ c10::intrusive_ptr<Work> ProcessGroupACCL::alltoall_base(
 	    ACCL::debug("Running without segmentation");
             run_alltoall(srctensor, dsttensor, opts);
           }
+	STOP_COARSE(total)	  
         };
     std::vector<at::Tensor> inputTensors = {inputTensor};
     std::vector<at::Tensor> outputTensors = {outputTensor};
