@@ -60,7 +60,7 @@ namespace c10d {
 #define ALLREDUCE_SIDESTEP false
 // #define ALLREDUCE_SIDESTEP true
 
-#define SIDESTEP_BCAST_WITH_ALLREDUCE
+// #define SIDESTEP_BCAST_WITH_ALLREDUCE
     
 #define RDVZ_THRESHOLD 64
 
@@ -153,10 +153,10 @@ std::map<at::ScalarType, MPI_Datatype> mpiDatatype = {
 #define DO_COND ((do_on_root && opts_root_rank == rank_) || (do_on_others && opts_root_rank != rank_))
 
 #define PRE_REQUEST(opname, tensor)					\
-  START_FINE(type)    \						      
+  START_FINE(type)    \
   in_buf->change_type(convert_datatype_from_torch(tensor.scalar_type())); \
   out_buf->change_type(convert_datatype_from_torch(tensor.scalar_type()));   \
-  STOP_FINE(type)						\  
+  STOP_FINE(type)						\
   ACCL::debug("[" #opname "] Entering barrier");			\
   START_FINE(barrier)    \
   accl->barrier();							\
@@ -170,7 +170,7 @@ STOP_FINE(lib)
 #define TIMER_WRAP()
     
 // Better logging
-// accl_log(mpi_rank, format_log("bcast", options, durationUs, 0));	\
+// accl_log(mpi_rank, format_log("bcast", options, durationUs, 0));
 
   
 namespace {
@@ -731,8 +731,9 @@ void accl_sa_handler(int)
 void ProcessGroupACCL::init_input_tensor(at::Tensor &tensor, std::unique_ptr<ACCL::BaseBuffer> &data, bool do_on_root, bool do_on_others, int opts_root_rank) {
   if DO_COND {
 	ACCL::debug("Copying data to CPU tensor of size " + std::to_string(tensor.numel()));
-	at::Tensor wrapper_tensor = torch::from_blob(data->byte_array(), tensor.sizes(), tensor.options().device(c10::DeviceType::CPU)); 
-	wrapper_tensor.copy_(tensor);
+	// at::Tensor wrapper_tensor = torch::from_blob(data->byte_array(), tensor.sizes(), tensor.options().device(c10::DeviceType::CPU)); 
+	// wrapper_tensor.copy_(tensor);
+	std::memcpy(data->byte_array(), tensor.data_ptr(), tensor.numel() * tensor.element_size());
 
 	//TODO check if necessary in coyote
 	if (!coyote_enabled) {
@@ -827,7 +828,9 @@ void ProcessGroupACCL::copy_back_tensor(at::Tensor tensor_original, std::unique_
       } else {
 	ACCL::debug("Copying data back from CPU tensor of size " +
 		    std::to_string(tensor_original.numel()));
-	tensor_original.copy_(torch::from_blob(data->byte_array(), tensor_original.sizes(), tensor_original.options().device(c10::DeviceType::CPU)));
+	std::memcpy(tensor_original.data_ptr(), data->byte_array(), tensor_original.numel() * tensor_original.element_size());
+	// tensor_original.copy_(torch::from_blob(data->byte_array(), tensor_original.sizes(), tensor_original.options().device(c10::DeviceType::CPU)));
+	ACCL::debug("Finished Copying ");
       }
   }
 }

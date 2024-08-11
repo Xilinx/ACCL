@@ -270,3 +270,6 @@ if __name__ == "__main__":
     p.stop()
 
     print(p.key_averages().table(sort_by="self_cpu_time_total", row_limit=100))
+
+
+    dist.destroy_process_group()
