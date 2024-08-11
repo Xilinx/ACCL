@@ -60,6 +60,8 @@ namespace c10d {
 #define ALLREDUCE_SIDESTEP false
 // #define ALLREDUCE_SIDESTEP true
 
+#define SIDESTEP_BCAST_WITH_ALLREDUCE
+    
 #define RDVZ_THRESHOLD 64
 
 #define MICRO_BENCH_FINE 1
@@ -959,7 +961,7 @@ void ProcessGroupACCL::initialize() {
 
 
   } else {
-    ACCL::debug(std::string("Performing standard initialization"));
+    // ACCL::debug(std::string("Error XRT initialization deprecated"));
     accl = accl_network_utils::initialize_accl(ranks_, rank_,
                                                simulator_, design_, xrt_device,
                                                xclbin_, nbufs_, bufsize, 0,
@@ -1074,6 +1076,41 @@ void ProcessGroupACCL::run_broadcast(at::Tensor in_tensor,
   std::chrono::time_point<std::chrono::high_resolution_clock> start_inner  = std::chrono::high_resolution_clock::now();
 
   // This case split is necessary, because otherwise data will be set to a nullptr
+  #ifdef SIDESTEP_BCAST_WITH_ALLREDUCE
+  START_FINE(init)
+  
+  if (opts.rootRank == rank_){
+      init_input_tensor(in_tensor, in_buf, true, false, opts.rootRank);
+  }
+  else{
+      auto zero_tensor = torch::zeros({in_tensor.numel()}, in_tensor.scalar_type());
+      init_input_tensor(zero_tensor, in_buf, false, true, opts.rootRank);
+  }
+
+  STOP_FINE(init)
+
+  START_FINE(lock)      
+  // Reserve device
+  c10::DeviceGuard guard(in_tensor.device());
+  std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
+  STOP_FINE(lock)      
+
+  PRE_REQUEST(Broadcast,in_tensor)  
+
+
+  // It seems to have issues with non-even numbers, so we round to 256
+  int rounded_count = (in_tensor.numel() + 1023) & ~1023;
+
+  
+  accl->allreduce(*in_buf, *out_buf, rounded_count, ACCL::reduceFunction::SUM);      
+
+  POST_REQUEST("allreduce", in_tensor.nbytes())
+
+  START_FINE(copy)      
+  copy_back_tensor(in_tensor, out_buf, true, true);
+  STOP_FINE(copy)
+  
+  #else
 
   START_FINE(init)
       
@@ -1096,7 +1133,9 @@ void ProcessGroupACCL::run_broadcast(at::Tensor in_tensor,
   
   PRE_REQUEST(Broadcast,in_tensor)
 
-  accl->bcast(*in_buf, in_tensor.numel(), opts.rootRank);
+  int rounded_count = (in_tensor.numel() + 1023) & ~1023;
+
+  accl->bcast(*in_buf, rounded_count, opts.rootRank);
 
   POST_REQUEST("bcast", in_tensor.nbytes())
 
@@ -1107,6 +1146,7 @@ void ProcessGroupACCL::run_broadcast(at::Tensor in_tensor,
   START_FINE(copy)
   copy_back_tensor(in_tensor, in_buf, true, true, opts.rootRank);
   STOP_FINE(copy)
+  #endif
 }
 
 c10::intrusive_ptr<Work>
@@ -1133,9 +1173,9 @@ ProcessGroupACCL::broadcast(std::vector<at::Tensor> &tensors,
 	START_COARSE(total)    
 	at::Tensor &tensor = (entry->src)[0];
         // Segment data if necessary
-        if (tensor.nbytes() > bufsize) {
+        if (tensor.nbytes() > bufsize / 2) {
 	  size_t non_zero_dim_count = tensor.numel() / tensor.size(0);
-          size_t n = bufsize / tensor.itemsize() / non_zero_dim_count;
+          size_t n = bufsize / 2 / tensor.itemsize() / non_zero_dim_count;
 	  ACCL::debug("[Broadcast] Segmenting tensor of size " + std::to_string(tensor.nbytes()) + " into " + std::to_string(n * non_zero_dim_count) + "-sized elements ");
           for (size_t i = 0; i < tensor.size(0); i += n) {
 	    ACCL::debug("part " + std::to_string(i) + "!");
@@ -1175,7 +1215,7 @@ void ProcessGroupACCL::run_allreduce(at::Tensor in_tensor,
 
 
   // It seems to have issues with non-even numbers, so we round to 256
-  int rounded_count = (in_tensor.numel() + 255) & ~255;
+  int rounded_count = (in_tensor.numel() + 1023) & ~1023;
 
   
   accl->allreduce(*in_buf, *out_buf, rounded_count, acclOp.at(opts.reduceOp));      

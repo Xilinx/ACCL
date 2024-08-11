@@ -1,5 +1,8 @@
 import torch
+import torchvision
 from torchvision import datasets
+from torchvision import models
+from torchvision import transforms
 from torchvision.transforms import ToTensor
 from torch.utils.data import DataLoader
 from torch.profiler import profile, ProfilerActivity
@@ -30,66 +33,32 @@ else:
 
 # Run via ACCL
 
-class CNN(nn.Module):
-    def __init__(self):
-        super(CNN, self).__init__()
-        self.conv1 = nn.Sequential(         
-            nn.Conv2d(
-                in_channels=1,              
-                out_channels=16,            
-                kernel_size=5,              
-                stride=1,                   
-                padding=2,                  
-            ),                              
-            nn.ReLU(),                      
-            nn.MaxPool2d(kernel_size=2),    
-        )
-        self.conv2 = nn.Sequential(         
-            nn.Conv2d(16, 32, 5, 1, 2),     
-            nn.ReLU(),                      
-            nn.MaxPool2d(2),                
-        )
-        # fully connected layer, output 10 classes
-        self.out = nn.Linear(32 * 7 * 7, 10)
-    def forward(self, x):
-        x = self.conv1(x)
-        x = self.conv2(x)
-        # flatten the output of conv2 to (batch_size, 32 * 7 * 7)
-        x = x.view(x.size(0), -1)       
-        output = self.out(x)
-        return output, x    # return x for visualization
-
-def train(num_epochs, cnn, loaders, p):
+def train(num_epochs, model, loaders, criterion, p):
 
     start_time_train = time.perf_counter()
     
-    cnn.train()
-        
-    # Train the model
+    model.train()
+
     total_step = len(loaders['train'])
 
-    optimizer = optim.Adam(cnn.parameters(), lr = 0.01)   
+    optimizer = optim.Adam(model.parameters(), lr = 0.001)   
 
     for epoch in range(num_epochs):
-        for i, (images, labels) in enumerate(loaders['train']):
+        model.train()
+        running_loss = 0.0
+        for i, (inputs, labels) in enumerate(loaders['train']):
             p.step()
             start_time = time.perf_counter()
-            # gives batch data, normalize x when iterate train_loader
-            b_x = Variable(images)   # batch x
-            b_y = Variable(labels)   # batch y
-            output = cnn(b_x)[0]               
+            
+            optimizer.zero_grad()
+            outputs = model(inputs)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
+            running_loss += loss.item()
 
-            loss = loss_func(output, b_y)
-            
-            # clear gradients for this training step   
-            optimizer.zero_grad()           
-            
-            # backpropagation, compute gradients 
-            loss.backward()    
-            # apply gradients             
-            optimizer.step()                
-            
-            # if (i+1) % 100 == 0:
+            # if (i+1) % 10 == 0:
+                # break
             if True:
                 end_time = time.perf_counter()
                 measured_time = (end_time - start_time) * 1000000
@@ -102,18 +71,22 @@ def train(num_epochs, cnn, loaders, p):
     print('Total train time: ' + str(measured_time_train))
         
 
-def test(p):
+def test(num_epochs, model, loaders, criterion, p):
     # Test the model
     start_time_test = time.perf_counter()
-    cnn.eval()
+    model.eval()
     with torch.no_grad():
         correct = 0
         total = 0
-        for images, labels in loaders['test']:
+        val_loss = 0
+        for i, (inputs, labels) in enumerate(loaders['test']):
             p.step()
-            test_output, last_layer = cnn(images)
-            pred_y = torch.max(test_output, 1)[1].data.squeeze()
-            correct_current = (pred_y == labels).sum().item()
+            test_output = model(inputs)
+            loss = criterion(test_output, labels)
+            val_loss += loss.item()
+
+            _, predicted = torch.max(test_output, 1)
+            correct_current = (predicted == labels).sum().item()
             total += labels.size(0)
             correct += correct_current
             
@@ -210,38 +183,44 @@ if __name__ == "__main__":
         
     device = 'cpu'
 
-    train_data = datasets.MNIST(
-        root = 'data',
-        train = True,                         
-        transform = ToTensor(), 
-        download = True,            
-    )
-    test_data = datasets.MNIST(
-        root = 'data', 
-        train = False, 
-        transform = ToTensor()
-    )
+    transform = transforms.Compose([
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        transforms.Normalize(
+            mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225]
+        )
+    ])
+
+    train_dataset = datasets.CIFAR10(root='cifar10_data', train=True, download=True, transform=transform)
+    val_dataset = datasets.CIFAR10(root='cifar10_data', train=False, download=True, transform=transform)
 
     if args.d : sampler = DistributedSampler
     else : sampler = lambda x : None
     
     loaders = {
-        'train' : torch.utils.data.DataLoader(train_data, 
-                                              batch_size=100, 
+        'train' : torch.utils.data.DataLoader(train_dataset, 
+                                              batch_size=32, 
                                               shuffle=False,
-                                              sampler=sampler(train_data)),
-        'test'  : torch.utils.data.DataLoader(test_data, 
-                                              batch_size=100, 
+                                              num_workers=4,
+                                              sampler=sampler(train_dataset)),
+        'test'  : torch.utils.data.DataLoader(val_dataset, 
+                                              batch_size=32, 
                                               shuffle=False,
-                                              sampler=sampler(test_data)),
+                                              num_workers=4,
+                                              sampler=sampler(val_dataset)),
     }
 
-    cnn = CNN()
-    if args.d : cnn = DDP(cnn, bucket_cap_mb=2)
+    model = models.resnet50(pretrained=True)
+    
+    if args.d : model = DDP(model, bucket_cap_mb=2, broadcast_buffers=False)
 
     loss_func = nn.CrossEntropyLoss()   
 
-    num_epochs = 10
+    criterion = nn.CrossEntropyLoss()
+    
+    num_epochs = 1
 
     mpi.Barrier()
 
@@ -253,19 +232,19 @@ if __name__ == "__main__":
         active=10,
         repeat=3
     )
+
     
     with torch.profiler.profile(
             activities=[torch.profiler.ProfilerActivity.CPU],
             schedule=schedule,
             on_trace_ready=torch.profiler.tensorboard_trace_handler('./accl_log/profiler_log'),
             record_shapes=True,
-            with_stack=True
     ) as p:
 
         
-        train(num_epochs, cnn, loaders, p)
+        train(num_epochs, model, loaders, criterion, p)
 
-        test(p)
+        test(num_epochs, model, loaders, criterion, p)
 
     p.stop()
 

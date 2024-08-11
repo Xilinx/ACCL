@@ -12,6 +12,8 @@ python3 -m venv venv
 source venv/bin/activate
 ```
 
+Activate an XRT 21 version. Later versions led to issues before.
+
 <details><summary>Installation without GPU support</summary>
   To install the plugin without GPU support, simply run the following from within the venv:
 

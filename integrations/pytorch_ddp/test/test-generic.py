@@ -49,8 +49,8 @@ else:
 rank = 0
 size = 0
 
-x = 128
-y = 2
+x = 28939
+y = 1
 
 count = x * y
 num_el = x * y
@@ -84,14 +84,21 @@ def test_broadcast_segment():
         logger.debug("Test broadcast finished!")
 
 def test_broadcast():
+    shape = (256,)
+    
     global num_errors
-    if rank == 0:
-        x = torch.ones(shape)
-    else:
-        x = torch.zeros(shape)
 
-    for i in range(1):
-        with torch.profiler.record_function("test bcast " + str(i)):
+        
+    # for i in range(10):
+    if True:
+
+        if rank == 0:
+            x = torch.ones(shape)
+        else:
+            x = torch.zeros(shape)
+
+        
+        with torch.profiler.record_function("test bcast "):
 
             start_time = time.perf_counter()
 
@@ -123,8 +130,8 @@ def test_broadcast():
         logger.debug("Test broadcast finished!")
 
 def test_broadcast_2():
-    test_type = torch.double
-    shape_2 = (2, 2)
+    test_type = torch.float
+    shape_2 = (1048576,)
     global num_errors
     if rank == 0:
         x = torch.ones(shape_2, dtype=test_type)
@@ -226,7 +233,7 @@ def test_gather():
             
 def test_allgather():
     global num_errors
-    shape_gather = (1,)
+    shape_gather = (2,)
     x = torch.full(shape_gather, float(rank), dtype=torch.float)
     y = [torch.empty(shape_gather, dtype=torch.float) for _ in range(size)]
 
@@ -268,10 +275,11 @@ def test_reduce():
 
 def test_allreduce():
 
-    for i in range(8,21):
-    # if True:
+    # for i in range(10):
+    if True:
     
-        shape = (28938,)
+        shape = (256,)
+        # shape = (320001,)
         global num_errors
         x = torch.ones(shape)
 
@@ -292,6 +300,10 @@ def test_allreduce():
     
 def test_alltoall():
     global num_errors
+
+    num_el = 26624
+    
+    shape = (num_el,)
 
     input = torch.arange(num_el, dtype=torch.float) + float(rank) * num_el
 
@@ -467,31 +479,35 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
     
     global num_errors
     num_errors = 0
-    # with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
-                 # profile_memory=True, record_shapes=True) as prof:
+    # with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], profile_memory=True, record_shapes=True) as prof:
 
-    # test_broadcast_segment()
-    # test_broadcast()
-    # test_broadcast()
-    # test_broadcast()
-    # test_broadcast()
-    # test_broadcast()
-    # test_broadcast_2()
-    # test_sendrcv()
-    # test_scatter()
-    # test_gather()
-    # test_allgather()
-    # test_alltoall()
-    test_allreduce()
-    # test_allgather()
-    # test_allreduce()
-    # test_allreduce()
-    # test_allreduce()
+    # for i in range(10):
+    if True:
 
-    # test_reduce()
+        # test_broadcast_2()
+        test_broadcast()
+        test_allreduce()
+        # test_allgather()
+        # test_broadcast_segment()
+        # test_broadcast()
+        # test_broadcast()
+        # test_broadcast()
+        # test_broadcast()
+        # test_broadcast()
+        # test_sendrcv()
+        # test_scatter()
+        # test_gather()
+        # test_allgather()
+        # test_alltoall()
+        # test_allreduce()
+        # test_allgather()
+        # test_allreduce()
+        # test_allreduce()
 
-        
-    # demo_basic(rank)
+        # test_reduce()
+
+
+        # demo_basic(rank)
 
 
     mpi.Barrier()

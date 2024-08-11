@@ -10,8 +10,9 @@ if [[ -v ACCL_SCRIPT ]]; then
     SCRIPT_NAME="$ACCL_SCRIPT"
 else
     # SCRIPT_NAME="test-mnist.py -d True -n 2" # MNIST
-    SCRIPT_NAME="test-imagenet.py -d True"
+    SCRIPT_NAME="test-resnet50.py -d True -n 2" # MNIST
     # SCRIPT_NAME=test-generic.py
+    # SCRIPT_NAME="test-imagenet.py -d True"
     echo "Variable ACCL_SCRIPT not set. Assuming $SCRIPT_NAME"
 fi
 
@@ -100,6 +101,7 @@ echo "Running with $NUM_PROCESS Processes"
 
 rm -f $(pwd)/accl_log/rank*
 rm -f $(pwd)/accl_log/accl_pg_*
+rm -rf $(pwd)/accl_log/profiler_log
 
 # C="mpirun -n $NUM_PROCESS $MPI_ARGS -outfile-pattern \"$(pwd)/accl_log/rank_%r_stdout\" $EXEC $ARG &"
 C="mpirun -n $NUM_PROCESS $MPI_ARGS -outfile-pattern \"$(pwd)/accl_log/rank_%r_stdout\" -errfile-pattern \"$(pwd)/accl_log/rank_%r_stderr\" $EXEC $ARG &"
