@@ -86,6 +86,19 @@ public:
 
   val_t read(addr_t offset) override;
 
+  /**
+   * Attach the FPGA to a DMABuf. Setup the content of the TLBs accordingly.
+   */
+  void attach_dma_buf(uint64_t buf_fd, addr_t vaddr, uint32_t offset);
+
+  /**
+   * Detach the FPGA from a DMABuf.
+   */
+  void detach_dma_buf(uint64_t buf_fd);
+  
+  // DEBUG
+  // void write_TLB_entry(addr_t vaddr, addr_t paddr, uint32_t len);
+
   void write(addr_t offset, val_t val) override;
 
   void wait(ACCLRequest *request) override;
