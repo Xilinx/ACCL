@@ -2,6 +2,7 @@
 #  Copyright (C) 2022 Xilinx, Inc
 #  Modifications Copyright (c) 2024, Advanced Micro Devices, Inc.
 #  All rights reserved.
+#
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
 #  You may obtain a copy of the License at
@@ -38,19 +39,6 @@
 #endif
 
 /** @file coyotebuffer.hpp */
-struct get_region_info_params {
-    hsa_region_t * region;
-    size_t desired_allocation_size;
-    hsa_agent_t* agent;
-    bool* taken;
-
-};
-
-struct GpuInfo {
-    hsa_agent_t gpu_device; // L'attributo per il dispositivo GPU
-    int requestedGPU; // 
-    get_region_info_params* information;
-};
 
 namespace ACCL {
 
@@ -78,134 +66,18 @@ typedef struct {
   hipDeviceptr_t dev_addr;
 } gpu_handle;
 
-bool my_ready = false;
-int counter_gpu = 0;
 
-static void print_info_region(hsa_region_t* region){
-
-
-    hsa_region_segment_t segment;
-    hsa_region_get_info(*region, HSA_REGION_INFO_SEGMENT, &segment);
-    uint32_t flags;
-    hsa_region_get_info(*region, HSA_REGION_INFO_GLOBAL_FLAGS,&flags);
-    uint32_t info_size;
-    hsa_region_get_info(*region, HSA_REGION_INFO_SIZE,&info_size ); 
-    size_t max_size = 0;
-    hsa_region_get_info(*region, HSA_REGION_INFO_ALLOC_MAX_SIZE , &max_size); 
-    uint32_t max_pvt_wg;
-    hsa_region_get_info(*region, HSA_REGION_INFO_ALLOC_MAX_PRIVATE_WORKGROUP_SIZE  , &max_pvt_wg); 
-    bool check;
-    hsa_region_get_info(*region, HSA_REGION_INFO_RUNTIME_ALLOC_ALLOWED, &check); 
-    size_t runtime_granule;
-    hsa_region_get_info(*region, HSA_REGION_INFO_RUNTIME_ALLOC_GRANULE, &runtime_granule); 
-    size_t runtime_alignment;
-    hsa_region_get_info(*region, HSA_REGION_INFO_RUNTIME_ALLOC_ALIGNMENT , &runtime_alignment);
-
-    std::cout<<"HSA_REGION_INFO_SEGMENT: "<<segment<<std::endl;
-    std::cout<<"HSA_REGION_INFO_GLOBAL_FLAGS Flags: "<<flags<<std::endl;
-    std::cout<<"HSA_REGION_INFO_SIZE: "<<info_size<<std::endl;
-    std::cout<<"HSA_REGION_INFO_ALLOC_MAX_SIZE : "<<max_size<<std::endl;
-    std::cout<<"HSA_REGION_INFO_ALLOC_MAX_PRIVATE_WORKGROUP_SIZE : "<<max_pvt_wg<<std::endl;
-    std::cout<<"HSA_REGION_INFO_RUNTIME_ALLOC_ALLOWED : "<<check<<std::endl;
-    std::cout<<"HSA_REGION_INFO_RUNTIME_ALLOC_GRANULE: "<<runtime_granule<<std::endl;
-    std::cout<<"HSA_REGION_INFO_RUNTIME_ALLOC_ALIGNMENT: "<<runtime_alignment<<std::endl;
-}
-
-/**
- * 
- * @brief Callback for HSA routine. It determines if a memory region can be used for a given memory allocation size.
- * 
- */
-static hsa_status_t get_region_info(hsa_region_t region, void* data) {
-    struct get_region_info_params * params = (struct get_region_info_params *) data;
-    
-    size_t max_size = 0;
-    int value = hsa_region_get_info(region, HSA_REGION_INFO_ALLOC_MAX_SIZE , &max_size); 
-    uint32_t info_size;
-    value = hsa_region_get_info(region, HSA_REGION_INFO_SIZE,&info_size ); 
-    //std::cout << "Desidered Allocation Size: " << params->desired_allocation_size << std::endl;
-    char name[64];
-    int stat = hsa_agent_get_info(*params->agent, HSA_AGENT_INFO_NAME, name);
-    if(!*params->taken && max_size > params->desired_allocation_size && info_size > params->desired_allocation_size )
-      {
-          //std::cout << "Belonging to the agent: " << name << std::endl;
-          //print_info_region(&region);
-
-    // if(max_size < params->desired_allocation_size) {
-    //     return HSA_STATUS_ERROR;
-    // }
-
-    //TODO: check on memory size. Currently HSA_REGION_INFO_ALLOC_MAX_SIZE > HSA_REGION_INFO_SIZE for both GPUs
-        *params->region = region;
-        *params->taken = true;
-        //std::cout<<"Returning a region"<<std::endl;
-
-      }
-  
-    return HSA_STATUS_SUCCESS;
-}
+#ifndef GLOBALS_HPP
+#define GLOBALS_HPP
+inline bool my_ready = false;
+#endif
 
   /**
    * @brief Callback for HSA routine. It determines if the given agent is of type HSA_DEVICE_TYPE_GPU
    * and sets the value of data to the agent handle if it is.
    */
 static hsa_status_t find_gpu(hsa_agent_t agent, void *data) {
-  GpuInfo* info = reinterpret_cast<GpuInfo*>(data);
   if (data == NULL) {
-      return HSA_STATUS_ERROR_INVALID_ARGUMENT;
-  }
-    hsa_device_type_t device_type;
-    char name[64];
-    hsa_status_t stat = hsa_agent_get_info(agent, HSA_AGENT_INFO_DEVICE, &device_type);
-
-    uint32_t NumaID; 
-    stat = hsa_agent_get_info(agent, HSA_AGENT_INFO_NODE, &NumaID);
-
-    hsa_agent_get_info(agent,HSA_AGENT_INFO_NAME,name);
-    //std::cout<<"printing an agent"<<std::endl;
-    //std::cout<< name << std::endl<< "with NUMA ID: "<< NumaID <<  std::endl;
-    if (stat != HSA_STATUS_SUCCESS) {
-        return stat;
-    }
-
-    //if (device_type == HSA_DEVICE_TYPE_GPU && my_ready == false && NumaID == info->NumaID) {
-    //if (my_ready == false && NumaID == info->NumaID) {
-    if(device_type == HSA_DEVICE_TYPE_GPU && my_ready == false && counter_gpu == info->requestedGPU){  
-        std::cout<<"assigning the device with NumaID: "<<NumaID<<std::endl;
-        *((hsa_agent_t *)data) = agent;
-        my_ready = true;
-        char name[64] = { 0 };
-        stat = hsa_agent_get_info(agent, HSA_AGENT_INFO_NAME, name);
-        //debug("GPU found: " + std::string(name));
-        //std::cout<<"Inside FindGPU I am looking for the region"<<std::endl;
-        *info->information->agent = agent;
-        int code = hsa_agent_iterate_regions(agent, get_region_info, info->information); 
-        if ( code != HSA_STATUS_SUCCESS)
-        {
-            std::cout << "Error here" << std::endl;
-            throw std::runtime_error("Something happened iterating regions!");
-        }
-        get_region_info_params infos = *info->information;
-        //std::cout<<"founded region: "<< infos.region<<std::endl;
-        int err = (infos.region->handle == 0) ? HSA_STATUS_ERROR : HSA_STATUS_SUCCESS;
-        //std::cout<<"Value of handle: "<<infos.region<<std::endl;
-        if(err != HSA_STATUS_SUCCESS) {
-          throw std::runtime_error("Insufficient memory on the GPU!");
-        }
-        
-
-    }else{
-
-      if(device_type == HSA_DEVICE_TYPE_GPU)
-      {
-        counter_gpu++;
-      }
-    }
-    return HSA_STATUS_SUCCESS;
-
-}
-static hsa_status_t find_gpu_noId(hsa_agent_t agent, void *data) {
-    if (data == NULL) {
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
     hsa_device_type_t device_type;
@@ -218,13 +90,33 @@ static hsa_status_t find_gpu_noId(hsa_agent_t agent, void *data) {
         my_ready = true;
         char name[64] = { 0 };
         stat = hsa_agent_get_info(agent, HSA_AGENT_INFO_NAME, name);
-        //debug("GPU found: " + std::string(name));
+        debug("GPU found: " + std::string(name));
     }
     return HSA_STATUS_SUCCESS;
 }
 
 
+struct get_region_info_params {
+    hsa_region_t * region;
+    size_t desired_allocation_size;
 
+};
+
+/**
+ * 
+ * @brief Callback for HSA routine. It determines if a memory region can be used for a given memory allocation size.
+ * 
+ */
+static hsa_status_t get_region_info(hsa_region_t region, void* data) {
+    struct get_region_info_params * params = (struct get_region_info_params *) data;
+    size_t max_size = 0;
+    hsa_region_get_info(region, HSA_REGION_INFO_ALLOC_MAX_SIZE , &max_size);
+    if(max_size < params->desired_allocation_size) {
+        return HSA_STATUS_ERROR;
+    }
+    *params->region = region;
+    return HSA_STATUS_SUCCESS;
+}
 
 #endif
 
@@ -249,13 +141,9 @@ template <typename dtype> class CoyoteBuffer : public Buffer<dtype> {
      * @param dmabuf  If set to true, it allocates the buffer on the GPU for peer-to-peer DMA. Otherwise, the buffer is allocated on the host.
      */
     #ifdef COYOTE_HSA_SUPPORT
-      CoyoteBuffer(addr_t length, dataType type, CCLO *device, bool dmabuf = false, int device_id = -1)
+      CoyoteBuffer(addr_t length, dataType type, CCLO *device, bool dmabuf = false)
         : Buffer<dtype>(nullptr, length, type, 0x0)
       {
-      //std::cout<<"I am creating the CoyoteBuffer"<<std::endl;
-      //std::cout<<"Device ID: "<<device_id<<std::endl;
-      //std::cout<<"DMABuf: "<<dmabuf<<std::endl;
-
       CoyoteDevice *dev = dynamic_cast<CoyoteDevice *>(device);
       this->device = dev;
       // 2M pages
@@ -264,110 +152,53 @@ template <typename dtype> class CoyoteBuffer : public Buffer<dtype> {
       this->n_pages = (buffer_size + page_size - 1) / page_size;
         if(dmabuf) {
           this->dmabuf_support = true;
+          hsa_agent_t gpu_device;
           hsa_status_t err;
           my_ready = false;
-          counter_gpu = 0;
-          hsa_agent_t gpu_device;
-          bool check = false;
-          hsa_region_t region_to_use = {0};
-          hsa_region_segment_t segment_to_use;
-          struct get_region_info_params info_params = {
-              .region = &region_to_use,
-              .desired_allocation_size = this->buffer_size,
-              .agent = &gpu_device,
-              .taken = &check
-
-          };
-          //std::cout<<"Printing before the choice"<<std::endl;
-          //print_info_region(info_params.region);
 
           //select GPU device
-          if(device_id != -1){
-              GpuInfo g;
-              g.requestedGPU = device_id; 
-              g.information = &info_params;
-              err = hsa_iterate_agents(find_gpu, &g);
-              gpu_device = g.gpu_device; // this should guarantee code compatibility after changes for GPU selection
-              if(err != HSA_STATUS_SUCCESS) {
-                throw std::runtime_error("No GPU found! You have specified a NumaID but the GPU was not there. Please provide a correct NumaID");
-              }
-          }else{
-              err = hsa_iterate_agents(find_gpu_noId,&gpu_device);
-              if(err != HSA_STATUS_SUCCESS) {
-                 throw std::runtime_error("No GPU found! You have not specified any NumaID. Please provide a correct NumaID");
-              }
-                //std::cout<<"Region INFO -to be checked"<<std::endl;
-                hsa_agent_iterate_regions(gpu_device, get_region_info, &info_params); 
-                //std::cout<<"founded region: "<< info_params.region<<std::endl;
-                err = (region_to_use.handle == 0) ? HSA_STATUS_ERROR : HSA_STATUS_SUCCESS;
-                //std::cout<<"Value of handle: "<<region_to_use.handle<<std::endl;
-                if(err != HSA_STATUS_SUCCESS) {
-                  throw std::runtime_error("Insufficient memory on the GPU!");
-                }
+          err = hsa_iterate_agents(find_gpu, &gpu_device);
+          if(err != HSA_STATUS_SUCCESS) {
+            throw std::runtime_error("No GPU found!");
           }
 
-          //std::cout<<"Now I am printing the chosen region"<<std::endl;
-          //print_info_region(info_params.region);
-          char name[64] = { 0 };
-          int stat = hsa_agent_get_info(*info_params.agent, HSA_AGENT_INFO_NAME, name);
-          if(stat != HSA_STATUS_SUCCESS) {
-            throw std::runtime_error("Name Retrival failed!");
+          hsa_region_t region_to_use = {0}; 
+          struct get_region_info_params info_params = {
+              .region = &region_to_use,
+              .desired_allocation_size = this->buffer_size
+          };
+          hsa_agent_iterate_regions(gpu_device, get_region_info, &info_params);
+          err = (region_to_use.handle == 0) ? HSA_STATUS_ERROR : HSA_STATUS_SUCCESS;
+          if(err != HSA_STATUS_SUCCESS) {
+            throw std::runtime_error("Insufficient memory on the GPU!");
           }
-          uint32_t id; 
-          stat = hsa_agent_get_info(*info_params.agent, HSA_AGENT_INFO_NODE, &id);
-          if(stat != HSA_STATUS_SUCCESS) {
-            throw std::runtime_error("ID Retrival failed!");
-          }
-          //std::cout << "in the chosen region, the agent is: " <<  name << " and its id is: " << id << std::endl;
 
-          //std::cout<<"Printing Memory Allocate Params"<<std::endl;
-          //std::cout<<"Buffer Size: " << this->buffer_size<<std::endl;
-          //std::cout<<"Aligned Buffer: " << (void **) &(this->aligned_buffer) << std::endl;
-          //std::cout<<"=========================================================================================="<<std::endl;
-          err = hsa_memory_allocate(*info_params.region, this->buffer_size, (void **) &(this->aligned_buffer)); 
-          //std::cout<<"=========================================================================================="<<std::endl;
-
+          err = hsa_memory_allocate(region_to_use, this->buffer_size, (void **) &(this->aligned_buffer));
           if(err != HSA_STATUS_SUCCESS) {
             throw std::runtime_error("Allocation failed on the GPU!");
           }
-          if(this->aligned_buffer==NULL)
-            std::cout<<" Pointer null"<< std::endl;
-          else
-            std::cout<<"Pointer not null"<< std::endl;
-
           this->_buffer = this->aligned_buffer;
+          
           this->dma_buf_fd = 0;
           size_t offset = 0;
 
           //export DMABuf via HSA
-
-          //std::cout<<"Printing Input Params"<<std::endl;
-          //std::cout<<this->aligned_buffer<<std::endl;
-          //std::cout<<this->buffer_size<<std::endl;
-          //std::cout<<&this->dma_buf_fd<<std::endl;
-          //std::cout<<&offset<<std::endl;
-          // this function fails before reaching the amd driver
           err = hsa_amd_portable_export_dmabuf(this->aligned_buffer, this->buffer_size, &this->dma_buf_fd, &offset);
-          
+
           if(err != HSA_STATUS_SUCCESS) {
-              if(err == HSA_STATUS_ERROR_INVALID_AGENT)
-                std::cout << "HSA_STATUS_ERROR_INVALID_AGENT" << std::endl;
-              std::cout << "Value of err: " << err << std::endl; 
               hsa_amd_portable_close_dmabuf(this->dma_buf_fd);
               throw std::runtime_error("HSA export failed!");
           }
-          //debug("hsa_amd_portable_export_dmabuf done!");
+          debug("hsa_amd_portable_export_dmabuf done!");
           
           //import DMABuf, attach FPGA, and setup TLB
           auto dev = static_cast<::ACCL::CoyoteDevice *>(device);
           dev->attach_dma_buf(this->dma_buf_fd, (unsigned long) this->aligned_buffer, offset);
-          //printf("Attach Completed. Going to Update\n");
         } else {
           //standard memory allocation on the HOST and TLB setup
           this->aligned_buffer = (dtype *)this->device->coyote_proc->getMem({fpga::CoyoteAlloc::HUGE_2M, n_pages});
         }
       this->update_buffer(this->aligned_buffer, (addr_t)this->aligned_buffer); 
-      //printf("Attach Completed. Update Completed\n");
 
       //std::cerr << "Allocation successful! Allocated buffer: "<<std::setbase(16)<<(uint64_t)this->aligned_buffer << std::setbase(10) <<", Size: " << this->_size << std::endl;
 
@@ -492,7 +323,6 @@ template <typename dtype> class CoyoteBuffer : public Buffer<dtype> {
 
       //std::cerr << "Free user buffer from cProc cPid:"<< std::setbase(10)<<this->device->coyote_proc->getCpid()<<", buffer_size:"<<buffer_size<<","<<std::setbase(16) << (uint64_t)this->aligned_buffer<<std::endl;
       #ifdef COYOTE_HSA_SUPPORT
-      printf("Defined HSA Support. Value of dmabuf_support = %d \n",this->dmabuf_support);
       if(this->dmabuf_support) {
         //detach FPGA from DMABuf
         this->device->coyote_proc->detachDMABuf(this->dma_buf_fd);
@@ -501,11 +331,8 @@ template <typename dtype> class CoyoteBuffer : public Buffer<dtype> {
         char * err_str;
 		    hsa_status_string(err, (const char **) &err_str);
         debug("hsa_amd_portable_close_dmabuf exit status = " + std::string(err_str));
-
         //deallocate buffer
         hsa_memory_free(this->aligned_buffer);
-        debug("buffer free");        
-
         this->aligned_buffer = nullptr;
       } else {
         this->device->coyote_proc->freeMem(this->aligned_buffer);

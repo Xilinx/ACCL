@@ -1,6 +1,7 @@
 /*******************************************************************************
 #  Copyright (C) 2022 Xilinx, Inc
-#
+#  Modifications Copyright (c) 2024, Advanced Micro Devices, Inc.
+#  All rights reserved.
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
 #  You may obtain a copy of the License at
@@ -383,6 +384,44 @@ void CoyoteDevice::attach_dma_buf(uint64_t buf_fd, addr_t vaddr, uint32_t offset
 void CoyoteDevice::detach_dma_buf(uint64_t buf_fd) {
   this->coyote_proc->detachDMABuf(buf_fd);
 }
+
+/**
+ * Export FPGA internal registers memory area via DMABuf
+ */
+uint64_t CoyoteDevice::export_mem_with_dma_buf(addr_t vaddr, uint32_t size,int * fd) {
+  return this->coyote_proc->exportMemWithDMABuf((void *) vaddr, size, fd);
+}
+
+/**
+ * Export FPGA CTRL registers memory area via DMABuf (specific case w.r.t. export_mem_with_dma_buf()) 
+ */
+uint64_t CoyoteDevice::export_CTRL_registers() {
+  try {
+    int fd_for_gpu = -1;  
+    this->coyote_proc->exportCTRL(&fd_for_gpu);
+    
+
+    this->ctrl_fd = fd_for_gpu;
+    std::cerr << "fd_for_GPU = " << fd_for_gpu << std::endl;
+
+    return fd_for_gpu;
+
+  } catch(...) {
+    CoyoteDevice::~CoyoteDevice();
+  }
+}
+
+/**
+ * Close the exported DMABuf for FPGA internal registers memory area
+ */
+void CoyoteDevice::close_export_mem_with_dma_buf(uint64_t buf_fd) {
+  this->coyote_proc->closeExportedDMABuf(buf_fd);
+}
+
+// DEBUG API
+// void CoyoteDevice::import_dma_buf_from_fd_to_GPU(int fd) {
+//   this->coyote_proc->importDMABufFromFDToGPU(fd);
+// }
 
 void CoyoteDevice::wait(ACCLRequest *request) { 
   auto fpga_handle = request_map.find(*request);

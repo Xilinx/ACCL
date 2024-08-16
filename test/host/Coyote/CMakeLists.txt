@@ -1,21 +1,11 @@
-# Copyright (c) 2024, Advanced Micro Devices, Inc.
-# All rights reserved.
-
+#Copyright (c) 2024, Advanced Micro Devices, Inc.
+#All rights reserved.
 cmake_minimum_required(VERSION 3.16)
 
-if(NOT DEFINED ROCM_PATH)
-if(DEFINED ENV{ROCM_PATH})
-    set(ROCM_PATH $ENV{ROCM_PATH} CACHE PATH "Path to which ROCM has been installed")
-elseif(DEFINED ENV{HIP_PATH})
-    set(ROCM_PATH "$ENV{HIP_PATH}/.." CACHE PATH "Path to which ROCM has been installed")
-else()
-    set(ROCM_PATH "/opt/rocm" CACHE PATH "Path to which ROCM has been installed")
-endif()
+if (NOT DEFINED CMAKE_CXX_COMPILER)
+    set(CMAKE_CXX_COMPILER /opt/rocm-6.0.2/bin/hipcc)
 endif()
 
-if (NOT DEFINED CMAKE_CXX_COMPILER)
-    set(CMAKE_CXX_COMPILER ${ROCM_PATH}/bin/hipcc)
-endif()
 
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_STANDARD 17)
@@ -24,7 +14,6 @@ set(CMAKE_CXX_FLAGS_DEBUG "-O0 -ggdb")
 
 set(XRT_REQUIRED OFF)
 set(COYOTE_HSA_SUPPORT OFF CACHE BOOL "enables the HSA runtime - HSA environment required")
-
 if(XRT_REQUIRED AND COYOTE_HSA_SUPPORT)
     message(FATAL_ERROR "XRT and HSA are not supported in combination.")
 endif()    
@@ -37,35 +26,6 @@ endif()
 
 message(CMAKE_CURRENT_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 
-#if(COYOTE_HSA_SUPPORT)
-#set(CURR_FOLDER_CMD "${CMAKE_CURRENT_SOURCE_DIR}/../scripts/rename_extension.sh 1 .")
-#set(DRIVER_XRT_CMD "${CMAKE_CURRENT_SOURCE_DIR}/../scripts/rename_extension.sh 1 ../../../driver/xrt/")
-#set(REFDES_COY_SW "${CMAKE_CURRENT_SOURCE_DIR}/../scripts/rename_extension.sh 1 ../../refdesigns/Coyote/sw/")
-#set(MODEL_CMD "${CMAKE_CURRENT_SOURCE_DIR}/../scripts/rename_extension.sh 1 ../../model/")
-#set(COYOTE_CMD "${CMAKE_CURRENT_SOURCE_DIR}/../scripts/rename_extension.sh 1 ../../refdesigns/Coyote/sw/src/")
-#
-#execute_process(COMMAND bash -c ${CURR_FOLDER_CMD})
-#execute_process(COMMAND bash -c ${DRIVER_XRT_CMD})
-#execute_process(COMMAND bash -c ${REFDES_COY_SW})
-#execute_process(COMMAND bash -c ${MODEL_CMD})
-#execute_process(COMMAND bash -c ${COYOTE_CMD})
-#
-#else()
-#set(CURR_FOLDER_CMD "${CMAKE_CURRENT_SOURCE_DIR}/../scripts/rename_extension.sh 2 .")
-#set(DRIVER_XRT_CMD "${CMAKE_CURRENT_SOURCE_DIR}/../scripts/rename_extension.sh 2 ../../../driver/xrt/")
-#set(REFDES_COY_SW "${CMAKE_CURRENT_SOURCE_DIR}/../scripts/rename_extension.sh 2 ../../refdesigns/Coyote/sw/")
-#set(MODEL_CMD "${CMAKE_CURRENT_SOURCE_DIR}/../scripts/rename_extension.sh 2 ../../model/")
-#set(COYOTE_CMD "${CMAKE_CURRENT_SOURCE_DIR}/../scripts/rename_extension.sh 2 ../../refdesigns/Coyote/sw/src/")
-#
-#
-#execute_process(COMMAND bash -c ${CURR_FOLDER_CMD})
-#execute_process(COMMAND bash -c ${DRIVER_XRT_CMD})
-#execute_process(COMMAND bash -c ${REFDES_COY_SW})
-#execute_process(COMMAND bash -c ${MODEL_CMD})
-#execute_process(COMMAND bash -c ${COYOTE_CMD})
-#
-#endif()
-
 if(COYOTE_HSA_SUPPORT)
 
     if(NOT DEFINED HIP_PATH)
@@ -76,6 +36,15 @@ if(COYOTE_HSA_SUPPORT)
         endif()
     endif()
 
+    if(NOT DEFINED ROCM_PATH)
+        if(DEFINED ENV{ROCM_PATH})
+            set(ROCM_PATH $ENV{ROCM_PATH} CACHE PATH "Path to which ROCM has been installed")
+        elseif(DEFINED ENV{HIP_PATH})
+            set(ROCM_PATH "$ENV{HIP_PATH}/.." CACHE PATH "Path to which ROCM has been installed")
+        else()
+            set(ROCM_PATH "/opt/rocm" CACHE PATH "Path to which ROCM has been installed")
+        endif()
+    endif()
 
     if(NOT DEFINED HCC_PATH)
         if(DEFINED ENV{HCC_PATH})
@@ -102,7 +71,7 @@ if(COYOTE_HSA_SUPPORT)
 endif()
 
 if(COYOTE_HSA_SUPPORT)
-    project(accl_on_coyote LANGUAGES CXX )
+    project(accl_on_coyote LANGUAGES CXX HIP)
 else()
     project(accl_on_coyote LANGUAGES CXX)
 endif()
@@ -142,7 +111,7 @@ set(EXEC accl_on_coyote)
 if(COYOTE_HSA_SUPPORT)
     file(STRINGS "${ROCM_PATH}/.info/version" ROCM_VERSION)
     if(${ROCM_VERSION} VERSION_LESS "6.0")
-        hip_add_executable(${EXEC} ${CMAKE_SOURCE_DIR}/test.hip)
+        hip_add_executable(${EXEC} ${CMAKE_SOURCE_DIR}/test.cpp)
     else()
         add_executable(${EXEC} ${CMAKE_SOURCE_DIR}/test.cpp)
     endif()
@@ -153,6 +122,15 @@ if(COYOTE_HSA_SUPPORT)
         $<BUILD_INTERFACE:${ROCM_PATH}/include>
         $<BUILD_INTERFACE:${ROCM_PATH}/include/hsa>)
       
+
+
+#acclgpu
+if(COYOTE_HSA_SUPPORT)
+add_subdirectory(${CMAKE_SOURCE_DIR}/../../../driver/gpu/ ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/gpu/)
+endif()
+
+target_include_directories(${EXEC} PUBLIC ${ACCLGPU_DRIVER_DIR}/include)
+target_link_libraries(${EXEC} PUBLIC acclgpu)  
 else()
     add_executable(${EXEC} ${CMAKE_SOURCE_DIR}/test.cpp)
 endif()
@@ -166,13 +144,14 @@ target_include_directories(${EXEC} PUBLIC ${ACCL_DRIVER_DIR}/include)
 target_link_libraries(${EXEC} PUBLIC accl)
 
 # MPI
-set(MPI_CXX_HEADER_DIR /scratch/users/gsorrent/mpich_install/include)
-set(MPI_mpi_LIBRARY /scratch/users/gsorrent/mpich_install/lib/libmpi.so.12.4.0)
-set(MPI_mpicxx_LIBRARY /scratch/users/gsorrent/mpich_install/lib/libmpicxx.so)
-set(MPI_INCLUDE_PATH /scratch/users/gsorrent/mpich_install) 
-set(MPI_HOME /scratch/users/gsorrent/mpich_install) # this is the one required
+#set(MPI_CXX_HEADER_DIR /scratch/users/gsorrent/mpich_install/include)
+#set(MPI_mpi_LIBRARY /scratch/users/gsorrent/mpich_install/lib/libmpi.so.12.4.0)
+#set(MPI_mpicxx_LIBRARY /scratch/users/gsorrent/mpich_install/lib/libmpicxx.so)
+#set(MPI_INCLUDE_PATH /scratch/users/gsorrent/mpich_install) 
+#set(MPI_HOME /scratch/users/gsorrent/mpich_install) # this is the one required
+#
 
-
+# MPI
 find_package(MPI REQUIRED)
 message(STATUS "MPI Include Path: ${MPI_CXX_INCLUDE_PATH}")
 
@@ -195,7 +174,6 @@ target_link_directories(${EXEC} PUBLIC /usr/local/lib)
 
 
 if(COYOTE_HSA_SUPPORT)  
-    set_target_properties(${EXEC} PROPERTIES LINKER_LANGUAGE CXX)
     target_link_libraries(${EXEC} PUBLIC hip::device  numa pthread drm drm_amdgpu rt dl hsa-runtime64 hsakmt)
 endif()
 

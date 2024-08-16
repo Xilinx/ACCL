@@ -34,6 +34,7 @@
 #include <hsa.h>
 #include <hsa/hsa_ext_finalize.h>
 #include <hsakmt/hsakmt.h>
+#include "mapping.hpp"
 #endif
 #include <signal.h>
 
@@ -125,7 +126,7 @@ struct timestamp_t
 
 #define ACCL_COPY_FPGA 14
 #define ACCL_COPY_NODMA 15
-
+#define ACCL_MAPPING 16
 // ACCL_CONFIG SUBFUNCTIONS
 #define HOUSEKEEP_SWRST 0
 #define HOUSEKEEP_PKTEN 1
@@ -135,8 +136,6 @@ struct timestamp_t
 #define HOUSEKEEP_SET_STACK_TYPE 5
 #define HOUSEKEEP_SET_MAX_SEGMENT_SIZE 6
 #define HOUSEKEEP_CLOSE_CON 7
-
-#define MAX_DEVICES 10
 
 std::string format_log(std::string collective, options_t options, double time, double tput)
 {
@@ -498,45 +497,370 @@ void configure_cyt_tcp(std::vector<rank_t> &ranks, int local_rank, CoyoteDevice*
 
 }
 
-
-
 #ifdef COYOTE_HSA_SUPPORT
 
-/*struct GpuInfo_user {
-    hsa_agent_t gpu_device; // L'attributo per il dispositivo GPU
-    int NumaID; //
-};
+#define FIRST_THREAD_IN_BLOCK() ((threadIdx.x + threadIdx.y + threadIdx.z) == 0)
+#define FIRST_BLOCK() ( blockIdx.x + blockIdx.y + blockIdx.z == 0)
+#define BEGIN_BLOCK_ZERO_DO __syncthreads(); if(FIRST_THREAD_IN_BLOCK()) { do{
+#define END_BLOCK_ZERO_DO }while(0); } __syncthreads();
 
-struct availableGPUs {
-	GpuInfo_user devices[MAX_DEVICES];
-	int size;
-};
+#define BEGIN_SINGLE_THREAD_DO __threadfence_system(); __syncthreads(); if(FIRST_BLOCK()&&FIRST_THREAD_IN_BLOCK()) { do{
+#define END_SINGLE_THREAD_DO }while(0); } __threadfence_system();
+#define STORE(DST, SRC) __atomic_store_n((DST), (SRC), __ATOMIC_SEQ_CST)
+
+const std::size_t OFFSET_HOSTCTRL = 0x2000; 
+const std::size_t OFFSET_CCLO = 0x0; 
+
+/**
+ * Utilities to write and read Coyote registers from GPU kernels
+*/
+//__device__ inline auto setCSR(volatile uint64_t * ctrl_reg, uint64_t val, uint32_t offs) {printf("write 0x%lx into 0x%lx\n", val, offs); ctrl_reg[offs] = val;}
+//__device__ inline auto setCSR(volatile uint64_t * ctrl_reg, uint64_t val, uint32_t offs) {
+//	//printf("write 0x%lx into 0x%lx\n", val, offs);
+//	//STORE(&ctrl_reg[offs],val);
+//	// asm volatile(
+//    //      "s_waitcnt lgkmcnt(0)"
+//    //  );
+//	asm volatile(
+//    "flat_store_dwordx2 %0 %1 glc slc \n"
+//    :
+//    : "v"(&ctrl_reg[offs]), "v"(val));
+//    asm volatile(
+//        "s_waitcnt lgkmcnt(0)"
+//    );
+//    asm volatile(
+//        "s_waitcnt vmcnt(0)"
+//    );
+//
+//	//asm volatile(
+//	//	"flat_store_dwordx2 %0 %1 glc slc \n"
+//	//	:
+//	//	: "v"(&ctrl_reg[offs]), "v"(val)); // Write first address last
+//}
+//
+
+__device__ inline auto getCSR(volatile uint64_t * ctrl_reg, uint32_t offs) { return ctrl_reg[offs]; }
+
+__device__ inline auto setCSR(volatile uint64_t * ctrl_reg, uint64_t val, uint32_t offs) {
 
 
-static hsa_status_t find_gpuId(hsa_agent_t agent, void *data) {
-    availableGPUs* info = reinterpret_cast<availableGPUs*>(data);
-    if (data == NULL) {
-      return HSA_STATUS_ERROR_INVALID_ARGUMENT;
-  }
-    hsa_device_type_t device_type;
-    hsa_status_t stat = hsa_agent_get_info(agent, HSA_AGENT_INFO_DEVICE, &device_type);
-    if (stat != HSA_STATUS_SUCCESS) {
-        return stat;
+	int check = 1;
+	while(check) {
+		int reg = getCSR(ctrl_reg, (OFFSET_HOSTCTRL + HOSTCTRL_ADDR::AP_CTRL)>>2);
+		//check = !((reg >> 1) & 0x1); 
+		check = ((reg >> 1) & 0x1); 
+
+	}
+	
+	asm volatile(
+    "flat_store_dwordx2 %0 %1 glc slc \n"
+    :
+    : "v"(&ctrl_reg[offs]), "v"(val));
+    asm volatile(
+        "s_waitcnt lgkmcnt(0)"
+    );
+    asm volatile(
+        "s_waitcnt vmcnt(0)"
+    );
+
+}
+
+
+
+__device__ inline auto start_setCSR(volatile uint64_t * ctrl_reg, uint64_t val, uint32_t offs) {
+
+	int check = 1;
+	while(check) {
+		int reg = getCSR(ctrl_reg, (OFFSET_HOSTCTRL + HOSTCTRL_ADDR::AP_CTRL)>>2);
+		//check = !((reg >> 1) & 0x1); 
+		check = ((reg >> 1) & 0x1); 
+
+	}
+	if (!check){
+	asm volatile(
+    "flat_store_dwordx2 %0 %1 glc slc \n"
+    :
+    : "v"(&ctrl_reg[offs]), "v"(val));
+    asm volatile(
+        "s_waitcnt lgkmcnt(0)"
+    );
+    asm volatile(
+        "s_waitcnt vmcnt(0)"
+    );
+	}
+
+}
+
+
+
+/**
+ * Utility to create ACCL copy request from GPU kernel
+*/
+
+__global__ void starter_ctrl(volatile uint64_t * ctrl_reg){
+
+	//auto start_beforesync = std::chrono::high_resolution_clock::now();
+//
+	//__threadfence_system(); 
+	//__syncthreads();
+	//hipStreamSynchronize(0);
+	setCSR(ctrl_reg, 0x1U, (OFFSET_HOSTCTRL + HOSTCTRL_ADDR::AP_CTRL)>>2);
+
+	//poll for the end
+	int check = 1;
+	
+	int counter = 0;
+	//while(check) {
+	//	int reg = getCSR(ctrl_reg, (OFFSET_HOSTCTRL + HOSTCTRL_ADDR::AP_CTRL)>>2);
+	//	check = !((reg >> 1) & 0x1); 
+	//	counter++;
+	//}
+
+
+}
+
+__device__ inline void start(::ACCL::GPU::Options options, volatile uint64_t * ctrl_reg) {
+        //assert(this->get_status() ==  operationStatus::EXECUTING);
+
+		//volatile int clock_counter = 0;
+		//while(clock_counter < 10000000) {
+		//	clock_counter++;
+		//}
+//
+		//volatile int clock_counter3 = 0;
+		//while(clock_counter3 < 10000000) {
+		//	clock_counter3++;
+		//}
+        int function, arg_id = 0;
+
+        if (options.scenario == ::ACCL::GPU::operation::config) {
+            function = static_cast<int>(options.cfg_function);
+        } else {
+            function = static_cast<int>(options.reduce_function);
+        }
+
+        uint32_t flags = static_cast<uint32_t>(options.host_flags) << 8 | static_cast<uint32_t>(options.stream_flags);
+
+		//write parameters
+		setCSR(ctrl_reg, static_cast<uint32_t>(options.scenario), (0x2010)>>2);
+		printf("Written scenario");
+        setCSR(ctrl_reg, static_cast<uint32_t>(options.count), (0x2018)>>2);
+        printf("Written count");
+		setCSR(ctrl_reg, static_cast<uint32_t>(options.comm), (0x2020)>>2);
+        printf("Written comm");
+		setCSR(ctrl_reg, static_cast<uint32_t>(options.root_src_dst), (0x2028)>>2);
+		printf("Written root_src_dst");
+		setCSR(ctrl_reg, static_cast<uint32_t>(function), (OFFSET_HOSTCTRL + HOSTCTRL_ADDR::FUNCTION_R)>>2);
+        printf("Written function");
+		setCSR(ctrl_reg, static_cast<uint32_t>(options.tag), (OFFSET_HOSTCTRL + HOSTCTRL_ADDR::MSG_TAG)>>2);
+        printf("Written tag");
+		setCSR(ctrl_reg, static_cast<uint32_t>(options.arithcfg_addr), (OFFSET_HOSTCTRL + HOSTCTRL_ADDR::DATAPATH_CFG)>>2);
+        printf("Written compression_flags");
+		setCSR(ctrl_reg, static_cast<uint32_t>(options.compression_flags), (OFFSET_HOSTCTRL + HOSTCTRL_ADDR::COMPRESSION_FLAGS)>>2);
+        printf("Written stream_flags");
+		//hardcoded flags for a generic GPU->FPGA->GPU
+		setCSR(ctrl_reg, static_cast<uint32_t>(1280), (OFFSET_HOSTCTRL + HOSTCTRL_ADDR::STREAM_FLAGS)>>2);
+        addr_t addr_a = options.addr_0;
+        printf("Written addr_0");
+		setCSR(ctrl_reg, static_cast<uint32_t>(addr_a), (OFFSET_HOSTCTRL + HOSTCTRL_ADDR::ADDRA_0)>>2);
+        printf("Written addr_1");
+		setCSR(ctrl_reg, static_cast<uint32_t>(addr_a >> 32), (OFFSET_HOSTCTRL + HOSTCTRL_ADDR::ADDRA_1)>>2);
+        addr_t addr_b = options.addr_1;
+        printf("Written addr_b");
+		setCSR(ctrl_reg, static_cast<uint32_t>(addr_b), (OFFSET_HOSTCTRL + HOSTCTRL_ADDR::ADDRB_0)>>2);
+        printf("Written addr_b");
+		setCSR(ctrl_reg, static_cast<uint32_t>(addr_b >> 32), (OFFSET_HOSTCTRL + HOSTCTRL_ADDR::ADDRB_1)>>2);
+        addr_t addr_c = options.addr_2;
+		setCSR(ctrl_reg, static_cast<uint32_t>(addr_c), (OFFSET_HOSTCTRL + HOSTCTRL_ADDR::ADDRC_0)>>2);
+		setCSR(ctrl_reg, static_cast<uint32_t>(addr_c >> 32), (OFFSET_HOSTCTRL + HOSTCTRL_ADDR::ADDRC_1)>>2);
+
+		setCSR(ctrl_reg, 0x1U, (OFFSET_HOSTCTRL + HOSTCTRL_ADDR::AP_CTRL)>>2);
+
+		//volatile int clock_counter = 0;
+		//while(clock_counter < 10000000) {
+		//	clock_counter++;
+		//}
+		//ctrl_reg[(OFFSET_HOSTCTRL + HOSTCTRL_ADDR::AP_CTRL)>>2] = 0x1U;
+
+
+        // //start the kernel
+        // setCSR(ctrl_reg, 0x1U, (OFFSET_HOSTCTRL + HOSTCTRL_ADDR::AP_CTRL)>>2);
+		
+		//kernel completed
+		
+		//hipLaunchKernelGGL(starter_ctrl,dim3(1),dim3(1),0,stream,(volatile uint64_t *) gpu_ptr); //dynamic parallelism not supported for HIP
+
+
+
     }
+/**
+ * GPU kernel to launch copy
+*/
+__global__ void launch_copy( addr_t buffer_a, addr_t buffer_b, uint32_t count, volatile uint64_t * ctrl_reg) {
+    // BEGIN_SINGLE_THREAD_DO
 
-    if (device_type == HSA_DEVICE_TYPE_GPU) {
-		GpuInfo_user current_gpu;
-        *((hsa_agent_t *)data) = agent;
-		uint32_t Numa; 
-    	stat = hsa_agent_get_info(agent, HSA_AGENT_INFO_NODE, &Numa);
-		current_gpu.NumaID =Numa;
-		current_gpu.gpu_device=agent;
-		info->devices[info->size] = current_gpu;
-		info->size++;
-    }
-    return HSA_STATUS_SUCCESS;
-}*/
+        ::ACCL::GPU::Mapping m;
+        m.ctrl_reg = (volatile uint64_t *) ctrl_reg;
 
+        //fill parameters
+
+        ::ACCL::GPU::Options options;
+        options.scenario = ::ACCL::GPU::operation::copy;
+		//printf("addr_0 = %lx, addr_2 = %lx\n", buffer_a, buffer_b);
+        options.addr_0 = buffer_a;
+        options.addr_2 = buffer_b;
+        options.data_type_io_0 = ::ACCL::GPU::dataType::float32;
+        options.data_type_io_2 = ::ACCL::GPU::dataType::float32;
+        options.count = count;
+		options.arithcfg_addr = 196; //both buffers are on the GPU, not on the FPGA
+		//printf("count = %d\n", count);
+        options.stream_flags = ::ACCL::GPU::streamFlags::NO_STREAM;
+        options.waitfor = NULL;
+
+		//printf("scenario = %d, data_type_io_0 = %d, data_type_io_2 = %d, stream_flags = %d\n", options.scenario, options.data_type_io_0, options.data_type_io_2, options.stream_flags);
+        
+		//create request and launch
+		::ACCL::GPU::CoyoteRequest cr{options, &m};
+        start(options, ctrl_reg);
+		
+    //END_SINGLE_THREAD_DO
+}
+
+
+/**
+ * @brief exports CTRL registrs via DMABuf, attaches GPU and invokes copy:
+ * 
+*/
+void test_mapping(::ACCL::ACCL &accl, options_t &options) {
+	
+	unsigned int count = options.nruns;
+	
+	//allocate GPU buffers
+
+  	auto op_buf = accl.create_coyotebuffer<float>(count, dataType::float32, true);
+  	auto res_buf = accl.create_coyotebuffer<float>(count, dataType::float32, true);
+	
+	//allocate host buffers
+  	auto op_buf_host = std::vector<float>(count);
+	auto res_buf_host = std::vector<float>(count);
+	test_debug("host buffers allocated", options);
+
+	//populate buffers
+	random_array(op_buf_host.data(), count);
+	hipMemcpy(op_buf->buffer(), op_buf_host.data(), 4*count, hipMemcpyHostToDevice);
+	hipMemset(res_buf->buffer(), 78, 4*count);
+	
+	//get virtual address for FPGA CTRL registers
+	auto cclo_ptr = static_cast<CoyoteDevice*>(accl.cclo);
+	
+	//export this memory area vuia DMABuf
+	int dmabuf_fd = (int) cclo_ptr->export_CTRL_registers();
+	test_debug("dmabuf fd: " + std::to_string(dmabuf_fd), options);
+
+	//HSA setup
+	hsa_agent_t gpu_device;
+	hsa_status_t err;
+	my_ready = false;
+	err = hsa_iterate_agents(find_gpu, &gpu_device);
+	assert(err == HSA_STATUS_SUCCESS);
+	void * gpu_ptr = NULL;
+	size_t gpu_size = 0;
+	void * metadata = NULL;
+	size_t metadata_size = 0;
+
+	
+	//import DMABuf and get GPU pointer
+	err = hsa_amd_interop_map_buffer(1, &gpu_device, dmabuf_fd, 0, &gpu_size,  &gpu_ptr, &metadata_size, (const void **) &metadata);
+	if(err == HSA_STATUS_SUCCESS) {
+		std::cout << "import successful!" << std::endl;
+	} else {
+		char * err_str;
+		hsa_status_string(err, (const char **) &err_str);
+		std::cout << "import error: " << err << ": " << err_str << std::endl;
+	}
+	std::cout << "GPU ptr: " << std::hex << gpu_ptr << std::dec << ", size: " << gpu_size << std::endl;
+
+	
+	cclo_ptr->printDebug();
+
+	//input to use to launch chipscope debugging
+	int input = 0;
+	std::cin >> input;
+
+	//launch GPU kernel
+ 	hipStream_t stream;
+    hipStreamCreate(&stream);
+	volatile int clock_counter2 = 0;
+	while(clock_counter2 < 10000000) {
+		clock_counter2++;
+	}
+	hipLaunchKernelGGL(launch_copy, 1, 1, 0, stream, (uint64_t) op_buf->buffer(), (uint64_t) res_buf->buffer(), count, (volatile uint64_t *) gpu_ptr);
+	hipEvent_t event;
+	hipEventCreate(&event);
+	hipEventRecord(event, stream);
+	volatile int clock_counter = 0;
+	while(clock_counter < 10000000) {
+		clock_counter++;
+	}
+	// auto start = std::chrono::high_resolution_clock::now();
+	//hipLaunchKernelGGL(starter_ctrl,dim3(1),dim3(1),0,stream,(volatile uint64_t *) gpu_ptr);
+	hipStreamWaitEvent(stream, event, 0);
+	//auto end = std::chrono::high_resolution_clock::now();
+	//auto elapsedTime = (std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() / 1000.0);
+	//ofstream outputFile;
+	//outputFile.open("SecondCall.csv", std::ios_base::app);
+	//outputFile<<elapsedTime<<std::endl;
+	//outputFile.close();
+	
+	//synchronize GPU kernel 
+
+	hipDeviceSynchronize();
+	//int input2 = 0;
+	//std::cout<<"Insert value to continue - WARNING: usually, crash after this step occurs " << std::endl;
+	//std::cin >> input2;
+
+
+	
+	cclo_ptr->printDebug(); //see how many writes have been performed w.r.t. previous printDebug() invokation
+
+	//current status of the registers
+	std::cout << "Currently reading FPGA registers to check the status" << std::endl;
+	std::cout << "scenario: " << cclo_ptr->coyote_proc->getCSR((OFFSET_HOSTCTRL + HOSTCTRL_ADDR::SCEN)>>2) << std::endl
+	<< "count: " << cclo_ptr->coyote_proc->getCSR((OFFSET_HOSTCTRL + HOSTCTRL_ADDR::LEN)>>2) <<std::endl
+	<< "comm: " << cclo_ptr->coyote_proc->getCSR((OFFSET_HOSTCTRL + HOSTCTRL_ADDR::COMM)>>2)<<std::endl
+	<< "root_src_dst: " << cclo_ptr->coyote_proc->getCSR((OFFSET_HOSTCTRL + HOSTCTRL_ADDR::ROOT_SRC_DST)>>2)  <<std::endl
+	<< "function: " << cclo_ptr->coyote_proc->getCSR((OFFSET_HOSTCTRL + HOSTCTRL_ADDR::FUNCTION_R)>>2)<<std::endl
+	<< "tag: " << cclo_ptr->coyote_proc->getCSR((OFFSET_HOSTCTRL + HOSTCTRL_ADDR::MSG_TAG)>>2) <<std::endl
+	<< "arithcfg_addr: " << cclo_ptr->coyote_proc->getCSR((OFFSET_HOSTCTRL + HOSTCTRL_ADDR::DATAPATH_CFG)>>2)<<std::endl
+	<< "compression flags: " <<  cclo_ptr->coyote_proc->getCSR((OFFSET_HOSTCTRL + HOSTCTRL_ADDR::COMPRESSION_FLAGS)>>2)<<std::endl
+	<< "stream flags: " << cclo_ptr->coyote_proc->getCSR((OFFSET_HOSTCTRL + HOSTCTRL_ADDR::STREAM_FLAGS)>>2)<<std::endl
+	<< "addr_a0: " << std::hex << cclo_ptr->coyote_proc->getCSR((OFFSET_HOSTCTRL + HOSTCTRL_ADDR::ADDRA_0)>>2)<<std::endl
+	<< "addr_a1: " << std::hex << cclo_ptr->coyote_proc->getCSR((OFFSET_HOSTCTRL + HOSTCTRL_ADDR::ADDRA_1)>>2)<<std::endl
+	<< "addr b0: " << cclo_ptr->coyote_proc->getCSR((OFFSET_HOSTCTRL + HOSTCTRL_ADDR::ADDRB_0)>>2)<<std::endl
+	<< "addr_b1: " << std::hex << cclo_ptr->coyote_proc->getCSR((OFFSET_HOSTCTRL + HOSTCTRL_ADDR::ADDRB_1)>>2)<<std::endl
+	<< "addr_c0: " << std::hex << cclo_ptr->coyote_proc->getCSR((OFFSET_HOSTCTRL + HOSTCTRL_ADDR::ADDRC_0)>>2)<<std::endl
+	<< "addr_c1: " << std::hex << cclo_ptr->coyote_proc->getCSR((OFFSET_HOSTCTRL + HOSTCTRL_ADDR::ADDRC_1)>>2) << std::endl;
+	std::cout << "Status checking completed" << std::endl;
+
+	std::cout << "duration from CPU: " << std::hex << cclo_ptr->read(CCLO_ADDR::PERFCNT_OFFSET) << std::dec << std::endl;
+	std::cout << "retcode: " << std::hex << cclo_ptr->read(CCLO_ADDR::RETCODE_OFFSET) << std::dec << std::endl;
+	
+	//verify correctness of the copy
+	hipMemcpy(res_buf_host.data(), res_buf->buffer(), 4*count, hipMemcpyDeviceToHost);
+	int check = memcmp(op_buf_host.data(), res_buf_host.data(), sizeof(float) * count);
+
+	int pos = 0;
+
+	if(!check) {
+		std::cout << "Copy is successful!" << std::endl;
+	} else {
+		std::cout << "Test is NOT successful!" << std::endl;
+	}
+}
+
+#endif
+
+#ifdef COYOTE_HSA_SUPPORT
 /**
  * @brief performs three different types of copies between GPU buffers and the FPGA, with peer-to-peer DMA:
  * 1. GPU buffer #1 -> FPGA -> GPU buffer #2
@@ -546,76 +870,36 @@ static hsa_status_t find_gpuId(hsa_agent_t agent, void *data) {
  * @returns HW times (microseconds) averaged over 100 iterations 
 */
 void test_copy_averaged_gpu_p2p(::ACCL::ACCL &accl, options_t &options) {
-	ofstream outputFile, bufferFile;
+	ofstream outputFile;
 	outputFile.open(options.output_file, std::ios_base::app);
+
 	unsigned int count = options.nruns;
 
+	//create two buffers on the GPU
+	
+  	auto op_buf = accl.create_coyotebuffer<float>(count, dataType::float32, true);
+  	auto res_buf = accl.create_coyotebuffer<float>(count, dataType::float32, true);
 	
 	//create two buffers on the host
   	auto op_buf_host = std::vector<float>(count);
-	random_array(op_buf_host.data(), count);
-
 	auto res_buf_host = std::vector<float>(count);
 	test_debug("HOST and GPU buffers allocated", options);
 
-	//create two buffers on the GPU
-
-	bufferFile.open("dmabuf_true.csv", std::ios_base::app);
-	auto start = std::chrono::high_resolution_clock::now();
-
-	//availableGPUs availableDevices;
-	//availableDevices.size=0;
-
-	//int itAgentsErr = hsa_iterate_agents(find_gpuId, &availableDevices);
-	//if (itAgentsErr != HSA_STATUS_SUCCESS)
-	//	printf("\nError in agents iteration\n");
-
-	//printf("\nNumber of devices: %d\n", availableDevices.size);
-	//printf("\nThe first numaID is %d\n", availableDevices.devices[0].NumaID);
-	//printf("\nThe second NumaID is %d\n", availableDevices.devices[1].NumaID );
-	// the NumaID can be found as the rocminfo agentID - 1
-	// Here we use 2 GPU, with agentID 3 and 4, so we set device_id to 2 and 3,
-	// since numaID enumeration starts from 0
-	//int device_id = availableDevices.devices[0].NumaID;
-
-	// Here, instead, we are selecting the GPU. HipSetDevice takes as input an ID, considering
-	// that each GPU will have an ID starting from 0.
-	int gpu_id = 0;
-	int err = hipSetDevice(gpu_id); // Just simple way to select the GPU without changing too many variables. agentID=3 -> deviceID=2 -> gpuID=0
-	if(err != 0)
-	{
-		std::cout<<"Value of err: " << err << std::endl;
-		throw std::runtime_error("Wrong GPU selection!");
-	}
-  	auto op_buf = accl.create_coyotebuffer<float>(count, dataType::float32,true,gpu_id);
-	hipMemcpy(op_buf->buffer(), op_buf_host.data(), 4*count, hipMemcpyHostToDevice); // questa viene eseguita
-	auto end = std::chrono::high_resolution_clock::now();
-	double buff_creation = (std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() / 1000.0);
-	bufferFile << count << "," <<buff_creation << std::endl;
-	bufferFile.close();	
-	//printf("\n---------------------------------------\n");
-	gpu_id = 0; // gpu_id, starts from 0 and considers gpus only/
-	err = hipSetDevice(gpu_id); 
-	if(err != 0)
-	{
-		std::cout<<"Value of err: " << err << std::endl;
-		throw std::runtime_error("Wrong GPU selection!");
-	}
-  	auto res_buf = accl.create_coyotebuffer<float>(count, dataType::float32, true,gpu_id);
-	//return;
 	//create vectors to save times and compute averages
 	std::vector<float> copy_values, sync_from_values, sync_to_values;
 
 	//initialize first GPU buffer with random data
-	
+	random_array(op_buf_host.data(), count);
+	hipMemcpy(op_buf->buffer(), op_buf_host.data(), 4*count, hipMemcpyHostToDevice);
+
+	//initialize second GPU buffer with fixed data
 	hipMemset(res_buf->buffer(), 78, 4*count);
-	printf("I have prepared the res buffer\n");
 
 	test_debug("copy type 1: GPU buffer #1 -> FPGA -> GPU buffer #2", options);
 
 	double sw_time_us = 0.0, hw_time_us = 0.0;
-	int num_iterations = 1;
-	for(int i = 0; i < num_iterations; i++) {	
+
+	for(int i = 0; i < 10; i++) {	
 		auto start = std::chrono::high_resolution_clock::now();
 		auto req = accl.copy(*op_buf, *res_buf, count, true, true, true);
 		accl.wait(req, 1000ms);
@@ -625,8 +909,8 @@ void test_copy_averaged_gpu_p2p(::ACCL::ACCL &accl, options_t &options) {
 		test_debug("copy type 1 #" + std::to_string(i) + ": sw_time = " + std::to_string(sw_time_us) + " us, hw_time = " + std::to_string(hw_time_us) + " us", options);
 		copy_values.push_back(hw_time_us);
 	}
-	//check correctness of the copy
 
+	//check correctness of the copy
 	hipMemcpy(res_buf_host.data(), res_buf->buffer(), 4*count, hipMemcpyDeviceToHost);
 	int check = memcmp(op_buf_host.data(), res_buf_host.data(), sizeof(float) * count);	
 
@@ -638,7 +922,7 @@ void test_copy_averaged_gpu_p2p(::ACCL::ACCL &accl, options_t &options) {
 
 	test_debug("copy type 2: FPGA -> GPU buffer #2", options);
 
-	for(int i = 0; i < num_iterations; i++) {	
+	for(int i = 0; i < 10; i++) {	
 		op_buf->sync_to_device();
 		auto start = std::chrono::high_resolution_clock::now();
 		auto req = accl.copy(*op_buf, *res_buf, count, true, true, true);
@@ -652,7 +936,7 @@ void test_copy_averaged_gpu_p2p(::ACCL::ACCL &accl, options_t &options) {
 
 	test_debug("copy type 3: GPU buffer #1 -> FPGA", options);
 
-	for(int i = 0; i < num_iterations; i++) {
+	for(int i = 0; i < 10; i++) {
 		res_buf->sync_to_device();
 		op_buf->sync_from_device();
 		auto start = std::chrono::high_resolution_clock::now();
@@ -699,53 +983,43 @@ void test_copy_averaged_gpu_p2p(::ACCL::ACCL &accl, options_t &options) {
 */
 void test_copy_averaged_gpu_no_p2p(::ACCL::ACCL &accl, options_t &options) {
 	ofstream outputFile;
-	std::cout<<"Going to execute the baseline"<<std::endl;
 	outputFile.open(options.output_file, std::ios_base::app);
-	int gpu_id=0;
-	hipSetDevice(gpu_id);
 	unsigned int count = options.nruns;
 
 	//create two buffers on the HOST
   	auto op_buf = accl.create_coyotebuffer<float>(count, dataType::float32, false);
-
   	auto res_buf = accl.create_coyotebuffer<float>(count, dataType::float32, false);
-
+	
 	//create two buffers on the GPU
-	//hsa_agent_t gpu_device;
-	//hsa_status_t err = hsa_iterate_agents(find_gpu, &gpu_device);
-	//if(err != HSA_STATUS_SUCCESS) {
-	//throw std::runtime_error("No GPU found!");
-	//}
-//
-	//hsa_region_t region_to_use = {0}; 
-	//struct get_region_info_params info_params = {
-	//	.region = &region_to_use,
-	//	.desired_allocation_size = count * sizeof(float)
-	//};
-//
-//
-	//int code = hsa_agent_iterate_regions(gpu_device, get_region_info, &info_params);
-	//std::cout<<code<<std::endl;
-	//err = (region_to_use.handle == 0) ? HSA_STATUS_ERROR : HSA_STATUS_SUCCESS;
-	//if(err != HSA_STATUS_SUCCESS) {
-	//throw std::runtime_error("Insufficient memory on the GPU!");
-	//}
-//
-	float *op_buf_gpu;
-	hipMalloc(&op_buf_gpu,sizeof(float) * count);
+	hsa_agent_t gpu_device;
+	hsa_status_t err = hsa_iterate_agents(find_gpu, &gpu_device);
+	if(err != HSA_STATUS_SUCCESS) {
+	throw std::runtime_error("No GPU found!");
+	}
 
-	float * res_buf_gpu;
-	hipMalloc(&res_buf_gpu,sizeof(float) * count) ;
+	hsa_region_t region_to_use = {0}; 
+	struct get_region_info_params info_params = {
+		.region = &region_to_use,
+		.desired_allocation_size = count * sizeof(float)
+	};
+	hsa_agent_iterate_regions(gpu_device, get_region_info, &info_params);
+	err = (region_to_use.handle == 0) ? HSA_STATUS_ERROR : HSA_STATUS_SUCCESS;
+	if(err != HSA_STATUS_SUCCESS) {
+	throw std::runtime_error("Insufficient memory on the GPU!");
+	}
 
-	//err = hsa_memory_allocate(region_to_use, sizeof(float) * count, (void **) &(op_buf_gpu));
-	//if(err != HSA_STATUS_SUCCESS) {
-	//throw std::runtime_error("Allocation failed on the GPU!");
-	//}
-	//err = hsa_memory_allocate(region_to_use, sizeof(float) * count, (void **) &(res_buf_gpu));
-	//if(err != HSA_STATUS_SUCCESS) {
-	//throw std::runtime_error("Allocation failed on the GPU!");
-	//}
-//
+	void * op_buf_gpu;
+	void * res_buf_gpu;
+
+	err = hsa_memory_allocate(region_to_use, sizeof(float) * count, (void **) &(op_buf_gpu));
+	if(err != HSA_STATUS_SUCCESS) {
+	throw std::runtime_error("Allocation failed on the GPU!");
+	}
+	err = hsa_memory_allocate(region_to_use, sizeof(float) * count, (void **) &(res_buf_gpu));
+	if(err != HSA_STATUS_SUCCESS) {
+	throw std::runtime_error("Allocation failed on the GPU!");
+	}
+
 	test_debug("HOST and GPU buffers allocated", options);	
 
 	//allocate buffer on the host
@@ -845,8 +1119,6 @@ void test_copy_averaged_gpu_no_p2p(::ACCL::ACCL &accl, options_t &options) {
 
 	hsa_memory_free(op_buf_gpu);
 	hsa_memory_free(res_buf_gpu);
-	std::cout<<"Baseline Finished"<<std::endl;
-
 }
 #endif
 
@@ -1559,12 +1831,12 @@ void test_accl_base(options_t options)
 		device = new CoyoteDevice();
 		configure_cyt_tcp(ranks, local_rank, device);
 	} else if (options.rdma){
-		std::cout<<"I am executing this: mpi_size = " << mpi_size << std::endl;
 		device = new CoyoteDevice(mpi_size);
 		configure_cyt_rdma(ranks, local_rank, device);
 	} else {
 		device = new CoyoteDevice();
 	}
+	
 	
 	if (options.hardware)
 	{
@@ -1584,13 +1856,6 @@ void test_accl_base(options_t options)
 		accl = std::make_unique<::ACCL::ACCL>(device);
 		if (options.protoc == 0){
 			std::cout<<"Eager Protocol"<<std::endl;
-			std::cout<<"RECAP PARAMS: "<<std::endl;
-			std::cout<<"ranks: "<<ranks.size()<<std::endl;
-			std::cout<<"mpi_rank: "<<mpi_rank<<std::endl;
-			std::cout<<"mpi_size+2: "<<mpi_size+2<<std::endl;
-			std::cout<<" options.rxbuf_size: "<< options.rxbuf_size<<std::endl;
-			std::cout<<" options.seg_size: "<< options.seg_size<<std::endl;
-
 			accl.get()->initialize(ranks, mpi_rank,
 				mpi_size+2, options.rxbuf_size, options.seg_size, 4096*1024*2);
 		} else if (options.protoc == 1){
@@ -1607,8 +1872,8 @@ void test_accl_base(options_t options)
 		exit(1);
 	}
 
-	printf("\nACCL Initialization Finished\n");
-
+	
+	
 	MPI_Barrier(MPI_COMM_WORLD);
 	
 	double durationUs = 0.0;
@@ -1622,13 +1887,22 @@ void test_accl_base(options_t options)
 	std::cout << "hw nop time [ns]:"<< std::dec<< durationNs<< std::endl;
 
 	std::cerr << "Rank " << mpi_rank << " passed last barrier before test!" << std::endl << std::flush;
+
 	MPI_Barrier(MPI_COMM_WORLD);
+
 	
 	#ifdef COYOTE_HSA_SUPPORT
 	if(options.test_mode == ACCL_COPY || options.test_mode == 0) {
 		debug(accl->dump_eager_rx_buffers(false));
 		MPI_Barrier(MPI_COMM_WORLD);
 		test_copy_averaged_gpu_p2p(*accl, options);
+		debug(accl->dump_communicator());
+		debug(accl->dump_eager_rx_buffers(false));
+	}
+	if(options.test_mode == ACCL_MAPPING || options.test_mode == 0) {
+		debug(accl->dump_eager_rx_buffers(false));
+		MPI_Barrier(MPI_COMM_WORLD);
+		test_mapping(*accl, options);
 		debug(accl->dump_communicator());
 		debug(accl->dump_eager_rx_buffers(false));
 	}
@@ -1773,10 +2047,7 @@ int main(int argc, char *argv[])
 	std::cout << "Reading MPI rank and size values..." << std::endl;
 	MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &mpi_size);
-
-	std::cout << "Value of MPI_SIZE " << mpi_size << std::endl;
-	std::cout << "Value of MPI_RANK " << mpi_rank << std::endl;
-
+	
 	std::cout << "Parsing options" << std::endl;
 	options_t options = parse_options(argc, argv);
 	

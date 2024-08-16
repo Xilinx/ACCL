@@ -95,6 +95,24 @@ public:
    * Detach the FPGA from a DMABuf.
    */
   void detach_dma_buf(uint64_t buf_fd);
+
+  /**
+   * Export FPGA internal registers memory area via DMABuf
+   */
+  uint64_t export_mem_with_dma_buf(addr_t vaddr, uint32_t size,int * fd);
+
+  /**
+   * Export FPGA CTRL registers memory area via DMABuf (specific case w.r.t. export_mem_with_dma_buf()) 
+   */
+  uint64_t export_CTRL_registers();
+
+  /**
+   * Close the exported DMABuf for FPGA internal registers memory area
+   */
+  void close_export_mem_with_dma_buf(uint64_t buf_fd);
+
+  //DEBUG
+  // void import_dma_buf_from_fd_to_GPU(int fd); 
   
   // DEBUG
   // void write_TLB_entry(addr_t vaddr, addr_t paddr, uint32_t len);
@@ -142,7 +160,7 @@ public:
   std::vector<fpga::cProcess*> coyote_qProc_vec;
 private:
   const size_t OFFSET_CCLO = 0x0; 
-
+  int ctrl_fd = -1;
   FPGAQueue<CoyoteRequest *> queue;
   std::unordered_map<ACCLRequest, CoyoteRequest *> request_map;
 

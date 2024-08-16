@@ -26,3 +26,6 @@ for count in ${vec[@]}
 do
     ./accl_on_coyote -y 14 -f -r -l fpgaIP -n $count -o output_host.csv -d
 done
+
+#TEST FPGA register mapping
+ ./accl_on_coyote -y 16  -f -r -l fpgaIP -n 200 -o output.csv -d 
