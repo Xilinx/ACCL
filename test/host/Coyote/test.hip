@@ -338,24 +338,51 @@ options_t parse_options(int argc, char *argv[])
 
 		options_t opts;
 		opts.start_port = start_port_arg.getValue();
+		std::cout << "value of start_port = " << opts.start_port <<std::endl;
 		opts.count = count_arg.getValue();
+		std::cout << "value of count = " << opts.count <<std::endl;
 		opts.rxbuf_size = bufsize_arg.getValue() * 1024; // convert to bytes
+		std::cout << "value of rxbuf_size = " << opts.rxbuf_size <<std::endl;
 		opts.seg_size = seg_arg.getValue() * 1024;		 // convert to bytes
+		std::cout << "value of seg_size = " << opts.seg_size <<std::endl;
 		opts.num_rxbufmem = num_rxbufmem_arg.getValue();
+		std::cout << "value of num_rxbufmem = " << opts.num_rxbufmem <<std::endl;
 		opts.nruns = nruns_arg.getValue();
+		std::cout << "value of nruns = " << opts.nruns <<std::endl;
 		opts.debug = debug_arg.getValue();
+		std::cout << "value of debug = " << opts.debug <<std::endl;
 		opts.host = host_arg.getValue();
+		std::cout << "value of host = " << opts.host <<std::endl;
 		opts.hardware = hardware_arg.getValue();
+		std::cout << "value of hardware = " << opts.hardware <<std::endl;
 		opts.axis3 = axis3_arg.getValue();
+		std::cout << "value of axis3 = " << opts.axis3 <<std::endl;
+
 		opts.udp = udp_arg.getValue();
+		std::cout << "value of udp = " << opts.udp <<std::endl;
+
 		opts.tcp = tcp_arg.getValue();
+		std::cout << "value of tcp = " << opts.tcp <<std::endl;
+
 		opts.rdma = rdma_arg.getValue();
+		std::cout << "value of rdma = " << opts.rdma <<std::endl;
+
 		opts.test_mode = test_mode_arg.getValue();
+		std::cout << "value of test_mode = " << opts.test_mode <<std::endl;
+
 		opts.device_index = device_index_arg.getValue();
+		std::cout << "value of device_index = " << opts.device_index <<std::endl;
 		opts.xclbin = xclbin_arg.getValue();
+		std::cout << "value of xclbin = " << opts.xclbin <<std::endl;
 		opts.fpgaIP = fpgaIP_arg.getValue();
+		std::cout << "value of fpgaIP = " << opts.fpgaIP <<std::endl;
+
 		opts.protoc = protoc_arg.getValue();
+		std::cout << "value of protoc = " << opts.protoc <<std::endl;
+
 		opts.output_file = output_file_arg.getValue();
+		std::cout << "value of output_file = " << opts.output_file <<std::endl;
+		
 
 		std::cout << "count:" << opts.count << " rxbuf_size:" << opts.rxbuf_size << " seg_size:" << opts.seg_size << " num_rxbufmem:" << opts.num_rxbufmem << std::endl;
 		return opts;
@@ -594,7 +621,7 @@ void test_copy_averaged_gpu_p2p(::ACCL::ACCL &accl, options_t &options) {
 	bufferFile << count << "," <<buff_creation << std::endl;
 	bufferFile.close();	
 	//printf("\n---------------------------------------\n");
-	gpu_id = 0; // gpu_id, starts from 0 and considers gpus only/
+	gpu_id = 1; // gpu_id, starts from 0 and considers gpus only/
 	err = hipSetDevice(gpu_id); 
 	if(err != 0)
 	{
@@ -607,7 +634,7 @@ void test_copy_averaged_gpu_p2p(::ACCL::ACCL &accl, options_t &options) {
 	std::vector<float> copy_values, sync_from_values, sync_to_values;
 
 	//initialize first GPU buffer with random data
-	
+
 	hipMemset(res_buf->buffer(), 78, 4*count);
 	printf("I have prepared the res buffer\n");
 
@@ -1559,12 +1586,12 @@ void test_accl_base(options_t options)
 		device = new CoyoteDevice();
 		configure_cyt_tcp(ranks, local_rank, device);
 	} else if (options.rdma){
-		std::cout<<"I am executing this: mpi_size = " << mpi_size << std::endl;
 		device = new CoyoteDevice(mpi_size);
 		configure_cyt_rdma(ranks, local_rank, device);
 	} else {
 		device = new CoyoteDevice();
 	}
+	
 	
 	if (options.hardware)
 	{
@@ -1584,13 +1611,7 @@ void test_accl_base(options_t options)
 		accl = std::make_unique<::ACCL::ACCL>(device);
 		if (options.protoc == 0){
 			std::cout<<"Eager Protocol"<<std::endl;
-			std::cout<<"RECAP PARAMS: "<<std::endl;
-			std::cout<<"ranks: "<<ranks.size()<<std::endl;
-			std::cout<<"mpi_rank: "<<mpi_rank<<std::endl;
-			std::cout<<"mpi_size+2: "<<mpi_size+2<<std::endl;
-			std::cout<<" options.rxbuf_size: "<< options.rxbuf_size<<std::endl;
-			std::cout<<" options.seg_size: "<< options.seg_size<<std::endl;
-
+			std::cout<<"Arguments"<<std::endl;
 			accl.get()->initialize(ranks, mpi_rank,
 				mpi_size+2, options.rxbuf_size, options.seg_size, 4096*1024*2);
 		} else if (options.protoc == 1){
@@ -1607,8 +1628,8 @@ void test_accl_base(options_t options)
 		exit(1);
 	}
 
-	printf("\nACCL Initialization Finished\n");
-
+	
+	
 	MPI_Barrier(MPI_COMM_WORLD);
 	
 	double durationUs = 0.0;
@@ -1622,6 +1643,7 @@ void test_accl_base(options_t options)
 	std::cout << "hw nop time [ns]:"<< std::dec<< durationNs<< std::endl;
 
 	std::cerr << "Rank " << mpi_rank << " passed last barrier before test!" << std::endl << std::flush;
+
 	MPI_Barrier(MPI_COMM_WORLD);
 	
 	#ifdef COYOTE_HSA_SUPPORT
@@ -1764,8 +1786,11 @@ int main(int argc, char *argv[])
     sigaction(SIGINT,&sa,NULL);
 	sigaction(SIGSEGV, &sa, NULL);
 	sigaction(SIGABRT, &sa, NULL);
-	std::cout << "Arguments: ";
-	for (int i = 0; i < argc; i++) std::cout << "'" << argv[i] << "' "; std::cout << std::endl;
+	std::cout << "----------------Arguments:----------------- "<<std::endl;
+	for (int i = 0; i < argc; i++) 
+		std::cout << "'" << argv[i] << "' "; std::cout << std::endl;
+	std::cout << "-------------End of Arguments:------------- "<<std::endl;
+
 	std::cout << "Running ACCL test in coyote..." << std::endl;
 	std::cout << "Initializing MPI..." << std::endl;
 	MPI_Init(&argc, &argv);
@@ -1773,10 +1798,7 @@ int main(int argc, char *argv[])
 	std::cout << "Reading MPI rank and size values..." << std::endl;
 	MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &mpi_size);
-
-	std::cout << "Value of MPI_SIZE " << mpi_size << std::endl;
-	std::cout << "Value of MPI_RANK " << mpi_rank << std::endl;
-
+	
 	std::cout << "Parsing options" << std::endl;
 	options_t options = parse_options(argc, argv);
 	
