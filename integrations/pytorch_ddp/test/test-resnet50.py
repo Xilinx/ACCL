@@ -17,10 +17,14 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler
 
 import argparse
+import numpy as np
 import os
 import sys
 import logging
 import time
+
+seed = 42
+torch.manual_seed(seed)
 
 logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
 
@@ -33,7 +37,7 @@ else:
 
 # Run via ACCL
 
-def train(num_epochs, model, loaders, criterion, p):
+def train(num_epochs, model, loaders, criterion):
 
     start_time_train = time.perf_counter()
     
@@ -47,7 +51,6 @@ def train(num_epochs, model, loaders, criterion, p):
         model.train()
         running_loss = 0.0
         for i, (inputs, labels) in enumerate(loaders['train']):
-            p.step()
             start_time = time.perf_counter()
             
             optimizer.zero_grad()
@@ -57,8 +60,8 @@ def train(num_epochs, model, loaders, criterion, p):
             optimizer.step()
             running_loss += loss.item()
 
-            # if (i+1) % 10 == 0:
-                # break
+            if (i+1) % 10 == 0:
+                break
             if True:
                 end_time = time.perf_counter()
                 measured_time = (end_time - start_time) * 1000000
@@ -71,7 +74,7 @@ def train(num_epochs, model, loaders, criterion, p):
     print('Total train time: ' + str(measured_time_train))
         
 
-def test(num_epochs, model, loaders, criterion, p):
+def test(num_epochs, model, loaders, criterion):
     # Test the model
     start_time_test = time.perf_counter()
     model.eval()
@@ -80,7 +83,6 @@ def test(num_epochs, model, loaders, criterion, p):
         total = 0
         val_loss = 0
         for i, (inputs, labels) in enumerate(loaders['test']):
-            p.step()
             test_output = model(inputs)
             loss = criterion(test_output, labels)
             val_loss += loss.item()
@@ -98,6 +100,67 @@ def test(num_epochs, model, loaders, criterion, p):
 
     print('Total test time: ' + str(measured_time_test))            
     print(f'Total accuracy: {correct}/{total} {correct/float(total)}')
+
+
+def test_allreduce(numel, testtype):
+
+    shape = (numel,)
+
+    
+    if testtype == torch.int64 or testtype == torch.int32:
+        rand_torch = torch.randint(torch.iinfo(testtype).min/size, torch.iinfo(testtype).max/size,shape, dtype=testtype)
+    else:
+        rand_torch = torch.rand(shape, dtype=testtype)
+    
+    # for i in range(10):
+    if True:
+    
+        # shape = (320001,)
+        x = rand_torch.clone()
+
+        dist.all_reduce(x, dist.ReduceOp.SUM)
+        mpi.Barrier()
+
+        try:
+            np.testing.assert_allclose(x, rand_torch * size)
+        except AssertionError as e:
+            logger.debug("Test AllReduce failed")
+            logger.debug(str(e))
+        else:
+            logger.debug("Test AllReduce finished!")
+
+def test_broadcast(numel, testtype):
+    shape = (numel,)
+
+    # testtype = torch.float32
+    if testtype == torch.int64 or testtype == torch.int32:
+        rand_torch = torch.randint(torch.iinfo(testtype).min, torch.iinfo(testtype).max,shape, dtype=testtype)
+        # rand_torch = torch.ones(shape, dtype=testtype)
+    else:
+        rand_torch = torch.rand(shape, dtype=testtype)
+    
+    # for i in range(10):
+    if True:
+
+        if rank == 1:
+            x = rand_torch.clone()
+        else:
+            x = torch.ones(shape, dtype=testtype)
+        
+        dist.broadcast(x, 1)
+
+        mpi.Barrier()
+
+    # logger.debug('Tensor after broadcast: ' + str(x))
+    # print('Tensor after broadcast: ' + str(x))
+    try:
+        np.testing.assert_allclose(x, rand_torch)
+    except AssertionError as e:
+        logger.debug("Test Broadcast failed")
+        logger.debug(str(e))
+    else:
+        logger.debug("Test broadcast finished!")
+            
     
 if __name__ == "__main__":
 
@@ -124,7 +187,7 @@ if __name__ == "__main__":
         print("only one machine specified. Assuming Non distributed setup")
         args.d = False
     elif args.n > 1 and args.d == None:
-        print("Assung DDP setup")
+        print("Assuming DDP setup")
         args.d = True
 
 
@@ -180,7 +243,16 @@ if __name__ == "__main__":
     
         accl.create_process_group(ranks, design, bufsize=rxbufsize, initialize=True, simulation=args.simulator)
         dist.init_process_group("ACCL", rank=rank, world_size=size)
-        
+
+
+    test_allreduce(256, torch.float32)
+    test_broadcast(256, torch.float32)
+
+    test_broadcast(162, torch.int32)
+    # if args.d : dist.destroy_process_group()
+
+    # sys.exit(0)
+    
     device = 'cpu'
 
     transform = transforms.Compose([
@@ -214,7 +286,7 @@ if __name__ == "__main__":
 
     model = models.resnet50(pretrained=True)
     
-    if args.d : model = DDP(model, bucket_cap_mb=2, broadcast_buffers=False)
+    if args.d : model = DDP(model, bucket_cap_mb=2, broadcast_buffers=False, find_unused_parameters=True)
 
     loss_func = nn.CrossEntropyLoss()   
 
@@ -234,18 +306,22 @@ if __name__ == "__main__":
     )
 
     
-    with torch.profiler.profile(
-            activities=[torch.profiler.ProfilerActivity.CPU],
-            schedule=schedule,
-            on_trace_ready=torch.profiler.tensorboard_trace_handler('./accl_log/profiler_log'),
-            record_shapes=True,
-    ) as p:
+    # with torch.profiler.profile(
+            # activities=[torch.profiler.ProfilerActivity.CPU],
+            # schedule=schedule,
+            # on_trace_ready=torch.profiler.tensorboard_trace_handler('./accl_log/profiler_log'),
+            # record_shapes=True,
+    # ) as p:
 
+    if True:
+    
         
-        train(num_epochs, model, loaders, criterion, p)
+        train(num_epochs, model, loaders, criterion)
 
-        test(num_epochs, model, loaders, criterion, p)
+        # test(num_epochs, model, loaders, criterion)
 
-    p.stop()
+    # p.stop()
 
-    print(p.key_averages().table(sort_by="self_cpu_time_total", row_limit=100))
+    # print(p.key_averages().table(sort_by="self_cpu_time_total", row_limit=100))
+
+    if args.d : dist.destroy_process_group()
