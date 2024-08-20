@@ -60,15 +60,17 @@ namespace c10d {
 #define ALLREDUCE_SIDESTEP false
 // #define ALLREDUCE_SIDESTEP true
 
-#define SIDESTEP_BCAST_WITH_ALLREDUCE
+// #define SIDESTEP_BCAST_WITH_ALLREDUCE
     
 #define RDVZ_THRESHOLD 64
 
-#define MICRO_BENCH_FINE 0
+#define MICRO_BENCH_FINE 1
 
-#define MICRO_BENCH_COARSE 0
+#define MICRO_BENCH_COARSE 1
 
-#define ACCL_MSG_SIZE 256    
+#define ACCL_MSG_SIZE 1048576
+
+#define ROUND_NR 256  
 
 #if MICRO_BENCH_FINE
 #define START_FINE(name) \
@@ -1099,19 +1101,17 @@ void ProcessGroupACCL::run_broadcast(at::Tensor in_tensor,
   #ifdef SIDESTEP_BCAST_WITH_ALLREDUCE
 
   // It seems to have issues with non-even numbers, so we round to ACCL_MSG_SIZE
-  int rounded_count = ACCL_MSG_SIZE / in_tensor.element_size();
-
+  int rounded_count = (in_tensor.numel() + ROUND_NR) & ~ROUND_NR;
   // if (in_tensor.scalar_type() == at::kInt || in_tensor.scalar_type() == at::kLong){
       // return;
-  }
+  // }
 
   ACCL::debug("rounded count:" + std::to_string(rounded_count));
   ACCL::debug("rootRank:" + std::to_string(opts.rootRank));
   
   int imaginary_count = rounded_count;
   if (in_tensor.scalar_type() == at::kDouble || in_tensor.scalar_type() == at::kLong){
-      imaginary_count = imaginary_count * 2;
-
+      imaginary_count = (in_tensor.numel()*2 + ROUND_NR) & ~ROUND_NR;
   }
 
   ACCL::debug("imaginary count:" + std::to_string(imaginary_count));
@@ -1175,8 +1175,8 @@ void ProcessGroupACCL::run_broadcast(at::Tensor in_tensor,
     // return;
   // }
 
-  int rounded_count = ACCL_MSG_SIZE / in_tensor.element_size();
-      
+  int rounded_count = (in_tensor.numel() + ROUND_NR) & ~ROUND_NR;
+  
   auto zero_tensor = torch::zeros({rounded_count}, in_tensor.scalar_type());
   
   
@@ -1188,9 +1188,9 @@ void ProcessGroupACCL::run_broadcast(at::Tensor in_tensor,
   if (opts.rootRank == rank_){
       init_input_tensor(in_tensor, in_buf, true, false, opts.rootRank);
   }
-  else{
-      init_input_tensor(zero_tensor, in_buf, false, true, opts.rootRank);
-  }
+  // else{
+      // init_input_tensor(zero_tensor, in_buf, false, true, opts.rootRank);
+  // }
 
   STOP_FINE(init)
   
@@ -1203,23 +1203,14 @@ void ProcessGroupACCL::run_broadcast(at::Tensor in_tensor,
   STOP_FINE(lock)
   
 
-  START_FINE(lib)
-      
+  // in_buf->change_type(convert_datatype_from_torch(at::kInt));
+  // out_buf->change_type(convert_datatype_from_torch(at::kInt));
 
-  in_buf->change_type(convert_datatype_from_torch(at::kInt));
-  out_buf->change_type(convert_datatype_from_torch(at::kInt));
-
-  int imaginary_count = rounded_count;
-
-  ACCL::debug("imaginary count:" + std::to_string(imaginary_count));
+  // int imaginary_count = rounded_count;
+  // if (in_tensor.scalar_type() == at::kDouble || in_tensor.scalar_type() == at::kLong){
+      // imaginary_count = (in_tensor.numel()*2 + ROUND_NR) & ~ROUND_NR;
+  // }
   
-  if (in_tensor.scalar_type() == at::kDouble || in_tensor.scalar_type() == at::kLong){
-      imaginary_count = imaginary_count * 2;
-
-  }
-      
-  
-  accl->barrier();
   /*      
     if(rank_ == opts.rootRank){
 
@@ -1248,22 +1239,24 @@ void ProcessGroupACCL::run_broadcast(at::Tensor in_tensor,
   */
 
 
-  if (in_tensor.scalar_type() == at::kInt || in_tensor.scalar_type() == at::kLong){
-      ACCL::debug("input:");
-	      for(int i = 0; i<(in_tensor.numel() * (in_tensor.element_size() / 4)); i++){
-		  ACCL::debug(std::to_string(((int *) in_buf->byte_array())[i]));
-  }
-		}
+  // if (in_tensor.scalar_type() == at::kInt || in_tensor.scalar_type() == at::kLong){
+      // ACCL::debug("input:");
+	      // for(int i = 0; i<(in_tensor.numel() * (in_tensor.element_size() / 4)); i++){
+		  // ACCL::debug(std::to_string(((int *) in_buf->byte_array())[i]));
+  // }
+		// }
   
-  
-  accl->bcast(*in_buf, imaginary_count, opts.rootRank);
 
-  if (in_tensor.scalar_type() == at::kInt || in_tensor.scalar_type() == at::kLong){
-      ACCL::debug("result:");
-	      for(int i = 0; i<(in_tensor.numel() * (in_tensor.element_size() / 4)); i++){
-		  ACCL::debug(std::to_string(((int *) in_buf->byte_array())[i]));
-  }
-		}
+  PRE_REQUEST(Broadcast, in_tensor)  
+      
+  accl->bcast(*in_buf, rounded_count, opts.rootRank);
+
+  // if (in_tensor.scalar_type() == at::kInt || in_tensor.scalar_type() == at::kLong){
+      // ACCL::debug("result:");
+	      // for(int i = 0; i<(in_tensor.numel() * (in_tensor.element_size() / 4)); i++){
+		  // ACCL::debug(std::to_string(((int *) in_buf->byte_array())[i]));
+  // }
+		// }
   
   POST_REQUEST("bcast", in_tensor.nbytes())
 
@@ -1288,8 +1281,8 @@ ProcessGroupACCL::broadcast(std::vector<at::Tensor> &tensors,
 	if (BROADCAST_SIDESTEP){
 	    
 	auto data = (entry->src)[0];
-	std::cerr << "before" << std::endl;
 	if(data.scalar_type() == at::kInt || data.scalar_type() == at::kLong){
+	    std::cerr << "before" << std::endl;
 	    std::cerr << data << std::endl;
 	}
 	ACCL::debug("[Broadcast] -- Sidestepped using OpenMPI -- size " + std::to_string(data.numel()));
@@ -1301,8 +1294,8 @@ ProcessGroupACCL::broadcast(std::vector<at::Tensor> &tensors,
             mpiDatatype.at(data.scalar_type()),
             opts.rootRank,
             MPI_COMM_WORLD));
-	std::cerr << "after" << std::endl;
 	if(data.scalar_type() == at::kInt || data.scalar_type() == at::kLong){
+	    std::cerr << "after" << std::endl;
 	    std::cerr << data << std::endl;
 	}
 	} else {
@@ -1365,7 +1358,8 @@ void ProcessGroupACCL::run_allreduce(at::Tensor in_tensor,
   PRE_REQUEST(Allreduce,in_tensor)  
 
 
-  int rounded_count = ACCL_MSG_SIZE / in_tensor.element_size();
+  int rounded_count = (in_tensor.numel() + ROUND_NR) & ~ROUND_NR;
+  
   ACCL::debug("rounded count:" + std::to_string(rounded_count));
   
   accl->allreduce(*in_buf, *out_buf, rounded_count, acclOp.at(opts.reduceOp));      

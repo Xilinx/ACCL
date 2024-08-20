@@ -49,8 +49,11 @@ else:
 rank = 0
 size = 0
 
-x = 28939
+x = 5000
 y = 1
+
+seed = 48
+torch.manual_seed(seed)
 
 count = x * y
 num_el = x * y
@@ -83,20 +86,27 @@ def test_broadcast_segment():
     else:
         logger.debug("Test broadcast finished!")
 
-def test_broadcast():
-    shape = (256,)
-    
+def test_broadcast(numel, testtype):
+    shape = (numel,)
+
+    # testtype = torch.float32
     global num_errors
 
-        
+    if testtype == torch.int64 or testtype == torch.int32:
+        rand_torch = torch.randint(torch.iinfo(testtype).min, torch.iinfo(testtype).max,shape, dtype=testtype)
+        # rand_torch = torch.ones(shape, dtype=testtype)
+    else:
+        rand_torch = torch.rand(shape, dtype=testtype)
+    
     # for i in range(10):
     if True:
 
         if rank == 0:
-            x = torch.ones(shape)
+            x = rand_torch.clone()
         else:
-            x = torch.zeros(shape)
+            x = torch.ones(shape, dtype=testtype)
 
+        mpi.Barrier()            
         
         with torch.profiler.record_function("test bcast "):
 
@@ -106,22 +116,20 @@ def test_broadcast():
 
             end_time = time.perf_counter()
             
-            measured_time = (end_time - start_time) * 1000000
+        measured_time = (end_time - start_time) * 1000000
             
-            logger.debug("Directly measured time us 1:" + str(measured_time))
+        logger.debug("Directly measured time us 1:" + str(measured_time))
             
-            mpi.Barrier()
+        mpi.Barrier()
 
-            end_time = time.perf_counter()
+        end_time = time.perf_counter()
 
-            measured_time = (end_time - start_time) * 1000000
+        measured_time = (end_time - start_time) * 1000000
 
-            logger.debug("Directly measured time us 2:" + str(measured_time))
+        logger.debug("Directly measured time us 2:" + str(measured_time))
 
-    # logger.debug('Tensor after broadcast: ' + str(x))
-    # print('Tensor after broadcast: ' + str(x))
     try:
-        np.testing.assert_allclose(x, torch.ones(shape))
+        np.testing.assert_allclose(x, rand_torch)
     except AssertionError as e:
         num_errors = num_errors + 1
         logger.debug("Test Broadcast failed")
@@ -233,9 +241,14 @@ def test_gather():
             
 def test_allgather():
     global num_errors
-    shape_gather = (2,)
-    x = torch.full(shape_gather, float(rank), dtype=torch.float)
-    y = [torch.empty(shape_gather, dtype=torch.float) for _ in range(size)]
+    testtype = torch.int64
+    shape_gather = (1,)
+    if testtype == torch.int64 or testtype == torch.int32:
+        rand_torch = torch.randint(torch.iinfo(testtype).min, torch.iinfo(testtype).max,shape_gather, dtype=testtype)
+    else:
+        rand_torch = torch.rand(shape_gather, dtype=testtype)
+    x = rand_torch.clone()
+    y = [torch.full(shape_gather, 0, dtype=testtype) for _ in range(size)]
 
     with torch.profiler.record_function("test_allgather"):
         
@@ -244,7 +257,7 @@ def test_allgather():
         mpi.Barrier()
     for i, c in enumerate(y):
         try:
-            np.testing.assert_allclose(c, torch.full(shape_gather, float(i), dtype=torch.float))
+            np.testing.assert_allclose(c, rand_torch)
         except AssertionError as e:
             num_errors = num_errors + 1
             logger.debug("Test AllGather failed")
@@ -273,23 +286,43 @@ def test_reduce():
             logger.debug("Test Reduce finished!")
         
 
-def test_allreduce():
+def test_allreduce(numel, testtype):
 
+    global num_errors
+
+    shape = (numel,)
+
+    
+    if testtype == torch.int64 or testtype == torch.int32:
+        rand_torch = torch.randint(torch.iinfo(testtype).min//size, torch.iinfo(testtype).max//size,shape, dtype=testtype)
+    else:
+        rand_torch = torch.rand(shape, dtype=testtype)
+    
     # for i in range(10):
     if True:
     
-        shape = (256,)
         # shape = (320001,)
-        global num_errors
-        x = torch.ones(shape)
+        x = rand_torch.clone()
 
+        mpi.Barrier()            
+        
+        start_time = time.perf_counter()
+
+        
         with torch.profiler.record_function("test_allreduce"):
 
             dist.all_reduce(x, dist.ReduceOp.SUM)
-            mpi.Barrier()
+
+        end_time = time.perf_counter()
+            
+        measured_time = (end_time - start_time) * 1000000
+
+        logger.debug("Directly measured time us 1:" + str(measured_time))            
+        
+        mpi.Barrier()
 
         try:
-            np.testing.assert_allclose(x, torch.full(shape, float(size)))
+            np.testing.assert_allclose(x, rand_torch * size)
         except AssertionError as e:
             num_errors = num_errors + 1
             logger.debug("Test AllReduce failed")
@@ -301,9 +334,9 @@ def test_allreduce():
 def test_alltoall():
     global num_errors
 
-    num_el = 26624
+    # num_el = 26624
     
-    shape = (num_el,)
+    # shape = (num_el,)
 
     input = torch.arange(num_el, dtype=torch.float) + float(rank) * num_el
 
@@ -471,22 +504,51 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
     mpi.Barrier()            
 
 
-    # dist.init_process_group("mpi", rank=rank, world_size=size)
+    dist.init_process_group("mpi", rank=rank, world_size=size)
 
     
-    accl.create_process_group(ranks, design, bufsize=rxbufsize, initialize=True, simulation=simulator)
-    dist.init_process_group("ACCL", rank=rank, world_size=size)
+    # accl.create_process_group(ranks, design, bufsize=rxbufsize, initialize=True, simulation=simulator)
+    # dist.init_process_group("ACCL", rank=rank, world_size=size)
     
     global num_errors
     num_errors = 0
-    # with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], profile_memory=True, record_shapes=True) as prof:
 
+    test_allreduce(256, torch.float32)
+    test_broadcast(256, torch.float32)
+
+    schedule = torch.profiler.schedule(
+        wait=1,
+        warmup=2,
+        active=5,
+    )
+    
+    with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], profile_memory=True, schedule=schedule, record_shapes=True) as prof:
+        for i in range(30):
+            test_broadcast(128 * 1024, torch.float32)
+            test_allreduce(128 * 1024, torch.float32)
+            prof.step()
+    
     # for i in range(10):
-    if True:
+    # if True:
+        # test_allreduce(256, torch.int32)
+        # test_allreduce(256, torch.int64)
+        # test_broadcast(256, torch.float32)
+        
+        # test_allgather()
 
         # test_broadcast_2()
-        test_broadcast()
-        test_allreduce()
+        # test_broadcast(642, torch.int64)
+        # test_broadcast(25610152, torch.float32)
+        # test_broadcast(53, torch.int64)
+        # test_broadcast(53120, torch.float32)
+        # test_broadcast(53, torch.int64)
+        # test_allreduce(25557032, torch.float32)
+        # test_broadcast(162, torch.int32)
+        # test_broadcast(25, torch.int32)
+        # test_broadcast(53120, torch.float32)
+        # test_broadcast(53, torch.int64)
+        # test_allreduce(2049000, torch.float32)
+        # test_allreduce()
         # test_allgather()
         # test_broadcast_segment()
         # test_broadcast()
@@ -496,11 +558,20 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
         # test_broadcast()
         # test_sendrcv()
         # test_scatter()
+    # for i in range(10):
         # test_gather()
-        # test_allgather()
         # test_alltoall()
-        # test_allreduce()
-        # test_allgather()
+        # test_allreduce(1000, torch.float32)
+        # test_allreduce(2052096, torch.float32)
+        # test_allreduce(1049600, torch.float32)
+        # test_broadcast(256 * 1024, torch.float32)
+        # test_allreduce(256 * 1024, torch.float32)        
+        # test_broadcast(53, torch.int64)
+        # test_broadcast(53120, torch.float32)
+        # test_broadcast(53, torch.int64)
+        # test_broadcast(162, torch.int32)
+        # test_broadcast(25, torch.int32)
+        # test_allreduce(8196000, torch.float32)
         # test_allreduce()
         # test_allreduce()
 
@@ -518,9 +589,11 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
     else:
         print(f"!!!!!!!! - {num_errors} Errors found - !!!!!!!!!")
         logger.debug(f"!!!!!!!! - {num_errors} Errors found - !!!!!!!!!")        
-    # print(prof.key_averages(group_by_input_shape=True)
-          # .table(sort_by="cpu_time_total", row_limit=15))
 
+    print(prof.key_averages(group_by_input_shape=True)
+          .table(sort_by="cpu_time_total", row_limit=15))
+
+        
     logger.debug('Destroying ACCL Process Group')
     dist.destroy_process_group()
 

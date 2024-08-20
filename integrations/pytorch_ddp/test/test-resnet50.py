@@ -23,7 +23,7 @@ import sys
 import logging
 import time
 
-seed = 42
+seed = 43
 torch.manual_seed(seed)
 
 logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
@@ -60,7 +60,7 @@ def train(num_epochs, model, loaders, criterion):
             optimizer.step()
             running_loss += loss.item()
 
-            if (i+1) % 10 == 0:
+            if (i+1) % 100 == 0:
                 break
             if True:
                 end_time = time.perf_counter()
@@ -286,7 +286,7 @@ if __name__ == "__main__":
 
     model = models.resnet50(pretrained=True)
     
-    if args.d : model = DDP(model, bucket_cap_mb=2, broadcast_buffers=False, find_unused_parameters=True)
+    if args.d : model = DDP(model, bucket_cap_mb=2, broadcast_buffers=True, find_unused_parameters=True)
 
     loss_func = nn.CrossEntropyLoss()   
 
