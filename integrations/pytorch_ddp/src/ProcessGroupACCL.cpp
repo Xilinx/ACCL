@@ -173,7 +173,9 @@ std::map<at::ScalarType, MPI_Datatype> mpiDatatype = {
 
 #define POST_REQUEST(name, nbytes)				\
   STOP_FINE(lib, nbytes)						\
+  START_COARSE(sleep)   						\
   std::this_thread::sleep_for(10ms);					\
+  STOP_COARSE(sleep, nbytes)   						\
   double durationUs_accl_##COLL_NAME = (double)accl->get_duration(req)/1000.0; \
   ACCL::debug("device_" + std::string(x_MAKE_STRING(COLL_NAME)) + "_"  + std::to_string(nbytes) + " durationUs: " + std::to_string(durationUs_accl_##COLL_NAME));
 
