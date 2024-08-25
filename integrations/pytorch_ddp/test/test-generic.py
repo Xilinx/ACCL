@@ -527,8 +527,8 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
     )
     
     # with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], profile_memory=True, schedule=schedule, record_shapes=True) as prof:
-    for n in range(4,14):
-        for i in range(5):
+    for n in range(4,22):
+        for i in range(20):
             test_broadcast(2**n, torch.float32)
             test_allreduce(2**n, torch.float32)
             # prof.step()

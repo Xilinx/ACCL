@@ -171,9 +171,13 @@ std::map<at::ScalarType, MPI_Datatype> mpiDatatype = {
   ACCL::debug("Performing " #opname " of " + std::to_string(tensor.numel()) + " items"); \
   START_FINE(lib)							
 
-#define POST_REQUEST(opname, nbytes)				\
-  STOP_FINE(lib, nbytes)						
+#define POST_REQUEST(name, nbytes)				\
+  STOP_FINE(lib, nbytes)						\
+  std::this_thread::sleep_for(10ms);					\
+  double durationUs_accl_##COLL_NAME = (double)accl->get_duration(req)/1000.0; \
+  ACCL::debug("device_" + std::string(x_MAKE_STRING(COLL_NAME)) + "_"  + std::to_string(nbytes) + " durationUs: " + std::to_string(durationUs_accl_##COLL_NAME));
 
+    
 #define TIMER_WRAP()
     
 // Better logging
@@ -1153,7 +1157,7 @@ void ProcessGroupACCL::run_broadcast(at::Tensor in_tensor,
 
   
       
-  accl->allreduce(*in_buf, *out_buf, imaginary_count, ACCL::reduceFunction::SUM);      
+  auto req = accl->allreduce(*in_buf, *out_buf, imaginary_count, ACCL::reduceFunction::SUM);      
 
   if (in_tensor.scalar_type() == at::kInt || in_tensor.scalar_type() == at::kLong){
       ACCL::debug("result:");
@@ -1251,7 +1255,7 @@ void ProcessGroupACCL::run_broadcast(at::Tensor in_tensor,
 
   PRE_REQUEST(Broadcast, in_tensor)  
       
-  accl->bcast(*in_buf, rounded_count, opts.rootRank);
+  auto req = accl->bcast(*in_buf, rounded_count, opts.rootRank);
 
   // if (in_tensor.scalar_type() == at::kInt || in_tensor.scalar_type() == at::kLong){
       // ACCL::debug("result:");
@@ -1367,7 +1371,7 @@ void ProcessGroupACCL::run_allreduce(at::Tensor in_tensor,
   
   ACCL::debug("rounded count:" + std::to_string(rounded_count));
   
-  accl->allreduce(*in_buf, *out_buf, rounded_count, acclOp.at(opts.reduceOp));      
+  auto req = accl->allreduce(*in_buf, *out_buf, rounded_count, acclOp.at(opts.reduceOp));      
 
   POST_REQUEST("allreduce", in_tensor.nbytes())
 
@@ -1454,7 +1458,7 @@ void ProcessGroupACCL::run_reduce(at::Tensor in_tensor,
 
   PRE_REQUEST(Reduce,in_tensor)  
 
-  accl->reduce(*in_buf, *out_buf, in_tensor.numel(), opts.rootRank, acclOp.at(opts.reduceOp));
+  auto req = accl->reduce(*in_buf, *out_buf, in_tensor.numel(), opts.rootRank, acclOp.at(opts.reduceOp));
 
   POST_REQUEST("reduce", in_tensor.nbytes())
 
@@ -1504,7 +1508,7 @@ void ProcessGroupACCL::run_allgather(
 
   int rounded_count = (in_tensor.numel() + 1023) & ~1023;
       
-  accl->allgather(*in_buf, *out_buf, rounded_count);
+  auto req = accl->allgather(*in_buf, *out_buf, rounded_count);
 
   POST_REQUEST("allgather", in_tensor.nbytes())
 
@@ -1602,7 +1606,7 @@ void ProcessGroupACCL::run_gather(at::Tensor in_tensor,
 
   PRE_REQUEST(Gather, in_tensor)
 
-  accl->gather(*in_buf, *out_buf, in_tensor.numel(), opts.rootRank);
+  auto req = accl->gather(*in_buf, *out_buf, in_tensor.numel(), opts.rootRank);
 
   POST_REQUEST("gather", in_tensor.nbytes())
 
@@ -1718,7 +1722,7 @@ void ProcessGroupACCL::run_scatter(std::vector<at::Tensor> &in_tensor_vec,
   PRE_REQUEST(Scatter, dsttensor)
   
   // Run scatter
-  accl->scatter(*in_buf, *out_buf, out_tensor.numel(), opts.rootRank);
+  auto req = accl->scatter(*in_buf, *out_buf, out_tensor.numel(), opts.rootRank);
 
   POST_REQUEST("scatter", out_tensor.nbytes())
 
@@ -1849,7 +1853,7 @@ void ProcessGroupACCL::run_alltoall(at::Tensor in_tensor,
 
   PRE_REQUEST(AlltoAll, in_tensor)
 
-  accl->alltoall(*in_buf, *out_buf, in_tensor.numel()/size_);
+  auto req = accl->alltoall(*in_buf, *out_buf, in_tensor.numel()/size_);
 
   POST_REQUEST("alltoall", a2a_nbytes)
 
@@ -1877,7 +1881,7 @@ void ProcessGroupACCL::run_alltoall_vec(std::vector<at::Tensor> &in_tensor_vec,
   
   PRE_REQUEST(AlltoAll, in_tensor_vec[0])
 
-  accl->alltoall(*in_buf, *out_buf, in_tensor_vec[0].numel());
+  auto req = accl->alltoall(*in_buf, *out_buf, in_tensor_vec[0].numel());
 
   POST_REQUEST("alltoall", a2a_nbytes)
 
