@@ -117,7 +117,9 @@ def test_broadcast(numel, testtype):
             end_time = time.perf_counter()
             
         measured_time = (end_time - start_time) * 1000000
-            
+
+        print("pytorch_Broadcast_" + str(x.nbytes) + " durationUs: " + str(measured_time), file=sys.stderr)
+        
         logger.debug("Directly measured time us 1:" + str(measured_time))
             
         mpi.Barrier()
@@ -317,6 +319,8 @@ def test_allreduce(numel, testtype):
             
         measured_time = (end_time - start_time) * 1000000
 
+        print("pytorch_Allreduce_" + str(x.nbytes) + " durationUs: " + str(measured_time), file=sys.stderr)
+        
         logger.debug("Directly measured time us 1:" + str(measured_time))            
         
         mpi.Barrier()
@@ -504,11 +508,11 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
     mpi.Barrier()            
 
 
-    dist.init_process_group("mpi", rank=rank, world_size=size)
+    # dist.init_process_group("mpi", rank=rank, world_size=size)
 
     
-    # accl.create_process_group(ranks, design, bufsize=rxbufsize, initialize=True, simulation=simulator)
-    # dist.init_process_group("ACCL", rank=rank, world_size=size)
+    accl.create_process_group(ranks, design, bufsize=rxbufsize, initialize=True, simulation=simulator)
+    dist.init_process_group("ACCL", rank=rank, world_size=size)
     
     global num_errors
     num_errors = 0
@@ -522,11 +526,12 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
         active=5,
     )
     
-    with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], profile_memory=True, schedule=schedule, record_shapes=True) as prof:
-        for i in range(30):
-            test_broadcast(128 * 1024, torch.float32)
-            test_allreduce(128 * 1024, torch.float32)
-            prof.step()
+    # with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], profile_memory=True, schedule=schedule, record_shapes=True) as prof:
+    for n in range(4,14):
+        for i in range(5):
+            test_broadcast(2**n, torch.float32)
+            test_allreduce(2**n, torch.float32)
+            # prof.step()
     
     # for i in range(10):
     # if True:
@@ -590,8 +595,8 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
         print(f"!!!!!!!! - {num_errors} Errors found - !!!!!!!!!")
         logger.debug(f"!!!!!!!! - {num_errors} Errors found - !!!!!!!!!")        
 
-    print(prof.key_averages(group_by_input_shape=True)
-          .table(sort_by="cpu_time_total", row_limit=15))
+    # print(prof.key_averages(group_by_input_shape=True)
+          # .table(sort_by="cpu_time_total", row_limit=15))
 
         
     logger.debug('Destroying ACCL Process Group')
