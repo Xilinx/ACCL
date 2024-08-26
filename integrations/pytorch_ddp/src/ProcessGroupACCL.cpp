@@ -985,7 +985,7 @@ void ProcessGroupACCL::initialize() {
       accl.get()->initialize(ranks_, rank_, size_+2, bufsize, segsize, 4096*1024*2);
     } else {
       std::cout<<"Rendezvous Protocol"<<std::endl;
-      accl.get()->initialize(ranks_, rank_, 16, 1024, RDVZ_THRESHOLD);
+      accl.get()->initialize(ranks_, rank_, 16, 1024, RDVZ_THRESHOLD, 4096*1024);
     }  
     
     ACCL::debug(std::string("[ACCL coyote] communicator: ") + accl->dump_communicator());
@@ -1185,8 +1185,6 @@ void ProcessGroupACCL::run_broadcast(at::Tensor in_tensor,
 
   int rounded_count = (in_tensor.numel() + ROUND_NR) & ~ROUND_NR;
   
-  auto zero_tensor = torch::zeros({rounded_count}, in_tensor.scalar_type());
-  
   
   ACCL::debug("rounded count:" + std::to_string(rounded_count));
   ACCL::debug("rootRank:" + std::to_string(opts.rootRank));
@@ -1211,61 +1209,11 @@ void ProcessGroupACCL::run_broadcast(at::Tensor in_tensor,
   STOP_FINE(lock, in_tensor.nbytes())
   
 
-  // in_buf->change_type(convert_datatype_from_torch(at::kInt));
-  // out_buf->change_type(convert_datatype_from_torch(at::kInt));
-
-  // int imaginary_count = rounded_count;
-  // if (in_tensor.scalar_type() == at::kDouble || in_tensor.scalar_type() == at::kLong){
-      // imaginary_count = (in_tensor.numel()*2 + ROUND_NR) & ~ROUND_NR;
-  // }
-  
-  /*      
-    if(rank_ == opts.rootRank){
-
-      for(int i = 0; i < size_; i++){
-	  if(i != opts.rootRank){
-	        if (in_tensor.scalar_type() == at::kInt || in_tensor.scalar_type() == at::kLong){
-		    ACCL::debug("sending:")
-	      for(int i = 0; i<(in_tensor.numel() * (in_tensor.element_size() / 4)); i++){
-		  ACCL::debug(std::to_string(((int *) in_buf->byte_array())[i]));
-  }
-		}
-	      ACCL::ACCLRequest* req = accl->send(*in_buf, rounded_count, i, 203);
-	  }
-	  
-  }
-    }
-    else{
-	  ACCL::ACCLRequest* req = accl->recv(*in_buf, rounded_count, opts.rootRank, 203);
-	  if (in_tensor.scalar_type() == at::kInt || in_tensor.scalar_type() == at::kLong){
-	      ACCL::debug("received:")
-	      for(int i = 0; i<(in_tensor.numel() * (in_tensor.element_size() / 4)); i++){
-		  ACCL::debug(std::to_string(((int *) in_buf->byte_array())[i]));
-  }
-		}
-    }
-  */
-
-
-  // if (in_tensor.scalar_type() == at::kInt || in_tensor.scalar_type() == at::kLong){
-      // ACCL::debug("input:");
-	      // for(int i = 0; i<(in_tensor.numel() * (in_tensor.element_size() / 4)); i++){
-		  // ACCL::debug(std::to_string(((int *) in_buf->byte_array())[i]));
-  // }
-		// }
-  
 
   PRE_REQUEST(Broadcast, in_tensor)  
       
   auto req = accl->bcast(*in_buf, rounded_count, opts.rootRank);
 
-  // if (in_tensor.scalar_type() == at::kInt || in_tensor.scalar_type() == at::kLong){
-      // ACCL::debug("result:");
-	      // for(int i = 0; i<(in_tensor.numel() * (in_tensor.element_size() / 4)); i++){
-		  // ACCL::debug(std::to_string(((int *) in_buf->byte_array())[i]));
-  // }
-		// }
-  
   POST_REQUEST("bcast", in_tensor.nbytes())
 
   // in_buf->sync_from_device();
@@ -1273,7 +1221,7 @@ void ProcessGroupACCL::run_broadcast(at::Tensor in_tensor,
       // ACCL::debug(std::to_string(((double *) in_buf->byte_array())[i]));
   // }
   START_FINE(copy)
-  copy_back_tensor(in_tensor, in_buf, true, true, opts.rootRank);
+  copy_back_tensor(in_tensor, in_buf, false, true, opts.rootRank);
   STOP_FINE(copy, in_tensor.nbytes())
   #endif
 }

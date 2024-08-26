@@ -105,7 +105,7 @@ for op in keywords:
                  labels=av_lists[op].keys(), alpha=0.8)
     ax.legend(loc='upper left', reverse=True)
     plt.gca().set_xscale('log', base=2)
-    ax.set_title('Execution time composition' + )
+    ax.set_title('Execution time composition' + op)
     ax.set_xlabel('size[B]')
     ax.set_ylabel('Latency us')
     # add tick at every 200 million people
