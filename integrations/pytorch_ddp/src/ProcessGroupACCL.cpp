@@ -180,12 +180,6 @@ std::map<at::ScalarType, MPI_Datatype> mpiDatatype = {
   ACCL::debug("device_" + std::string(x_MAKE_STRING(COLL_NAME)) + "_"  + std::to_string(nbytes) + " durationUs: " + std::to_string(durationUs_accl_##COLL_NAME));
 
     
-#define TIMER_WRAP()
-    
-// Better logging
-// accl_log(mpi_rank, format_log("bcast", options, durationUs, 0));
-
-  
 namespace {
 
 /* Alternative for std::format from C++20 in C++17.
@@ -758,7 +752,7 @@ void accl_sa_handler(int)
 // TODO delete when not needed anymore
 void ProcessGroupACCL::init_input_tensor(at::Tensor &tensor, std::unique_ptr<ACCL::BaseBuffer> &data, bool do_on_root, bool do_on_others, int opts_root_rank) {
   if DO_COND {
-	ACCL::debug("Copying data to CPU tensor of size " + std::to_string(tensor.numel()));
+	// ACCL::debug("Copying data to CPU tensor of size " + std::to_string(tensor.numel()));
 	// at::Tensor wrapper_tensor = torch::from_blob(data->byte_array(), tensor.sizes(), tensor.options().device(c10::DeviceType::CPU)); 
 	// wrapper_tensor.copy_(tensor);
 	std::memcpy(data->byte_array(), tensor.data_ptr(), tensor.numel() * tensor.element_size());
@@ -780,7 +774,7 @@ void ProcessGroupACCL::init_input_tensor(at::Tensor &tensor, std::unique_ptr<ACC
     // Prepend another dimension for vector length
     sizes.insert(sizes.begin(), tensor_vec.size());
       
-    ACCL::debug("Copying data to CPU tensor of size " + std::to_string(total_size));
+    // ACCL::debug("Copying data to CPU tensor of size " + std::to_string(total_size));
     at::Tensor wrapper_tensor = torch::from_blob(data->byte_array(), sizes, options);
 
     for (const auto i : c10::irange(tensor_vec.size())) {
@@ -854,11 +848,11 @@ void ProcessGroupACCL::copy_back_tensor(at::Tensor tensor_original, std::unique_
       if (p2p_applicable(*accl, tensor_original, p2p_enabled)) {
 	copy_back_p2p_buffer(*data, tensor_original);
       } else {
-	ACCL::debug("Copying data back from CPU tensor of size " +
-		    std::to_string(tensor_original.numel()));
+	// ACCL::debug("Copying data back from CPU tensor of size " +
+		    // std::to_string(tensor_original.numel()));
 	std::memcpy(tensor_original.data_ptr(), data->byte_array(), tensor_original.numel() * tensor_original.element_size());
 	// tensor_original.copy_(torch::from_blob(data->byte_array(), tensor_original.sizes(), tensor_original.options().device(c10::DeviceType::CPU)));
-	ACCL::debug("Finished Copying ");
+	// ACCL::debug("Finished Copying ");
       }
   }
 }
@@ -1112,12 +1106,6 @@ void ProcessGroupACCL::run_broadcast(at::Tensor in_tensor,
 
   // It seems to have issues with non-even numbers, so we round to ACCL_MSG_SIZE
   int rounded_count = (in_tensor.numel() + ROUND_NR) & ~ROUND_NR;
-  // if (in_tensor.scalar_type() == at::kInt || in_tensor.scalar_type() == at::kLong){
-      // return;
-  // }
-
-  ACCL::debug("rounded count:" + std::to_string(rounded_count));
-  ACCL::debug("rootRank:" + std::to_string(opts.rootRank));
   
   int imaginary_count = rounded_count;
   if (in_tensor.scalar_type() == at::kDouble || in_tensor.scalar_type() == at::kLong){
@@ -1150,26 +1138,8 @@ void ProcessGroupACCL::run_broadcast(at::Tensor in_tensor,
   in_buf->change_type(convert_datatype_from_torch(at::kInt));
   out_buf->change_type(convert_datatype_from_torch(at::kInt));
 
-  if (in_tensor.scalar_type() == at::kInt || in_tensor.scalar_type() == at::kLong){
-      ACCL::debug("input:");
-	      for(int i = 0; i<(in_tensor.numel() * (in_tensor.element_size() / 4)); i++){
-		  ACCL::debug(std::to_string(((int *) in_buf->byte_array())[i]));
-	      }
-  }
-
-  
-      
   auto req = accl->allreduce(*in_buf, *out_buf, imaginary_count, ACCL::reduceFunction::SUM);      
 
-  if (in_tensor.scalar_type() == at::kInt || in_tensor.scalar_type() == at::kLong){
-      ACCL::debug("result:");
-	      for(int i = 0; i<(in_tensor.numel() * (in_tensor.element_size() / 4)); i++){
-		  ACCL::debug(std::to_string(((int *) out_buf->byte_array())[i]));
-	      }
-  }
-  
-
-  
   POST_REQUEST("broadcast", in_tensor.nbytes())
 
   START_FINE(copy)      
@@ -1186,9 +1156,6 @@ void ProcessGroupACCL::run_broadcast(at::Tensor in_tensor,
   int rounded_count = (in_tensor.numel() + ROUND_NR) & ~ROUND_NR;
   
   
-  ACCL::debug("rounded count:" + std::to_string(rounded_count));
-  ACCL::debug("rootRank:" + std::to_string(opts.rootRank));
-  
   START_FINE(init)
 
   if (opts.rootRank == rank_){
@@ -1200,9 +1167,6 @@ void ProcessGroupACCL::run_broadcast(at::Tensor in_tensor,
 
   STOP_FINE(init, in_tensor.nbytes())
   
-  // Reserve device
-
-      
   START_FINE(lock)
   c10::DeviceGuard guard(in_tensor.device());
   std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
@@ -1216,10 +1180,6 @@ void ProcessGroupACCL::run_broadcast(at::Tensor in_tensor,
 
   POST_REQUEST("bcast", in_tensor.nbytes())
 
-  // in_buf->sync_from_device();
-  // for(int i = 0; i<in_tensor.numel(); i++){
-      // ACCL::debug(std::to_string(((double *) in_buf->byte_array())[i]));
-  // }
   START_FINE(copy)
   copy_back_tensor(in_tensor, in_buf, false, true, opts.rootRank);
   STOP_FINE(copy, in_tensor.nbytes())
@@ -1232,15 +1192,11 @@ ProcessGroupACCL::broadcast(std::vector<at::Tensor> &tensors,
   checkSingleTensor(tensors);
   std::function<void(std::unique_ptr<WorkEntry> &)> runFunc =
       [opts, this](std::unique_ptr<WorkEntry> &entry) {
-	  std::cerr << "Starting Broadcast" << std::endl;
+	  // std::cerr << "Starting Broadcast" << std::endl;
 	// if (((entry->src)[0]).numel() <= RDVZ_THRESHOLD || BROADCAST_SIDESTEP){
 	if (BROADCAST_SIDESTEP){
 	    
 	auto data = (entry->src)[0];
-	if(data.scalar_type() == at::kInt || data.scalar_type() == at::kLong){
-	    std::cerr << "before" << std::endl;
-	    std::cerr << data << std::endl;
-	}
 	ACCL::debug("[Broadcast] -- Sidestepped using OpenMPI -- size " + std::to_string(data.numel()));
 	c10::DeviceGuard guard(data.device());
         std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
@@ -1250,28 +1206,13 @@ ProcessGroupACCL::broadcast(std::vector<at::Tensor> &tensors,
             mpiDatatype.at(data.scalar_type()),
             opts.rootRank,
             MPI_COMM_WORLD));
-	if(data.scalar_type() == at::kInt || data.scalar_type() == at::kLong){
-	    std::cerr << "after" << std::endl;
-	    std::cerr << data << std::endl;
-	}
 	} else {
 	START_COARSE(total)    
 	at::Tensor &tensor = (entry->src)[0];
-	if(tensor.scalar_type() == at::kInt || tensor.scalar_type() == at::kLong){
-	    std::cerr << tensor << std::endl;
-	}
-	ACCL::debug(string_of_torch_datatype(tensor.scalar_type()));
         // Segment data if necessary
         if (tensor.nbytes() > ACCL_MSG_SIZE) {
-	    ACCL::debug("nbytes: " + std::to_string(tensor.nbytes()));
-	    ACCL::debug("bufsize: " + std::to_string(bufsize));
-	    ACCL::debug("numel: " + std::to_string(tensor.numel()));
-	    ACCL::debug("tensor.size(0): " + std::to_string(tensor.size(0)));
 	  size_t non_zero_dim_count = tensor.numel() / tensor.size(0);
-	  ACCL::debug("non_zero_dim_count: " + std::to_string(non_zero_dim_count));
-	  ACCL::debug("tensor.itemsize(): " + std::to_string(tensor.itemsize()));
           size_t n = ACCL_MSG_SIZE / tensor.itemsize() / non_zero_dim_count;
-	 ACCL::debug("n: " + std::to_string(n));
 	  ACCL::debug("[Broadcast] Segmenting tensor of size " + std::to_string(tensor.nbytes()) + " into " + std::to_string(n * non_zero_dim_count) + "-sized elements ");
           for (size_t i = 0; i < tensor.size(0); i += n) {
 	    ACCL::debug("part " + std::to_string(i) + "!");
@@ -1279,13 +1220,8 @@ ProcessGroupACCL::broadcast(std::vector<at::Tensor> &tensors,
             run_broadcast(tensor.narrow(0, i, end), opts);
           }
         } else {
-	  ACCL::debug("[Broadcast] Broadcasting entire tensor of size " + std::to_string(tensor.nbytes()) + " without segmentation.");
           run_broadcast(tensor, opts);
         }
-	if(tensor.scalar_type() == at::kInt || tensor.scalar_type() == at::kLong){
-	    std::cerr << tensor << std::endl;
-	}
-
 	STOP_COARSE(total, ((entry->src)[0]).nbytes())    
 	}
       };
@@ -1319,8 +1255,6 @@ void ProcessGroupACCL::run_allreduce(at::Tensor in_tensor,
 
   int rounded_count = (in_tensor.numel() + ROUND_NR) & ~ROUND_NR;
   
-  ACCL::debug("rounded count:" + std::to_string(rounded_count));
-  
   auto req = accl->allreduce(*in_buf, *out_buf, rounded_count, acclOp.at(opts.reduceOp));      
 
   POST_REQUEST("allreduce", in_tensor.nbytes())
@@ -1337,7 +1271,6 @@ ProcessGroupACCL::allreduce(std::vector<at::Tensor> &tensors,
 
   std::function<void(std::unique_ptr<WorkEntry> &)> runFunc =
       [opts, this](std::unique_ptr<WorkEntry> &entry) {
-	std::cerr << "Starting AllReduce" << std::endl;
 	// sidestep eager allreduce
 	// if (((entry->src)[0]).numel() <= RDVZ_THRESHOLD || ALLREDUCE_SIDESTEP){
 	  if (ALLREDUCE_SIDESTEP){
@@ -1356,21 +1289,13 @@ ProcessGroupACCL::allreduce(std::vector<at::Tensor> &tensors,
 	    START_COARSE(total)    
 	    auto tensor = (entry->src)[0];
 	    // Segment data if necessary
-	    ACCL::debug(string_of_torch_datatype(tensor.scalar_type()));
 	    if (tensor.nbytes() > (ACCL_MSG_SIZE)) {
-		ACCL::debug("nbytes: " + std::to_string(tensor.nbytes()));
-		ACCL::debug("bufsize: " + std::to_string(bufsize));
-		ACCL::debug("numel: " + std::to_string(tensor.numel()));
-		ACCL::debug("tensor.size(0): " + std::to_string(tensor.size(0)));
 		size_t non_zero_dim_count = tensor.numel() / tensor.size(0);
-		ACCL::debug("non_zero_dim_count: " + std::to_string(non_zero_dim_count));
-		ACCL::debug("tensor.itemsize(): " + std::to_string(tensor.itemsize()));
 		size_t n = ACCL_MSG_SIZE / (tensor.itemsize() * non_zero_dim_count);
-		ACCL::debug("n: " + std::to_string(n));
 		ACCL::debug("[Allreduce] Segmenting tensor of size " + std::to_string(tensor.nbytes()) + " into " + std::to_string(n * non_zero_dim_count) + "-sized elements ");
 		for (size_t i = 0; i < tensor.size(0); i += n) {
 		    START_FINE(loop)    
-		    ACCL::debug("part " + std::to_string(i) + "!");
+		    // ACCL::debug("part " + std::to_string(i) + "!");
 		    size_t end = std::min(n, static_cast<size_t>(tensor.size(0)) - i);
 		    run_allreduce(tensor.narrow(0, i, end), opts);
 		    STOP_FINE(loop, tensor.nbytes())    
@@ -1509,7 +1434,6 @@ ProcessGroupACCL::allgather(std::vector<std::vector<at::Tensor>> &outputTensors,
         auto srctensor = (entry->src)[0];
         auto &dsttensors = entry->dst;
         // Segment data if necessary
-	ACCL::debug(string_of_torch_datatype(dsttensors[0].scalar_type()));
         if (srctensor.nbytes() > bufsize) {
 	  size_t non_zero_dim_count = srctensor.numel() / srctensor.size(0);
           size_t n = bufsize / srctensor.itemsize() / non_zero_dim_count;
@@ -1736,7 +1660,6 @@ ProcessGroupACCL::scatter(std::vector<at::Tensor> &outputTensors,
         auto dsttensor = (entry->dst)[0];
         // Segment data if necessary
         if (dsttensor.nbytes() > bufsize / 4) {
-          ACCL::debug("dsttensor to large!");
 	  size_t non_zero_dim_count = dsttensor.numel() / dsttensor.size(0);
           size_t n = bufsize / 4 / dsttensor.itemsize() / non_zero_dim_count;
           for (size_t i = 0; i < dsttensor.size(0); i += n) {
@@ -1787,17 +1710,15 @@ void ProcessGroupACCL::run_alltoall(at::Tensor in_tensor,
                                     at::Tensor out_tensor,
                                     const AllToAllOptions &opts) {
 
-  int a2a_nbytes = in_tensor.nbytes()/size_;
-
   START_FINE(init)
   init_input_tensor(in_tensor, in_buf, true, true);
-  STOP_FINE(init, a2a_nbytes)
+  STOP_FINE(init, in_tensor.nbytes())
 
   // Reserve device
   START_FINE(lock)      
   c10::DeviceGuard guard(in_tensor.device());
   std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
-  STOP_FINE(lock, a2a_nbytes)
+  STOP_FINE(lock, in_tensor.nbytes())
 
   // init_output_data(out_tensor, dstdata, out_tensor.numel(), out_tensor.scalar_type(), true, true);
 
@@ -1805,11 +1726,11 @@ void ProcessGroupACCL::run_alltoall(at::Tensor in_tensor,
 
   auto req = accl->alltoall(*in_buf, *out_buf, in_tensor.numel()/size_);
 
-  POST_REQUEST("alltoall", a2a_nbytes)
+  POST_REQUEST("alltoall", in_tensor.nbytes())
 
   START_FINE(copy)      
   copy_back_tensor(out_tensor, out_buf, true, true);    
-  STOP_FINE(copy,  a2a_nbytes)
+  STOP_FINE(copy,  in_tensor.nbytes())
 }
 
     
@@ -1865,7 +1786,6 @@ c10::intrusive_ptr<Work> ProcessGroupACCL::alltoall_base(
           // std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
           // Segment data if necessary
           if (dsttensor.nbytes() > bufsize) {
-            ACCL::debug("dsttensor to large!");
 
 	    // Split individual entries
 	    size_t non_zero_dim_count = dsttensor.numel() / dsttensor.size(0);
@@ -1873,29 +1793,26 @@ c10::intrusive_ptr<Work> ProcessGroupACCL::alltoall_base(
 	    size_t entry_size = dsttensor.numel() / size_ / non_zero_dim_count;
             for (size_t i = 0; i < entry_size; i += n) {
               ACCL::debug("part " + std::to_string(i) + "!");
-              size_t end = std::min(i + n, static_cast<size_t>(entry_size));
+              size_t end = std::min(n, static_cast<size_t>(entry_size) - i);
 
 	      std::vector<at::Tensor> srctensorslices;
 	      srctensorslices.reserve(size_);
-	      ACCL::debug("dsttensorslices:");
 	      for (int j = 0; j < size_; j++) {
 		  int bufpos = j * entry_size;
-		  srctensorslices.emplace_back(srctensor.narrow(0, i + bufpos, end + bufpos));
+		  srctensorslices.emplace_back(srctensor.narrow(0, i + bufpos, end));
 	      }
 	      std::vector<at::Tensor> dsttensorslices;
 	      dsttensorslices.reserve(size_);
-	      ACCL::debug("dsttensorslices:");
 	      for (int j = 0; j < size_; j++) {
 		  int bufpos = j * entry_size;
-		  dsttensorslices.emplace_back(dsttensor.narrow(0, i + bufpos, end + bufpos));
+		  dsttensorslices.emplace_back(dsttensor.narrow(0, i + bufpos, end));
 	      }
               run_alltoall_vec(srctensorslices, dsttensorslices, opts);
             }
           } else {
-	    ACCL::debug("Running without segmentation");
             run_alltoall(srctensor, dsttensor, opts);
           }
-	  STOP_COARSE(total, ((((entry->src)[0]).nbytes())/size_))    
+	  STOP_COARSE(total, ((((entry->src)[0]).nbytes())))    
         };
     std::vector<at::Tensor> inputTensors = {inputTensor};
     std::vector<at::Tensor> outputTensors = {outputTensor};
