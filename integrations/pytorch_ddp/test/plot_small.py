@@ -4,7 +4,7 @@ import seaborn as sns
 import numpy as np
 import matplotlib.ticker as mticker
 
-keywords = ["Broadcast", "Allreduce" ]
+keywords = ["Broadcast", "Allreduce", "AlltoAll" ]
 # parts = ["lib","barrier","total"]
 parts = ["lib", "copy","init", "total", "device", "pytorch", "sleep"]
 parts_plot = ["init", "device", "lib_oh", "copy", "total_oh", "pytorch_oh"]
@@ -23,8 +23,8 @@ with open(log_file_path, 'r') as log_file:
     lines = log_file.readlines()
 
 current_keyword = None
-results = { "Broadcast": {}, "Allreduce": {}}
-averages = { "Broadcast": {}, "Allreduce": {}}
+results = { "Broadcast": {}, "Allreduce": {}, "AlltoAll": {}}
+averages = { "Broadcast": {}, "Allreduce": {}, "AlltoAll": {}}
 
 # results = { "Broadcast": {}, "Allreduce": {}}
 
@@ -70,8 +70,14 @@ for op, parts in results.items():
                 count += 1
             averages[op][part][cnt] = test_sum / count    
 
+sizes.sort()
+            
 for op, parts in averages.items():
     for cnt in sizes:
+        if cnt == 32:
+            print(averages[op]['lib_oh'])
+            print(parts['lib'])
+            print(parts['device'])
         averages[op]['lib_oh'][cnt] = parts['lib'][cnt] - parts['device'][cnt]
         averages[op]['total_oh'][cnt] = parts['total'][cnt] - parts['sleep'][cnt]  - parts['lib'][cnt] - parts['init'][cnt] - parts['copy'][cnt]
         averages[op]['pytorch_oh'][cnt] = parts['pytorch'][cnt] - (parts['total'][cnt])
@@ -82,14 +88,14 @@ for op, parts in averages.items():
     averages[op].pop('pytorch')    
 
 
-sizes.sort()
-
 av_lists = {}
 for word in keywords:
     av_lists[word] = {}
     for part in parts_plot:
         av_lists[word][part] = []
         for size in sizes:
+            # if size == 32:
+                # continue
             av_lists[word][part].append(averages[word][part][size])
 
 
@@ -105,7 +111,7 @@ for op in keywords:
                  labels=av_lists[op].keys(), alpha=0.8)
     ax.legend(loc='upper left', reverse=True)
     plt.gca().set_xscale('log', base=2)
-    ax.set_title('Execution time composition' + op)
+    ax.set_title(op + ' Execution time composition')
     ax.set_xlabel('size[B]')
     ax.set_ylabel('Latency us')
     # add tick at every 200 million people
