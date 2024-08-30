@@ -1312,16 +1312,14 @@ ProcessGroupACCL::allreduce(std::vector<at::Tensor> &tensors,
                  c10::optional<std::vector<at::Tensor>>(tensors));
 }
 
-#undef COLL_NAME
-#define COLL_NAME UNNAMED
-
 c10::intrusive_ptr<Work>
 ProcessGroupACCL::allreduce_coalesced(std::vector<at::Tensor> &tensors,
                                       const AllreduceCoalescedOptions &opts) {
   TORCH_CHECK(false,
               "allreduce_coalesced is currently not supported with ACCL");
 }
-
+#undef COLL_NAME
+#define COLL_NAME Reduce
 void ProcessGroupACCL::run_reduce(at::Tensor in_tensor,
                                   const ReduceOptions &opts) {
 
@@ -1365,6 +1363,8 @@ ProcessGroupACCL::reduce(std::vector<at::Tensor> &tensors,
                  c10::optional<std::vector<at::Tensor>>(tensors));
 }
 
+#undef COLL_NAME
+#define COLL_NAME Allgather
 void ProcessGroupACCL::run_allgather(
     at::Tensor in_tensor,
     const std::vector<at::Tensor> &dsttensorvec) {
@@ -1465,6 +1465,9 @@ c10::intrusive_ptr<Work> ProcessGroupACCL::allgather_coalesced(
   TORCH_CHECK(false, "ProcessGroupACCL does not support allgather_coalesced");
 }
 
+#undef COLL_NAME
+#define COLL_NAME Gather
+    
 void ProcessGroupACCL::run_gather(at::Tensor in_tensor,
                                   const std::vector<at::Tensor> &dsttensorvec,
                                   const GatherOptions &opts) {
@@ -1580,6 +1583,8 @@ ProcessGroupACCL::gather(std::vector<std::vector<at::Tensor>> &outputTensors,
   }
 }
 
+#undef COLL_NAME
+#define COLL_NAME Scatter
 void ProcessGroupACCL::run_scatter(std::vector<at::Tensor> &in_tensor_vec,
                                    at::Tensor out_tensor,
                                    const ScatterOptions &opts) {
@@ -1836,8 +1841,7 @@ ProcessGroupACCL::alltoall(std::vector<at::Tensor> &outputTensors,
 }
 
 #undef COLL_NAME
-#define COLL_NAME UNNAMED
-
+#define COLL_NAME Send
 
 void ProcessGroupACCL::run_send(at::Tensor in_tensor, int dstRank,
                                 int tag) {
@@ -1881,6 +1885,9 @@ ProcessGroupACCL::send(std::vector<at::Tensor> &tensors, int dstRank, int tag) {
                  c10::optional<std::vector<at::Tensor>>(tensors));
 }
 
+#undef COLL_NAME
+#define COLL_NAME Recv    
+    
 void ProcessGroupACCL::run_recv(at::Tensor out_tensor, int srcRank,
                                 int tag) {
 
@@ -1924,6 +1931,9 @@ ProcessGroupACCL::recv(std::vector<at::Tensor> &tensors, int srcRank, int tag) {
                  c10::optional<std::vector<at::Tensor>>(tensors));
 }
 
+#undef COLL_NAME
+#define COLL_NAME Unnamed
+    
 c10::intrusive_ptr<Work>
 ProcessGroupACCL::recvAnysource(std::vector<at::Tensor> &tensors, int tag) {
   TORCH_CHECK(false, "ProcessGroupACCL does not support recvAnysource");
