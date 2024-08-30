@@ -49,7 +49,7 @@ else:
 rank = 0
 size = 0
 
-x = 5000
+x = 1024
 y = 1
 
 seed = 48
@@ -118,7 +118,7 @@ def test_broadcast(numel, testtype):
             
         measured_time = (end_time - start_time) * 1000000
 
-        print("pytorch_Broadcast_" + str(x.nbytes) + " durationUs: " + str(measured_time), file=sys.stderr)
+        print(str(rank) + "_pytorch_Broadcast_" + str(x.nbytes) + " durationUs: " + str(measured_time), file=sys.stderr)
         
         logger.debug("Directly measured time us 1:" + str(measured_time))
             
@@ -164,8 +164,10 @@ def test_broadcast_2():
         logger.debug("Test broadcast finished!")
 
         
-def test_sendrcv():
+def test_sendrcv(numel):
     global num_errors
+
+    shape = (numel,)
     x = torch.full(shape, float(rank))
 
     y = torch.empty(shape)
@@ -175,13 +177,34 @@ def test_sendrcv():
 
 
     with torch.profiler.record_function("test_sendrcv"):
-
         if rank % 2:
+            mpi.Barrier()            
+            start_time = time.perf_counter()
             dist.send(x, next_rank)
+            end_time = time.perf_counter()
+            measured_time = (end_time - start_time) * 1000000
+            print(str(rank) + "_pytorch_Send_" + str(x.nbytes) + " durationUs: " + str(measured_time), file=sys.stderr)
+
+            mpi.Barrier()            
+            start_time = time.perf_counter()
             dist.recv(y, prev_rank)
+            end_time = time.perf_counter()
+            measured_time = (end_time - start_time) * 1000000
+            print(str(rank) + "_pytorch_Recv_" + str(x.nbytes) + " durationUs: " + str(measured_time), file=sys.stderr)
         else:
+            mpi.Barrier()            
+            start_time = time.perf_counter()
             dist.recv(y, prev_rank)
+            end_time = time.perf_counter()
+            measured_time = (end_time - start_time) * 1000000
+            print(str(rank) + "_pytorch_Recv_" + str(x.nbytes) + " durationUs: " + str(measured_time), file=sys.stderr)
+
+            mpi.Barrier()            
+            start_time = time.perf_counter()
             dist.send(x, next_rank)
+            end_time = time.perf_counter()
+            measured_time = (end_time - start_time) * 1000000
+            print(str(rank) + "_pytorch_Send_" + str(x.nbytes) + " durationUs: " + str(measured_time), file=sys.stderr)
         mpi.Barrier()
     try:
         np.testing.assert_allclose(y, torch.full(shape, prev_rank))
@@ -193,18 +216,27 @@ def test_sendrcv():
         logger.debug("Test Sendrcv finished!")
 
 
-def test_scatter():
+def test_scatter(numel):
     global num_errors
+
+    shape = (numel,)
     if rank == 0:
         x = [torch.full(shape, float(i+1)) for i in range(size)]
     else:
         x = None
     y = torch.full(shape, float(0))
 
+    mpi.Barrier()            
+    start_time = time.perf_counter()
+    
     with torch.profiler.record_function("test_scatter"):
         
         dist.scatter(y, x, 0)
-        mpi.Barrier()
+
+    end_time = time.perf_counter()
+    measured_time = (end_time - start_time) * 1000000
+    print(str(rank) + "_pytorch_Scatter_" + str(y.nbytes) + " durationUs: " + str(measured_time), file=sys.stderr)
+    
     try:
         np.testing.assert_allclose(y, torch.full(shape, float(rank+1)))
     except AssertionError as e:
@@ -216,8 +248,10 @@ def test_scatter():
     
 
 
-def test_gather():
+def test_gather(numel):
     global num_errors
+
+    shape = (numel,)
     x = torch.full(shape, float(rank))
 
     if rank == 0:
@@ -225,10 +259,17 @@ def test_gather():
     else:
         y = None
 
+    mpi.Barrier()            
+    start_time = time.perf_counter()
+        
     with torch.profiler.record_function("test_gather"):
             
         dist.gather(x, y, 0)
-        mpi.Barrier()
+
+    end_time = time.perf_counter()
+    measured_time = (end_time - start_time) * 1000000
+    print(str(rank) + "_pytorch_Gather_" + str(x.nbytes) + " durationUs: " + str(measured_time), file=sys.stderr)
+    
     if rank == 0:
         for i, c in enumerate(y):
             try:
@@ -241,22 +282,32 @@ def test_gather():
                 logger.debug("Test Gather finished!")
 
             
-def test_allgather():
+def test_allgather(numel, testtype):
     global num_errors
-    testtype = torch.int64
-    shape_gather = (1,)
-    if testtype == torch.int64 or testtype == torch.int32:
-        rand_torch = torch.randint(torch.iinfo(testtype).min, torch.iinfo(testtype).max,shape_gather, dtype=testtype)
-    else:
-        rand_torch = torch.rand(shape_gather, dtype=testtype)
-    x = rand_torch.clone()
-    y = [torch.full(shape_gather, 0, dtype=testtype) for _ in range(size)]
 
+    shape = (numel,)
+    if testtype == torch.int64 or testtype == torch.int32:
+        rand_torch = torch.randint(torch.iinfo(testtype).min, torch.iinfo(testtype).max,shape, dtype=testtype)
+    else:
+        rand_torch = torch.rand(shape, dtype=testtype)
+    x = rand_torch.clone()
+    y = [torch.full(shape, 0, dtype=testtype) for _ in range(size)]
+
+    mpi.Barrier()            
+    start_time = time.perf_counter()
+
+    print('len y:' + str(len(y)))
+    
     with torch.profiler.record_function("test_allgather"):
-        
-        
         dist.all_gather(y, x)
-        mpi.Barrier()
+
+    end_time = time.perf_counter()
+    measured_time = (end_time - start_time) * 1000000
+    print(str(rank) + "_pytorch_Allgather_" + str(x.nbytes) + " durationUs: " + str(measured_time), file=sys.stderr)
+        
+    mpi.Barrier()
+
+        
     for i, c in enumerate(y):
         try:
             np.testing.assert_allclose(c, rand_torch)
@@ -269,14 +320,24 @@ def test_allgather():
         
 
 
-def test_reduce():
+def test_reduce(numel):
     global num_errors
+
+
+    shape = (numel,)
     x = torch.ones(shape)
 
+    mpi.Barrier()            
+    start_time = time.perf_counter()
     with torch.profiler.record_function("test_reduce"):
 
         dist.reduce(x, 0, dist.ReduceOp.SUM)
-        mpi.Barrier()            
+        mpi.Barrier()
+
+    end_time = time.perf_counter()
+    measured_time = (end_time - start_time) * 1000000
+    print(str(rank) + "_pytorch_Reduce_" + str(x.nbytes) + " durationUs: " + str(measured_time), file=sys.stderr)
+    
     if rank == 0:
         try:
             np.testing.assert_allclose(x, torch.full(shape, float(size)))
@@ -316,10 +377,8 @@ def test_allreduce(numel, testtype):
             dist.all_reduce(x, dist.ReduceOp.SUM)
 
         end_time = time.perf_counter()
-            
         measured_time = (end_time - start_time) * 1000000
-
-        print("pytorch_Allreduce_" + str(x.nbytes) + " durationUs: " + str(measured_time), file=sys.stderr)
+        print(str(rank) + "_pytorch_Allreduce_" + str(x.nbytes) + " durationUs: " + str(measured_time), file=sys.stderr)
         
         logger.debug("Directly measured time us 1:" + str(measured_time))            
         
@@ -335,34 +394,40 @@ def test_allreduce(numel, testtype):
             logger.debug("Test AllReduce finished!")
         
     
-def test_alltoall():
+def test_alltoall(numel):
     global num_errors
 
     # num_el = 26624
     
-    # shape = (num_el,)
+    shape = (numel,)
 
-    input = torch.arange(num_el, dtype=torch.float) + float(rank) * num_el
+    input = torch.arange(numel, dtype=torch.float) + float(rank) * numel
 
     input_shaped = input.reshape(shape)
 
-    output = torch.ones(num_el)
+    output = torch.ones(numel)
 
     output_shaped = output.reshape(shape)
 
+    start_time = time.perf_counter()
+    
     with torch.profiler.record_function("test_alltoall"):
         
         dist.all_to_all_single(output_shaped, input_shaped)
 
-        mpi.Barrier()
+    end_time = time.perf_counter()
 
-    test = torch.zeros(num_el)
+    measured_time = (end_time - start_time) * 1000000
+    
+    print(str(rank) + "_pytorch_AlltoAll_" + str(input.nbytes) + " durationUs: " + str(measured_time), file=sys.stderr)
+        
+    test = torch.zeros(numel)
 
-    section_size = int(num_el/size)
+    section_size = int(numel/size)
 
     for section in range(size):
         for el in range(section_size):
-            test[section * section_size + el] = float(rank) * section_size + section * num_el + el
+            test[section * section_size + el] = float(rank) * section_size + section * numel + el
 
     test_shaped = test.reshape(shape)
     try:
@@ -460,6 +525,7 @@ def start_test(comms: str, simulator: bool, host_file: str=None, fpga_file: str=
         mp = "30505"
     os.environ['MASTER_ADDR'] = ma
     os.environ['MASTER_PORT'] = mp
+
     rank = mpi.Get_rank()
     size = mpi.Get_size()
     start_port = 5005
@@ -527,14 +593,25 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
     )
     
     # with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], profile_memory=True, schedule=schedule, record_shapes=True) as prof:
-    for n in range(4,22):
-        for i in range(20):
-            test_broadcast(2**n, torch.float32)
-            test_allreduce(2**n, torch.float32)
+
+    n = 19
+    
+    if True:
+        for i in range(40):
+            num = 2**n * 3
+            test_broadcast(num, torch.float32)
+            test_allreduce(num, torch.float32)
+            test_alltoall(num)
+            test_allgather(num, torch.float32)
+            test_sendrcv(num)
+            test_scatter(num)
+            test_gather(num)
+            test_reduce(num)
+            
             # prof.step()
     
     # for i in range(10):
-    # if True:
+    if False:
         # test_allreduce(256, torch.int32)
         # test_allreduce(256, torch.int64)
         # test_broadcast(256, torch.float32)
@@ -542,30 +619,25 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
         # test_allgather()
 
         # test_broadcast_2()
-        # test_broadcast(642, torch.int64)
+        test_broadcast(1024, torch.float32)
         # test_broadcast(25610152, torch.float32)
         # test_broadcast(53, torch.int64)
         # test_broadcast(53120, torch.float32)
         # test_broadcast(53, torch.int64)
-        # test_allreduce(25557032, torch.float32)
+        test_allreduce(1024, torch.float32)
         # test_broadcast(162, torch.int32)
         # test_broadcast(25, torch.int32)
         # test_broadcast(53120, torch.float32)
         # test_broadcast(53, torch.int64)
         # test_allreduce(2049000, torch.float32)
         # test_allreduce()
-        # test_allgather()
         # test_broadcast_segment()
         # test_broadcast()
         # test_broadcast()
         # test_broadcast()
         # test_broadcast()
         # test_broadcast()
-        # test_sendrcv()
-        # test_scatter()
-    # for i in range(10):
-        # test_gather()
-        # test_alltoall()
+        test_alltoall()
         # test_allreduce(1000, torch.float32)
         # test_allreduce(2052096, torch.float32)
         # test_allreduce(1049600, torch.float32)
@@ -580,7 +652,6 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
         # test_allreduce()
         # test_allreduce()
 
-        # test_reduce()
 
 
         # demo_basic(rank)
