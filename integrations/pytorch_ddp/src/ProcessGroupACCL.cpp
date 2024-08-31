@@ -1323,19 +1323,26 @@ ProcessGroupACCL::allreduce_coalesced(std::vector<at::Tensor> &tensors,
 void ProcessGroupACCL::run_reduce(at::Tensor in_tensor,
                                   const ReduceOptions &opts) {
 
-  init_input_tensor(in_tensor, in_buf, true, true);    
+
+  START_FINE(init)    
+  init_input_tensor(in_tensor, in_buf, true, true);
+  STOP_FINE(init, in_tensor.nbytes())
 
   // Reserve device
   c10::DeviceGuard guard(in_tensor.device());
   std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
 
-  PRE_REQUEST(Reduce,in_tensor)  
+  PRE_REQUEST(Reduce,in_tensor)
 
-  auto req = accl->reduce(*in_buf, *out_buf, in_tensor.numel(), opts.rootRank, acclOp.at(opts.reduceOp));
+  int rounded_count = (in_tensor.numel() + ROUND_NR) & ~ROUND_NR;
+
+  auto req = accl->reduce(*in_buf, *out_buf, rounded_count, opts.rootRank, acclOp.at(opts.reduceOp));
 
   POST_REQUEST("reduce", in_tensor.nbytes())
 
+  START_FINE(copy)      
   copy_back_tensor(in_tensor, out_buf, true, false, opts.rootRank);
+  STOP_FINE(copy, in_tensor.nbytes())
 }
 
 c10::intrusive_ptr<Work>
@@ -1345,6 +1352,7 @@ ProcessGroupACCL::reduce(std::vector<at::Tensor> &tensors,
 
   std::function<void(std::unique_ptr<WorkEntry> &)> runFunc =
       [opts, this](std::unique_ptr<WorkEntry> &entry) {
+	START_COARSE(total)    
         auto tensor = (entry->src)[0];
         // Segment data if necessary
         if (tensor.nbytes() > bufsize) {
@@ -1356,6 +1364,7 @@ ProcessGroupACCL::reduce(std::vector<at::Tensor> &tensors,
         } else {
           run_reduce(tensor, opts);
         }
+	STOP_COARSE(total, ((entry->src)[0]).nbytes())    
       };
   auto entry =
       std::make_unique<WorkEntry>(&tensors, &tensors, std::move(runFunc));
@@ -1372,13 +1381,18 @@ void ProcessGroupACCL::run_allgather(
     
   at::Tensor dsttensor;
 
+  START_FINE(init)
   init_input_tensor(in_tensor, in_buf, true, true);    
   // Reserve device
+
+  init_output_tensor(in_tensor, dsttensor, out_buf, size_, in_tensor.scalar_type(), true, true);
+  STOP_FINE(init, in_tensor.nbytes())
+
+
   c10::DeviceGuard guard(in_tensor.device());
   std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
 
-  init_output_tensor(in_tensor, dsttensor, out_buf, size_, in_tensor.scalar_type(), true, true);
-  
+      
   PRE_REQUEST(Allgather,in_tensor)
 
   int rounded_count = (in_tensor.numel() + 1023) & ~1023;
@@ -1386,8 +1400,10 @@ void ProcessGroupACCL::run_allgather(
   auto req = accl->allgather(*in_buf, *out_buf, rounded_count);
 
   POST_REQUEST("allgather", in_tensor.nbytes())
-
+      
+  START_FINE(copy)      
   copy_back_tensorvec(dsttensorvec, out_buf, dsttensor, in_tensor.numel(), rounded_count, true, true);
+  STOP_FINE(copy, in_tensor.nbytes())
     
 }
 
@@ -1431,6 +1447,7 @@ ProcessGroupACCL::allgather(std::vector<std::vector<at::Tensor>> &outputTensors,
           outputDataVec[i].copy_(flatOutputTensor[i]);
         }
         #else
+	START_COARSE(total)    
         auto srctensor = (entry->src)[0];
         auto &dsttensors = entry->dst;
         // Segment data if necessary
@@ -1450,6 +1467,7 @@ ProcessGroupACCL::allgather(std::vector<std::vector<at::Tensor>> &outputTensors,
         } else {
           run_allgather(srctensor, dsttensors);
         }
+	STOP_COARSE(total, ((entry->src)[0]).nbytes())    
       #endif
       };
   auto entry = std::make_unique<WorkEntry>(&inputTensors, &outputTensors[0],
@@ -1476,18 +1494,23 @@ void ProcessGroupACCL::run_gather(at::Tensor in_tensor,
   // Reserve device
   c10::DeviceGuard guard(in_tensor.device());
   std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
+
+  START_FINE(init)
   
   init_input_tensor(in_tensor, in_buf, true, true);
 
   init_output_tensor(in_tensor, dsttensor, out_buf, size_, in_tensor.scalar_type(), true, false, opts.rootRank);
 
+  STOP_FINE(init, in_tensor.nbytes())
+  
   PRE_REQUEST(Gather, in_tensor)
 
   auto req = accl->gather(*in_buf, *out_buf, in_tensor.numel(), opts.rootRank);
 
   POST_REQUEST("gather", in_tensor.nbytes())
-
+  START_FINE(copy)      
   copy_back_tensorvec(dsttensorvec, out_buf, dsttensor, in_tensor.numel(), in_tensor.numel(), true, false, opts.rootRank);
+  STOP_FINE(copy, in_tensor.nbytes())
     
 }
 
@@ -1547,6 +1570,7 @@ ProcessGroupACCL::gather(std::vector<std::vector<at::Tensor>> &outputTensors,
           }
         }
 	#else
+	START_COARSE(total)    
         auto srctensor = (entry->src)[0];
         auto &dsttensors = entry->dst;
         // Segment data if necessary
@@ -1567,6 +1591,7 @@ ProcessGroupACCL::gather(std::vector<std::vector<at::Tensor>> &outputTensors,
         } else {
           run_gather(srctensor, dsttensors, opts);
         }
+	STOP_COARSE(total, ((entry->src)[0]).nbytes())    
       #endif
       };
 
@@ -1594,18 +1619,24 @@ void ProcessGroupACCL::run_scatter(std::vector<at::Tensor> &in_tensor_vec,
   c10::DeviceGuard guard(out_tensor.device());
   std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
 
+
+  START_FINE(init)
   init_input_data_vec(in_tensor_vec, in_buf, out_tensor.options().device(c10::DeviceType::CPU), true, false, opts.rootRank);
   
   init_output_tensor(out_tensor, dsttensor, out_buf, 0, out_tensor.scalar_type(), true, true, opts.rootRank);
 
-  PRE_REQUEST(Scatter, dsttensor)
+  STOP_FINE(init, out_tensor.nbytes())
+  
+  PRE_REQUEST(Scatter, out_tensor)
   
   // Run scatter
   auto req = accl->scatter(*in_buf, *out_buf, out_tensor.numel(), opts.rootRank);
 
   POST_REQUEST("scatter", out_tensor.nbytes())
 
+  START_FINE(copy)      
   copy_back_tensor(out_tensor, out_buf, true, true, opts.rootRank);
+  STOP_FINE(copy, out_tensor.nbytes())
 }
 
 c10::intrusive_ptr<Work>
@@ -1661,10 +1692,11 @@ ProcessGroupACCL::scatter(std::vector<at::Tensor> &outputTensors,
             opts.rootRank,
             MPI_COMM_WORLD));
         #else
+	START_COARSE(total)    
         auto &srctensors = entry->src;
         auto dsttensor = (entry->dst)[0];
         // Segment data if necessary
-        if (dsttensor.nbytes() > bufsize / 4) {
+        if (dsttensor.nbytes() > bufsize) {
 	  size_t non_zero_dim_count = dsttensor.numel() / dsttensor.size(0);
           size_t n = bufsize / 4 / dsttensor.itemsize() / non_zero_dim_count;
           for (size_t i = 0; i < dsttensor.size(0); i += n) {
@@ -1681,6 +1713,7 @@ ProcessGroupACCL::scatter(std::vector<at::Tensor> &outputTensors,
         } else {
           run_scatter(srctensors, dsttensor, opts);
         }
+	STOP_COARSE(total, ((entry->src)[0]).nbytes())    
         #endif
       };
 
@@ -1850,13 +1883,17 @@ void ProcessGroupACCL::run_send(at::Tensor in_tensor, int dstRank,
   c10::DeviceGuard guard(in_tensor.device());
   std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
 
+  START_FINE(init)
   init_input_tensor(in_tensor, in_buf, true, true);
+  STOP_FINE(init, in_tensor.nbytes())
 
   PRE_REQUEST(Send,in_tensor)
   
   ACCL::ACCLRequest* req = accl->send(*in_buf, in_tensor.numel(), dstRank, tag);
 
   POST_REQUEST("send", in_tensor.nbytes())
+
+  ACCL::debug("copy_" + std::string(x_MAKE_STRING(COLL_NAME)) + "_" + std::to_string(in_tensor.nbytes()) + " durationUs: " + std::to_string(0));
 }
 
 
@@ -1866,6 +1903,7 @@ ProcessGroupACCL::send(std::vector<at::Tensor> &tensors, int dstRank, int tag) {
 
   std::function<void(std::unique_ptr<WorkEntry> &)> runFunc =
       [dstRank, tag, this](std::unique_ptr<WorkEntry> &entry) {
+	START_COARSE(total)    
         at::Tensor &tensor = (entry->src)[0];
         // Segment data if necessary
         if (tensor.nbytes() > bufsize) {
@@ -1877,6 +1915,7 @@ ProcessGroupACCL::send(std::vector<at::Tensor> &tensors, int dstRank, int tag) {
         } else {
           run_send(tensor, dstRank, tag);
         }
+	STOP_COARSE(total, ((entry->src)[0]).nbytes())    
       };
 
   auto entry =
@@ -1892,6 +1931,8 @@ void ProcessGroupACCL::run_recv(at::Tensor out_tensor, int srcRank,
                                 int tag) {
 
   // Reserve device
+
+  ACCL::debug("init_" + std::string(x_MAKE_STRING(COLL_NAME)) + "_" + std::to_string(out_tensor.nbytes()) + " durationUs: " + std::to_string(0));  
   c10::DeviceGuard guard(out_tensor.device());
   std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
 
@@ -1903,7 +1944,9 @@ void ProcessGroupACCL::run_recv(at::Tensor out_tensor, int srcRank,
 
   POST_REQUEST("recv", out_tensor.nbytes())
 
-  copy_back_tensor(out_tensor, out_buf, true, true);      
+  START_FINE(copy)            
+  copy_back_tensor(out_tensor, out_buf, true, true);
+  STOP_FINE(copy, out_tensor.nbytes())  
 }
 
 c10::intrusive_ptr<Work>
@@ -1913,6 +1956,7 @@ ProcessGroupACCL::recv(std::vector<at::Tensor> &tensors, int srcRank, int tag) {
   std::function<void(std::unique_ptr<WorkEntry> &)> runFunc =
       [srcRank, tag, this](std::unique_ptr<WorkEntry> &entry) {
         const at::Tensor &tensor = (entry->dst)[0];
+	START_COARSE(total)    
         // Segment data if necessary
         if (tensor.nbytes() > bufsize) {
           size_t n = bufsize / tensor.itemsize();
@@ -1923,6 +1967,7 @@ ProcessGroupACCL::recv(std::vector<at::Tensor> &tensors, int srcRank, int tag) {
         } else {
           run_recv(tensor, srcRank, tag);
         }
+	STOP_COARSE(total, ((entry->src)[0]).nbytes())    
       };
 
   auto entry =
