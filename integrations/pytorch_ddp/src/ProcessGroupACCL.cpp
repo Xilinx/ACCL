@@ -1350,7 +1350,7 @@ ProcessGroupACCL::reduce(std::vector<at::Tensor> &tensors,
         if (tensor.nbytes() > bufsize) {
           size_t n = bufsize / tensor.itemsize();
           for (size_t i = 0; i < tensor.numel(); i += n) {
-            size_t end = std::min(i + n, static_cast<size_t>(tensor.numel()));
+            size_t end = std::min(n, static_cast<size_t>(tensor.numel()) - i);
             run_reduce(tensor.narrow(0, i, end), opts);
           }
         } else {
@@ -1439,7 +1439,7 @@ ProcessGroupACCL::allgather(std::vector<std::vector<at::Tensor>> &outputTensors,
           size_t n = bufsize / srctensor.itemsize() / non_zero_dim_count;
           for (size_t i = 0; i < srctensor.size(0); i += n) {
             size_t end =
-                std::min(i + n, static_cast<size_t>(srctensor.size(0)));
+                std::min(n, static_cast<size_t>(srctensor.size(0) - i));
             std::vector<at::Tensor> dsttensorslices;
             dsttensorslices.reserve(dsttensors.size());
             for (auto &dsttensor : dsttensors) {
@@ -1556,7 +1556,7 @@ ProcessGroupACCL::gather(std::vector<std::vector<at::Tensor>> &outputTensors,
 	  ACCL::debug("[Gather] Segmenting tensor of size " + std::to_string(srctensor.nbytes()) + " into " + std::to_string(n * non_zero_dim_count) + "-sized elements ");
           for (size_t i = 0; i < srctensor.size(0); i += n) {
             size_t end =
-                std::min(i + n, static_cast<size_t>(srctensor.size(0)));
+                std::min(n, static_cast<size_t>(srctensor.size(0)) - i);
             std::vector<at::Tensor> dsttensorslices;
             dsttensorslices.reserve(dsttensors.size());
             for (auto &dsttensor : dsttensors) {
@@ -1670,7 +1670,7 @@ ProcessGroupACCL::scatter(std::vector<at::Tensor> &outputTensors,
           for (size_t i = 0; i < dsttensor.size(0); i += n) {
             ACCL::debug("part " + std::to_string(i) + "!");
             size_t end =
-                std::min(i + n, static_cast<size_t>(dsttensor.size(0)));
+                std::min(n, static_cast<size_t>(dsttensor.size(0)) - i);
             std::vector<at::Tensor> srctensorslices;
             srctensorslices.reserve(srctensors.size());
             for (auto &srctensor : srctensors) {
@@ -1871,7 +1871,7 @@ ProcessGroupACCL::send(std::vector<at::Tensor> &tensors, int dstRank, int tag) {
         if (tensor.nbytes() > bufsize) {
           size_t n = bufsize / tensor.itemsize();
           for (size_t i = 0; i < tensor.numel(); i += n) {
-            size_t end = std::min(i + n, static_cast<size_t>(tensor.numel()));
+            size_t end = std::min(n, static_cast<size_t>(tensor.numel()) - i);
             run_send(tensor.narrow(0, i, end), dstRank, tag);
           }
         } else {
@@ -1917,7 +1917,7 @@ ProcessGroupACCL::recv(std::vector<at::Tensor> &tensors, int srcRank, int tag) {
         if (tensor.nbytes() > bufsize) {
           size_t n = bufsize / tensor.itemsize();
           for (size_t i = 0; i < tensor.numel(); i += n) {
-            size_t end = std::min(i + n, static_cast<size_t>(tensor.numel()));
+            size_t end = std::min(n, static_cast<size_t>(tensor.numel()) - i);
             run_recv(tensor.narrow(0, i, end), srcRank, tag);
           }
         } else {
@@ -1941,7 +1941,7 @@ ProcessGroupACCL::recvAnysource(std::vector<at::Tensor> &tensors, int tag) {
 
 c10::intrusive_ptr<Work>
 ProcessGroupACCL::barrier(const BarrierOptions &opts) {
-  TORCH_CHECK(false, "ProcessGroupACCL does not support barrier");
+  accl->barrier();
 }
 
 c10::intrusive_ptr<Work>
