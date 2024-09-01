@@ -769,22 +769,23 @@ void ProcessGroupACCL::init_input_tensor(at::Tensor &tensor, std::unique_ptr<ACC
   void ProcessGroupACCL::init_input_data_vec(std::vector<at::Tensor> &tensor_vec, std::unique_ptr<ACCL::BaseBuffer> &data, const at::TensorOptions &options, bool do_on_root, bool do_on_others, int opts_root_rank) {
   if DO_COND {
     int64_t tens_size = static_cast<size_t>(tensor_vec[0].numel());
-    int64_t total_size = tens_size * static_cast<size_t>(size_);
-    std::vector<int64_t> sizes = tensor_vec[0].sizes().vec();
+    // int64_t total_size = tens_size * static_cast<size_t>(size_);
+    // std::vector<int64_t> sizes = tensor_vec[0].sizes().vec();
     // Prepend another dimension for vector length
-    sizes.insert(sizes.begin(), tensor_vec.size());
+    // sizes.insert(sizes.begin(), tensor_vec.size());
       
     // ACCL::debug("Copying data to CPU tensor of size " + std::to_string(total_size));
-    at::Tensor wrapper_tensor = torch::from_blob(data->byte_array(), sizes, options);
+    // at::Tensor wrapper_tensor = torch::from_blob(data->byte_array(), sizes, options);
 
     for (const auto i : c10::irange(tensor_vec.size())) {
-      if (p2p_applicable(*accl, tensor_vec[0], p2p_enabled)) {
-	auto slice = data->slice(i * tens_size, (i + 1) * tens_size);
-	copy_to_p2p_buffer(*slice, tensor_vec[i]);
-      } else {
-	auto slice = wrapper_tensor[i];
-	slice.copy_(tensor_vec[i]);
-      }
+	std::memcpy(data->byte_array() + i * tens_size * tensor_vec[0].element_size(), tensor_vec[i].data_ptr(), tens_size * tensor_vec[0].element_size());
+      // if (p2p_applicable(*accl, tensor_vec[0], p2p_enabled)) {
+	// auto slice = data->slice(i * tens_size, (i + 1) * tens_size);
+	// copy_to_p2p_buffer(*slice, tensor_vec[i]);
+      // } else {
+	// auto slice = wrapper_tensor[i];
+	// slice.copy_(tensor_vec[i]);
+      // }
     }
     if (!coyote_enabled) {
       data->sync_to_device();
@@ -793,52 +794,6 @@ void ProcessGroupACCL::init_input_tensor(at::Tensor &tensor, std::unique_ptr<ACC
     // data = std::unique_ptr<ACCL::Buffer<float>>(nullptr);
   }
 }  
-  
-  // like init_output_tensor but without needlessly setting the tensor
-  // TODO: remove once all collectives reuse the buffer
-void ProcessGroupACCL::init_output_data(at::Tensor &tensor_original, std::unique_ptr<ACCL::BaseBuffer> &dstdata, int out_tensor_size, c10::ScalarType type, bool do_on_root, bool do_on_others, int opts_root_rank) {
-  if DO_COND {
-      if (p2p_applicable(*accl, tensor_original, p2p_enabled)) {
-	dstdata = create_buffer_p2p(*accl, out_tensor_size, type);
-    } else {
-	if (coyote_enabled) {
-	  dstdata = create_coyotebuffer(*accl, out_tensor_size, type);
-	} else {
-	  dstdata = create_buffer(*accl, out_tensor_size, type);
-	}
-    }
-  } else {
-    dstdata = std::unique_ptr<ACCL::Buffer<float>>(nullptr);
-  }
-}
-
-    void ProcessGroupACCL::init_output_tensor(const at::Tensor &tensor_original, at::Tensor &dsttensor, std::unique_ptr<ACCL::BaseBuffer> &dstdata, int num_tensors, c10::ScalarType type, bool do_on_root, bool do_on_others, int opts_root_rank) {
-    if DO_COND {
-	int64_t num_tensors_s = static_cast<size_t>(num_tensors);
-	std::vector<int64_t> sizes = tensor_original.sizes().vec();
-	int64_t total_size = static_cast<size_t>(tensor_original.numel());
-	if  (num_tensors != 0) {
-	    // Prepend another dimension for vector length
-	    sizes.insert(sizes.begin(), num_tensors_s);
-	    total_size = total_size * num_tensors_s;
-	}
-	
-	if (p2p_applicable(*accl, tensor_original, p2p_enabled)) {
-	  dstdata = create_buffer_p2p(*accl, total_size, type);
-	} else if (coyote_enabled) {
-	    // std::vector<int64_t> sizes = {static_cast<int64_t>(out_tensor_size)};
-	    dsttensor = torch::from_blob(dstdata->byte_array(), sizes, tensor_original.options().device(c10::DeviceType::CPU));
-	    // This should not be necessary:
-	    // dsttensor.copy_(tensor_original);
-	} else {
-	    dsttensor = torch::from_blob(dstdata->byte_array(), sizes, tensor_original.options().device(c10::DeviceType::CPU));
-	    // This should not be necessary:
-	    // dsttensor.copy_(tensor_original);
-	}
-      } else {
-      dsttensor = at::Tensor(nullptr);
-    }
-}
   
 void ProcessGroupACCL::copy_back_tensor(at::Tensor tensor_original, std::unique_ptr<ACCL::BaseBuffer> &data, bool do_on_root, bool do_on_others, int opts_root_rank){
   if DO_COND {
@@ -1379,13 +1334,10 @@ void ProcessGroupACCL::run_allgather(
     const std::vector<at::Tensor> &dsttensorvec) {
 
     
-  at::Tensor dsttensor;
-
   START_FINE(init)
   init_input_tensor(in_tensor, in_buf, true, true);    
   // Reserve device
 
-  init_output_tensor(in_tensor, dsttensor, out_buf, size_, in_tensor.scalar_type(), true, true);
   STOP_FINE(init, in_tensor.nbytes())
 
 
@@ -1402,7 +1354,7 @@ void ProcessGroupACCL::run_allgather(
   POST_REQUEST("allgather", in_tensor.nbytes())
       
   START_FINE(copy)      
-  copy_back_tensorvec(dsttensorvec, out_buf, dsttensor, in_tensor.numel(), rounded_count, true, true);
+  copy_back_tensorvec(dsttensorvec, out_buf, in_tensor, in_tensor.numel(), rounded_count, true, true);
   STOP_FINE(copy, in_tensor.nbytes())
     
 }
@@ -1489,8 +1441,6 @@ c10::intrusive_ptr<Work> ProcessGroupACCL::allgather_coalesced(
 void ProcessGroupACCL::run_gather(at::Tensor in_tensor,
                                   const std::vector<at::Tensor> &dsttensorvec,
                                   const GatherOptions &opts) {
-  at::Tensor dsttensor;
-
   // Reserve device
   c10::DeviceGuard guard(in_tensor.device());
   std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
@@ -1498,8 +1448,6 @@ void ProcessGroupACCL::run_gather(at::Tensor in_tensor,
   START_FINE(init)
   
   init_input_tensor(in_tensor, in_buf, true, true);
-
-  init_output_tensor(in_tensor, dsttensor, out_buf, size_, in_tensor.scalar_type(), true, false, opts.rootRank);
 
   STOP_FINE(init, in_tensor.nbytes())
   
@@ -1509,7 +1457,7 @@ void ProcessGroupACCL::run_gather(at::Tensor in_tensor,
 
   POST_REQUEST("gather", in_tensor.nbytes())
   START_FINE(copy)      
-  copy_back_tensorvec(dsttensorvec, out_buf, dsttensor, in_tensor.numel(), in_tensor.numel(), true, false, opts.rootRank);
+  copy_back_tensorvec(dsttensorvec, out_buf, in_tensor, in_tensor.numel(), in_tensor.numel(), true, false, opts.rootRank);
   STOP_FINE(copy, in_tensor.nbytes())
     
 }
@@ -1613,8 +1561,6 @@ ProcessGroupACCL::gather(std::vector<std::vector<at::Tensor>> &outputTensors,
 void ProcessGroupACCL::run_scatter(std::vector<at::Tensor> &in_tensor_vec,
                                    at::Tensor out_tensor,
                                    const ScatterOptions &opts) {
-  at::Tensor dsttensor;
-
   // Reserve device
   c10::DeviceGuard guard(out_tensor.device());
   std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
@@ -1623,8 +1569,6 @@ void ProcessGroupACCL::run_scatter(std::vector<at::Tensor> &in_tensor_vec,
   START_FINE(init)
   init_input_data_vec(in_tensor_vec, in_buf, out_tensor.options().device(c10::DeviceType::CPU), true, false, opts.rootRank);
   
-  init_output_tensor(out_tensor, dsttensor, out_buf, 0, out_tensor.scalar_type(), true, true, opts.rootRank);
-
   STOP_FINE(init, out_tensor.nbytes())
   
   PRE_REQUEST(Scatter, out_tensor)
@@ -1775,10 +1719,6 @@ void ProcessGroupACCL::run_alltoall(at::Tensor in_tensor,
 void ProcessGroupACCL::run_alltoall_vec(std::vector<at::Tensor> &in_tensor_vec,
                                     std::vector<at::Tensor> &out_tensor_vec,
                                     const AllToAllOptions &opts) {
-  at::Tensor dsttensor;
-
-  // Reserve device
-
   int a2a_nbytes = in_tensor_vec[0].nbytes();
   
   c10::DeviceGuard guard(in_tensor_vec[0].device());
@@ -1786,15 +1726,13 @@ void ProcessGroupACCL::run_alltoall_vec(std::vector<at::Tensor> &in_tensor_vec,
 
   init_input_data_vec(in_tensor_vec, in_buf, out_tensor_vec[0].options().device(c10::DeviceType::CPU), true, true);
 
-  init_output_tensor(in_tensor_vec[0], dsttensor, out_buf, size_, in_tensor_vec[0].scalar_type(), true, true);
-  
   PRE_REQUEST(AlltoAll, in_tensor_vec[0])
 
   auto req = accl->alltoall(*in_buf, *out_buf, in_tensor_vec[0].numel());
 
   POST_REQUEST("alltoall", a2a_nbytes)
 
-  copy_back_tensorvec(out_tensor_vec, out_buf, dsttensor, in_tensor_vec[0].numel(), in_tensor_vec[0].numel(), true, true);
+  copy_back_tensorvec(out_tensor_vec, out_buf, in_tensor_vec[0], in_tensor_vec[0].numel(), in_tensor_vec[0].numel(), true, true);
       
 }
 

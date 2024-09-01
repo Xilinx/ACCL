@@ -594,17 +594,18 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
     
     # with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], profile_memory=True, schedule=schedule, record_shapes=True) as prof:
 
-    n = 19
+    static_n = 10
     
     if True:
-        for i in range(40):
-            num = 2**n * 3
+    # for n in range(6,19):
+        for i in range(1):
+            num = 2**static_n
             test_broadcast(num, torch.float32)
             test_allreduce(num, torch.float32)
             test_alltoall(num)
             test_allgather(num, torch.float32)
-            test_sendrcv(num)
-            test_scatter(num)
+            # test_sendrcv(num)
+            # test_scatter(num)
             test_gather(num)
             test_reduce(num)
             
