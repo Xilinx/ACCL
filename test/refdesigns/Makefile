@@ -80,7 +80,8 @@ VADD_XO=../../kernels/plugins/vadd_put/vadd_put_$(FPGAPART).xo
 CYT_DMA_ADAPTER_XO=../../kernels/plugins/cyt_adapter/cyt_dma_adapter_$(FPGAPART).xo
 CYT_RDMA_ARBITER_XO=../../kernels/plugins/cyt_adapter/cyt_rdma_arbiter_$(FPGAPART).xo
 CYT_RDMA_MUX_XO=../../kernels/plugins/cyt_adapter/cyt_rdma_mux_$(FPGAPART).xo
-CYT_ADAPTER_XO = $(CYT_DMA_ADAPTER_XO) $(CYT_RDMA_ARBITER_XO) $(CYT_RDMA_MUX_XO)
+CCLO_SQ_ADAPTER_XO=../../kernels/plugins/cyt_adapter/cclo_sq_adapter_$(FPGAPART).xo
+CYT_ADAPTER_XO = $(CYT_DMA_ADAPTER_XO) $(CYT_RDMA_ARBITER_XO) $(CCLO_SQ_ADAPTER_XO)
 
 HWEMU_MST_XO=$$XILINX_VITIS/data/emulation/XO/sim_ipc_axis_master_512.xo
 HWEMU_SLV_XO=$$XILINX_VITIS/data/emulation/XO/sim_ipc_axis_slave_512.xo
@@ -193,7 +194,7 @@ else ifeq (coyote_rdma, $(MODE))
 		N_DDR_CHAN = 2
 	endif
 	OTHER_XO += $(CYT_ADAPTER_XO)
-	COYOTE_CONFIG = -DFDEV_NAME=$(BOARD) -DEN_MEM=1 -DEN_STRM=1 -DEN_BPSS=1 -DEN_RDMA_0=1 -DEN_RPC=1 -DN_STRM_AXI=3 -DN_CARD_AXI=3 -DEN_HLS=0 -DACLK_F=250 -DTLBL_A=12 -DN_DDR_CHAN=$(N_DDR_CHAN)
+	COYOTE_CONFIG = -DFDEV_NAME=$(BOARD) -DEXAMPLE=rdma -DSHELL_PROBE=8 -DN_REGIONS=1 -DEN_MEM=1 -DEN_STRM=1 -DEN_RDMA=1 -DN_RDMA_AXI=2 -DN_STRM_AXI=3 -DN_CARD_AXI=3 -DACLK_F=250 -DTLBL_A=12 -DN_DDR_CHAN=$(N_DDR_CHAN)
 	CCLO_STACK_TYPE = RDMA
 	OUTPUT_PRODUCT = $(CYT_BIT)
 	USE_HOSTMEM = 1
@@ -232,19 +233,19 @@ $(VNX)/NetLayers/_x.%/networklayer.xo:
 	$(MAKE) -C xup_vitis_network_example/NetLayers DEVICE=$* all
 
 .PHONY: coyote_shell
-coyote_shell: $(CYT_BUILD_DIR)/lynx/lynx.xpr
+coyote_shell: $(CYT_BUILD_DIR)/test_config_0/user_c0_0/test.xpr
 
-$(CYT_BUILD_DIR)/lynx/lynx.xpr:
-	mkdir $(CYT_BUILD_DIR) && cd $(CYT_BUILD_DIR) && cmake ../Coyote/hw $(COYOTE_CONFIG)
-	$(MAKE) -C $(CYT_BUILD_DIR) shell
+$(CYT_BUILD_DIR)/test_config_0/user_c0_0/test.xpr:
+	mkdir $(CYT_BUILD_DIR) && cd $(CYT_BUILD_DIR) && cmake ../hdl/ $(COYOTE_CONFIG)
+	$(MAKE) -C $(CYT_BUILD_DIR) project
 
 $(CYT_BIT): coyote_shell
 	$(MAKE) -C ../../kernels/cclo PLATFORM=$(PLATFORM) STACK_TYPE=$(CCLO_STACK_TYPE) MB_DEBUG_LEVEL=$(CCLO_MB_DEBUG_LEVEL)
 	$(MAKE) -C ../../kernels/plugins DEVICE=$(FPGAPART)
 	cp -rf $(OTHER_XO) $(CYT_BUILD_DIR)/iprepo && cd $(CYT_BUILD_DIR)/iprepo && unzip -n '*.xo'
 	vivado -mode tcl -source tcl/coyote.tcl -tclargs $(CCLO_STACK_TYPE) $(CYT_BUILD_DIR)
-	cp hdl/$(MODE)_top.sv $(CYT_BUILD_DIR)/lynx/hdl/config_0/user_logic_c0_0.sv
-	$(MAKE) -C $(CYT_BUILD_DIR) compile
+	cp hdl/$(MODE)_top.sv $(CYT_BUILD_DIR)/test_config_0/user_c0_0/hdl/wrappers/user_logic_c0_0.sv
+	$(MAKE) -C $(CYT_BUILD_DIR) bitgen
 
 .PHONY: tcp_stack
 tcp_stack: $(TCP_XO) $(CMAC_TCP_XO)

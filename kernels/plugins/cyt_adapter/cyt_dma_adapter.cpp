@@ -25,6 +25,7 @@ using namespace std;
 // the dest field of the dm cmd indicates the host/card accesses
 // the dest field is converted to strm flag in the cyt_sq_cmd
 // DMA Channel is used to select axis streams, channel 0 and 1 are reserved 
+
 template <int DMA_CHANNEL>
 void dm_sq_cmd_converter(hls::stream<ap_axiu<104,0,0,DEST_WIDTH>>& dm_cmd,
 							hls::stream<cyt_req_t>& cyt_sq_cmd,

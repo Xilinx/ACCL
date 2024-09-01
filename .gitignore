@@ -21,3 +21,10 @@
 driver/xrt/src/m2m
 driver/xrt/build
 .vscode
+coyote_build*
+*xcu55c-fsvh2892-2L-e*
+*_prj
+*.gen
+*.ip_user_files
+*.cache
+*.srcs

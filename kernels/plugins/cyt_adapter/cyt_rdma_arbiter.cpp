@@ -176,7 +176,6 @@ void cyt_rdma_arbiter_data(
 // if strm flag is CYT_STRM_RDMA, and the opcode is CYT_RDMA_WRITE, this is a WRITE Verb, route meta and data to channel 1
 // if data routes to channel 1 (CYT_RDMA_WRITE), set the meta_internal field according to the dest flag in the cyt_req_t to indicate host/card
 // compact bit pragma required for cyt_req_t as this interfaces with Coyote. 
-
 void cyt_rdma_arbiter(
                 hls::stream<cyt_req_t >& s_meta,
                 hls::stream<ap_axiu<512, 0, 0, 8> >& s_axis_0,
