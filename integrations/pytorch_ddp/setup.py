@@ -52,7 +52,6 @@ include_dirs = [root / 'include',  driver_dir / 'xrt' / 'include',
 library_dirs = [driver_dir / 'xrt' / 'lib', xrt_dir / 'lib', '/mnt/scratch/zhe/mpich/install/lib/libmpicxx.so']
 libraries = ['accl', 'jsoncpp', 'zmq']
 sources = [root / 'src' / 'ProcessGroupACCL.cpp',
-           root / 'src' / 'coyote_init.cpp',
            vnx_dir / 'src' / 'cmac.cpp', vnx_dir / 'src' / 'networklayer.cpp',
            accl_utils_dir / 'src' / 'accl_network_utils.cpp']
 

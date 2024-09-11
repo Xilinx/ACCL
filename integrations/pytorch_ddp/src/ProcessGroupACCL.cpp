@@ -39,9 +39,7 @@
 
 #include <accl.hpp>
 #include <accl_network_utils.hpp>
-#include "coyote_init.hpp"
 
-namespace cyt = coyote_init;
 namespace py = pybind11;
 using namespace ACCL;
 
