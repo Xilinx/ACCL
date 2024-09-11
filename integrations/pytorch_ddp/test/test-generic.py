@@ -62,29 +62,6 @@ shape = (x , y)
 rxbufsize = 4096 * 1024
 
 
-def test_broadcast_segment():
-    global num_errors
-    shape_segment = (1024 * 1,)
-    if rank == 0:
-        x = torch.ones(shape_segment, dtype=torch.float)
-    else:
-        x = torch.zeros(shape_segment, dtype=torch.float)
-
-    with torch.profiler.record_function("test bcast segmented"):
-            
-        dist.broadcast(x, 0)
-
-        mpi.Barrier()            
-        # logger.debug('Tensor after broadcast: ' + str(x))
-        # print('Tensor after broadcast: ' + str(x))
-    try:
-        np.testing.assert_allclose(x, torch.ones(shape_segment, dtype=torch.float))
-    except AssertionError as e:
-        num_errors = num_errors + 1
-        logger.debug("Test Broadcast failed")
-        logger.debug(str(e))
-    else:
-        logger.debug("Test broadcast finished!")
 
 def test_broadcast(numel, testtype):
     shape = (numel,)
@@ -120,15 +97,12 @@ def test_broadcast(numel, testtype):
 
         print(str(rank) + "_pytorch_Broadcast_" + str(x.nbytes) + " durationUs: " + str(measured_time), file=sys.stderr)
         
-        logger.debug("Directly measured time us 1:" + str(measured_time))
-            
         mpi.Barrier()
 
         end_time = time.perf_counter()
 
         measured_time = (end_time - start_time) * 1000000
 
-        logger.debug("Directly measured time us 2:" + str(measured_time))
 
     try:
         np.testing.assert_allclose(x, rand_torch)
@@ -139,31 +113,6 @@ def test_broadcast(numel, testtype):
     else:
         logger.debug("Test broadcast finished!")
 
-def test_broadcast_2():
-    test_type = torch.float
-    shape_2 = (1048576,)
-    global num_errors
-    if rank == 0:
-        x = torch.ones(shape_2, dtype=test_type)
-    else:
-        x = torch.zeros(shape_2, dtype=test_type)
-
-    with torch.profiler.record_function("test bcast float prec"):
-        dist.broadcast(x, 0)
-        mpi.Barrier()            
-
-    # logger.debug('Tensor after broadcast: ' + str(x))
-    # print('Tensor after broadcast: ' + str(x))
-    try:
-        np.testing.assert_allclose(x, torch.ones(shape_2, dtype=test_type))
-    except AssertionError as e:
-        num_errors = num_errors + 1
-        logger.debug("Test Broadcast failed")
-        logger.debug(str(e))
-    else:
-        logger.debug("Test broadcast finished!")
-
-        
 def test_sendrcv(numel):
     global num_errors
 
@@ -594,9 +543,8 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
     
     # with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], profile_memory=True, schedule=schedule, record_shapes=True) as prof:
 
-    n = 19
-    
-    if True:
+    # generic testing
+    for n in range(9,20)
         for i in range(40):
             num = 2**n * 3
             test_broadcast(num, torch.float32)
@@ -609,52 +557,30 @@ Master address: {ma}:{mp}, Start port for FPGA: {start_port}")
             test_reduce(num)
             
             # prof.step()
-    
+
+    # to simulate resnet behaviour(check to make sure it's the same as in your resnet config)
     # for i in range(10):
-    if False:
-        # test_allreduce(256, torch.int32)
-        # test_allreduce(256, torch.int64)
-        # test_broadcast(256, torch.float32)
-        
-        # test_allgather()
+    test_resnet_sim = False
+    if test_resnet_sim:
+        test_allreduce(256, torch.int32)
+        test_allreduce(256, torch.int64)
+        test_broadcast(256, torch.float32)
+        for i in range(5):
+            test_allreduce(1000, torch.float32)
+            test_allreduce(2052096, torch.float32)
+            test_allreduce(1049600, torch.float32)
+            test_broadcast(256 * 1024, torch.float32)
+            test_allreduce(256 * 1024, torch.float32)        
+            test_broadcast(53, torch.int64)
+            test_broadcast(53120, torch.float32)
+            test_broadcast(53, torch.int64)
+            test_broadcast(162, torch.int32)
+            test_broadcast(25, torch.int32)
+            test_allreduce(8196000, torch.float32)
 
-        # test_broadcast_2()
-        test_broadcast(1024, torch.float32)
-        # test_broadcast(25610152, torch.float32)
-        # test_broadcast(53, torch.int64)
-        # test_broadcast(53120, torch.float32)
-        # test_broadcast(53, torch.int64)
-        test_allreduce(1024, torch.float32)
-        # test_broadcast(162, torch.int32)
-        # test_broadcast(25, torch.int32)
-        # test_broadcast(53120, torch.float32)
-        # test_broadcast(53, torch.int64)
-        # test_allreduce(2049000, torch.float32)
-        # test_allreduce()
-        # test_broadcast_segment()
-        # test_broadcast()
-        # test_broadcast()
-        # test_broadcast()
-        # test_broadcast()
-        # test_broadcast()
-        test_alltoall()
-        # test_allreduce(1000, torch.float32)
-        # test_allreduce(2052096, torch.float32)
-        # test_allreduce(1049600, torch.float32)
-        # test_broadcast(256 * 1024, torch.float32)
-        # test_allreduce(256 * 1024, torch.float32)        
-        # test_broadcast(53, torch.int64)
-        # test_broadcast(53120, torch.float32)
-        # test_broadcast(53, torch.int64)
-        # test_broadcast(162, torch.int32)
-        # test_broadcast(25, torch.int32)
-        # test_allreduce(8196000, torch.float32)
-        # test_allreduce()
-        # test_allreduce()
-
-
-
-        # demo_basic(rank)
+    test_NN = False
+    if test_NN:
+        demo_basic(rank)
 
 
     mpi.Barrier()
