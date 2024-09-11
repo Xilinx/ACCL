@@ -40,7 +40,7 @@ done
 #define ACCL_BARRIER 		12
 
 ARG=" -d -f -r" # debug, hardware, and tcp/rdma flags
-TEST_MODE=(10) 
+TEST_MODE=(3) 
 N_ELEMENTS=(512) # 128 256 512 1024 2048 4096 8192 16384 32768 65536 131072 262144 524288 1048576
 NRUN=(1) # number of runs
 HOST=(1)
@@ -50,7 +50,7 @@ echo "Run command: $EXEC $ARG -y $TEST_MODE -c 1024 -l $FPGA_FILE"
 
 rm -f $(pwd)/accl_log/rank*
 
-for NP in `seq 4 $NUM_PROCESS`; do
+for NP in `seq $NUM_PROCESS $NUM_PROCESS`; do
 	for MODE in ${TEST_MODE[@]}; do
 		for N_ELE in ${N_ELEMENTS[@]}; do
 			for H in ${HOST[@]}; do

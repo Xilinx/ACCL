@@ -16,6 +16,8 @@ set(EN_AVX 1 CACHE STRING "AVX environment.")
 
 add_subdirectory(${CMAKE_SOURCE_DIR}/../../../driver/xrt/ ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/xrt/)
 
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Exec
 set(EXEC accl_on_coyote)
