@@ -752,29 +752,21 @@ void accl_sa_handler(int)
 // TODO delete when not needed anymore
 void ProcessGroupACCL::init_input_tensor(at::Tensor &tensor, std::unique_ptr<ACCL::BaseBuffer> &data, bool do_on_root, bool do_on_others, int opts_root_rank) {
   if DO_COND {
-	// ACCL::debug("Copying data to CPU tensor of size " + std::to_string(tensor.numel()));
-	// at::Tensor wrapper_tensor = torch::from_blob(data->byte_array(), tensor.sizes(), tensor.options().device(c10::DeviceType::CPU)); 
-	// wrapper_tensor.copy_(tensor);
 	std::memcpy(data->byte_array(), tensor.data_ptr(), tensor.numel() * tensor.element_size());
-
-	//TODO check if necessary in coyote
 	if (!coyote_enabled) {
 	    data->sync_to_device();
 	}
 	
     }
-    // don't sync if no rank initializes, we will fill content and sync later
 }
-
+// This should also be implemented as a memory copy as the other ones. Check the branch pytorch_ddp_only_memcpy. maybe directly run on buffers without any tensor
   void ProcessGroupACCL::init_input_data_vec(std::vector<at::Tensor> &tensor_vec, std::unique_ptr<ACCL::BaseBuffer> &data, const at::TensorOptions &options, bool do_on_root, bool do_on_others, int opts_root_rank) {
   if DO_COND {
     int64_t tens_size = static_cast<size_t>(tensor_vec[0].numel());
     int64_t total_size = tens_size * static_cast<size_t>(size_);
     std::vector<int64_t> sizes = tensor_vec[0].sizes().vec();
-    // Prepend another dimension for vector length
     sizes.insert(sizes.begin(), tensor_vec.size());
       
-    // ACCL::debug("Copying data to CPU tensor of size " + std::to_string(total_size));
     at::Tensor wrapper_tensor = torch::from_blob(data->byte_array(), sizes, options);
 
     for (const auto i : c10::irange(tensor_vec.size())) {
@@ -789,13 +781,10 @@ void ProcessGroupACCL::init_input_tensor(at::Tensor &tensor, std::unique_ptr<ACC
     if (!coyote_enabled) {
       data->sync_to_device();
     }
-  // } else {
-    // data = std::unique_ptr<ACCL::Buffer<float>>(nullptr);
   }
 }  
   
-  // like init_output_tensor but without needlessly setting the tensor
-  // TODO: remove once all collectives reuse the buffer
+// This should also be implemented as a memory copy as the other ones. Check the branch pytorch_ddp_only_memcpy
 void ProcessGroupACCL::init_output_data(at::Tensor &tensor_original, std::unique_ptr<ACCL::BaseBuffer> &dstdata, int out_tensor_size, c10::ScalarType type, bool do_on_root, bool do_on_others, int opts_root_rank) {
   if DO_COND {
       if (p2p_applicable(*accl, tensor_original, p2p_enabled)) {
@@ -811,7 +800,7 @@ void ProcessGroupACCL::init_output_data(at::Tensor &tensor_original, std::unique
     dstdata = std::unique_ptr<ACCL::Buffer<float>>(nullptr);
   }
 }
-
+// This function could and should be removed if we adapt the structure in the calls
     void ProcessGroupACCL::init_output_tensor(const at::Tensor &tensor_original, at::Tensor &dsttensor, std::unique_ptr<ACCL::BaseBuffer> &dstdata, int num_tensors, c10::ScalarType type, bool do_on_root, bool do_on_others, int opts_root_rank) {
     if DO_COND {
 	int64_t num_tensors_s = static_cast<size_t>(num_tensors);
@@ -826,14 +815,7 @@ void ProcessGroupACCL::init_output_data(at::Tensor &tensor_original, std::unique
 	if (p2p_applicable(*accl, tensor_original, p2p_enabled)) {
 	  dstdata = create_buffer_p2p(*accl, total_size, type);
 	} else if (coyote_enabled) {
-	    // std::vector<int64_t> sizes = {static_cast<int64_t>(out_tensor_size)};
 	    dsttensor = torch::from_blob(dstdata->byte_array(), sizes, tensor_original.options().device(c10::DeviceType::CPU));
-	    // This should not be necessary:
-	    // dsttensor.copy_(tensor_original);
-	} else {
-	    dsttensor = torch::from_blob(dstdata->byte_array(), sizes, tensor_original.options().device(c10::DeviceType::CPU));
-	    // This should not be necessary:
-	    // dsttensor.copy_(tensor_original);
 	}
       } else {
       dsttensor = at::Tensor(nullptr);
@@ -845,15 +827,7 @@ void ProcessGroupACCL::copy_back_tensor(at::Tensor tensor_original, std::unique_
       if (!coyote_enabled) {
 	data->sync_from_device();
       }
-      if (p2p_applicable(*accl, tensor_original, p2p_enabled)) {
-	copy_back_p2p_buffer(*data, tensor_original);
-      } else {
-	// ACCL::debug("Copying data back from CPU tensor of size " +
-		    // std::to_string(tensor_original.numel()));
-	std::memcpy(tensor_original.data_ptr(), data->byte_array(), tensor_original.numel() * tensor_original.element_size());
-	// tensor_original.copy_(torch::from_blob(data->byte_array(), tensor_original.sizes(), tensor_original.options().device(c10::DeviceType::CPU)));
-	// ACCL::debug("Finished Copying ");
-      }
+      std::memcpy(tensor_original.data_ptr(), data->byte_array(), tensor_original.numel() * tensor_original.element_size());
   }
 }
 
@@ -863,15 +837,7 @@ void ProcessGroupACCL::copy_back_tensorvec(const std::vector<at::Tensor> &dstten
       data->sync_from_device();
     }
     for (const auto i : c10::irange(dsttensorvec.size())) {
-	// TODO uncomment and correct
-      // if (p2p_applicable(*accl, dsttensorvec[0], p2p_enabled)) {
-	// auto slice =
-	  // data->slice(i * numel, (i + 1) * numel);
-	// copy_back_p2p_buffer(*slice, dsttensorvec[i]);
-      // } else {
 	std::memcpy(dsttensorvec[i].data_ptr(), data->byte_array() + i * offset * dsttensor.element_size(), numel * dsttensor.element_size());
-	// dsttensorvec[i].copy_(dsttensor[i]);
-      // }
     }
   }
 }  
@@ -926,11 +892,7 @@ ProcessGroupACCL::ProcessGroupACCL(
       } else {
         throw std::runtime_error("Undefined ACCL design");
       }
-      // create the two buffers, which are gonna be reused during calls
-      // We use float32, but they are gonna be filled arbitrarily
-
     }
-    // use xrt
     else{
       xrt_device = xrt::device(device_index);
     }
@@ -1148,22 +1110,13 @@ void ProcessGroupACCL::run_broadcast(at::Tensor in_tensor,
   
   #else
 
-  // if (opts.rootRank != 0){
-    // ACCL::debug("Can't run on non-zero root rank");
-    // return;
-  // }
-
   int rounded_count = (in_tensor.numel() + ROUND_NR) & ~ROUND_NR;
-  
   
   START_FINE(init)
 
   if (opts.rootRank == rank_){
       init_input_tensor(in_tensor, in_buf, true, false, opts.rootRank);
   }
-  // else{
-      // init_input_tensor(zero_tensor, in_buf, false, true, opts.rootRank);
-  // }
 
   STOP_FINE(init, in_tensor.nbytes())
   
@@ -1192,8 +1145,6 @@ ProcessGroupACCL::broadcast(std::vector<at::Tensor> &tensors,
   checkSingleTensor(tensors);
   std::function<void(std::unique_ptr<WorkEntry> &)> runFunc =
       [opts, this](std::unique_ptr<WorkEntry> &entry) {
-	  // std::cerr << "Starting Broadcast" << std::endl;
-	// if (((entry->src)[0]).numel() <= RDVZ_THRESHOLD || BROADCAST_SIDESTEP){
 	if (BROADCAST_SIDESTEP){
 	    
 	auto data = (entry->src)[0];
@@ -1271,8 +1222,6 @@ ProcessGroupACCL::allreduce(std::vector<at::Tensor> &tensors,
 
   std::function<void(std::unique_ptr<WorkEntry> &)> runFunc =
       [opts, this](std::unique_ptr<WorkEntry> &entry) {
-	// sidestep eager allreduce
-	// if (((entry->src)[0]).numel() <= RDVZ_THRESHOLD || ALLREDUCE_SIDESTEP){
 	  if (ALLREDUCE_SIDESTEP){
 	    auto data = (entry->src)[0];
 	    ACCL::debug("[Allreduce] -- Sidestepped using OpenMPI -- size " + std::to_string(data.numel()));
@@ -1600,7 +1549,6 @@ void ProcessGroupACCL::run_scatter(std::vector<at::Tensor> &in_tensor_vec,
 
   PRE_REQUEST(Scatter, dsttensor)
   
-  // Run scatter
   auto req = accl->scatter(*in_buf, *out_buf, out_tensor.numel(), opts.rootRank);
 
   POST_REQUEST("scatter", out_tensor.nbytes())
