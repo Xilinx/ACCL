@@ -757,7 +757,6 @@ void ProcessGroupACCL::init_input_tensor(at::Tensor &tensor, std::unique_ptr<ACC
 	
     }
 }
-// This should also be implemented as a memory copy as the other ones. Check the branch pytorch_ddp_only_memcpy. maybe directly run on buffers without any tensor
   void ProcessGroupACCL::init_input_data_vec(std::vector<at::Tensor> &tensor_vec, std::unique_ptr<ACCL::BaseBuffer> &data, const at::TensorOptions &options, bool do_on_root, bool do_on_others, int opts_root_rank) {
   if DO_COND {
     int64_t tens_size = static_cast<size_t>(tensor_vec[0].numel());
@@ -769,13 +768,6 @@ void ProcessGroupACCL::init_input_tensor(at::Tensor &tensor, std::unique_ptr<ACC
 
     for (const auto i : c10::irange(tensor_vec.size())) {
 	std::memcpy(data->byte_array() + i * tens_size * tensor_vec[0].element_size(), tensor_vec[i].data_ptr(), tens_size * tensor_vec[0].element_size());
-      // if (p2p_applicable(*accl, tensor_vec[0], p2p_enabled)) {
-	// auto slice = data->slice(i * tens_size, (i + 1) * tens_size);
-	// copy_to_p2p_buffer(*slice, tensor_vec[i]);
-      // } else {
-	// auto slice = wrapper_tensor[i];
-	// slice.copy_(tensor_vec[i]);
-      // }
     }
     if (!coyote_enabled) {
       data->sync_to_device();
@@ -783,7 +775,6 @@ void ProcessGroupACCL::init_input_tensor(at::Tensor &tensor, std::unique_ptr<ACC
   }
 }  
   
-// This should also be implemented as a memory copy as the other ones. Check the branch pytorch_ddp_only_memcpy
 void ProcessGroupACCL::init_output_data(at::Tensor &tensor_original, std::unique_ptr<ACCL::BaseBuffer> &dstdata, int out_tensor_size, c10::ScalarType type, bool do_on_root, bool do_on_others, int opts_root_rank) {
   if DO_COND {
       if (p2p_applicable(*accl, tensor_original, p2p_enabled)) {
