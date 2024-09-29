@@ -161,10 +161,10 @@ def start_test(simulator: bool):
              for i in range(size)]
 
     if simulator:
-        accl.create_simulate_process_group(ranks, bufsize=rxbufsize)
+        accl.create_simulate_process_group(ranks, bufsize=rxbufsize, initialize=True)
     else:
         accl.create_process_group_coyote(ranks, accl.ACCLDesign.cyt_rdma,
-                                         bufsize=rxbufsize)
+                                         bufsize=rxbufsize, initialize=True)
     dist.init_process_group("ACCL", rank=rank, world_size=size)
 
     with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
