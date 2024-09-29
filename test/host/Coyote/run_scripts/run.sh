@@ -41,10 +41,10 @@ done
 
 ARG=" -d -f -r" # debug, hardware, and tcp/rdma flags
 TEST_MODE=(3) 
-N_ELEMENTS=(512) # 128 256 512 1024 2048 4096 8192 16384 32768 65536 131072 262144 524288 1048576
+N_ELEMENTS=(256) # 128 256 512 1024 2048 4096 8192 16384 32768 65536 131072 262144 524288 1048576
 NRUN=(1) # number of runs
 HOST=(1)
-PROTOC=(1) # eager=0, rendezevous=1
+PROTOC=(0) # eager=0, rendezevous=1
 
 echo "Run command: $EXEC $ARG -y $TEST_MODE -c 1024 -l $FPGA_FILE"
 

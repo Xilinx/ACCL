@@ -38,7 +38,8 @@ void cyt_rdma_arbiter_meta(
 
     if (!STREAM_IS_EMPTY(s_meta)){
 		reqWord = STREAM_READ(s_meta);
-        if (reqWord.strm == CYT_STRM_RDMA && reqWord.opcode == CYT_RDMA_SEND){
+        // if (reqWord.strm == CYT_STRM_RDMA && reqWord.opcode == CYT_RDMA_SEND){
+        if(reqWord.opcode == RC_SEND_FIRST || reqWord.opcode == RC_SEND_MIDDLE || reqWord.opcode == RC_SEND_LAST || reqWord.opcode == RC_SEND_ONLY ){
             meta_notif.type = 0; //don't care
             meta_notif.session_id(CYT_PID_BITS-1,0) = reqWord.pid;
             meta_notif.session_id(CYT_PID_BITS+CYT_DEST_BITS-1,CYT_PID_BITS) = reqWord.vfid; //TODO: check this
@@ -50,7 +51,8 @@ void cyt_rdma_arbiter_meta(
             meta_internal(63,32) = reqWord.len;
             STREAM_WRITE(meta_int, meta_internal);
 
-        } else if (reqWord.strm == CYT_STRM_RDMA && reqWord.opcode == CYT_RDMA_WRITE) {
+        // } else if (reqWord.strm == CYT_STRM_RDMA && reqWord.opcode == CYT_RDMA_WRITE) {
+        } else if (reqWord.opcode == RC_RDMA_WRITE_FIRST || reqWord.opcode == RC_RDMA_WRITE_MIDDLE || reqWord.opcode == RC_RDMA_WRITE_LAST || reqWord.opcode == RC_RDMA_WRITE_LAST_WITH_IMD || reqWord.opcode == RC_RDMA_WRITE_ONLY || reqWord.opcode == RC_RDMA_WRITE_ONLY_WIT_IMD) {
             // simply forward the rq_wr and the conversion from rq_wr to sq_wr is done downstream
             STREAM_WRITE(m_meta_1, reqWord);
             meta_internal(15,0) = reqWord.dest;

@@ -254,6 +254,67 @@ accl_bd_wrapper accl_system(
 );
 
 
+// ila_top ila_top(
+//     .clk(aclk),
+//     .probe0(sq_wr.valid), //1
+//     .probe1(sq_wr.ready), //1
+//     .probe2(sq_wr.data), //128
+//     .probe3(sq_rd.valid), //1
+//     .probe4(sq_rd.ready), //1
+//     .probe5(sq_rd.data), //128
+//     .probe6(rq_wr.valid), //1
+//     .probe7(rq_wr.ready), //1
+//     .probe8(rq_wr.data), //128
+//     .probe9(rq_rd.valid), //1
+//     .probe10(rq_rd.ready), //1
+//     .probe11(rq_rd.data), //128
+//     .probe12(axis_rreq_send[0].tvalid),
+//     .probe13(axis_rreq_send[0].tready),
+//     .probe14(axis_rreq_send[1].tvalid),
+//     .probe15(axis_rreq_send[1].tready),
+//     .probe16(axis_rrsp_recv[0].tvalid),
+//     .probe17(axis_rrsp_recv[0].tready),
+//     .probe18(axis_rrsp_recv[1].tvalid),
+//     .probe19(axis_rrsp_recv[1].tready),
+//     .probe20(axis_rreq_send[0].tlast),
+//     .probe21(axis_rreq_send[1].tlast),
+//     .probe22(axis_rrsp_recv[0].tlast),
+//     .probe23(axis_rrsp_recv[1].tlast),
+//     .probe24(cq_rd.data), //32
+//     .probe25(cq_rd.valid),
+//     .probe26(cq_rd.ready),
+//     .probe27(cq_wr.data), //32
+//     .probe28(cq_wr.valid),
+//     .probe29(cq_wr.ready),
+//     .probe30(axis_host_send[0].tvalid),
+//     .probe31(axis_host_send[0].tready),
+//     .probe32(axis_host_send[1].tvalid),
+//     .probe33(axis_host_send[1].tready),
+//     .probe34(axis_host_send[2].tvalid),
+//     .probe35(axis_host_send[2].tready),
+//     .probe36(axis_card_send[0].tvalid),
+//     .probe37(axis_card_send[0].tready),
+//     .probe38(axis_card_send[1].tvalid),
+//     .probe39(axis_card_send[1].tready),
+//     .probe40(axis_card_send[2].tvalid),
+//     .probe41(axis_card_send[2].tready),
+//     .probe42(axis_host_recv[0].tvalid),
+//     .probe43(axis_host_recv[0].tready),
+//     .probe44(axis_host_recv[1].tvalid),
+//     .probe45(axis_host_recv[1].tready),
+//     .probe46(axis_host_recv[2].tvalid),
+//     .probe47(axis_host_recv[2].tready),
+//     .probe48(axis_card_recv[0].tvalid),
+//     .probe49(axis_card_recv[0].tready),
+//     .probe50(axis_card_recv[1].tvalid),
+//     .probe51(axis_card_recv[1].tready),
+//     .probe52(axis_card_recv[2].tvalid),
+//     .probe53(axis_card_recv[2].tready)
+// );
+
+
+
+
 assign axis_host_send[0].tid = 0;
 assign axis_host_send[1].tid = 0;
 assign axis_host_send[2].tid = 0;

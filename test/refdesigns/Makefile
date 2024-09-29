@@ -77,11 +77,11 @@ COMPRESSION_XO=../../kernels/plugins/hp_compression/hp_compression_$(FPGAPART).x
 LOOPBACK_XO=../../kernels/plugins/loopback/loopback_$(FPGAPART).xo
 TCP_SESS_XO=../../kernels/plugins/tcp_session_handler/tcp_session_handler_$(FPGAPART).xo
 VADD_XO=../../kernels/plugins/vadd_put/vadd_put_$(FPGAPART).xo
-CYT_DMA_ADAPTER_XO=../../kernels/plugins/cyt_adapter/cyt_dma_adapter_$(FPGAPART).xo
+CYT_DMA_SQ_ADAPTER_XO=../../kernels/plugins/cyt_adapter/cyt_dma_sq_adapter_$(FPGAPART).xo
+CYT_CQ_DM_STS_CONVERTER_XO=../../kernels/plugins/cyt_adapter/cyt_cq_dm_sts_converter_$(FPGAPART).xo
 CYT_RDMA_ARBITER_XO=../../kernels/plugins/cyt_adapter/cyt_rdma_arbiter_$(FPGAPART).xo
-CYT_RDMA_MUX_XO=../../kernels/plugins/cyt_adapter/cyt_rdma_mux_$(FPGAPART).xo
 CCLO_SQ_ADAPTER_XO=../../kernels/plugins/cyt_adapter/cclo_sq_adapter_$(FPGAPART).xo
-CYT_ADAPTER_XO = $(CYT_DMA_ADAPTER_XO) $(CYT_RDMA_ARBITER_XO) $(CCLO_SQ_ADAPTER_XO)
+CYT_ADAPTER_XO = $(CYT_DMA_SQ_ADAPTER_XO) $(CYT_RDMA_ARBITER_XO) $(CCLO_SQ_ADAPTER_XO) $(CYT_CQ_DM_STS_CONVERTER_XO)
 
 HWEMU_MST_XO=$$XILINX_VITIS/data/emulation/XO/sim_ipc_axis_master_512.xo
 HWEMU_SLV_XO=$$XILINX_VITIS/data/emulation/XO/sim_ipc_axis_slave_512.xo

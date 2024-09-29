@@ -40,6 +40,23 @@ using namespace std;
 #define CYT_RDMA_SEND    2
 #define CYT_RDMA_IMMED   3
 
+#define RC_SEND_FIRST 0
+#define RC_SEND_MIDDLE 1
+#define RC_SEND_LAST 2
+#define RC_SEND_ONLY 4
+#define RC_RDMA_WRITE_FIRST 6
+#define RC_RDMA_WRITE_MIDDLE 7
+#define RC_RDMA_WRITE_LAST 8
+#define RC_RDMA_WRITE_LAST_WITH_IMD 9
+#define RC_RDMA_WRITE_ONLY 10
+#define RC_RDMA_WRITE_ONLY_WIT_IMD 11
+#define RC_RDMA_READ_REQUEST 12
+#define RC_RDMA_READ_RESP_FIRST 13
+#define RC_RDMA_READ_RESP_MIDDLE 14
+#define RC_RDMA_READ_RESP_LAST 15
+#define RC_RDMA_READ_RESP_ONLY 16
+#define RC_ACK 17
+
 // Coyote STRM Opcode
 #define CYT_STRM_CARD 0
 #define CYT_STRM_HOST 1

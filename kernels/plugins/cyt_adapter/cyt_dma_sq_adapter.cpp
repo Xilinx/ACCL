@@ -127,68 +127,15 @@ void multiplexor(hls::stream<cyt_req_t>& in0,
 }
 
 
-void cq_dm_sts_converter(hls::stream<cyt_ack_t> & cq_sts, 
-						hls::stream<ap_axiu<32,0,0,0>> & dm0_sts,
-						hls::stream<ap_axiu<32,0,0,0>> & dm1_sts,
-						hls::stream<ap_uint<1+4+23>>& dm0_meta,
-						hls::stream<ap_uint<1+4+23>>& dm1_meta)
-{
-#pragma HLS inline off
-#pragma HLS pipeline II=1
-
-	if (!STREAM_IS_EMPTY(cq_sts))
-	{
-		cyt_ack_t cq_sts_word = STREAM_READ(cq_sts);
-
-		ap_axiu<32,0,0,0> dm_sts_word;
-		ap_uint<1+4+23> dm_meta_word;
-
-		// only process status if it is local memory completion status
-		if(cq_sts_word.opcode == CYT_STRM_CARD || cq_sts_word.opcode == CYT_STRM_HOST)
-		{
-			// only send back ack when the cq_sts stems from kernel issued bypass commands
-			// if dest == 2, this comes from wr_req/rd_req, no need to forward to data mover
-			if(cq_sts_word.host == 0)
-			{
-				do{
-					if(cq_sts_word.dest == 0){
-						dm_meta_word = STREAM_READ(dm0_meta);
-					} else if (cq_sts_word.dest == 1){
-						dm_meta_word = STREAM_READ(dm1_meta);
-					}
-					dm_sts_word.data.range(3,0) = dm_meta_word(26,23); //tag
-					dm_sts_word.data.range(4,4) = 0; // internal error
-					dm_sts_word.data.range(5,5) = 0; // decode error
-					dm_sts_word.data.range(6,6) = 0; // slave error
-					dm_sts_word.data.range(7,7) = 1; // OK
-					dm_sts_word.data.range(30,8) = dm_meta_word(22,0); // bytes received
-					dm_sts_word.data.range(31,31) = dm_meta_word(27,27); // EOP
-					dm_sts_word.last = 1;
-					if(cq_sts_word.dest == 0){
-						STREAM_WRITE(dm0_sts, dm_sts_word);
-					} else if (cq_sts_word.dest == 1){
-						STREAM_WRITE(dm1_sts, dm_sts_word);
-					}
-				} while(dm_meta_word(27,27) == 0);
-			}
-		}
-	}
-
-}
 
 // The cyt sq commands have 4 sources if RDMA is enabled
 // 2 DMA channels from the CCLO, CCLO sq command, and the Cyt rq interface
-void cyt_dma_adapter(
+void cyt_dma_sq_adapter(
 	//DM command streams
 	hls::stream<ap_axiu<104,0,0,DEST_WIDTH>> &dma0_s2mm_cmd,
 	hls::stream<ap_axiu<104,0,0,DEST_WIDTH>> &dma1_s2mm_cmd,
 	hls::stream<ap_axiu<104,0,0,DEST_WIDTH>> &dma0_mm2s_cmd,
 	hls::stream<ap_axiu<104,0,0,DEST_WIDTH>> &dma1_mm2s_cmd,
-	//DM status streams
-	hls::stream<ap_axiu<32,0,0,0>> &dma0_s2mm_sts,
-	hls::stream<ap_axiu<32,0,0,0>> &dma1_s2mm_sts,
-	hls::stream<ap_axiu<32,0,0,0>> &dma0_mm2s_sts,
-	hls::stream<ap_axiu<32,0,0,0>> &dma1_mm2s_sts,
 
 	//Coyote rq rd_req and wr_req
 	hls::stream<cyt_req_t> & cyt_rq_wr_cmd,
@@ -198,32 +145,31 @@ void cyt_dma_adapter(
 	hls::stream<cyt_req_t >& cclo_sq_wr_cmd,
 	hls::stream<cyt_req_t >& cclo_sq_rd_cmd,
 
-	//Coyote sq interface command and cq status
+	//Coyote sq interface command
 	hls::stream<cyt_req_t> &cyt_sq_wr_cmd,
 	hls::stream<cyt_req_t> &cyt_sq_rd_cmd,
 
-	hls::stream<cyt_ack_t> &cyt_cq_wr_sts,
-	hls::stream<cyt_ack_t> &cyt_cq_rd_sts
+	//DM command meta
+	hls::stream<ap_uint<1+4+23>> & dma0_s2mm_meta,
+	hls::stream<ap_uint<1+4+23>> & dma1_s2mm_meta,
+	hls::stream<ap_uint<1+4+23>> & dma0_mm2s_meta,
+	hls::stream<ap_uint<1+4+23>> & dma1_mm2s_meta
 ) {
 #pragma HLS INTERFACE axis port=dma0_s2mm_cmd
 #pragma HLS INTERFACE axis port=dma1_s2mm_cmd
 #pragma HLS INTERFACE axis port=dma0_mm2s_cmd
 #pragma HLS INTERFACE axis port=dma1_mm2s_cmd
-#pragma HLS INTERFACE axis port=dma0_s2mm_sts
-#pragma HLS INTERFACE axis port=dma1_s2mm_sts
-#pragma HLS INTERFACE axis port=dma0_mm2s_sts
-#pragma HLS INTERFACE axis port=dma1_mm2s_sts
+#pragma HLS INTERFACE axis port=dma0_s2mm_meta
+#pragma HLS INTERFACE axis port=dma1_s2mm_meta
+#pragma HLS INTERFACE axis port=dma0_mm2s_meta
+#pragma HLS INTERFACE axis port=dma1_mm2s_meta
 #pragma HLS INTERFACE axis port=cyt_sq_rd_cmd
-#pragma HLS INTERFACE axis port=cyt_cq_rd_sts
 #pragma HLS INTERFACE axis port=cyt_sq_wr_cmd
-#pragma HLS INTERFACE axis port=cyt_cq_wr_sts
 #pragma HLS INTERFACE ap_ctrl_none port=return
 #pragma HLS DATAFLOW disable_start_propagation
 
 #pragma HLS aggregate variable=cyt_sq_wr_cmd compact=bit
 #pragma HLS aggregate variable=cyt_sq_rd_cmd compact=bit
-#pragma HLS aggregate variable=cyt_cq_wr_sts compact=bit
-#pragma HLS aggregate variable=cyt_cq_rd_sts compact=bit
 
 #pragma HLS INTERFACE axis port=cyt_rq_wr_cmd
 #pragma HLS INTERFACE axis port=cyt_rq_rd_cmd
@@ -244,20 +190,11 @@ void cyt_dma_adapter(
 	static hls::stream<cyt_req_t > sq_rd_cmd_1;
     #pragma HLS stream variable=sq_rd_cmd_1 depth=16
 
-	static hls::stream<ap_uint<1+4+23>> dma0_mm2s_meta;
-    #pragma HLS stream variable=dma0_mm2s_meta depth=16
-	static hls::stream<ap_uint<1+4+23>> dma1_mm2s_meta;
-    #pragma HLS stream variable=dma1_mm2s_meta depth=16
-	static hls::stream<ap_uint<1+4+23>> dma0_s2mm_meta;
-    #pragma HLS stream variable=dma0_s2mm_meta depth=16
-	static hls::stream<ap_uint<1+4+23>> dma1_s2mm_meta;
-    #pragma HLS stream variable=dma1_s2mm_meta depth=16
-
 	static hls::stream<cyt_req_t > sq_wr_cmd_2;
     #pragma HLS stream variable=sq_wr_cmd_2 depth=16
 	static hls::stream<cyt_req_t > sq_rd_cmd_2;
     #pragma HLS stream variable=sq_rd_cmd_2 depth=16
-
+ 
 	dm_sq_cmd_converter<0>(dma0_s2mm_cmd, sq_wr_cmd_0, dma0_s2mm_meta);
 	dm_sq_cmd_converter<1>(dma1_s2mm_cmd, sq_wr_cmd_1, dma1_s2mm_meta);
 	cyt_rq_sq_cmd_converter<2>(cyt_rq_wr_cmd, sq_wr_cmd_2);
@@ -268,10 +205,6 @@ void cyt_dma_adapter(
 	dm_sq_cmd_converter<1>(dma1_mm2s_cmd,sq_rd_cmd_1, dma1_mm2s_meta);
 	cyt_rq_sq_cmd_converter<2>(cyt_rq_rd_cmd, sq_rd_cmd_2);
 	multiplexor(cclo_sq_rd_cmd, sq_rd_cmd_0,sq_rd_cmd_1,sq_rd_cmd_2, cyt_sq_rd_cmd);
-
-	// handle the completion queue conversion to dm sts
-	cq_dm_sts_converter(cyt_cq_wr_sts, dma0_s2mm_sts, dma1_s2mm_sts, dma0_s2mm_meta, dma1_s2mm_meta);
-	cq_dm_sts_converter(cyt_cq_rd_sts, dma0_mm2s_sts, dma1_mm2s_sts, dma0_mm2s_meta, dma1_mm2s_meta);
 
 
 }

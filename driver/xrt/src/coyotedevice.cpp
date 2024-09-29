@@ -369,7 +369,7 @@ CCLO::deviceType CoyoteDevice::get_device_type()
 void CoyoteDevice::printDebug(){
   coyote_proc->printDebug();
 
-  std::ifstream inputFile("/sys/kernel/coyote_cnfg/cyt_attr_nstats_q0");  
+  std::ifstream inputFile("/sys/kernel/coyote_sysfs_0/cyt_attr_nstats");  
 
   if (!inputFile.is_open()) {
       std::cerr << "Failed to open net sts file." << std::endl;

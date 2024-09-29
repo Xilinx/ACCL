@@ -1212,7 +1212,7 @@ void test_accl_base(options_t options)
 		}
 	}
 
-	
+	MPI_Barrier(MPI_COMM_WORLD);
 	if (failed_tests == 0){
 		std::cout << "\nACCL base functionality test completed successfully!\n" << std::endl;
 	}
