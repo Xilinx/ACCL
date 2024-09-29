@@ -9,7 +9,6 @@ from torch.autograd import Variable
 import torch.distributed as dist
 import accl_process_group as accl
 
-from mpi4py.MPI import COMM_WORLD as mpi
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler
 
@@ -59,7 +58,7 @@ class CNN(nn.Module):
         output = self.out(x)
         return output, x    # return x for visualization
 
-def train(num_epochs, cnn, loaders, p):
+def train(num_epochs, cnn, loaders):
 
     start_time_train = time.perf_counter()
     
@@ -72,7 +71,7 @@ def train(num_epochs, cnn, loaders, p):
 
     for epoch in range(num_epochs):
         for i, (images, labels) in enumerate(loaders['train']):
-            p.step()
+            # p.step()
             start_time = time.perf_counter()
             # gives batch data, normalize x when iterate train_loader
             b_x = Variable(images)   # batch x
@@ -102,7 +101,7 @@ def train(num_epochs, cnn, loaders, p):
     print('Total train time: ' + str(measured_time_train))
         
 
-def test(p):
+def test():
     # Test the model
     start_time_test = time.perf_counter()
     cnn.eval()
@@ -110,7 +109,7 @@ def test(p):
         correct = 0
         total = 0
         for images, labels in loaders['test']:
-            p.step()
+            # p.step()
             test_output, last_layer = cnn(images)
             pred_y = torch.max(test_output, 1)[1].data.squeeze()
             correct_current = (pred_y == labels).sum().item()
@@ -167,8 +166,11 @@ if __name__ == "__main__":
         args.master_port = "30505"
     os.environ['MASTER_ADDR'] = args.master_address
     os.environ['MASTER_PORT'] = args.master_port
-    rank = mpi.Get_rank()
-    size = mpi.Get_size()
+
+    dist.init_process_group("mpi")
+    rank = dist.get_rank()
+    size = dist.get_world_size()
+
 
     rxbufsize = 4096 * 1024
 
@@ -203,10 +205,11 @@ if __name__ == "__main__":
             design = accl.ACCLDesign.cyt_rdma
     
 
-        mpi.Barrier()            
     
-        accl.create_process_group(ranks, design, bufsize=rxbufsize, initialize=True, simulation=args.simulator)
-        dist.init_process_group("ACCL", rank=rank, world_size=size)
+        # dist.init_process_group("mpi", rank=rank, world_size=size)
+        
+        # accl.create_process_group(ranks, design, bufsize=rxbufsize, initialize=True, simulation=args.simulator)
+        # dist.init_process_group("ACCL", rank=rank, world_size=size)
         
     device = 'cpu'
 
@@ -243,10 +246,11 @@ if __name__ == "__main__":
 
     num_epochs = 10
 
-    mpi.Barrier()
-
     print("starting training")
 
+    print(rank)
+    print(size)
+    
     schedule = torch.profiler.schedule(
         wait=1,
         warmup=1,
@@ -254,22 +258,18 @@ if __name__ == "__main__":
         repeat=3
     )
     
-    with torch.profiler.profile(
-            activities=[torch.profiler.ProfilerActivity.CPU],
-            schedule=schedule,
-            on_trace_ready=torch.profiler.tensorboard_trace_handler('./accl_log/profiler_log'),
-            record_shapes=True,
-            with_stack=True
-    ) as p:
+    # with torch.profiler.profile(
+            # activities=[torch.profiler.ProfilerActivity.CPU],
+            # schedule=schedule,
+            # on_trace_ready=torch.profiler.tensorboard_trace_handler('./accl_log/profiler_log'),
+            # record_shapes=True,
+            # with_stack=True
+    # ) as p:
 
         
-        train(num_epochs, cnn, loaders, p)
+    train(num_epochs, cnn, loaders)
 
-        test(p)
-
-    p.stop()
-
-    print(p.key_averages().table(sort_by="self_cpu_time_total", row_limit=100))
+    test()
 
 
     dist.destroy_process_group()

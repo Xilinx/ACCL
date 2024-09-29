@@ -62,44 +62,17 @@ namespace c10d {
     
 #define RDVZ_THRESHOLD 64
 
-#define MICRO_BENCH_FINE 1
-
-#define MICRO_BENCH_COARSE 1
-
+// This is the maximal message size. larger sizes get segmented
 #define ACCL_MSG_SIZE 2097152
 
+// counts are rounded up to this number for stability reasons
 #define ROUND_NR 256
 
+// This is intended for debugging, you can refer to the name of the collective using this
 #define COLL_NAME UNNAMED
 
 #define x_MAKE_STRING(s) MAKE_STRING(s)
 #define MAKE_STRING(s) #s    
-
-    
-
-#if MICRO_BENCH_FINE
-#define START_FINE(name) \
-  std::chrono::time_point<std::chrono::high_resolution_clock> start_##name  = std::chrono::high_resolution_clock::now();
-#define STOP_FINE(name, accl_nbytes)						\
-  auto end_##name = std::chrono::high_resolution_clock::now();		\
-  double durationUs_##name = (std::chrono::duration_cast<std::chrono::nanoseconds>(end_##name-start_##name).count() / 1000.0); \
-  ACCL::debug(#name "_" + std::string(x_MAKE_STRING(COLL_NAME)) + "_" + std::to_string(accl_nbytes) + " durationUs: " + std::to_string(durationUs_##name));
-#else
-#define START_FINE(name)
-#define STOP_FINE(name)
-#endif
-
-#if MICRO_BENCH_COARSE
-#define START_COARSE(name) \
-  std::chrono::time_point<std::chrono::high_resolution_clock> start_##name  = std::chrono::high_resolution_clock::now();
-#define STOP_COARSE(name, accl_nbytes)						\
-  auto end_##name = std::chrono::high_resolution_clock::now();		\
-  double durationUs_##name = (std::chrono::duration_cast<std::chrono::nanoseconds>(end_##name-start_##name).count() / 1000.0); \
-  ACCL::debug(#name "_" + std::string(x_MAKE_STRING(COLL_NAME)) + "_" + std::to_string(accl_nbytes) + " durationUs: " + std::to_string(durationUs_##name));
-#else
-#define START_COARSE(name)
-#define STOP_COARSE(name)
-#endif
 
 // Used in sidestepping
 #define MPI_CHECK(cmd)                                                   \
@@ -135,49 +108,18 @@ std::map<at::ScalarType, MPI_Datatype> mpiDatatype = {
     
 #define CEIL_DIV(x, y) ((x) / (y) + ((x) % (y) != 0))
 
-#define ACCL_ERROR(status)                                                     \
-  ("ACCL error in: " + std::string(__FILE__) + ":" +                           \
-   std::to_string(__LINE__) + ", with error code: " + std::to_string(status))
-
 #if defined(ACCL_PROCESS_GROUP_HIP_ENABLED) &&                                 \
     defined(ACCL_PROCESS_GROUP_CUDA_ENABLED)
 #error Cannot compile Process Group with both HIP and CUDA support
 #endif // ACCL_PROCESS_GROUP_HIP_ENABLED && ACCL_PROCESS_GROUP_CUDA_ENABLED
 
-// Activate Parameter printing:
-#define DO_PARA_PRINT
-
-#if defined(DO_PARA_PRINT)
-  #define PARA_PRINT(x)							\
-    ACCL::debug(#x "size: " + std::to_string(x.numel()) + " of type: " + string_of_accl_datatype(convert_datatype_from_torch(x.scalar_type())))
-#else
-  #define PARA_PRINT(x)
-#endif
-
-
-#define STANDARD_DECL \
-  std::unique_ptr<ACCL::BaseBuffer> data;				\
-  std::unique_ptr<ACCL::BaseBuffer> dstdata;				\
-
 #define DO_COND ((do_on_root && opts_root_rank == rank_) || (do_on_others && opts_root_rank != rank_))
 
 #define PRE_REQUEST(opname, tensor)					\
-  START_FINE(type)    \
   in_buf->change_type(convert_datatype_from_torch(tensor.scalar_type())); \
   out_buf->change_type(convert_datatype_from_torch(tensor.scalar_type()));   \
-  STOP_FINE(type, tensor.nbytes())					\
-  ACCL::debug("Performing " #opname " of " + std::to_string(tensor.numel()) + " items"); \
-  START_FINE(lib)							
+  ACCL::debug("Performing " #opname " of " + std::to_string(tensor.numel()) + " items")
 
-#define POST_REQUEST(name, nbytes)				\
-  STOP_FINE(lib, nbytes)						\
-  START_COARSE(sleep)   						\
-  std::this_thread::sleep_for(10ms);					\
-  STOP_COARSE(sleep, nbytes)   						\
-  double durationUs_accl_##COLL_NAME = (double)accl->get_duration(req)/1000.0; \
-  ACCL::debug("device_" + std::string(x_MAKE_STRING(COLL_NAME)) + "_"  + std::to_string(nbytes) + " durationUs: " + std::to_string(durationUs_accl_##COLL_NAME));
-
-    
 namespace {
 
 /* Alternative for std::format from C++20 in C++17.
@@ -196,34 +138,6 @@ std::string string_format(const std::string &format, Args... args) {
                      buf.get() + size - 1); // We don't want the '\0' inside
 }
 
-template <typename val_t>
-std::string format_array(val_t *data, std::size_t size, std::size_t breakval = 3) {
-  std::ostringstream buffer;
-  buffer << "[";
-  if (size <= breakval * 2 + 1) {
-    for (std::size_t i = 0; i < size; ++i) {
-      buffer << data[i];
-      if (i + 1 != size) {
-        buffer << ", ";
-      }
-    }
-  } else {
-    for (std::size_t i = 0; i < breakval; ++i) {
-      buffer << data[i] << ", ";
-    }
-    buffer << "..., ";
-    for (std::size_t i = size - breakval; i < size; ++i) {
-      buffer << data[i];
-      if (i + 1 != size) {
-        buffer << ", ";
-      }
-    }
-  }
-  buffer << "]";
-
-  return buffer.str();
-}
-
 // Op mapping
 std::map<ReduceOp, ACCL::reduceFunction> acclOp = {
     {ReduceOp::SUM, ACCL::reduceFunction::SUM},
@@ -240,25 +154,6 @@ std::map<at::ScalarType, ACCL::dataType> acclDatatype = {
 };
 
 
-std::string format_log(std::string collective, int world_size, int rank, double time, int n_bytes)
-{
-    std::string log_str = collective + "," + std::to_string(world_size) + "," + std::to_string(rank) + "," + std::to_string(time) + "," + std::to_string(n_bytes);
-    return log_str;
-}    
-
-#define ACCL_PG_LOG_FILE(i)                                                       \
-  (std::string("accl_log/accl_pg_") + i + std::string(".log"))    
-    
-void accl_pg_log(int rank, const std::string &message) {
-  std::string str_rank = std::to_string(rank);
-  std::string filename = ACCL_PG_LOG_FILE(str_rank);
-  std::ofstream outfile;
-  outfile.open(filename, std::ios::out | std::ios_base::app);
-  outfile << message << std::endl;
-  outfile.close();
-}
-    
-    
 // Checking the input tensor's validity
 void checkSingleTensorHelper(const at::Tensor &tensor) {
   if (!tensor.is_contiguous()) {
@@ -398,114 +293,6 @@ std::map<std::string, std::string> convert_compression_to_dict(
   return dictionary;
 }
 
-// Create an ACCL Buffer with correct type
-std::unique_ptr<ACCL::BaseBuffer> create_buffer(ACCL::ACCL &accl, size_t length,
-                                                c10::ScalarType type) {
-  switch (type) {
-  case at::kInt:
-    return accl.create_buffer<int32_t>(length, acclDatatype.at(type));
-  case at::kLong:
-    return accl.create_buffer<int64_t>(length, acclDatatype.at(type));
-  case at::kFloat:
-    return accl.create_buffer<float>(length, acclDatatype.at(type));
-  case at::kDouble:
-    return accl.create_buffer<double>(length, acclDatatype.at(type));
-  default:
-    TORCH_CHECK(false, "Tensor has unsupported datatype");
-    break;
-  }
-}
-
-// Create an ACCL Buffer with correct type
-std::unique_ptr<ACCL::BaseBuffer> create_coyotebuffer(ACCL::ACCL &accl, size_t length,
-                                                c10::ScalarType type) {
-  switch (type) {
-  case at::kInt:
-    return accl.create_coyotebuffer<int32_t>(length, acclDatatype.at(type));
-  case at::kLong:
-    return accl.create_coyotebuffer<int64_t>(length, acclDatatype.at(type));
-  case at::kFloat:
-    return accl.create_coyotebuffer<float>(length, acclDatatype.at(type));
-  case at::kDouble:
-    return accl.create_coyotebuffer<double>(length, acclDatatype.at(type));
-  default:
-    TORCH_CHECK(false, "Tensor has unsupported datatype");
-    break;
-  }
-}
-
-// Create an ACCL P2P Buffer with correct type
-std::unique_ptr<ACCL::BaseBuffer>
-create_buffer_p2p(ACCL::ACCL &accl, size_t length, c10::ScalarType type) {
-  switch (type) {
-  case at::kInt:
-    return accl.create_buffer_p2p<int32_t>(length, acclDatatype.at(type));
-  case at::kLong:
-    return accl.create_buffer_p2p<int64_t>(length, acclDatatype.at(type));
-  case at::kFloat:
-    return accl.create_buffer_p2p<float>(length, acclDatatype.at(type));
-  case at::kDouble:
-    return accl.create_buffer_p2p<double>(length, acclDatatype.at(type));
-  default:
-    TORCH_CHECK(false, "Tensor has unsupported datatype");
-    break;
-  }
-}
-
-std::unique_ptr<ACCL::BaseBuffer> create_buffer_p2p(ACCL::ACCL &accl,
-                                                    const at::Tensor &tensor) {
-  return create_buffer_p2p(accl, tensor.numel(), tensor.scalar_type());
-}
-
-// Create an ACCL Buffer with correct type from Tensor
-std::unique_ptr<ACCL::BaseBuffer> create_buffer(ACCL::ACCL &accl,
-                                                const at::Tensor &tensor) {
-  std::unique_ptr<ACCL::BaseBuffer> buffer;
-  switch (tensor.scalar_type()) {
-  case at::kInt:
-    buffer = accl.create_buffer(static_cast<int32_t *>(tensor.data_ptr()),
-                                tensor.numel(),
-                                acclDatatype.at(tensor.scalar_type()));
-
-    ACCL::debug("Creating int32 buffer at 0x" +
-                ACCL::debug_hex(buffer->address()) + " of " +
-                std::to_string(buffer->size()) + "B.");
-    break;
-  case at::kLong:
-    buffer = accl.create_buffer(static_cast<int64_t *>(tensor.data_ptr()),
-                                tensor.numel(),
-                                acclDatatype.at(tensor.scalar_type()));
-
-    ACCL::debug("Creating int64 buffer at 0x" +
-                ACCL::debug_hex(buffer->address()) + " of " +
-                std::to_string(buffer->size()) + "B.");
-    break;
-  case at::kFloat:
-    buffer = accl.create_buffer(static_cast<float *>(tensor.data_ptr()),
-                                tensor.numel(),
-                                acclDatatype.at(tensor.scalar_type()));
-
-    ACCL::debug("Creating float32 buffer at 0x" +
-                ACCL::debug_hex(buffer->address()) + " of " +
-                std::to_string(buffer->size()) + "B.");
-
-    break;
-  case at::kDouble:
-    buffer = accl.create_buffer(static_cast<double *>(tensor.data_ptr()),
-                                tensor.numel(),
-                                acclDatatype.at(tensor.scalar_type()));
-
-    ACCL::debug("Creating float64 buffer at 0x" +
-                ACCL::debug_hex(buffer->address()) + " of " +
-                std::to_string(buffer->size()) + "B.");
-    break;
-  default:
-    TORCH_CHECK(false, "Tensor has unsupported datatype");
-    break;
-  }
-
-  return buffer;
-}
 
 // Check if process is compiled with HIP support
 inline bool hip_enabled() {
@@ -523,149 +310,6 @@ inline bool cuda_enabled() {
 #else
   return false;
 #endif
-}
-
-// Check if tensor is a GPU tensor, the ProcessGroup is compiled with GPU
-// support, ACCL is not running in simulation mode, and the ProcessGroup was
-// initialized with p2p_enabled
-bool p2p_applicable(ACCL::ACCL &accl, const at::Tensor &tensor,
-                    bool p2p_enabled) {
-  auto type = tensor.device().type();
-  if (type != c10::DeviceType::CPU && p2p_enabled && !accl.is_simulated()) {
-    if (type == c10::DeviceType::HIP) {
-      return hip_enabled();
-    } else if (type == c10::DeviceType::CUDA) {
-      // HIP tensors will identify themselves as CUDA tensor depending on the
-      // initialization, so we have to see CUDA tensors as HIP tensors if
-      // ProcessGroup is compiled with HIP support
-#ifdef ACCL_PROCESS_GROUP_HIP_ENABLED
-      return hip_enabled();
-#else
-      return cuda_enabled();
-#endif
-    }
-  }
-  return false;
-}
-
-// Copy a GPU tensor to a P2P FPGA buffer
-void copy_to_p2p_buffer(ACCL::BaseBuffer &buffer, const at::Tensor &tensor) {
-  if (tensor.device().type() == c10::DeviceType::HIP) {
-    ACCL::debug("Syncing HIP GPU buffer to FPGA");
-#ifdef ACCL_PROCESS_GROUP_HIP_ENABLED
-    hipMemcpy(buffer.byte_array(), tensor.data_ptr(), tensor.nbytes(),
-              hipMemcpyDeviceToHost);
-#else
-    TORCH_CHECK(false, "ACCL ProcessGroup is build without HIP support");
-#endif
-  } else if (tensor.device().type() == c10::DeviceType::CUDA) {
-#ifdef ACCL_PROCESS_GROUP_HIP_ENABLED
-    ACCL::debug("Syncing HIP GPU buffer to FPGA");
-    hipMemcpy(buffer.byte_array(), tensor.data_ptr(), tensor.nbytes(),
-              hipMemcpyDeviceToHost);
-#else
-    ACCL::debug("Syncing CUDA GPU buffer to FPGA");
-#ifdef ACCL_PROCESS_GROUP_CUDA_ENABLED
-    cudaMemcpy(buffer.byte_array(), tensor.data_ptr(), tensor.nbytes(),
-               cudaMemcpyDeviceToHost);
-#else
-    TORCH_CHECK(false, "ACCL ProcessGroup is build without CUDA support");
-#endif // ACCL_PROCESS_GROUP_CUDA_ENABLED
-#endif // ACCL_PROCESS_GROUP_HIP_ENABLED
-  }
-}
-
-// Create a new FPGA P2P buffer and copy contents of GPU tensor
-inline std::unique_ptr<ACCL::BaseBuffer>
-create_and_copy_p2p_buffer(ACCL::ACCL &accl, const at::Tensor &tensor) {
-  ACCL::debug("Creating p2p buffer of size " + std::to_string(tensor.nbytes()));
-  std::unique_ptr<ACCL::BaseBuffer> buffer =
-      create_buffer_p2p(accl, tensor.numel(), tensor.scalar_type());
-  copy_to_p2p_buffer(*buffer, tensor);
-  return buffer;
-}
-
-// Copy results from an FPGA P2P buffer back to the GPU tensor
-void copy_back_p2p_buffer(ACCL::BaseBuffer &buffer, const at::Tensor &tensor) {
-  if (tensor.device().type() == c10::DeviceType::HIP) {
-    ACCL::debug("Syncing HIP GPU buffer from FPGA");
-#ifdef ACCL_PROCESS_GROUP_HIP_ENABLED
-    hipMemcpy(tensor.data_ptr(), buffer.byte_array(), tensor.nbytes(),
-              hipMemcpyHostToDevice);
-#else
-    TORCH_CHECK(false, "ACCL ProcessGroup is build without HIP support");
-#endif
-  } else if (tensor.device().type() == c10::DeviceType::CUDA) {
-#ifdef ACCL_PROCESS_GROUP_HIP_ENABLED
-    ACCL::debug("Syncing HIP GPU buffer from FPGA");
-    hipMemcpy(tensor.data_ptr(), buffer.byte_array(), tensor.nbytes(),
-              hipMemcpyHostToDevice);
-#else
-    ACCL::debug("Syncing CUDA GPU buffer from FPGA");
-#ifdef ACCL_PROCESS_GROUP_CUDA_ENABLED
-    cudaMemcpy(tensor.data_ptr(), buffer.byte_array(), tensor.nbytes(),
-               cudaMemcpyHostToDevice);
-#else
-    TORCH_CHECK(false, "ACCL ProcessGroup is build without CUDA support");
-#endif // ACCL_PROCESS_GROUP_CUDA_ENABLED
-#endif // ACCL_PROCESS_GROUP_HIP_ENABLED
-  }
-}
-
-bool check_arp(vnx::Networklayer &network_layer,
-               std::vector<ACCL::rank_t> &ranks, int rank, int size) {
-  std::map<unsigned, bool> ranks_checked;
-  for (unsigned i = 0; i < static_cast<unsigned>(size); ++i) {
-    ranks_checked[i] = false;
-  }
-
-  bool sanity_check = true;
-  const std::map<int, std::pair<std::string, std::string>> arp =
-      network_layer.read_arp_table(size);
-
-  std::ostringstream ss_arp;
-  ss_arp << "ARP table:";
-
-  for (const std::pair<const int, std::pair<std::string, std::string>> &elem :
-       arp) {
-    const unsigned index = elem.first;
-    const std::pair<std::string, std::string> &entry = elem.second;
-    const std::string &mac = entry.first;
-    const std::string &ip = entry.second;
-    ss_arp << "\n(" << index << ") " << mac << ": " << ip;
-
-    for (unsigned i = 0; i < static_cast<unsigned>(size); ++i) {
-      if (ranks[i].ip == ip) {
-        if (ranks_checked[i]) {
-          std::cerr << "Double entry for " << ip << " in arp table!"
-                    << std::endl;
-          sanity_check = false;
-        } else {
-          ranks_checked[i] = true;
-        }
-      }
-    }
-  }
-
-  ACCL::debug(ss_arp.str());
-
-  if (!sanity_check) {
-    return false;
-  }
-
-  unsigned hosts = 0;
-  for (unsigned i = 0; i < static_cast<unsigned>(size); ++i) {
-    if (ranks_checked[i]) {
-      hosts += 1;
-    }
-  }
-  if (hosts < static_cast<unsigned>(size) - 1) {
-    std::cerr << "Found only " << hosts << " hosts out of " << size - 1 << "!"
-              << std::endl;
-    return false;
-  }
-
-  return true;
 }
 
 } // namespace
@@ -747,25 +391,20 @@ void accl_sa_handler(int)
 	exit(EXIT_FAILURE);
 }
 
-// TODO delete when not needed anymore
 void ProcessGroupACCL::init_input_tensor(at::Tensor &tensor, std::unique_ptr<ACCL::BaseBuffer> &data, bool do_on_root, bool do_on_others, int opts_root_rank) {
   if DO_COND {
 	std::memcpy(data->byte_array(), tensor.data_ptr(), tensor.numel() * tensor.element_size());
 	if (!coyote_enabled) {
 	    data->sync_to_device();
 	}
-	
     }
 }
-  void ProcessGroupACCL::init_input_data_vec(std::vector<at::Tensor> &tensor_vec, std::unique_ptr<ACCL::BaseBuffer> &data, const at::TensorOptions &options, bool do_on_root, bool do_on_others, int opts_root_rank) {
+
+void ProcessGroupACCL::init_input_data_vec(std::vector<at::Tensor> &tensor_vec, std::unique_ptr<ACCL::BaseBuffer> &data, const at::TensorOptions &options, bool do_on_root, bool do_on_others, int opts_root_rank) {
   if DO_COND {
     int64_t tens_size = static_cast<size_t>(tensor_vec[0].numel());
     int64_t total_size = tens_size * static_cast<size_t>(size_);
-    std::vector<int64_t> sizes = tensor_vec[0].sizes().vec();
-    sizes.insert(sizes.begin(), tensor_vec.size());
       
-    at::Tensor wrapper_tensor = torch::from_blob(data->byte_array(), sizes, options);
-
     for (const auto i : c10::irange(tensor_vec.size())) {
 	std::memcpy(data->byte_array() + i * tens_size * tensor_vec[0].element_size(), tensor_vec[i].data_ptr(), tens_size * tensor_vec[0].element_size());
     }
@@ -774,44 +413,7 @@ void ProcessGroupACCL::init_input_tensor(at::Tensor &tensor, std::unique_ptr<ACC
     }
   }
 }  
-  
-void ProcessGroupACCL::init_output_data(at::Tensor &tensor_original, std::unique_ptr<ACCL::BaseBuffer> &dstdata, int out_tensor_size, c10::ScalarType type, bool do_on_root, bool do_on_others, int opts_root_rank) {
-  if DO_COND {
-      if (p2p_applicable(*accl, tensor_original, p2p_enabled)) {
-	dstdata = create_buffer_p2p(*accl, out_tensor_size, type);
-    } else {
-	if (coyote_enabled) {
-	  dstdata = create_coyotebuffer(*accl, out_tensor_size, type);
-	} else {
-	  dstdata = create_buffer(*accl, out_tensor_size, type);
-	}
-    }
-  } else {
-    dstdata = std::unique_ptr<ACCL::Buffer<float>>(nullptr);
-  }
-}
-// This function could and should be removed if we adapt the structure in the calls
-    void ProcessGroupACCL::init_output_tensor(const at::Tensor &tensor_original, at::Tensor &dsttensor, std::unique_ptr<ACCL::BaseBuffer> &dstdata, int num_tensors, c10::ScalarType type, bool do_on_root, bool do_on_others, int opts_root_rank) {
-    if DO_COND {
-	int64_t num_tensors_s = static_cast<size_t>(num_tensors);
-	std::vector<int64_t> sizes = tensor_original.sizes().vec();
-	int64_t total_size = static_cast<size_t>(tensor_original.numel());
-	if  (num_tensors != 0) {
-	    // Prepend another dimension for vector length
-	    sizes.insert(sizes.begin(), num_tensors_s);
-	    total_size = total_size * num_tensors_s;
-	}
-	
-	if (p2p_applicable(*accl, tensor_original, p2p_enabled)) {
-	  dstdata = create_buffer_p2p(*accl, total_size, type);
-	} else if (coyote_enabled) {
-	    dsttensor = torch::from_blob(dstdata->byte_array(), sizes, tensor_original.options().device(c10::DeviceType::CPU));
-	}
-      } else {
-      dsttensor = at::Tensor(nullptr);
-    }
-}
-  
+
 void ProcessGroupACCL::copy_back_tensor(at::Tensor tensor_original, std::unique_ptr<ACCL::BaseBuffer> &data, bool do_on_root, bool do_on_others, int opts_root_rank){
   if DO_COND {
       if (!coyote_enabled) {
@@ -889,26 +491,6 @@ ProcessGroupACCL::ProcessGroupACCL(
   }
 }
 
-std::vector<std::uint8_t> ProcessGroupACCL::get_local_qp(unsigned int rank) {
-  std::vector<std::uint8_t> qp;
-  char *data = (char *) &ibvQpConn_vec[rank]->getQpairStruct()->local;
-  for (std::size_t i = 0; i < sizeof(fpga::ibvQ); ++i) {
-    qp.push_back(data[i]);
-  }
-
-  return qp;
-}
-
-void ProcessGroupACCL::set_remote_qp(unsigned int rank, std::vector<std::uint8_t> &qp) {
-  fpga::ibvQ remote_qp;
-  char *data = (char *) &remote_qp;
-  for (std::size_t i = 0; i < sizeof(fpga::ibvQ); ++i) {
-    data[i] = qp[i];
-  }
-
-  ibvQpConn_vec[rank]->getQpairStruct()->remote = remote_qp;
-}
-
 void ProcessGroupACCL::initialize() {
   std::cout << "PG initialize called\n";
   if (initialized) {
@@ -921,18 +503,10 @@ void ProcessGroupACCL::initialize() {
     global_accl = &accl;
 
     // Rendezvous protocol for now
-    int protoc = 1;
-    // default from test.cpp
     int segsize = 4096 * 1024;
 
     
-    if (protoc == 0){
-      std::cout<<"Eager Protocol"<<std::endl;
-      accl.get()->initialize(ranks_, rank_, size_+2, bufsize, segsize, 4096*1024*2);
-    } else {
-      std::cout<<"Rendezvous Protocol"<<std::endl;
-      accl.get()->initialize(ranks_, rank_, 16, 1024, RDVZ_THRESHOLD, 4096*1024);
-    }  
+    accl.get()->initialize(ranks_, rank_, 16, 1024, RDVZ_THRESHOLD, 4096*1024);
     
     ACCL::debug(std::string("[ACCL coyote] communicator: ") + accl->dump_communicator());
 
@@ -950,14 +524,6 @@ void ProcessGroupACCL::initialize() {
                                       
     int devicemem = accl->devicemem();
 
-    // Not sure if this is needed:
-    // Initialize cache buffers
-    // if (!simulator_){
-	// buf0 = xrt::bo(xrt_device, bufsize, devicemem);
-	// buf1 = xrt::bo(xrt_device, bufsize, devicemem);
-    // }
-    
-	    
   }
 
   in_buf = accl->create_buffer_host<float>(bufsize/sizeof(float), ACCL::dataType::float32);
@@ -976,12 +542,10 @@ void ProcessGroupACCL::destroy() {
   std::unique_lock<std::mutex> lock(pgMutex_);
   queueConsumeCV_.wait(lock, [&] { return queue_.empty(); });
 
-  //TODO free other buffer types
+  // TODO free other buffer types
   if (!simulator_) {
-      // if(coyote_enabled){
-	  in_buf->free_buffer();
-	  out_buf->free_buffer();
-      // }
+      in_buf->free_buffer();
+      out_buf->free_buffer();
   }
 
   // Queue is empty, signal stop
@@ -1054,8 +618,8 @@ void ProcessGroupACCL::run_broadcast(at::Tensor in_tensor,
 
   std::chrono::time_point<std::chrono::high_resolution_clock> start_inner  = std::chrono::high_resolution_clock::now();
 
+  // This is very experimental
   #ifdef SIDESTEP_BCAST_WITH_ALLREDUCE
-
   // It seems to have issues with non-even numbers, so we round to ACCL_MSG_SIZE
   int rounded_count = (in_tensor.numel() + ROUND_NR) & ~ROUND_NR;
   
@@ -1063,11 +627,6 @@ void ProcessGroupACCL::run_broadcast(at::Tensor in_tensor,
   if (in_tensor.scalar_type() == at::kDouble || in_tensor.scalar_type() == at::kLong){
       imaginary_count = (in_tensor.numel()*2 + ROUND_NR) & ~ROUND_NR;
   }
-
-  ACCL::debug("imaginary count:" + std::to_string(imaginary_count));
-
-  
-  START_FINE(init)
 
   auto zero_tensor = torch::zeros({imaginary_count}, at::kInt);
   if (opts.rootRank == rank_){
@@ -1078,54 +637,32 @@ void ProcessGroupACCL::run_broadcast(at::Tensor in_tensor,
   }
   init_input_tensor(zero_tensor, out_buf, true, false, opts.rootRank);
 
-  STOP_FINE(init, in_tensor.nbytes())
-
-  START_FINE(lock)      
   // Reserve device
   c10::DeviceGuard guard(in_tensor.device());
   std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
-  STOP_FINE(lock, in_tensor.nbytes())      
 
-
-  in_buf->change_type(convert_datatype_from_torch(at::kInt));
-  out_buf->change_type(convert_datatype_from_torch(at::kInt));
-
+  PRE_REQUEST(Broadcast, in_tensor);
+  
   auto req = accl->allreduce(*in_buf, *out_buf, imaginary_count, ACCL::reduceFunction::SUM);      
 
-  POST_REQUEST("broadcast", in_tensor.nbytes())
-
-  START_FINE(copy)      
   copy_back_tensor(in_tensor, out_buf, true, true);
-  STOP_FINE(copy, in_tensor.nbytes())
   
   #else
 
   int rounded_count = (in_tensor.numel() + ROUND_NR) & ~ROUND_NR;
   
-  START_FINE(init)
-
   if (opts.rootRank == rank_){
       init_input_tensor(in_tensor, in_buf, true, false, opts.rootRank);
   }
 
-  STOP_FINE(init, in_tensor.nbytes())
-  
-  START_FINE(lock)
   c10::DeviceGuard guard(in_tensor.device());
   std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
-  STOP_FINE(lock, in_tensor.nbytes())
-  
 
-
-  PRE_REQUEST(Broadcast, in_tensor)  
+  PRE_REQUEST(Broadcast, in_tensor);
       
   auto req = accl->bcast(*in_buf, rounded_count, opts.rootRank);
 
-  POST_REQUEST("bcast", in_tensor.nbytes())
-
-  START_FINE(copy)
   copy_back_tensor(in_tensor, in_buf, false, true, opts.rootRank);
-  STOP_FINE(copy, in_tensor.nbytes())
   #endif
 }
 
@@ -1148,7 +685,6 @@ ProcessGroupACCL::broadcast(std::vector<at::Tensor> &tensors,
             opts.rootRank,
             MPI_COMM_WORLD));
 	} else {
-	START_COARSE(total)    
 	at::Tensor &tensor = (entry->src)[0];
         // Segment data if necessary
         if (tensor.nbytes() > ACCL_MSG_SIZE) {
@@ -1163,7 +699,6 @@ ProcessGroupACCL::broadcast(std::vector<at::Tensor> &tensors,
         } else {
           run_broadcast(tensor, opts);
         }
-	STOP_COARSE(total, ((entry->src)[0]).nbytes())    
 	}
       };
   auto entry =
@@ -1178,31 +713,17 @@ ProcessGroupACCL::broadcast(std::vector<at::Tensor> &tensors,
 void ProcessGroupACCL::run_allreduce(at::Tensor in_tensor,
                                      const AllreduceOptions &opts) {
 
-  START_FINE(init)
-  
   init_input_tensor(in_tensor, in_buf, true, true);
 
-  STOP_FINE(init, in_tensor.nbytes())
-
-
-  START_FINE(lock)      
   // Reserve device
   c10::DeviceGuard guard(in_tensor.device());
   std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
-  STOP_FINE(lock, in_tensor.nbytes())      
-
-  PRE_REQUEST(Allreduce,in_tensor)  
-
-
+  PRE_REQUEST(Allreduce,in_tensor); 
   int rounded_count = (in_tensor.numel() + ROUND_NR) & ~ROUND_NR;
   
   auto req = accl->allreduce(*in_buf, *out_buf, rounded_count, acclOp.at(opts.reduceOp));      
 
-  POST_REQUEST("allreduce", in_tensor.nbytes())
-
-  START_FINE(copy)      
   copy_back_tensor(in_tensor, out_buf, true, true);
-  STOP_FINE(copy, in_tensor.nbytes())
 }
 
 c10::intrusive_ptr<Work>
@@ -1225,7 +746,6 @@ ProcessGroupACCL::allreduce(std::vector<at::Tensor> &tensors,
 			  mpiOp.at(opts.reduceOp),
 			  MPI_COMM_WORLD));
 	} else {
-	    START_COARSE(total)    
 	    auto tensor = (entry->src)[0];
 	    // Segment data if necessary
 	    if (tensor.nbytes() > (ACCL_MSG_SIZE)) {
@@ -1233,16 +753,13 @@ ProcessGroupACCL::allreduce(std::vector<at::Tensor> &tensors,
 		size_t n = ACCL_MSG_SIZE / (tensor.itemsize() * non_zero_dim_count);
 		ACCL::debug("[Allreduce] Segmenting tensor of size " + std::to_string(tensor.nbytes()) + " into " + std::to_string(n * non_zero_dim_count) + "-sized elements ");
 		for (size_t i = 0; i < tensor.size(0); i += n) {
-		    START_FINE(loop)    
 		    // ACCL::debug("part " + std::to_string(i) + "!");
 		    size_t end = std::min(n, static_cast<size_t>(tensor.size(0)) - i);
 		    run_allreduce(tensor.narrow(0, i, end), opts);
-		    STOP_FINE(loop, tensor.nbytes())    
 		}
 	    } else {
 		run_allreduce(tensor, opts);
 	    }
-	    STOP_COARSE(total, ((entry->src)[0]).nbytes())    
       }
       };
   auto entry =
@@ -1263,25 +780,19 @@ void ProcessGroupACCL::run_reduce(at::Tensor in_tensor,
                                   const ReduceOptions &opts) {
 
 
-  START_FINE(init)    
   init_input_tensor(in_tensor, in_buf, true, true);
-  STOP_FINE(init, in_tensor.nbytes())
 
   // Reserve device
   c10::DeviceGuard guard(in_tensor.device());
   std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
 
-  PRE_REQUEST(Reduce,in_tensor)
+  PRE_REQUEST(Reduce,in_tensor);
 
   int rounded_count = (in_tensor.numel() + ROUND_NR) & ~ROUND_NR;
 
   auto req = accl->reduce(*in_buf, *out_buf, rounded_count, opts.rootRank, acclOp.at(opts.reduceOp));
 
-  POST_REQUEST("reduce", in_tensor.nbytes())
-
-  START_FINE(copy)      
   copy_back_tensor(in_tensor, out_buf, true, false, opts.rootRank);
-  STOP_FINE(copy, in_tensor.nbytes())
 }
 
 c10::intrusive_ptr<Work>
@@ -1291,7 +802,6 @@ ProcessGroupACCL::reduce(std::vector<at::Tensor> &tensors,
 
   std::function<void(std::unique_ptr<WorkEntry> &)> runFunc =
       [opts, this](std::unique_ptr<WorkEntry> &entry) {
-	START_COARSE(total)    
         auto tensor = (entry->src)[0];
         // Segment data if necessary
         if (tensor.nbytes() > bufsize) {
@@ -1303,7 +813,6 @@ ProcessGroupACCL::reduce(std::vector<at::Tensor> &tensors,
         } else {
           run_reduce(tensor, opts);
         }
-	STOP_COARSE(total, ((entry->src)[0]).nbytes())    
       };
   auto entry =
       std::make_unique<WorkEntry>(&tensors, &tensors, std::move(runFunc));
@@ -1316,31 +825,19 @@ ProcessGroupACCL::reduce(std::vector<at::Tensor> &tensors,
 void ProcessGroupACCL::run_allgather(
     at::Tensor in_tensor,
     const std::vector<at::Tensor> &dsttensorvec) {
-
     
-  START_FINE(init)
   init_input_tensor(in_tensor, in_buf, true, true);    
-  // Reserve device
-
-  STOP_FINE(init, in_tensor.nbytes())
-
-
   c10::DeviceGuard guard(in_tensor.device());
   std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
 
       
-  PRE_REQUEST(Allgather,in_tensor)
+  PRE_REQUEST(Allgather,in_tensor);
 
   int rounded_count = (in_tensor.numel() + 1023) & ~1023;
       
   auto req = accl->allgather(*in_buf, *out_buf, rounded_count);
 
-  POST_REQUEST("allgather", in_tensor.nbytes())
-      
-  START_FINE(copy)      
   copy_back_tensorvec(dsttensorvec, out_buf, in_tensor, in_tensor.numel(), rounded_count, true, true);
-  STOP_FINE(copy, in_tensor.nbytes())
-    
 }
 
 c10::intrusive_ptr<Work>
@@ -1383,7 +880,6 @@ ProcessGroupACCL::allgather(std::vector<std::vector<at::Tensor>> &outputTensors,
           outputDataVec[i].copy_(flatOutputTensor[i]);
         }
         #else
-	START_COARSE(total)    
         auto srctensor = (entry->src)[0];
         auto &dsttensors = entry->dst;
         // Segment data if necessary
@@ -1403,7 +899,6 @@ ProcessGroupACCL::allgather(std::vector<std::vector<at::Tensor>> &outputTensors,
         } else {
           run_allgather(srctensor, dsttensors);
         }
-	STOP_COARSE(total, ((entry->src)[0]).nbytes())    
       #endif
       };
   auto entry = std::make_unique<WorkEntry>(&inputTensors, &outputTensors[0],
@@ -1429,21 +924,13 @@ void ProcessGroupACCL::run_gather(at::Tensor in_tensor,
   c10::DeviceGuard guard(in_tensor.device());
   std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
 
-  START_FINE(init)
-  
   init_input_tensor(in_tensor, in_buf, true, true);
 
-  STOP_FINE(init, in_tensor.nbytes())
-  
-  PRE_REQUEST(Gather, in_tensor)
+  PRE_REQUEST(Gather, in_tensor);
 
   auto req = accl->gather(*in_buf, *out_buf, in_tensor.numel(), opts.rootRank);
 
-  POST_REQUEST("gather", in_tensor.nbytes())
-  START_FINE(copy)      
   copy_back_tensorvec(dsttensorvec, out_buf, in_tensor, in_tensor.numel(), in_tensor.numel(), true, false, opts.rootRank);
-  STOP_FINE(copy, in_tensor.nbytes())
-    
 }
 
 c10::intrusive_ptr<Work>
@@ -1502,7 +989,6 @@ ProcessGroupACCL::gather(std::vector<std::vector<at::Tensor>> &outputTensors,
           }
         }
 	#else
-	START_COARSE(total)    
         auto srctensor = (entry->src)[0];
         auto &dsttensors = entry->dst;
         // Segment data if necessary
@@ -1523,7 +1009,6 @@ ProcessGroupACCL::gather(std::vector<std::vector<at::Tensor>> &outputTensors,
         } else {
           run_gather(srctensor, dsttensors, opts);
         }
-	STOP_COARSE(total, ((entry->src)[0]).nbytes())    
       #endif
       };
 
@@ -1550,20 +1035,13 @@ void ProcessGroupACCL::run_scatter(std::vector<at::Tensor> &in_tensor_vec,
   std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
 
 
-  START_FINE(init)
   init_input_data_vec(in_tensor_vec, in_buf, out_tensor.options().device(c10::DeviceType::CPU), true, false, opts.rootRank);
   
-  STOP_FINE(init, out_tensor.nbytes())
-  
-  PRE_REQUEST(Scatter, out_tensor)
+  PRE_REQUEST(Scatter, out_tensor);
   
   auto req = accl->scatter(*in_buf, *out_buf, out_tensor.numel(), opts.rootRank);
 
-  POST_REQUEST("scatter", out_tensor.nbytes())
-
-  START_FINE(copy)      
   copy_back_tensor(out_tensor, out_buf, true, true, opts.rootRank);
-  STOP_FINE(copy, out_tensor.nbytes())
 }
 
 c10::intrusive_ptr<Work>
@@ -1619,7 +1097,6 @@ ProcessGroupACCL::scatter(std::vector<at::Tensor> &outputTensors,
             opts.rootRank,
             MPI_COMM_WORLD));
         #else
-	START_COARSE(total)    
         auto &srctensors = entry->src;
         auto dsttensor = (entry->dst)[0];
         // Segment data if necessary
@@ -1640,7 +1117,6 @@ ProcessGroupACCL::scatter(std::vector<at::Tensor> &outputTensors,
         } else {
           run_scatter(srctensors, dsttensor, opts);
         }
-	STOP_COARSE(total, ((entry->src)[0]).nbytes())    
         #endif
       };
 
@@ -1675,27 +1151,19 @@ void ProcessGroupACCL::run_alltoall(at::Tensor in_tensor,
                                     at::Tensor out_tensor,
                                     const AllToAllOptions &opts) {
 
-  START_FINE(init)
   init_input_tensor(in_tensor, in_buf, true, true);
-  STOP_FINE(init, in_tensor.nbytes())
 
   // Reserve device
-  START_FINE(lock)      
   c10::DeviceGuard guard(in_tensor.device());
   std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
-  STOP_FINE(lock, in_tensor.nbytes())
 
   // init_output_data(out_tensor, dstdata, out_tensor.numel(), out_tensor.scalar_type(), true, true);
 
-  PRE_REQUEST(AlltoAll, in_tensor)
+  PRE_REQUEST(AlltoAll, in_tensor);
 
   auto req = accl->alltoall(*in_buf, *out_buf, in_tensor.numel()/size_);
 
-  POST_REQUEST("alltoall", in_tensor.nbytes())
-
-  START_FINE(copy)      
   copy_back_tensor(out_tensor, out_buf, true, true);    
-  STOP_FINE(copy,  in_tensor.nbytes())
 }
 
     
@@ -1709,11 +1177,9 @@ void ProcessGroupACCL::run_alltoall_vec(std::vector<at::Tensor> &in_tensor_vec,
 
   init_input_data_vec(in_tensor_vec, in_buf, out_tensor_vec[0].options().device(c10::DeviceType::CPU), true, true);
 
-  PRE_REQUEST(AlltoAll, in_tensor_vec[0])
+  PRE_REQUEST(AlltoAll, in_tensor_vec[0]);
 
   auto req = accl->alltoall(*in_buf, *out_buf, in_tensor_vec[0].numel());
-
-  POST_REQUEST("alltoall", a2a_nbytes)
 
   copy_back_tensorvec(out_tensor_vec, out_buf, in_tensor_vec[0], in_tensor_vec[0].numel(), in_tensor_vec[0].numel(), true, true);
       
@@ -1736,7 +1202,6 @@ c10::intrusive_ptr<Work> ProcessGroupACCL::alltoall_base(
 
     std::function<void(std::unique_ptr<WorkEntry>&)> runFunc =
         [opts, this](std::unique_ptr<WorkEntry>& entry) {
-	  START_COARSE(total)    
           auto srctensor = (entry->src)[0];
           auto dsttensor = (entry->dst)[0];
 
@@ -1771,7 +1236,6 @@ c10::intrusive_ptr<Work> ProcessGroupACCL::alltoall_base(
           } else {
             run_alltoall(srctensor, dsttensor, opts);
           }
-	  STOP_COARSE(total, ((((entry->src)[0]).nbytes())))    
         };
     std::vector<at::Tensor> inputTensors = {inputTensor};
     std::vector<at::Tensor> outputTensors = {outputTensor};
@@ -1804,17 +1268,12 @@ void ProcessGroupACCL::run_send(at::Tensor in_tensor, int dstRank,
   c10::DeviceGuard guard(in_tensor.device());
   std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
 
-  START_FINE(init)
   init_input_tensor(in_tensor, in_buf, true, true);
-  STOP_FINE(init, in_tensor.nbytes())
 
-  PRE_REQUEST(Send,in_tensor)
+  PRE_REQUEST(Send,in_tensor);
   
   ACCL::ACCLRequest* req = accl->send(*in_buf, in_tensor.numel(), dstRank, tag);
 
-  POST_REQUEST("send", in_tensor.nbytes())
-
-  ACCL::debug("copy_" + std::string(x_MAKE_STRING(COLL_NAME)) + "_" + std::to_string(in_tensor.nbytes()) + " durationUs: " + std::to_string(0));
 }
 
 
@@ -1824,7 +1283,6 @@ ProcessGroupACCL::send(std::vector<at::Tensor> &tensors, int dstRank, int tag) {
 
   std::function<void(std::unique_ptr<WorkEntry> &)> runFunc =
       [dstRank, tag, this](std::unique_ptr<WorkEntry> &entry) {
-	START_COARSE(total)    
         at::Tensor &tensor = (entry->src)[0];
         // Segment data if necessary
         if (tensor.nbytes() > bufsize) {
@@ -1836,7 +1294,6 @@ ProcessGroupACCL::send(std::vector<at::Tensor> &tensors, int dstRank, int tag) {
         } else {
           run_send(tensor, dstRank, tag);
         }
-	STOP_COARSE(total, ((entry->src)[0]).nbytes())    
       };
 
   auto entry =
@@ -1851,23 +1308,14 @@ ProcessGroupACCL::send(std::vector<at::Tensor> &tensors, int dstRank, int tag) {
 void ProcessGroupACCL::run_recv(at::Tensor out_tensor, int srcRank,
                                 int tag) {
 
-  // Reserve device
-
-  ACCL::debug("init_" + std::string(x_MAKE_STRING(COLL_NAME)) + "_" + std::to_string(out_tensor.nbytes()) + " durationUs: " + std::to_string(0));  
   c10::DeviceGuard guard(out_tensor.device());
   std::unique_lock<std::mutex> globalLock(pgGlobalMutex_);
 
-  // init_output_data(out_tensor, dstdata, out_tensor.numel(), out_tensor.scalar_type(), true, true);
-
-  PRE_REQUEST(Receive, out_tensor)  
+  PRE_REQUEST(Receive, out_tensor);
   
   ACCL::ACCLRequest* req = accl->recv(*out_buf, out_tensor.numel(), srcRank, tag);
 
-  POST_REQUEST("recv", out_tensor.nbytes())
-
-  START_FINE(copy)            
   copy_back_tensor(out_tensor, out_buf, true, true);
-  STOP_FINE(copy, out_tensor.nbytes())  
 }
 
 c10::intrusive_ptr<Work>
@@ -1877,7 +1325,6 @@ ProcessGroupACCL::recv(std::vector<at::Tensor> &tensors, int srcRank, int tag) {
   std::function<void(std::unique_ptr<WorkEntry> &)> runFunc =
       [srcRank, tag, this](std::unique_ptr<WorkEntry> &entry) {
         const at::Tensor &tensor = (entry->dst)[0];
-	START_COARSE(total)    
         // Segment data if necessary
         if (tensor.nbytes() > bufsize) {
           size_t n = bufsize / tensor.itemsize();
@@ -1888,7 +1335,6 @@ ProcessGroupACCL::recv(std::vector<at::Tensor> &tensors, int srcRank, int tag) {
         } else {
           run_recv(tensor, srcRank, tag);
         }
-	STOP_COARSE(total, ((entry->src)[0]).nbytes())    
       };
 
   auto entry =
