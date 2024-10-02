@@ -17,7 +17,6 @@
 
 set command [lindex $argv 0]
 set device [lindex $argv 1]
-set stack [lindex $argv 2]
 
 set do_sim 0
 set do_syn 0
@@ -52,19 +51,15 @@ switch $command {
 }
 
 
-open_project build_cyt_dma_adapter.${device}
+open_project build_cclo_sq_adapter.${device}
 
-if {$stack eq "RDMA"} {
-    add_files cyt_dma_adapter.cpp -cflags "-std=c++14 -I. -I../../../driver/hls/ -DACCL_SYNTHESIS -DACCL_RDMA"
-} else {
-    add_files cyt_dma_adapter.cpp -cflags "-std=c++14 -I. -I../../../driver/hls/ -DACCL_SYNTHESIS"
-}
+add_files cclo_sq_adapter.cpp -cflags "-std=c++14 -I. -I../../cclo/hls/eth_intf -I../../../driver/hls/ -DACCL_SYNTHESIS"
 
 
-set_top cyt_dma_adapter
+set_top cclo_sq_adapter
 
 open_solution sol1
-config_export -format xo -library ACCL -output [pwd]/cyt_dma_adapter_$device.xo
+config_export -format xo -library ACCL -output [pwd]/cclo_sq_adapter_${device}.xo
 
 if {$do_sim} {
     csim_design -clean

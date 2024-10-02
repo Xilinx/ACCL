@@ -16,8 +16,8 @@
 #
 # *******************************************************************************/
 
-PERIPHERAL_IPS = hostctrl loopback reduce_ops hp_compression dummy_tcp_stack client_arbiter vadd_put cyt_adapter external_dma dummy_cyt_rdma_stack dummy_cyt_dma tcp_session_handler
-DEVICE=xcu280-fsvh2892-2L-e
+PERIPHERAL_IPS = hostctrl loopback reduce_ops hp_compression dummy_tcp_stack client_arbiter vadd_put cyt_adapter external_dma tcp_session_handler
+DEVICE=xcu55c-fsvh2892-2L-e
 TARGET=ip
 
 all: $(PERIPHERAL_IPS)

@@ -20,9 +20,9 @@
 #include "acclrequest.hpp"
 #include "cclo.hpp"
 #include "constants.hpp"
-#include "cProcess.hpp"
-#include "ibvQpConn.hpp"
-#include "ibvStructs.hpp"
+#include "cThread.hpp"
+// #include "ibvQpConn.hpp"
+// #include "ibvStructs.hpp"
 #include <string>
 #include <iostream>
 #include <fstream>
@@ -108,7 +108,7 @@ public:
 
   void printDebug() override;
 
-  fpga::cProcess* get_device(){
+  fpga::cThread<std::any>* get_device(){
     return coyote_proc;
   }
 
@@ -120,13 +120,13 @@ public:
 
   val_t get_retcode(ACCLRequest *request) override;
 
-  fpga::cProcess* coyote_proc;
+  fpga::cThread<std::any>* coyote_proc;
 
   // RDMA related 
   // RDMA requires multiple processes to establish queue pairs
   // The CCLO kernel is still managed by coyote_proc
   unsigned int num_qp;
-  std::vector<fpga::cProcess*> coyote_qProc_vec;
+  std::vector<fpga::cThread<std::any>*> coyote_qProc_vec;
 private:
   const size_t OFFSET_CCLO = 0x0; 
 

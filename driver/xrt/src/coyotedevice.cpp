@@ -18,7 +18,7 @@
 
 #include "accl/coyotedevice.hpp"
 #include "accl/common.hpp"
-#include "cProcess.hpp"
+#include "cThread.hpp"
 #include <future>
 #include <iomanip>
 
@@ -276,28 +276,28 @@ void CoyoteRequest::wait_kernel() {
 }
 
 CoyoteDevice::CoyoteDevice(): num_qp(0) {
-  this->coyote_proc = new fpga::cProcess(targetRegion, getpid());
-	std::cerr << "ACLL DEBUG: aquiring cProc: targetRegion: " << targetRegion << ", cPid: " << coyote_proc->getCpid() << std::endl;
+  this->coyote_proc = new fpga::cThread<std::any>(targetRegion, getpid(), 0);
+	std::cerr << "ACLL DEBUG: aquiring cProc: targetRegion: " << targetRegion << ", cPid: " << coyote_proc->getCtid() << std::endl;
 }
 
 CoyoteDevice::CoyoteDevice(unsigned int num_qp): num_qp(num_qp) {
 
   for (unsigned int i=0; i<(num_qp+1); i++)
   {
-    fpga::cProcess* cproc = new fpga::cProcess(targetRegion, getpid());
+    fpga::cThread<std::any>* cproc = new fpga::cThread<std::any>(targetRegion, getpid(), 0);
     coyote_qProc_vec.push_back(cproc);
   }
 
   for (unsigned int i=0; i<coyote_qProc_vec.size(); i++){
-    if(coyote_qProc_vec[i]->getCpid() == 0){
+    if(coyote_qProc_vec[i]->getCtid() == 0){
       this->coyote_proc = coyote_qProc_vec[i];
-      std::cerr << "ACLL DEBUG: aquiring cProc: targetRegion: " << targetRegion << ", cPid: " << coyote_proc->getCpid() << std::endl;
+      std::cerr << "ACLL DEBUG: aquiring cProc: targetRegion: " << targetRegion << ", cPid: " << coyote_proc->getCtid() << std::endl;
       coyote_qProc_vec.erase(coyote_qProc_vec.begin() + i);
       break;
     }
   }
 
-  if(coyote_proc == NULL || coyote_proc->getCpid() != 0){
+  if(coyote_proc == NULL || coyote_proc->getCtid() != 0){
     std::cerr << "cProc initialization error!"<<std::endl;
     for(unsigned int i = 0; i < coyote_qProc_vec.size(); i++) {
       if(coyote_qProc_vec[i] != nullptr) {
@@ -308,7 +308,7 @@ CoyoteDevice::CoyoteDevice(unsigned int num_qp): num_qp(num_qp) {
   }
 
   for (unsigned int i=0; i<coyote_qProc_vec.size(); i++){
-    std::cerr << "ACLL DEBUG: aquiring qProc: targetRegion: " << targetRegion << ", cPid: " << coyote_qProc_vec[i]->getCpid() << std::endl;
+    std::cerr << "ACLL DEBUG: aquiring qProc: targetRegion: " << targetRegion << ", cPid: " << coyote_qProc_vec[i]->getCtid() << std::endl;
   }
 
 }
@@ -369,7 +369,7 @@ CCLO::deviceType CoyoteDevice::get_device_type()
 void CoyoteDevice::printDebug(){
   coyote_proc->printDebug();
 
-  std::ifstream inputFile("/sys/kernel/coyote_cnfg/cyt_attr_nstats_q0");  
+  std::ifstream inputFile("/sys/kernel/coyote_sysfs_0/cyt_attr_nstats");  
 
   if (!inputFile.is_open()) {
       std::cerr << "Failed to open net sts file." << std::endl;
