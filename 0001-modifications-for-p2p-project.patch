@@ -1,0 +1,167 @@
+From 77b54184a72bbf4d9495213b24cb0ae0090065cd Mon Sep 17 00:00:00 2001
+From: GiuseppeSorrentino99 <giuseppe.sorrentino@polimi.it>
+Date: Fri, 22 Mar 2024 16:02:42 +0000
+Subject: [PATCH 1/2] modifications for p2p project
+
+---
+ src/core/inc/runtime.h             | 10 ++++++++--
+ src/core/runtime/amd_gpu_agent.cpp | 23 ++++++++++++++++-------
+ src/core/runtime/runtime.cpp       | 17 +++++++++++++----
+ 3 files changed, 37 insertions(+), 13 deletions(-)
+
+diff --git a/src/core/inc/runtime.h b/src/core/inc/runtime.h
+index e7f856b..47f0978 100644
+--- a/src/core/inc/runtime.h
++++ b/src/core/inc/runtime.h
+@@ -88,7 +88,7 @@
+ #define HSA_ARGUMENT_ALIGN_BYTES 16
+ #define HSA_QUEUE_ALIGN_BYTES 64
+ #define HSA_PACKET_ALIGN_BYTES 64
+-
++#define HSA_MAX_GPUS 10
+ //Avoids include
+ namespace rocr {
+ namespace AMD {
+@@ -112,6 +112,8 @@ extern bool g_use_mwaitx;
+ class Runtime {
+  friend class AMD::MemoryRegion;
+  public:
++ int count_gpu=0; 
++
+   /// @brief Structure to describe connectivity between agents.
+   struct LinkInfo {
+     LinkInfo() : num_hop(0), info{0} {}
+@@ -125,7 +127,7 @@ class Runtime {
+     bool supports_exception_debugging;
+     bool supports_event_age;
+   };
+-
++  
+   /// @brief Open connection to kernel driver and increment reference count.
+   static hsa_status_t Acquire();
+ 
+@@ -403,6 +405,8 @@ class Runtime {
+ 
+   Agent* region_gpu() { return region_gpu_; }
+ 
++  Agent** region_gpu_array() { return region_gpu_array_; }
++
+   const std::vector<const MemoryRegion*>& system_regions_fine() const {
+     return system_regions_fine_;
+   }
+@@ -661,6 +665,8 @@ class Runtime {
+   // Deprecated HSA Region API GPU (for legacy APU support only)
+   Agent* region_gpu_;
+ 
++  Agent* region_gpu_array_[HSA_MAX_GPUS];
++
+   AsyncEventsControl async_events_control_;
+ 
+   AsyncEvents async_events_;
+diff --git a/src/core/runtime/amd_gpu_agent.cpp b/src/core/runtime/amd_gpu_agent.cpp
+index f5d276f..07d0bfb 100644
+--- a/src/core/runtime/amd_gpu_agent.cpp
++++ b/src/core/runtime/amd_gpu_agent.cpp
+@@ -446,7 +446,7 @@ void GpuAgent::InitRegionList() {
+               new MemoryRegion(false, false, false, false, this, mem_props[mem_idx]);
+ 
+           regions_.push_back(region);
+-
++          
+           if (region->IsLocalMemory()) {
+             regions_.push_back(
+                 new MemoryRegion(false, false, false, true, this, mem_props[mem_idx]));
+@@ -600,13 +600,22 @@ hsa_status_t GpuAgent::VisitRegion(bool include_peer,
+                                    void* data) const {
+   if (include_peer) {
+     // Only expose system, local, and LDS memory of the blit agent.
+-    if (this->node_id() == core::Runtime::runtime_singleton_->region_gpu()->node_id()) {
+-      hsa_status_t stat = VisitRegion(regions_, callback, data);
+-      if (stat != HSA_STATUS_SUCCESS) {
+-        return stat;
++    //if (this->node_id() == core::Runtime::runtime_singleton_->region_gpu()->node_id()) {
++    //  hsa_status_t stat = VisitRegion(regions_, callback, data);
++    //  if (stat != HSA_STATUS_SUCCESS) {
++    //    return stat;
++    //  }
++    //}
++    auto* region_gpus = core::Runtime::runtime_singleton_->region_gpu_array();
++    for (int j = 0; j < core::Runtime::runtime_singleton_->count_gpu; j++)
++     {   
++      if (this->node_id() == region_gpus[j]->node_id()) { 
++        hsa_status_t stat2 = VisitRegion(regions_, callback, data);
++        if (stat2 != HSA_STATUS_SUCCESS) {
++          return stat2;
++        }
+       }
+-    }
+-
++     }
+     // Also expose system regions accessible by this agent.
+     hsa_status_t stat =
+         VisitRegion(core::Runtime::runtime_singleton_->system_regions_fine(),
+diff --git a/src/core/runtime/runtime.cpp b/src/core/runtime/runtime.cpp
+index 0def322..1ab7707 100644
+--- a/src/core/runtime/runtime.cpp
++++ b/src/core/runtime/runtime.cpp
+@@ -157,14 +157,14 @@ bool Runtime::IsOpen() {
+ void Runtime::RegisterAgent(Agent* agent, bool Enabled) {
+   // Record the agent in the node-to-agent reverse lookup table.
+   agents_by_node_[agent->node_id()].push_back(agent);
+-
++  
+   // Process agent as a cpu or gpu device.
+   if (agent->device_type() == Agent::DeviceType::kAmdCpuDevice) {
+     cpu_agents_.push_back(agent);
+ 
+     agents_by_gpuid_[0] = agent;
+ 
+-    // Add cpu regions to the system region list.
++     // Add cpu regions to the system region list.
+     for (const core::MemoryRegion* region : agent->regions()) {
+       if (region->fine_grain()) {
+         system_regions_fine_.push_back(region);
+@@ -206,12 +206,16 @@ void Runtime::RegisterAgent(Agent* agent, bool Enabled) {
+     }
+   } else if (agent->device_type() == Agent::DeviceType::kAmdGpuDevice) {
+     if (Enabled) {
++      count_gpu ++;
++      if(count_gpu >= HSA_MAX_GPUS)
++          throw std::runtime_error("Too many GPUs, change the HSA_MAX_GPUS constant in runtime.cpp");
+       gpu_agents_.push_back(agent);
+       gpu_ids_.push_back(agent->node_id());
+       agents_by_gpuid_[((AMD::GpuAgent*)agent)->KfdGpuID()] = agent;
+ 
+       // Assign the first discovered gpu agent as region gpu.
+       if (region_gpu_ == NULL) region_gpu_ = agent;
++      region_gpu_array_[count_gpu -1] = agent;
+     } else {
+       disabled_gpu_agents_.push_back(agent);
+     }
+@@ -234,6 +238,11 @@ void Runtime::DestroyAgents() {
+ 
+   region_gpu_ = NULL;
+ 
++  for(int k = 0; k < count_gpu; k++){
++    region_gpu_array_[k] = NULL;
++
++  }
++  count_gpu = 0;
+   system_regions_fine_.clear();
+   system_regions_coarse_.clear();
+ }
+@@ -1481,9 +1490,9 @@ void Runtime::PrintMemoryMapNear(void* ptr) {
+     it++;
+   }
+ }
+-
+ Runtime::Runtime()
+-    : region_gpu_(nullptr),
++    : region_gpu_array_({}),
++      region_gpu_(nullptr),
+       sys_clock_freq_(0),
+       vm_fault_event_(nullptr),
+       vm_fault_signal_(nullptr),
+-- 
+2.34.1
+
