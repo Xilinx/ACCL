@@ -19,8 +19,22 @@ See [INSTALL.md](INSTALL.md) to learn how to build ACCL-enabled designs and inte
 To use ACCL from Python, refer to [PyACCL](https://github.com/Xilinx/pyaccl).
 
 ## Citation
-If you use our work or would like to cite it in your own, please use the following citation:
+If you use our work or would like to cite it in your own, please cite one of our papers:
 
+```
+@INPROCEEDINGS{298689,
+  author = {Zhenhao He and Dario Korolija and Yu Zhu and Benjamin Ramhorst and Tristan Laan and Lucian Petrica and Michaela Blott and Gustavo Alonso},
+  title = {{ACCL+}: an {FPGA-Based} Collective Engine for Distributed Applications},
+  booktitle = {18th USENIX Symposium on Operating Systems Design and Implementation (OSDI 24)},
+  year = {2024},
+  isbn = {978-1-939133-40-3},
+  address = {Santa Clara, CA},
+  pages = {211--231},
+  url = {https://www.usenix.org/conference/osdi24/presentation/he},
+  publisher = {USENIX Association},
+  month = jul
+}
+```
 ```
 @INPROCEEDINGS{9651265,
   author={He, Zhenhao and Parravicini, Daniele and Petrica, Lucian and O’Brien, Kenneth and Alonso, Gustavo and Blott, Michaela},
