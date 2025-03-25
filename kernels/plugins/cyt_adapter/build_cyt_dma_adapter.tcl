@@ -52,7 +52,7 @@ switch $command {
 }
 
 
-open_project build_cyt_dma_adapter
+open_project build_cyt_dma_adapter.${device}
 
 if {$stack eq "RDMA"} {
     add_files cyt_dma_adapter.cpp -cflags "-std=c++14 -I. -I../../../driver/hls/ -DACCL_SYNTHESIS -DACCL_RDMA"
@@ -64,7 +64,7 @@ if {$stack eq "RDMA"} {
 set_top cyt_dma_adapter
 
 open_solution sol1
-config_export -format xo -library ACCL -output [pwd]/cyt_dma_adapter.xo
+config_export -format xo -library ACCL -output [pwd]/cyt_dma_adapter_$device.xo
 
 if {$do_sim} {
     csim_design -clean

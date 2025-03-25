@@ -54,16 +54,18 @@ using namespace hlslib;
 
 Log logger;
 
-void dma_read(vector<char> &mem, Stream<ap_axiu<104,0,0,DEST_WIDTH> > &cmd, Stream<ap_uint<32> > &sts, Stream<stream_word > &rdata){
-    axi::Command<64, 23> command = axi::Command<64, 23>(cmd.Pop().data);
+void dma_read(vector<char> &dmem, vector<char> &hmem, Stream<ap_axiu<104,0,0,DEST_WIDTH> > &cmd, Stream<ap_uint<32> > &sts, Stream<stream_word > &rdata){
+    ap_axiu<104,0,0,DEST_WIDTH> cmd_word = cmd.Pop();
+    axi::Command<64, 23> command = axi::Command<64, 23>(cmd_word.data);
+    bool host = (cmd_word.dest == 1);
     axi::Status status;
     stream_word tmp;
-    logger << log_level::verbose << "DMA Read: Command popped. length: " << command.length << " offset: " << command.address << " EOF: " << command.eof << endl;
+    logger << log_level::verbose << "DMA " << (host ? "host" : "device") << " read: Command popped. length: " << command.length << " offset: " << command.address << " EOF: " << command.eof << endl;
     int byte_count = 0;
     while(byte_count < command.length){
         tmp.keep = 0;
         for(int i=0; i<64 && byte_count < command.length; i++){
-            tmp.data(8*(i+1)-1, 8*i) = mem.at(command.address+byte_count);
+            tmp.data(8*(i+1)-1, 8*i) = host ? hmem.at(command.address+byte_count) : dmem.at(command.address+byte_count);
             tmp.keep(i,i) = 1;
             byte_count++;
         }
@@ -76,17 +78,23 @@ void dma_read(vector<char> &mem, Stream<ap_axiu<104,0,0,DEST_WIDTH> > &cmd, Stre
     logger("DMA Read: Status pushed\n", log_level::verbose);
 }
 
-void dma_write(vector<char> &mem, Stream<ap_axiu<104,0,0,DEST_WIDTH> > &cmd, Stream<ap_uint<32> > &sts, Stream<stream_word > &wdata){
-    axi::Command<64, 23> command = axi::Command<64, 23>(cmd.Pop().data);
+void dma_write(vector<char> &dmem, vector<char> &hmem, Stream<ap_axiu<104,0,0,DEST_WIDTH> > &cmd, Stream<ap_uint<32> > &sts, Stream<stream_word > &wdata){
+    ap_axiu<104,0,0,DEST_WIDTH> cmd_word = cmd.Pop();
+    axi::Command<64, 23> command = axi::Command<64, 23>(cmd_word.data);
+    bool host = (cmd_word.dest == 1);
     axi::Status status;
     stream_word tmp;
-    logger << log_level::verbose << "DMA Write: Command popped. length: " << command.length << " offset: " << command.address << " EOF: " << command.eof << endl;
+    logger << log_level::verbose << "DMA " << (host ? "host" : "device") << " write: Command popped. length: " << command.length << " offset: " << command.address << " EOF: " << command.eof << endl;
     int byte_count = 0;
     while(byte_count<command.length){
         tmp = wdata.Pop();
         for(int i=0; i<64; i++){
             if(tmp.keep(i,i) == 1){
-                mem.at(command.address+byte_count) = tmp.data(8*(i+1)-1, 8*i);
+                if(host){
+                    hmem.at(command.address+byte_count) = tmp.data(8*(i+1)-1, 8*i);
+                } else {
+                    dmem.at(command.address+byte_count) = tmp.data(8*(i+1)-1, 8*i);
+                }
                 byte_count++;
             }
         }
@@ -263,7 +271,7 @@ void sim_bd(zmq_intf_context *ctx, string comm_backend, unsigned int local_rank,
     bool use_tcp = !comm_backend.compare("tcp");
     bool use_cyt_rdma = !comm_backend.compare("cyt_rdma");
 
-    vector<char> devicemem;
+    vector<char> devicemem, hostmem;
 
     Stream<ap_uint<32>, 32> host_cmd("host_cmd");
     Stream<ap_uint<32>, 32> host_sts("host_sts");
@@ -343,14 +351,56 @@ void sim_bd(zmq_intf_context *ctx, string comm_backend, unsigned int local_rank,
 
     unsigned int max_words_per_pkt = (use_cyt_rdma ? 4096 : MAX_PACKETSIZE)/DATAPATH_WIDTH_BYTES;
 
+    SetName(cmd_fifos[CMD_CALL_RETRY], "cmd_call_retry");
+    SetName(sts_fifos[STS_CALL_RETRY], "sts_call_retry");
+    SetName(cmd_fifos[CMD_DMA_MOVE], "cmd_dma_move");
+    SetName(sts_fifos[STS_DMA_MOVE], "sts_dma_move");
+    SetName(cmd_fifos[CMD_RNDZV], "cmd_rndzv");
+    SetName(sts_fifos[STS_RNDZV], "sts_rndzv");
+    SetName(cmd_fifos[CMD_RNDZV_PENDING], "cmd_rndzv_pending");
+    SetName(sts_fifos[STS_RNDZV_PENDING], "sts_rndzv_pending");
+    SetName(cmd_fifos[CMD_CALL], "cmd_call");
+    SetName(sts_fifos[STS_CALL], "sts_call");
+
+    SetName(dma_write_cmd_int[1], "dma_write_cmd_int_0");
+    SetName(dma_write_cmd_int[0], "dma_write_cmd_int_1");
+    SetName(dma_read_cmd_int[1], "dma_read_cmd_int_0");
+    SetName(dma_read_cmd_int[0], "dma_read_cmd_int_1");
+    SetName(dma_write_sts_int[1], "dma_write_sts_int_0");
+    SetName(dma_write_sts_int[0], "dma_write_sts_int_1");
+    SetName(dma_read_sts_int[1], "dma_read_sts_int_0");
+    SetName(dma_read_sts_int[0], "dma_read_sts_int_1");
+    SetName(dma_read_data[1], "dma_read_data_0");
+    SetName(dma_read_data[0], "dma_read_data_1");
+
+    SetName(switch_s[7], "switch_s_7");
+    SetName(switch_s[6], "switch_s_6");
+    SetName(switch_s[5], "switch_s_5");
+    SetName(switch_s[4], "switch_s_4");
+    SetName(switch_s[3], "switch_s_3");
+    SetName(switch_s[2], "switch_s_2");
+    SetName(switch_s[1], "switch_s_1");
+    SetName(switch_s[0], "switch_s_0");
+
+    SetName(switch_m[9], "switch_m_9");
+    SetName(switch_m[8], "switch_m_8");
+    SetName(switch_m[7], "switch_m_7");
+    SetName(switch_m[6], "switch_m_6");
+    SetName(switch_m[5], "switch_m_5");
+    SetName(switch_m[4], "switch_m_4");
+    SetName(switch_m[3], "switch_m_3");
+    SetName(switch_m[2], "switch_m_2");
+    SetName(switch_m[1], "switch_m_1");
+    SetName(switch_m[0], "switch_m_0");
+
     // Dataflow functions running in parallel
     HLSLIB_DATAFLOW_INIT();
     //DMA0
-    HLSLIB_FREERUNNING_FUNCTION(dma_write, devicemem, dma_write_cmd_int[0], dma_write_sts_int[0], switch_m[SWITCH_M_DMA0_WRITE]);
-    HLSLIB_FREERUNNING_FUNCTION(dma_read, devicemem, dma_read_cmd_int[0], dma_read_sts_int[0], dma_read_data[0]);
+    HLSLIB_FREERUNNING_FUNCTION(dma_write, devicemem, hostmem, dma_write_cmd_int[0], dma_write_sts_int[0], switch_m[SWITCH_M_DMA0_WRITE]);
+    HLSLIB_FREERUNNING_FUNCTION(dma_read, devicemem, hostmem, dma_read_cmd_int[0], dma_read_sts_int[0], dma_read_data[0]);
     //DMA1
-    HLSLIB_FREERUNNING_FUNCTION(dma_write, devicemem, dma_write_cmd_int[1], dma_write_sts_int[1], switch_m[SWITCH_M_DMA1_WRITE]);
-    HLSLIB_FREERUNNING_FUNCTION(dma_read, devicemem, dma_read_cmd_int[1], dma_read_sts_int[1], dma_read_data[1]);
+    HLSLIB_FREERUNNING_FUNCTION(dma_write, devicemem, hostmem, dma_write_cmd_int[1], dma_write_sts_int[1], switch_m[SWITCH_M_DMA1_WRITE]);
+    HLSLIB_FREERUNNING_FUNCTION(dma_read, devicemem, hostmem, dma_read_cmd_int[1], dma_read_sts_int[1], dma_read_data[1]);
     //RX buffer handling offload
     HLSLIB_FREERUNNING_FUNCTION(rxbuf_enqueue, enq2sess_dma_cmd, inflight_rxbuf, cfgmem);
     HLSLIB_FREERUNNING_FUNCTION(rxbuf_dequeue, sess2deq_dma_sts, eth_rx_sts_sess, inflight_rxbuf_sess, eth_rx_notif, cfgmem);
@@ -423,7 +473,7 @@ void sim_bd(zmq_intf_context *ctx, string comm_backend, unsigned int local_rank,
             rdma_wr_data, rdma_wr_cmd, rdma_wr_sts,
             eth_rx_data, eth_tx_data
         );
-        HLSLIB_FREERUNNING_FUNCTION(dma_write, devicemem, rdma_wr_cmd, rdma_wr_sts, rdma_wr_data);
+        HLSLIB_FREERUNNING_FUNCTION(dma_write, devicemem, hostmem, rdma_wr_cmd, rdma_wr_sts, rdma_wr_data);
     } else{
         HLSLIB_FREERUNNING_FUNCTION(udp_packetizer, switch_m[SWITCH_M_ETH_TX], eth_tx_data, eth_tx_cmd, eth_tx_sts, max_words_per_pkt);
         HLSLIB_FREERUNNING_FUNCTION(udp_depacketizer, eth_rx_data, switch_s[SWITCH_S_ETH_RX], eth_rx_sts, eth_notif_out_dpkt);
@@ -440,7 +490,7 @@ void sim_bd(zmq_intf_context *ctx, string comm_backend, unsigned int local_rank,
     HLSLIB_FREERUNNING_FUNCTION(client_arbiter, callreq_arb_host, callack_arb_host, callreq_arb[2], callack_arb[2], sts_fifos[CMD_CALL], cmd_fifos[STS_CALL]);
 
     //ZMQ to host process
-    HLSLIB_FREERUNNING_FUNCTION(serve_zmq, ctx, cfgmem, devicemem, callreq_fifos, callack_fifos);
+    HLSLIB_FREERUNNING_FUNCTION(serve_zmq, ctx, cfgmem, devicemem, hostmem, callreq_fifos, callack_fifos);
     //ZMQ to other nodes process(es)
     HLSLIB_FREERUNNING_FUNCTION(eth_endpoint_egress_port, ctx, eth_tx_data, local_rank);
     HLSLIB_FREERUNNING_FUNCTION(eth_endpoint_ingress_port, ctx, eth_rx_data);

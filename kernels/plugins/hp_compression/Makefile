@@ -17,7 +17,7 @@
 
 TARGET=ip
 DEVICE=xcu250-figd2104-2L-e
-REDUCE_IP=hp_compression.xo
+REDUCE_IP=hp_compression_$(DEVICE).xo
 
 all: $(REDUCE_IP)
 

@@ -15,6 +15,7 @@
 #
 *******************************************************************************/
 #include <fstream>
+#include <algorithm>
 #include <json/json.h>
 
 #ifdef ACCL_NETWORK_UTILS_MPI
@@ -191,9 +192,9 @@ void configure_vnx(vnx::CMAC &cmac, vnx::Networklayer &network_layer,
   }
 }
 
-void configure_tcp(FPGABuffer<int8_t> &tx_buf_network, FPGABuffer<int8_t> &rx_buf_network,
+void configure_tcp(XRTBuffer<int8_t> &tx_buf_network, XRTBuffer<int8_t> &rx_buf_network,
                    xrt::kernel &network_krnl, xrt::kernel &session_krnl,
-                   const std::vector<rank_t> &ranks, int local_rank) {
+                   std::vector<rank_t> &ranks, int local_rank) {
   tx_buf_network.sync_to_device();
   rx_buf_network.sync_to_device();
 
@@ -211,26 +212,184 @@ void configure_tcp(FPGABuffer<int8_t> &tx_buf_network, FPGABuffer<int8_t> &rx_bu
      << std::dec << std::endl;
   log_debug(ss.str());
 
-  //set up sessions for ranks
-  for(size_t i = 0; i < ranks.size(); ++i){
-    bool success;
-    if (i == static_cast<size_t>(local_rank)) {
-      continue;
+  MPI_Barrier(MPI_COMM_WORLD);
+
+  // Set up ports for each [other] rank on each rank
+  for (int i = 0; i < ranks.size(); i++) {
+    uint8_t tmp_ret_code = 0;
+    uint16_t tmp_session_id = static_cast<uint16_t>(ranks[i].session_id);
+    xrt::run run = session_krnl(
+      static_cast<uint32_t>(ip_encode(ranks[i].ip)), 
+      static_cast<uint16_t>(ranks[i].port), 
+      &tmp_session_id, 
+      &tmp_ret_code,
+      tcpSessionHandlerOperation::OPEN_PORT
+    );
+    run.wait();
+    uint8_t ret_code = session_krnl.read_register(0x30);
+    if(!ret_code){
+      throw std::runtime_error(
+        "Failed to open port: " + std::to_string(ranks[i].port) + 
+        " from local rank: " + std::to_string(local_rank)
+      );
+    } else {
+      std::cout << "Successfully opened port: " << std::to_string(ranks[i].port) << 
+        " from local rank: " << std::to_string(local_rank) << std::endl;
     }
-    session_krnl(ranks[i].ip, ranks[i].port, false, 	
-                  &(ranks[i].session_id), &success);
-    if(!success){
-      throw std::runtime_error("Failed to establish session for IP:"+
-                                ranks[i].ip+
-                                " port: "+
-                                std::to_string(ranks[i].port));
-    }
-    std::ostringstream ss;
-    ss << "Established session ID: " << ranks[i].session_id << std::endl;
-    log_debug(ss.str());
   }
 
+  MPI_Barrier(MPI_COMM_WORLD);
+
+  // Open TCP connections
+  for (int i = 0; i < ranks.size(); i++) {
+    if (i == local_rank) continue;
+    uint8_t tmp_ret_code = 0;
+    uint16_t tmp_session_id = static_cast<uint16_t>(ranks[i].session_id);
+    xrt::run run = session_krnl(
+      static_cast<uint32_t>(ip_encode(ranks[i].ip)), 
+      static_cast<uint16_t>(ranks[i].port),
+      &tmp_session_id, 
+      &tmp_ret_code,
+      tcpSessionHandlerOperation::OPEN_CONNECTION
+    );
+    run.wait();
+    uint8_t ret_code = session_krnl.read_register(0x30);
+    uint8_t updated_sesion = session_krnl.read_register(0x28);
+    if(!ret_code){
+      throw std::runtime_error(
+        "Failed to establish session for IP: " + ranks[i].ip +
+        " port: "+ std::to_string(ranks[i].port) + 
+        " from local rank: " + std::to_string(local_rank)
+      );
+    } else {
+      std::cout << "Successfully opened session: " << updated_sesion << 
+        "with IP address: " << std::to_string(ranks[i].port) << 
+        " from local rank: " << std::to_string(local_rank) << std::endl;
+    }
+  }
 }
+
+void exchange_qp(unsigned int master_rank, unsigned int slave_rank, unsigned int local_rank, std::vector<fpga::ibvQpConn*> &ibvQpConn_vec, std::vector<ACCL::rank_t> &ranks){
+  	
+	if (local_rank == master_rank)
+	{
+		std::cout<<"Local rank "<<local_rank<<" sending local QP to remote rank "<<slave_rank<<std::endl;
+		// Send the local queue pair information to the slave rank
+		MPI_Send(&(ibvQpConn_vec[slave_rank]->getQpairStruct()->local), sizeof(fpga::ibvQ), MPI_CHAR, slave_rank, 0, MPI_COMM_WORLD);
+	}
+	else if (local_rank == slave_rank)
+	{
+		std::cout<<"Local rank "<<local_rank<<" receiving remote QP from remote rank "<<master_rank<<std::endl;
+		// Receive the queue pair information from the master rank
+		fpga::ibvQ received_q;
+		MPI_Recv(&received_q, sizeof(fpga::ibvQ), MPI_CHAR, master_rank, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+		// Copy the received data to the remote queue pair
+		ibvQpConn_vec[master_rank]->getQpairStruct()->remote = received_q;
+	}
+
+	// Synchronize after the first exchange to avoid race conditions
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	if (local_rank == slave_rank)
+	{
+		std::cout<<"Local rank "<<local_rank<<" sending local QP to remote rank "<<master_rank<<std::endl;
+		// Send the local queue pair information to the master rank
+		MPI_Send(&(ibvQpConn_vec[master_rank]->getQpairStruct()->local), sizeof(fpga::ibvQ), MPI_CHAR, master_rank, 0, MPI_COMM_WORLD);
+	}
+	else if (local_rank == master_rank)
+	{
+		std::cout<<"Local rank "<<local_rank<<" receiving remote QP from remote rank "<<slave_rank<<std::endl;
+		// Receive the queue pair information from the slave rank
+		fpga::ibvQ received_q;
+		MPI_Recv(&received_q, sizeof(fpga::ibvQ), MPI_CHAR, slave_rank, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+		// Copy the received data to the remote queue pair
+		ibvQpConn_vec[slave_rank]->getQpairStruct()->remote = received_q;
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	// write established connection to hardware and perform arp lookup
+	if (local_rank == master_rank)
+	{
+		int connection = (ibvQpConn_vec[slave_rank]->getQpairStruct()->local.qpn & 0xFFFF) | ((ibvQpConn_vec[slave_rank]->getQpairStruct()->remote.qpn & 0xFFFF) << 16);
+		ibvQpConn_vec[slave_rank]->getQpairStruct()->print();
+		ibvQpConn_vec[slave_rank]->setConnection(connection);
+		ibvQpConn_vec[slave_rank]->writeContext(ranks[slave_rank].port);
+		ibvQpConn_vec[slave_rank]->doArpLookup();
+		ranks[slave_rank].session_id = ibvQpConn_vec[slave_rank]->getQpairStruct()->local.qpn;
+	} else if (local_rank == slave_rank) 
+	{
+		int connection = (ibvQpConn_vec[master_rank]->getQpairStruct()->local.qpn & 0xFFFF) | ((ibvQpConn_vec[master_rank]->getQpairStruct()->remote.qpn & 0xFFFF) << 16);
+		ibvQpConn_vec[master_rank]->getQpairStruct()->print();
+		ibvQpConn_vec[master_rank]->setConnection(connection);
+		ibvQpConn_vec[master_rank]->writeContext(ranks[master_rank].port);
+		ibvQpConn_vec[master_rank]->doArpLookup();
+		ranks[master_rank].session_id = ibvQpConn_vec[master_rank]->getQpairStruct()->local.qpn;
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+}
+
+void configure_cyt_rdma(std::vector<ACCL::rank_t> &ranks, int local_rank, ACCL::CoyoteDevice* device){
+
+	std::cout<<"Initializing QP connections..."<<std::endl;
+	// create queue pair connections
+	std::vector<fpga::ibvQpConn*> ibvQpConn_vec;
+	// create single page dummy memory space for each qp
+	uint32_t n_pages = 1;
+	for(int i=0; i<ranks.size(); i++)
+	{
+		fpga::ibvQpConn* qpConn = new fpga::ibvQpConn(device->coyote_qProc_vec[i], ranks[local_rank].ip, n_pages);
+		ibvQpConn_vec.push_back(qpConn);
+		// qpConn->getQpairStruct()->print();
+	}
+
+	std::cout<<"Exchanging QP..."<<std::endl;
+	for(int i=0; i<ranks.size(); i++)
+	{
+		for(int j=i+1; j<ranks.size();j++)
+		{
+			exchange_qp(i, j, local_rank, ibvQpConn_vec, ranks);
+		}
+	}
+}
+
+void configure_cyt_tcp(std::vector<ACCL::rank_t> &ranks, int local_rank, ACCL::CoyoteDevice* device){
+	std::cout<<"Configuring Coyote TCP..."<<std::endl;
+	// arp lookup
+    for(int i=0; i<ranks.size(); i++){
+        if(local_rank != i){
+            device->get_device()->doArpLookup(ip_encode(ranks[i].ip));
+        }
+    }
+
+	//open port 
+    for (int i=0; i<ranks.size(); i++)
+    {
+        uint32_t dstPort = ranks[i].port;
+        bool open_port_status = device->get_device()->tcpOpenPort(dstPort);
+    }
+
+	std::this_thread::sleep_for(10ms);
+
+	//open con
+    for (int i=0; i<ranks.size(); i++)
+    {
+        uint32_t dstPort = ranks[i].port;
+        uint32_t dstIp = ip_encode(ranks[i].ip);
+        uint32_t dstRank = i;
+		uint32_t session = 0;
+        if (local_rank != dstRank)
+        {
+            bool success = device->get_device()->tcpOpenCon(dstIp, dstPort, &session);
+			ranks[i].session_id = session;
+        }
+    }
+
+}
+
 
 std::vector<std::string> get_ips(fs::path config_file) {
   std::vector<std::string> ips{};
@@ -290,15 +449,17 @@ std::vector<rank_t> generate_ranks(bool local, int local_rank, int world_size,
 }
 
 std::unique_ptr<ACCL::ACCL>
-initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
+initialize_accl(std::vector<rank_t> &ranks, int local_rank,
                 bool simulator, acclDesign design, xrt::device device,
-                fs::path xclbin, int nbufs, addr_t bufsize, addr_t segsize,
-                bool rsfec) {
+                fs::path xclbin, unsigned int nbufs, unsigned int bufsize, 
+                unsigned int egrsize, bool rsfec) {
   std::size_t world_size = ranks.size();
   std::unique_ptr<ACCL::ACCL> accl;
 
-  if (segsize == 0) {
-    segsize = bufsize;
+  if (egrsize == 0) {
+    egrsize = bufsize;
+  } else if(egrsize > bufsize){
+    bufsize = egrsize;
   }
 
   if (simulator) {
@@ -342,13 +503,13 @@ initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
       // Tx and Rx buffers will not be cleaned up properly and leak memory.
       // They need to live at least as long as ACCL so for now this is the best
       // we can do without requiring the users to allocate the buffers manually.
-      auto tx_buf_network = new FPGABuffer<int8_t>(
+      auto tx_buf_network = new XRTBuffer<int8_t>(
           64 * 1024 * 1024, dataType::int8, device, networkmem);
-      auto rx_buf_network = new FPGABuffer<int8_t>(
+      auto rx_buf_network = new XRTBuffer<int8_t>(
           64 * 1024 * 1024, dataType::int8, device, networkmem);
       auto network_krnl =
-          xrt::kernel(device, xclbin_uuid, "network_krnl:{network_krnl_0}",
-                      xrt::kernel::cu_access_mode::exclusive);
+          xrt::kernel(device, xclbin_uuid, "network_krnl:{poe_0}",
+                    xrt::kernel::cu_access_mode::exclusive);
       auto session_krnl =
           xrt::kernel(device, xclbin_uuid, "tcp_session_handler:{session_handler_0}",
                       xrt::kernel::cu_access_mode::exclusive);
@@ -358,7 +519,7 @@ initialize_accl(const std::vector<rank_t> &ranks, int local_rank,
 
     accl = std::make_unique<ACCL::ACCL>(device, cclo_ip, hostctrl_ip, devicemem, rxbufmem);
   }
-  accl.get()->initialize(ranks, local_rank,	nbufs, bufsize, segsize);
+  accl.get()->initialize(ranks, local_rank,	nbufs, bufsize, egrsize, std::min(nbufs*bufsize, (unsigned int)4*1024*1024));
   return accl;
 }
 } // namespace accl_network_utils

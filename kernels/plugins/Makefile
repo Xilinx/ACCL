@@ -17,29 +17,12 @@
 # *******************************************************************************/
 
 PERIPHERAL_IPS = hostctrl loopback reduce_ops hp_compression dummy_tcp_stack client_arbiter vadd_put cyt_adapter external_dma dummy_cyt_rdma_stack dummy_cyt_dma tcp_session_handler
+DEVICE=xcu280-fsvh2892-2L-e
 TARGET=ip
-PLATFORM ?= xilinx_u280_xdma_201920_3
-DEBUG ?= none
-STACK_TYPE ?= UDP
-
-ifeq (u250,$(findstring u250, $(PLATFORM)))
-	FPGAPART=xcu250-figd2104-2L-e
-else ifeq (u280,$(findstring u280, $(PLATFORM)))
-	FPGAPART=xcu280-fsvh2892-2L-e
-else ifeq (u55c,$(findstring u55c, $(PLATFORM)))
-	FPGAPART=xcu55c-fsvh2892-2L-e
-else ifeq (u200,$(findstring u200, $(PLATFORM)))
-	FPGAPART=xcu200-fsgd2104-2-e
-else ifeq (u50,$(findstring u50, $(PLATFORM)))
-	FPGAPART=xcu50-fsvh2104-2-e
-else
-	$(error Unsupported PLATFORM)
-endif
 
 all: $(PERIPHERAL_IPS)
-
 
 .PHONY: hostctrl loopback reduce_ops hp_compression dummy_tcp_stack client_arbiter vadd_put cyt_adapter external_dma dummy_cyt_rdma_stack dummy_cyt_dma tcp_session_handler
 
 $(PERIPHERAL_IPS):
-	$(MAKE) -C $@ DEVICE=$(FPGAPART) TARGET=$(TARGET) STACK_TYPE=$(STACK_TYPE)
+	$(MAKE) -C $@ DEVICE=$(DEVICE) TARGET=$(TARGET)

@@ -15,7 +15,7 @@
 #
 # *******************************************************************************/
 DEVICE=xcu280-fsvh2892-2L-e
-DUMMY_DMA_IP=dummy_cyt_dma.xo
+DUMMY_DMA_IP=dummy_cyt_dma_$(DEVICE).xo
 
 TARGET=ip
 

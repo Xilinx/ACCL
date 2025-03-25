@@ -53,14 +53,14 @@ switch $command {
 }
 
 
-open_project build_${ipname}
+open_project build_${ipname}.${device}
 
 add_files reduce_ops.cpp -cflags "-std=c++14 -I[pwd]/ -I[pwd]/../../../driver/hls/ -DACCL_SYNTHESIS"
 
 set_top ${ipname}
 
 open_solution sol1
-config_export -format xo -library ACCL -output [pwd]/${ipname}.xo
+config_export -format xo -library ACCL -output [pwd]/${ipname}_${device}.xo
 
 if {$do_sim} {
     csim_design -clean

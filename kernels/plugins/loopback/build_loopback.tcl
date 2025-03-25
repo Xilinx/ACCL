@@ -50,14 +50,14 @@ switch $command {
     }
 }
 
-open_project build_loopback
+open_project build_loopback.${device}
 
 add_files loopback.cpp -cflags "-std=c++14 -I[pwd]/../../../driver/hls/ -DACCL_SYNTHESIS"
 
 set_top loopback
 
 open_solution sol1
-config_export -format xo -library ACCL -output [pwd]/loopback.xo
+config_export -format xo -library ACCL -output [pwd]/loopback_${device}.xo
 
 if {$do_sim} {
     csim_design -clean

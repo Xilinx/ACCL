@@ -42,6 +42,7 @@ inline int size;
 inline pid_t emulator_pid;
 inline options_t options;
 inline xrt::device dev;
+inline ACCL::CoyoteDevice* cyt_dev;
 inline std::unique_ptr<ACCL::ACCL> accl;
 inline std::ofstream csvstream;
 
@@ -66,9 +67,21 @@ class TestEnvironment : public ::testing::Environment {
         design = acclDesign::UDP;
       } else if (options.tcp) {
         design = acclDesign::TCP;
+      } else if (options.cyt_tcp) {
+        design = acclDesign::CYT_TCP;
+      } else if (options.cyt_rdma) {
+        design = acclDesign::CYT_RDMA;
       }
       
-      if (options.hardware || options.test_xrt_simulator) {
+      if(options.hardware){
+        if(options.cyt_rdma) {
+          cyt_dev = new ACCL::CoyoteDevice(::size);
+        } else if (options.cyt_tcp){
+          cyt_dev = new ACCL::CoyoteDevice();
+        } else {
+          dev = xrt::device(options.device_index);
+        }
+      } else if (options.test_xrt_simulator) {
         dev = xrt::device(options.device_index);
       }
  
@@ -84,12 +97,17 @@ class TestEnvironment : public ::testing::Environment {
         options.benchmark = false;
       }
 
-      accl = initialize_accl(
-          ranks, ::rank, !options.hardware, design, dev, options.xclbin, options.rxbuf_count,
-          options.rxbuf_size, options.segment_size, options.rsfec);
-      std::cout << "Setting up TestEnvironment" << std::endl;
+
+      if(options.hardware && (options.cyt_rdma || options.cyt_tcp)){
+		    accl = std::make_unique<ACCL::ACCL>(cyt_dev);
+			  accl.get()->initialize(ranks, ::rank, options.rxbuf_count, options.rxbuf_size, options.max_eager_count);
+      } else {
+        accl = initialize_accl(
+            ranks, ::rank, !options.hardware, design, dev, options.xclbin, options.rxbuf_count,
+            options.rxbuf_size, options.max_eager_count, options.rsfec);
+      }
+      std::cout << "Done setting up TestEnvironment" << std::endl;
       accl->set_timeout(1e6);
-      accl->set_rendezvous_threshold(options.max_eager_count);
 
     }
 

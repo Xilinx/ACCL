@@ -1,5 +1,6 @@
+#!/bin/bash
 # /*******************************************************************************
-#  Copyright (C) 2023 Advanced Micro Devices, Inc
+#  Copyright (C) 2024 Advanced Micro Devices, Inc
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -14,13 +15,26 @@
 #  limitations under the License.
 #
 # *******************************************************************************/
-DEVICE=xcu280-fsvh2892-2L-e
-TCP_STACK_IP=dummy_cyt_rdma_stack_$(DEVICE).xo
 
-TARGET=ip
+MODES=(
+    axis3x
+    udp
+    tcp
+    coyote_tcp
+    coyote_rdma
+)
 
-all: $(TCP_STACK_IP)
+PLATFORMS=(
+    xilinx_u55c_gen3x16_xdma_3_202210_1
+    xilinx_u50_gen3x16_xdma_5_202210_1
+    xilinx_u200_gen3x16_xdma_2_202110_1
+    xilinx_u280_gen3x16_xdma_1_202211_1
+    xilinx_u250_gen3x16_xdma_4_1_202210_1
+)
 
-$(TCP_STACK_IP): build_cyt_rdma_stack.tcl dummy_cyt_rdma_stack.cpp
-	vitis_hls $< -tclargs $(TARGET) $(DEVICE)
-
+# build for any combination of mode and platform
+for mode in ${MODES[@]}; do
+    for platform in ${PLATFORMS[@]}; do
+        make -j$(nproc) MODE=$mode PLATFORM=$platform > build_${mode}_${platform}.log
+    done
+done

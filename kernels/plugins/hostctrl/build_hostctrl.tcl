@@ -51,14 +51,14 @@ switch $command {
 }
 
 
-open_project build_hostctrl
+open_project build_hostctrl.${device}
 
 add_files hostctrl.cpp -cflags "-std=c++14 -I. -I../../../driver/hls/ -DACCL_SYNTHESIS"
 
 set_top hostctrl
 
 open_solution sol1
-config_export -format xo -library ACCL -output [pwd]/hostctrl.xo
+config_export -format xo -library ACCL -output [pwd]/hostctrl_${device}.xo
 
 if {$do_sim} {
     csim_design -clean

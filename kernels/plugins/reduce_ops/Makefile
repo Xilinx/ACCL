@@ -19,11 +19,11 @@ TARGET=ip
 DEVICE=xcu250-figd2104-2L-e
 DTYPES=float half double int32_t int64_t
 DWIDTH=512
-REDUCE_IP = reduce_ops.xo
+REDUCE_IP = reduce_ops_$(DEVICE).xo
 
 all: $(REDUCE_IP)
 
-reduce_ops.xo: build.tcl reduce_ops.cpp
+$(REDUCE_IP): build.tcl reduce_ops.cpp
 	vitis_hls $< -tclargs $(TARGET) $(DEVICE)
 
 

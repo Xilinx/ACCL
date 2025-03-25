@@ -51,14 +51,14 @@ switch $command {
 }
 
 
-open_project tcp_session_handler
+open_project tcp_session_handler.${device}
 
-add_files tcp_session_handler.cpp -cflags "-std=c++14 -I../../../driver/hls/ -I../../../hlslib/include/hlslib/xilinx -DACCL_SYNTHESIS"
+add_files tcp_session_handler.cpp -cflags "-std=c++14 -I../../../driver/hls/ -I../../../driver/xrt/include/accl/ -I../../../hlslib/include/hlslib/xilinx -DACCL_SYNTHESIS"
 
 set_top tcp_session_handler
 
 open_solution sol1
-config_export -format xo -library ACCL -output [pwd]/tcp_session_handler.xo
+config_export -format xo -library ACCL -output [pwd]/tcp_session_handler_${device}.xo
 
 if {$do_sim} {
     csim_design -clean

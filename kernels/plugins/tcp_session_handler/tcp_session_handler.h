@@ -15,13 +15,15 @@
 #
 # *******************************************************************************/
 #include "accl_hls.h"
+#include "stdint.h"
+#include "constants.hpp"
 
 void tcp_session_handler(
-    unsigned int ip,
-    unsigned int port_nr,
-    bool close,	
-    unsigned int *session_id,
-    bool *success,
+    uint32_t ip,
+    uint16_t port_nr,
+    volatile uint16_t *session_id,
+    volatile uint8_t *return_code,
+    ACCL::tcpSessionHandlerOperation operation,
     STREAM<ap_axiu<16, 0, 0, 0>>& listen_port, 
     STREAM<ap_axiu<8, 0, 0, 0>>& port_status,
 	STREAM<ap_axiu<64, 0, 0, 0>>& open_connection,

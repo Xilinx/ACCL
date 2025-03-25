@@ -33,11 +33,11 @@ zmq_intf_context zmq_server_intf(unsigned int starting_port, unsigned int local_
     zmq_intf_context ctx;
 
     logger = &log;
-    ctx.cmd_socket = std::make_unique<zmqpp::socket>(ctx.context, zmqpp::socket_type::reply);
-    ctx.eth_tx_socket = std::make_unique<zmqpp::socket>(ctx.context, zmqpp::socket_type::pub);
-    ctx.eth_rx_socket = std::make_unique<zmqpp::socket>(ctx.context, zmqpp::socket_type::sub);
-    ctx.krnl_tx_socket = std::make_unique<zmqpp::socket>(ctx.context, zmqpp::socket_type::pub);
-    ctx.krnl_rx_socket = std::make_unique<zmqpp::socket>(ctx.context, zmqpp::socket_type::sub);
+    ctx.cmd_socket = std::make_unique<zmq::socket_t>(ctx.context, zmq::socket_type::rep);
+    ctx.eth_tx_socket = std::make_unique<zmq::socket_t>(ctx.context, zmq::socket_type::pub);
+    ctx.eth_rx_socket = std::make_unique<zmq::socket_t>(ctx.context, zmq::socket_type::sub);
+    ctx.krnl_tx_socket = std::make_unique<zmq::socket_t>(ctx.context, zmq::socket_type::pub);
+    ctx.krnl_rx_socket = std::make_unique<zmq::socket_t>(ctx.context, zmq::socket_type::sub);
 
     const string endpoint_base = "tcp://127.0.0.1:";
 
@@ -57,6 +57,12 @@ zmq_intf_context zmq_server_intf(unsigned int starting_port, unsigned int local_
 
     this_thread::sleep_for(chrono::milliseconds(1000));
 
+    *logger << log_level::verbose << "Rank " << local_rank << " subscribing to " << local_rank << " (ETH)" << endl;
+    // Create a padded version of the rank to prevent subscription to
+    // ranks that have the same starting digits
+    std::stringstream rank_pad;
+    rank_pad << std::setw(DEST_PADDING) << std::setfill('0') << local_rank; 
+
     // connect to the sockets
     for(int i=0; i<world_size; i++){
         *logger << log_level::verbose << "Rank " << local_rank << " connecting to " << eth_endpoints.at(i) << " (ETH)" << endl;
@@ -65,12 +71,8 @@ zmq_intf_context zmq_server_intf(unsigned int starting_port, unsigned int local_
 
     this_thread::sleep_for(chrono::milliseconds(1000));
 
-    *logger << log_level::verbose << "Rank " << local_rank << " subscribing to " << local_rank << " (ETH)" << endl;
-    // Create a padded version of the rank to prevent subscription to
-    // ranks that have the same starting digits
-    std::stringstream rank_pad;
-    rank_pad << std::setw(DEST_PADDING) << std::setfill('0') << local_rank; 
-    ctx.eth_rx_socket->subscribe(rank_pad.str());
+    //TODO use non-deprecated set call: ctx.eth_rx_socket->set(zmq::sockopt::subscribe, rank_pad.str());
+    ctx.eth_rx_socket->setsockopt(ZMQ_SUBSCRIBE, rank_pad.str().c_str(), rank_pad.str().length());
 
     this_thread::sleep_for(chrono::milliseconds(1000));
 
@@ -85,14 +87,18 @@ zmq_intf_context zmq_server_intf(unsigned int starting_port, unsigned int local_
     if(!kernel_loopback){
         krnl_endpoint = endpoint_base + to_string(starting_port+3*world_size+local_rank);
     }
+
+    //subscribing to all (for now)
+    *logger << log_level::verbose << "Rank " << local_rank << " subscribing to all (KRNL)" << endl;
+
     *logger << log_level::verbose << "Rank " << local_rank << " connecting to " << krnl_endpoint << " (KRNL)" << endl;
     ctx.krnl_rx_socket->connect(krnl_endpoint);
     this_thread::sleep_for(chrono::milliseconds(1000));
-    //subscribing to all (for now)
-    *logger << log_level::verbose << "Rank " << local_rank << " subscribing to all (KRNL)" << endl;
-    ctx.krnl_rx_socket->subscribe("");
-    this_thread::sleep_for(chrono::milliseconds(1000));
 
+    //TODO use non-deprecated call: ctx.krnl_rx_socket->set(zmq::sockopt::subscribe, "");
+    ctx.krnl_rx_socket->setsockopt(ZMQ_SUBSCRIBE, "", 0);
+    this_thread::sleep_for(chrono::milliseconds(1000));
+    
     *logger << log_level::info << "ZMQ Context established for rank " << local_rank << endl;
 
     return ctx;
@@ -100,7 +106,6 @@ zmq_intf_context zmq_server_intf(unsigned int starting_port, unsigned int local_
 
 void eth_endpoint_egress_port(zmq_intf_context *ctx, Stream<stream_word > &in, unsigned int local_rank){
 
-    zmqpp::message message;
     Json::Value packet;
     Json::StreamWriterBuilder builder;
 
@@ -125,15 +130,14 @@ void eth_endpoint_egress_port(zmq_intf_context *ctx, Stream<stream_word > &in, u
     std::stringstream dest_pad;
     dest_pad << std::setw(DEST_PADDING) << std::setfill('0') << dest; 
     //first part of the message is the destination port ID
-    message << dest_pad.str();
+    ctx->eth_tx_socket->send(zmq::message_t(dest_pad.str()), zmq::send_flags::sndmore); 
     //second part of the message is the local rank of the sender
-    message << to_string(local_rank);
+    ctx->eth_tx_socket->send(zmq::message_t(to_string(local_rank)), zmq::send_flags::sndmore); 
     //finally package the data
     string str = Json::writeString(builder, packet);
-    message << str;
     *logger << log_level::verbose << "ETH Send " << idx << " bytes to " << dest << endl;
     *logger << log_level::debug << str << endl;
-    ctx->eth_tx_socket->send(message);
+    ctx->eth_tx_socket->send(zmq::message_t(str), zmq::send_flags::none);
     //add some spacing to encourage realistic
     //interleaving between messsages in fabric
     this_thread::sleep_for(chrono::milliseconds(10));
@@ -144,16 +148,18 @@ void eth_endpoint_ingress_port(zmq_intf_context *ctx, Stream<stream_word > &out)
     Json::Reader reader;
 
     // receive the message
-    zmqpp::message message;
-    if(!ctx->eth_rx_socket->receive(message, true)) return;
+    zmq::message_t message;
+    if(!(ctx->eth_rx_socket->recv(message, zmq::recv_flags::dontwait)).has_value()) return;
 
     // decompose the message
-    string msg_text, dst_text, src_text, sender_rank_text;
+    string msg_text, dst_text, sender_rank_text;
 
     //get and check destination ID
-    message >> dst_text;
-    message >> sender_rank_text;
-    message >> msg_text;
+    dst_text = message.to_string();
+    ctx->eth_rx_socket->recv(message);
+    sender_rank_text = message.to_string();
+    ctx->eth_rx_socket->recv(message);
+    msg_text = message.to_string();
 
     //parse msg_text as json
     Json::Value packet, data;
@@ -185,7 +191,6 @@ void eth_endpoint_ingress_port(zmq_intf_context *ctx, Stream<stream_word > &out)
 
 void krnl_endpoint_egress_port(zmq_intf_context *ctx, Stream<stream_word > &in){
 
-    zmqpp::message message;
     Json::Value packet;
     Json::StreamWriterBuilder builder;
 
@@ -208,15 +213,14 @@ void krnl_endpoint_egress_port(zmq_intf_context *ctx, Stream<stream_word > &in){
 
     //first part of the message is the destination port ID
     dest = tmp.dest;
-    message << to_string(dest);
+    ctx->krnl_tx_socket->send(zmq::message_t(to_string(dest)), zmq::send_flags::sndmore);
 
     //finally package the data
     string str = Json::writeString(builder, packet);
-    message << str;
     *logger << log_level::verbose << "CCLO to user kernel: push " << idx << " bytes to dest = " << dest << endl;
     *logger << log_level::debug << str << endl;
     if(!ctx->stop){
-        ctx->krnl_tx_socket->send(message);
+        ctx->krnl_tx_socket->send(zmq::message_t(str), zmq::send_flags::none);
     }
 }
 
@@ -226,15 +230,16 @@ void krnl_endpoint_ingress_port(zmq_intf_context *ctx, Stream<stream_word > &out
     Json::Reader reader;
 
     // receive the message
-    zmqpp::message message;
-    if(!ctx->krnl_rx_socket->receive(message, true)) return;
+    zmq::message_t message;
+    if(!(ctx->krnl_rx_socket->recv(message, zmq::recv_flags::dontwait)).has_value()) return;
 
     // decompose the message
     string msg_text, dst_text;
 
     //get and check destination ID
-    message >> dst_text;
-    message >> msg_text;
+    dst_text = message.to_string();
+    ctx->krnl_rx_socket->recv(message);
+    msg_text = message.to_string();
 
     //parse msg_text as json
     Json::Value packet, data;
@@ -265,18 +270,17 @@ void krnl_endpoint_ingress_port(zmq_intf_context *ctx, Stream<stream_word > &out
 
 }
 
-void serve_zmq(zmq_intf_context *ctx, uint32_t *cfgmem, vector<char> &devicemem, Stream<command_word> cmd[NUM_CTRL_STREAMS], Stream<command_word> sts[NUM_CTRL_STREAMS]){
+void serve_zmq(zmq_intf_context *ctx, uint32_t *cfgmem, vector<char> &devicemem, vector<char> &hostmem, Stream<command_word> cmd[NUM_CTRL_STREAMS], Stream<command_word> sts[NUM_CTRL_STREAMS]){
 
     Json::Reader reader;
     Json::StreamWriterBuilder builder;
 
     // receive the message
-    zmqpp::message message;
-    if(!ctx->cmd_socket->receive(message, true)) return;
+    zmq::message_t message;
+    if(!(ctx->cmd_socket->recv(message, zmq::recv_flags::dontwait)).has_value()) return;
 
     // decompose the message
-    string msg_text;
-    message >> msg_text; //message now is in a string
+    string msg_text = message.to_string(); //message now is in a string
 
     *logger << log_level::debug << "Received: " << msg_text << endl;
 
@@ -288,6 +292,7 @@ void serve_zmq(zmq_intf_context *ctx, uint32_t *cfgmem, vector<char> &devicemem,
     Json::Value response;
     response["status"] = 0;
     int adr, val, len;
+    bool host;
     uint64_t dma_addr;
     Json::Value dma_wdata;
     unsigned int ctrl_id;
@@ -317,44 +322,76 @@ void serve_zmq(zmq_intf_context *ctx, uint32_t *cfgmem, vector<char> &devicemem,
                 cfgmem[adr/4] = request["wdata"].asUInt();
             }
             break;
-        // Devicemem read request  {"type": 2, "addr": <uint>, "len": <uint>}
+        // Devicemem read request  {"type": 2, "addr": <uint>, "len": <uint>, "host": <bool>}
         // Devicemem read response {"status": OK|ERR, "rdata": <array of uint>}
         case 2:
             adr = request["addr"].asUInt();
             len = request["len"].asUInt();
-            *logger << log_level::debug << "Mem read " << adr << " len: " << len << endl;
-            if((adr+len) > devicemem.size()){
-                response["status"] = 1;
-                response["rdata"][0] = 0;
+            host = request["host"].asUInt();
+            *logger << log_level::debug << (host ? "Host " : "Device ") << " mem read " << adr << " len: " << len << endl;
+            if(host){
+                if((adr+len) > hostmem.size()){
+                    response["status"] = 1;
+                    response["rdata"][0] = 0;
+                    *logger << log_level::error << "Host mem read outside allocated range ("<< hostmem.size()/1024 << "KB) at addr: " << adr << " len: " << len << endl;
+                } else {
+                    for (int i=0; i<len; i++)
+                    {
+                        response["rdata"][i] = hostmem.at(adr+i);
+                    }
+                }
             } else {
-                for (int i=0; i<len; i++)
-                {
-                    response["rdata"][i] = devicemem.at(adr+i);
+                if((adr+len) > devicemem.size()){
+                    response["status"] = 1;
+                    response["rdata"][0] = 0;
+                    *logger << log_level::error << "Device mem read outside allocated range ("<< devicemem.size()/1024 << "KB) at addr: " << adr << " len: " << len << endl;
+                } else {
+                    for (int i=0; i<len; i++)
+                    {
+                        response["rdata"][i] = devicemem.at(adr+i);
+                    }
                 }
             }
             break;
-        // Devicemem write request  {"type": 3, "addr": <uint>, "wdata": <array of uint>}
+        // Devicemem write request  {"type": 3, "addr": <uint>, "wdata": <array of uint>, "host": <bool>}
         // Devicemem write response {"status": OK|ERR}
         case 3:
             adr = request["addr"].asUInt();
             dma_wdata = request["wdata"];
             len = dma_wdata.size();
-            *logger << log_level::debug << "Mem write " << adr << " len: " << len << endl;
-            if((adr+len) > devicemem.size()){
-                devicemem.resize(adr+len);
-            }
-            for(int i=0; i<len; i++){
-                devicemem.at(adr+i) = dma_wdata[i].asUInt();
+            host = request["host"].asUInt();
+            *logger << log_level::debug << (host ? "Host " : "Device ") << " mem write " << adr << " len: " << len << endl;
+            if(host){
+                if((adr+len) > hostmem.size()){
+                    hostmem.resize(adr+len);
+                }
+                for(int i=0; i<len; i++){
+                    hostmem.at(adr+i) = dma_wdata[i].asUInt();
+                }
+            } else {
+                if((adr+len) > devicemem.size()){
+                    devicemem.resize(adr+len);
+                }
+                for(int i=0; i<len; i++){
+                    devicemem.at(adr+i) = dma_wdata[i].asUInt();
+                }
             }
             break;
-        // Devicemem allocate request  {"type": 4, "addr": <uint>, "len": <uint>}
+        // Devicemem allocate request  {"type": 4, "addr": <uint>, "len": <uint>, "host": <bool>}
         // Devicemem allocate response {"status": OK|ERR}
         case 4:
             adr = request["addr"].asUInt();
             len = request["len"].asUInt();
-            *logger << log_level::debug << "Mem allocate " << adr << " len: " << len << endl;
-            if((adr+len) > devicemem.size()){
-                devicemem.resize(adr+len);
+            host = request["host"].asUInt();
+            *logger << log_level::debug << (host ? "Host " : "Device ") << " mem allocate " << adr << " len: " << len << endl;
+            if(host){
+                if((adr+len) > hostmem.size()){
+                    hostmem.resize(adr+len);
+                }
+            } else {
+                if((adr+len) > devicemem.size()){
+                    devicemem.resize(adr+len);
+                }
             }
             break;
         // Call request  {"type": 5, arg names and values}
@@ -407,7 +444,8 @@ void serve_zmq(zmq_intf_context *ctx, uint32_t *cfgmem, vector<char> &devicemem,
     }
     //return message to client
     string str = Json::writeString(builder, response);
-    ctx->cmd_socket->send(str);
+    zmq::message_t ret_msg(str);
+    ctx->cmd_socket->send(ret_msg, zmq::send_flags::none);
 }
 
 
@@ -422,12 +460,11 @@ void serve_zmq(zmq_intf_context *ctx,
     Json::StreamWriterBuilder builder;
 
     // receive the message
-    zmqpp::message message;
-    if(!ctx->cmd_socket->receive(message, true)) return;
+    zmq::message_t message;
+    if(!(ctx->cmd_socket->recv(message, zmq::recv_flags::dontwait)).has_value()) return;
 
     // decompose the message
-    string msg_text;
-    message >> msg_text;//message now is in a string
+    string msg_text = message.to_string();//message now is in a string
 
     *logger << log_level::debug << "Received: " << msg_text << endl;
 
@@ -439,6 +476,7 @@ void serve_zmq(zmq_intf_context *ctx,
     Json::Value response;
     response["status"] = 0;
     int adr, val, len;
+    bool host;
     uint64_t dma_addr;
     Json::Value dma_wdata;
     ap_uint<64> mem_addr;
@@ -487,17 +525,19 @@ void serve_zmq(zmq_intf_context *ctx,
                 }
             }
             break;
-        // Devicemem read request  {"type": 2, "addr": <uint>, "len": <uint>}
+        // Devicemem read request  {"type": 2, "addr": <uint>, "len": <uint>, "host": <bool>}
         // Devicemem read response {"status": OK|ERR, "rdata": <array of uint>}
         case 2:
             adr = request["addr"].asUInt();
             len = request["len"].asUInt();
+            host = request["host"].asUInt();
             *logger << log_level::debug << "Mem read " << adr << " len: " << len << endl;
-            if((adr+len) > ACCL_SIM_MEM_SIZE_KB*1024){
+            if((adr+len) > (host ? 1 : ACCL_SIM_NUM_BANKS)*ACCL_SIM_MEM_SIZE_KB*1024){
                 response["status"] = 1;
                 response["rdata"][0] = 0;
                 *logger << log_level::error << "Mem read outside available range ("<< ACCL_SIM_MEM_SIZE_KB << "KB) at addr: " << adr << " len: " << len << endl;
             } else {
+                adr += host ? ACCL_SIM_NUM_BANKS*ACCL_SIM_MEM_SIZE_KB*1024 : 0;
                 aximm_rd_addr.Push(adr);
                 aximm_rd_len.Push(len);
                 unsigned int idx = 0;
@@ -513,17 +553,19 @@ void serve_zmq(zmq_intf_context *ctx,
                 }
             }
             break;
-        // Devicemem write request  {"type": 3, "addr": <uint>, "wdata": <array of uint>}
+        // Devicemem write request  {"type": 3, "addr": <uint>, "wdata": <array of uint>, "host": <bool>}
         // Devicemem write response {"status": OK|ERR}
         case 3:
             adr = request["addr"].asUInt();
             dma_wdata = request["wdata"];
             len = dma_wdata.size();
+            host = request["host"].asUInt();
             *logger << log_level::debug << "Mem write " << adr << " len: " << len << endl;
-            if((adr+len) > ACCL_SIM_MEM_SIZE_KB*1024){
+            if((adr+len) > (host ? 1 : ACCL_SIM_NUM_BANKS)*ACCL_SIM_MEM_SIZE_KB*1024){
                 response["status"] = 1;
                 *logger << log_level::error << "Mem write outside available range ("<< ACCL_SIM_MEM_SIZE_KB << "KB) at addr: " << adr << " len: " << len << endl;
             } else{
+                adr += host ? ACCL_SIM_NUM_BANKS*ACCL_SIM_MEM_SIZE_KB*1024 : 0;
                 aximm_wr_addr.Push(adr);
                 aximm_wr_len.Push(len);
                 for(int i=0; i<len; i+=64){
@@ -544,13 +586,14 @@ void serve_zmq(zmq_intf_context *ctx,
                 }
             }
             break;
-        // Devicemem allocate request  {"type": 4, "addr": <uint>, "len": <uint>}
+        // Devicemem allocate request  {"type": 4, "addr": <uint>, "len": <uint>, "host": <bool>}
         // Devicemem allocate response {"status": OK|ERR}
         case 4:
             adr = request["addr"].asUInt();
             len = request["len"].asUInt();
-            *logger << log_level::debug << "Mem allocate " << adr << " len: " << len << endl;
-            if((adr+len) > ACCL_SIM_MEM_SIZE_KB*1024){
+            host = request["host"].asUInt();
+            *logger << log_level::debug << (host ? "Host " : "Device ") << " mem allocate " << adr << " len: " << len << endl;
+            if((adr+len) > (host ? 1 : ACCL_SIM_NUM_BANKS)*ACCL_SIM_MEM_SIZE_KB*1024){
                 response["status"] = 1;
                 *logger << log_level::error << "Mem allocate outside available range ("<< ACCL_SIM_MEM_SIZE_KB << "KB) at addr: " << adr << " len: " << len << endl;
             }
@@ -673,7 +716,8 @@ void serve_zmq(zmq_intf_context *ctx,
     }
     //return message to client
     string str = Json::writeString(builder, response);
-    ctx->cmd_socket->send(str);
+    zmq::message_t ret_msg(str);
+    ctx->cmd_socket->send(ret_msg, zmq::send_flags::none);
 }
 
 void zmq_cmd_server(zmq_intf_context *ctx,

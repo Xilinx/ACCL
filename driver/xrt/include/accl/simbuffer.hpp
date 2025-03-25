@@ -26,11 +26,21 @@
 
 /** @file simbuffer.hpp */
 
-#define DEFAULT_SIMBUFFER_MEMGRP 0
+#define ACCL_SIM_DEFAULT_BANK 0
+
+#ifndef ACCL_SIM_NUM_BANKS
+#define ACCL_SIM_NUM_BANKS 1
+#endif
+
+#ifndef ACCL_SIM_MEM_SIZE_KB
+#define ACCL_SIM_MEM_SIZE_KB (256*1024)
+#endif
 
 namespace ACCL {
-/** Stores the next free address on the simulated device. */
-extern addr_t next_free_address;
+/** Stores the next free address on the simulated device.
+    Multiple card memory banks and one host memory bank */
+extern addr_t next_free_card_address[ACCL_SIM_NUM_BANKS];
+extern addr_t next_free_host_address;
 
 /**
  * A buffer that is allocated on a external CCLO emulator or simulator with an
@@ -53,6 +63,8 @@ private:
   xrt::bo _bo;              // Only set if constructed using bo.
   xrt::bo internal_copy_bo; // Used to sync bo over zmq
   xrt::device _device{};    // Used to create copy buffers
+  bool host;                // Flag identifying host-side buffer
+  unsigned int memgrp;      //bank of buffer has device-side image
   bool bo_valid{};
 
   /**
@@ -61,12 +73,31 @@ private:
    * @param size    Size of the buffer to allocate.
    * @return addr_t Next free address on the CCLO.
    */
-  addr_t get_next_free_address(size_t size) {
-    addr_t address = next_free_address;
+  addr_t get_next_free_card_address(size_t size, unsigned int memgrp = ACCL_SIM_DEFAULT_BANK) {
+    if(memgrp > ACCL_SIM_NUM_BANKS){
+      throw std::invalid_argument("Requested address in invalid memory bank");
+    }
+    addr_t address = next_free_card_address[memgrp];
     // allocate on 4K boundaries
     // not sure how realistic this is, but it does help
     // work around some addressing limitations in RTLsim
-    next_free_address += ((addr_t)std::ceil(size / 4096.0)) * 4096;
+    next_free_card_address[memgrp] += ((addr_t)std::ceil(size / 4096.0)) * 4096;
+
+    return address + memgrp*ACCL_SIM_MEM_SIZE_KB*1024;
+  }
+
+  /**
+   * Get the next free host address available.
+   *
+   * @param size    Size of the buffer to allocate.
+   * @return addr_t Next free host address.
+   */
+  addr_t get_next_free_host_address(size_t size) {
+    addr_t address = next_free_host_address;
+    // allocate on 4K boundaries
+    // not sure how realistic this is, but it does help
+    // work around some addressing limitations in RTLsim
+    next_free_host_address += ((addr_t)std::ceil(size / 4096.0)) * 4096;
 
     return address;
   }
@@ -88,7 +119,7 @@ private:
    */
   void allocate_buffer() {
     zmq_client_memalloc(this->zmq_ctx, (uint64_t)this->_address,
-                        (unsigned int)this->_size);
+                        (unsigned int)this->_size, this->host);
   }
 
 public:
@@ -99,11 +130,18 @@ public:
    * @param length  Amount of elements in the existing host buffer.
    * @param type    ACCL datatype of buffer.
    * @param context The zmq server of the CCLO to use.
+   * @param is_host The type of buffer to create.
+   * @param mmegrp  The bank in which to allocate the buffer.
    */
   SimBuffer(dtype *buffer, size_t length, dataType type,
-            zmq_intf_context *const context)
+            zmq_intf_context *const context,
+            bool is_host = false,
+            unsigned int memgrp = ACCL_SIM_DEFAULT_BANK)
       : SimBuffer(buffer, length, type, context,
-                  this->get_next_free_address(length * sizeof(dtype))) {}
+                  is_host ?
+                  this->get_next_free_host_address(length * sizeof(dtype)) :
+                  this->get_next_free_card_address(length * sizeof(dtype), memgrp),
+                  is_host, memgrp) {}
 
   /**
    * Construct a new simulated buffer from a simulated BO buffer.
@@ -119,8 +157,12 @@ public:
   SimBuffer(xrt::bo &bo, xrt::device &device, size_t length, dataType type,
             zmq_intf_context *const context)
       : SimBuffer(bo.map<dtype *>(), length, type, context,
-                  this->get_next_free_address(length * sizeof(dtype)), bo,
-                  device, true) {}
+                  bo.get_flags() == xrt::bo::flags::host_only ?
+                  this->get_next_free_host_address(length * sizeof(dtype)) :
+                  this->get_next_free_card_address(length * sizeof(dtype), ACCL_SIM_DEFAULT_BANK),
+                  bo, device, 
+                  bo.get_flags() == xrt::bo::flags::host_only, ACCL_SIM_DEFAULT_BANK,
+                  true) {}
 
   /**
    * Construct a new simulated buffer without an existing host pointer.
@@ -128,25 +170,33 @@ public:
    * @param length  Amount of elements to allocate for.
    * @param type    ACCL datatype of buffer.
    * @param context The zmq server of the CCLO to use.
+   * @param is_host The type of buffer to create.
+   * @param mmegrp  The bank in which to allocate the buffer.
    */
-  SimBuffer(size_t length, dataType type, zmq_intf_context *const context)
-      : SimBuffer(create_internal_buffer(length), length, type, context) {}
+  SimBuffer(size_t length, dataType type, zmq_intf_context *const context,
+            bool is_host = false,
+            unsigned int memgrp = ACCL_SIM_DEFAULT_BANK)
+      : SimBuffer(create_internal_buffer(length), length, type, context, is_host, memgrp) {}
 
   /**
    * Construct a new simulated buffer from an existing host pointer at a
    * specific physical address. You should generally let ACCL itself decide
    * which physical address to use.
    *
-   * @param buffer           Host buffer to use.
-   * @param length           Amount of elements in host pointer.
-   * @param type             ACCL datatype of buffer.
-   * @param context          The zmq server of the CCLO to use.
+   * @param buffer  Host buffer to use.
+   * @param length  Amount of elements in host pointer.
+   * @param type    ACCL datatype of buffer.
+   * @param context The zmq server of the CCLO to use.
    * @param address The physical address of the device buffer.
+   * @param is_host The type of buffer to create.
+   * @param mmegrp  The bank in which to allocate the buffer.
    */
   SimBuffer(dtype *buffer, size_t length, dataType type,
-            zmq_intf_context *const context, const addr_t address)
+            zmq_intf_context *const context, const addr_t address,
+            bool is_host = false,
+            unsigned int memgrp = ACCL_SIM_DEFAULT_BANK)
       : Buffer<dtype>(buffer, length, type, address), zmq_ctx(context),
-        _bo(xrt::bo()) {
+        _bo(xrt::bo()), host(is_host), memgrp(memgrp) {
     allocate_buffer();
   }
 
@@ -157,14 +207,14 @@ public:
   SimBuffer(dtype *buffer, size_t length, dataType type,
             zmq_intf_context *const context, const addr_t address,
             xrt::bo &bo, xrt::device &device, bool bo_valid_,
+            bool is_host, unsigned int memgrp,
             bool is_slice = false)
       : Buffer<dtype>(buffer, length, type, address), zmq_ctx(context),
-        _bo(bo), _device(device), bo_valid(bo_valid_) {
+        _bo(bo), _device(device), bo_valid(bo_valid_), host(is_host), memgrp(memgrp) {
     if (bo_valid) {
-      internal_copy_bo = xrt::bo(_device, this->_size,
-                                 (xrt::memory_group)DEFAULT_SIMBUFFER_MEMGRP);
+      internal_copy_bo = xrt::bo(_device, this->_size, bo.get_flags(), this->memgrp);
     }
-
+    
     allocate_buffer();
   }
 
@@ -204,7 +254,7 @@ public:
    * Check if the buffer is host-only, always false in sim.
    *
    */
-  bool is_host_only() const override { return false; }
+  bool is_host_only() const override { return host; }
 
   /**
    * Sync the user BO buffer to the simulated buffer.
@@ -218,7 +268,7 @@ public:
       internal_copy_bo.sync(xclBOSyncDirection::XCL_BO_SYNC_BO_FROM_DEVICE);
       zmq_client_memwrite(this->zmq_ctx, (uint64_t)this->_address,
                           (unsigned int)this->_size,
-                          internal_copy_bo.map<uint8_t *>());
+                          internal_copy_bo.map<uint8_t *>(), this->host);
     }
   }
 
@@ -250,7 +300,7 @@ public:
     sync_bo_to_device();
     zmq_client_memread(this->zmq_ctx, (uint64_t)this->_address,
                        (unsigned int)this->_size,
-                       static_cast<uint8_t *>(this->_byte_array));
+                       static_cast<uint8_t *>(this->_byte_array), this->host);
   }
 
   /**
@@ -262,7 +312,7 @@ public:
   void sync_to_device() override {
     zmq_client_memwrite(this->zmq_ctx, (uint64_t)this->_address,
                         (unsigned int)this->_size,
-                        static_cast<uint8_t *>(this->_byte_array));
+                        static_cast<uint8_t *>(this->_byte_array), this->host);
     if (bo_valid) {
       _bo.sync(XCL_BO_SYNC_BO_TO_DEVICE);
     }
@@ -283,7 +333,7 @@ public:
 
     return std::unique_ptr<BaseBuffer>(new SimBuffer(
         &this->_buffer[start], end - start, this->_type, this->zmq_ctx,
-        this->_address + start, bo_slice, _device, bo_valid, true));
+        this->_address + start, bo_slice, _device, bo_valid, this->host, this->memgrp, true));
   }
 };
 } // namespace ACCL

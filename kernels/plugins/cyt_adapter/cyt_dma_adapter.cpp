@@ -73,27 +73,6 @@ void rdma_req_byp_cmd_converter(
 
 void multiplexor(hls::stream<cyt_req_t>& in0,
 				hls::stream<cyt_req_t>& in1,
-				hls::stream<cyt_req_t>& out)
-{
-#pragma HLS inline off
-#pragma HLS pipeline II=1
-
-	cyt_req_t currWord;
-
-	if (!STREAM_IS_EMPTY(in0))
-	{
-		currWord = STREAM_READ(in0);
-		STREAM_WRITE(out, currWord);
-	}
-	else if(!STREAM_IS_EMPTY(in1))
-	{
-		currWord = STREAM_READ(in1);
-		STREAM_WRITE(out, currWord);
-	}
-}
-
-void multiplexor(hls::stream<cyt_req_t>& in0,
-				hls::stream<cyt_req_t>& in1,
 				hls::stream<cyt_req_t>& in2,
 				hls::stream<cyt_req_t>& out)
 {
@@ -184,11 +163,11 @@ void cyt_dma_adapter(
 	hls::stream<ap_axiu<32,0,0,0>> &dma1_s2mm_sts,
 	hls::stream<ap_axiu<32,0,0,0>> &dma0_mm2s_sts,
 	hls::stream<ap_axiu<32,0,0,0>> &dma1_mm2s_sts,
-#ifdef ACCL_RDMA
+
 	//RDMA rd_req and wr_req
 	hls::stream<cyt_req_t> & rdma_wr_req,
 	hls::stream<cyt_req_t> & rdma_rd_req,
-#endif
+
 	//Coyote Bypass interface command and status
 	hls::stream<cyt_req_t> &cyt_byp_wr_cmd,
 	hls::stream<ap_uint<16>> &cyt_byp_wr_sts,
@@ -213,13 +192,10 @@ void cyt_dma_adapter(
 #pragma HLS aggregate variable=cyt_byp_wr_cmd compact=bit
 #pragma HLS aggregate variable=cyt_byp_rd_cmd compact=bit
 
-#ifdef ACCL_RDMA
 #pragma HLS INTERFACE axis port=rdma_wr_req
 #pragma HLS INTERFACE axis port=rdma_rd_req
 #pragma HLS aggregate variable=rdma_wr_req compact=bit
 #pragma HLS aggregate variable=rdma_rd_req compact=bit
-#endif
-	
 
 	static hls::stream<cyt_req_t > byp_wr_cmd_0;
     #pragma HLS stream variable=byp_wr_cmd_0 depth=16
@@ -239,36 +215,21 @@ void cyt_dma_adapter(
 	static hls::stream<ap_uint<1+4+23>> dma1_s2mm_meta;
     #pragma HLS stream variable=dma1_s2mm_meta depth=16
 
-#ifdef ACCL_RDMA
 	static hls::stream<cyt_req_t > byp_wr_cmd_2;
     #pragma HLS stream variable=byp_wr_cmd_2 depth=16
 	static hls::stream<cyt_req_t > byp_rd_cmd_2;
     #pragma HLS stream variable=byp_rd_cmd_2 depth=16
-#endif
 
 	dm_byp_cmd_converter<0>(dma0_s2mm_cmd, byp_wr_cmd_0, dma0_s2mm_meta);
 	dm_byp_cmd_converter<1>(dma1_s2mm_cmd, byp_wr_cmd_1, dma1_s2mm_meta);
-#ifdef ACCL_RDMA
 	rdma_req_byp_cmd_converter<2>(rdma_wr_req, byp_wr_cmd_2);
-#endif
-
-#ifdef ACCL_RDMA
 	multiplexor(byp_wr_cmd_0,byp_wr_cmd_1,byp_wr_cmd_2,cyt_byp_wr_cmd);
-#else
-	multiplexor(byp_wr_cmd_0,byp_wr_cmd_1,cyt_byp_wr_cmd);
-#endif
+
 
 	dm_byp_cmd_converter<0>(dma0_mm2s_cmd,byp_rd_cmd_0, dma0_mm2s_meta);
 	dm_byp_cmd_converter<1>(dma1_mm2s_cmd,byp_rd_cmd_1, dma1_mm2s_meta);
-#ifdef ACCL_RDMA
 	rdma_req_byp_cmd_converter<2>(rdma_rd_req, byp_rd_cmd_2);
-#endif
-
-#ifdef ACCL_RDMA
 	multiplexor(byp_rd_cmd_0,byp_rd_cmd_1,byp_rd_cmd_2,cyt_byp_rd_cmd);
-#else
-	multiplexor(byp_rd_cmd_0,byp_rd_cmd_1,cyt_byp_rd_cmd);
-#endif
 
 	byp_dm_sts_converter(cyt_byp_wr_sts, dma0_s2mm_sts, dma1_s2mm_sts, dma0_s2mm_meta, dma1_s2mm_meta);
 	byp_dm_sts_converter(cyt_byp_rd_sts, dma0_mm2s_sts, dma1_mm2s_sts, dma0_mm2s_meta, dma1_mm2s_meta);

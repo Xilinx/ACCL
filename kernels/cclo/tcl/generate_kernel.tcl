@@ -34,36 +34,36 @@ update_compile_order -fileset sources_1
 create_bd_design ccl_offload_bd
 
 # add our own ip to the repo
-set_property  ip_repo_paths  {./hls/} [current_project]
+set_property  ip_repo_paths  {../hls/} [current_project]
 update_ip_catalog
 
 #rebuild bd
-source -notrace tcl/rebuild_bd.tcl
+source -notrace ../tcl/rebuild_bd.tcl
 create_root_design $stacktype $en_dma $en_arith $en_compress $en_extkrnl $mb_debug_level $commit_hash
 
 #add debug if requested
 if [string equal $hw_debug_level "dma"] {
   puts "Adding DMA debug to block design"
-  source  -notrace tcl/debug_dma.tcl
+  source  -notrace ../tcl/debug_dma.tcl
 } elseif [string equal $hw_debug_level "pkt"] {
   puts "Adding (de)packetizer debug to block design"
-  source  -notrace tcl/debug_pkt.tcl
+  source  -notrace ../tcl/debug_pkt.tcl
 } elseif [string equal $hw_debug_level "arith"] {
   puts "Adding arithmetic debug to block design"
-  source  -notrace tcl/debug_arith.tcl
+  source  -notrace ../tcl/debug_arith.tcl
 } elseif [string equal $hw_debug_level "control"] {
   puts "Adding control debug to block design"
-  source  -notrace tcl/debug_control.tcl
+  source  -notrace ../tcl/debug_control.tcl
 } elseif [string equal $hw_debug_level "all"] {
   puts "Adding all debug cores to block design"
-  source  -notrace tcl/debug_dma.tcl
-  source  -notrace tcl/debug_pkt.tcl
-  source  -notrace tcl/debug_arith.tcl
-  source  -notrace tcl/debug_control.tcl
+  source  -notrace ../tcl/debug_dma.tcl
+  source  -notrace ../tcl/debug_pkt.tcl
+  source  -notrace ../tcl/debug_arith.tcl
+  source  -notrace ../tcl/debug_control.tcl
 }
 
 # add wrapper
-add_files -norecurse ./hdl/ccl_offload.v
+add_files -norecurse ../hdl/ccl_offload.v
 update_compile_order -fileset sources_1
 update_compile_order -fileset sim_1
 generate_target all [get_files  ./ccl_offload_ex/ccl_offload_ex.srcs/sources_1/bd/ccl_offload_bd/ccl_offload_bd.bd]

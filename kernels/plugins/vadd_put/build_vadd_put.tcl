@@ -40,14 +40,14 @@ switch $command {
 }
 
 
-open_project build_vadd_put
+open_project build_vadd_put.${device}
 
 add_files vadd_put.cpp -cflags "-std=c++14 -I../../../driver/hls/ -I. -DACCL_SYNTHESIS"
 
 set_top vadd_put
 
 open_solution sol1
-config_export -format xo -library ACCL -output [pwd]/vadd_put.xo
+config_export -format xo -library ACCL -output [pwd]/vadd_put_${device}.xo
 
 if {$do_syn} {
     set_part $device

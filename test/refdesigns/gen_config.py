@@ -31,7 +31,9 @@ args = parser.parse_args()
 if args.board == "u50" and args.ethif != 0:
     raise "U50 has a single Ethernet port"
 
+num_extdma_ports = 1
 if args.host:
+    num_extdma_ports = 2
     if args.board == "u280" or args.board == "u50":
         raise "Host memory only supported on U55C/U200/U250"
 
@@ -68,24 +70,19 @@ else:
 
 cclo_instantiation = "nk=ccl_offload:{num_inst}:".format(num_inst=num_cclo)
 arb_instantiation = "nk=client_arbiter:{num_inst}:".format(num_inst=num_cclo)
-hc_instantiation = "nk=hostctrl:{num_inst}:".format(num_inst=2*num_cclo)
+hc_instantiation = "nk=hostctrl:{num_inst}:".format(num_inst=num_cclo)
 reduce_instantiation = "nk=reduce_ops:{num_inst}:".format(num_inst=num_cclo)
 cast_instantiation = "nk=hp_compression:{num_inst}:".format(num_inst=3*num_cclo)
-
-if args.host:
-    extdma_instantiation = "nk=external_dma:{num_inst}:".format(num_inst=2*num_cclo)
-else:
-    extdma_instantiation = ""
+extdma_instantiation = "nk=external_dma_{num_ports}port:{num_inst}:".format(num_inst=2*num_cclo, num_ports=num_extdma_ports)
 
 for i in range(num_cclo):
     endch = "" if i == num_cclo-1 else "."
     cclo_instantiation += "ccl_offload_{inst_nr}".format(inst_nr=i) + endch
     arb_instantiation += "arb_{inst_nr}".format(inst_nr=i) + endch
-    hc_instantiation += "hostctrl_{inst_nr}_0.hostctrl_{inst_nr}_1".format(inst_nr=i) + endch
+    hc_instantiation += "hostctrl_{inst_nr}_0".format(inst_nr=i) + endch
     reduce_instantiation += "arith_{inst_nr}".format(inst_nr=i) + endch
     cast_instantiation += "compression_{inst_nr}_0.compression_{inst_nr}_1.compression_{inst_nr}_2".format(inst_nr=i) + endch
-    if args.host:
-        extdma_instantiation += "extdma_{num_inst}_0.extdma_{num_inst}_1".format(num_inst=i) + endch
+    extdma_instantiation += "extdma_{num_inst}_0.extdma_{num_inst}_1".format(num_inst=i) + endch
 
 if args.axis3x:
     if args.vadd:
@@ -123,11 +120,12 @@ else:
 
 for i in range(num_cclo):
     target_slr = min(i,num_slr-1) if args.axis3x else cclo_slr
-    slr_constraints += "slr=arb_{inst_nr}:SLR{slr_nr}\nslr=arith_{inst_nr}:SLR{slr_nr}\nslr=ccl_offload_{inst_nr}:SLR{slr_nr}\n".format(inst_nr=i, slr_nr=target_slr)
+    slr_constraints += "slr=arith_{inst_nr}:SLR{slr_nr}\nslr=ccl_offload_{inst_nr}:SLR{slr_nr}\n".format(inst_nr=i, slr_nr=target_slr)
+    if args.vadd:
+        slr_constraints += "slr=arb_{inst_nr}:SLR{slr_nr}\n".format(inst_nr=i, slr_nr=target_slr)
     for j in range(3):
         slr_constraints += "slr=compression_{inst_nr}_{dp_nr}:SLR{slr_nr}\n".format(inst_nr=i, dp_nr=j, slr_nr=target_slr)
-    for j in range(2):
-        slr_constraints += "slr=hostctrl_{inst_nr}_{dp_nr}:SLR{slr_nr}\n".format(inst_nr=i, dp_nr=j, slr_nr=target_slr)
+    slr_constraints += "slr=hostctrl_{inst_nr}_0:SLR{slr_nr}\n".format(inst_nr=i, slr_nr=target_slr)
     if args.axis3x:
         slr_constraints += "slr=poe_{inst_nr}:SLR{slr_nr}\n".format(inst_nr=i, slr_nr=target_slr)
     else:
@@ -136,9 +134,8 @@ for i in range(num_cclo):
         slr_constraints += "slr=lb_user_krnl_{inst_nr}:SLR{slr_nr}\n".format(inst_nr=i, slr_nr=target_slr)
     else:
         slr_constraints += "slr=vadd_{inst_nr}_0:SLR{slr_nr}\n".format(inst_nr=i, slr_nr=target_slr)
-    if args.host:
-        for j in range(2):
-            slr_constraints += "slr=extdma_{inst_nr}_{dp_nr}:SLR{slr_nr}\n".format(inst_nr=i, dp_nr=j, slr_nr=target_slr)
+    for j in range(2):
+        slr_constraints += "slr=extdma_{inst_nr}_{dp_nr}:SLR{slr_nr}\n".format(inst_nr=i, dp_nr=j, slr_nr=target_slr)
 
 if args.poe == "tcp":
     slr_constraints += "slr=session_handler_0:SLR{slr_nr}\n".format(slr_nr=poe_slr)
@@ -154,24 +151,17 @@ bank_ctr = 0
 for i in range(num_cclo):
     if mem_type == "DDR":
         target_bank = i if args.axis3x else cclo_slr
-        if args.host:
-            mem_constraints += "sp=extdma_{inst_nr}_0.m_axi_0:DDR[{start_bank}]\n".format(inst_nr=i, start_bank=target_bank)
-            mem_constraints += "sp=extdma_{inst_nr}_0.m_axi_1:HOST[0]\n".format(inst_nr=i)
-            mem_constraints += "sp=extdma_{inst_nr}_1.m_axi_0:DDR[{start_bank}]\n".format(inst_nr=i, start_bank=target_bank)
-            mem_constraints += "sp=extdma_{inst_nr}_1.m_axi_1:HOST[0]\n".format(inst_nr=i)
-        else:
-            mem_constraints += "sp=ccl_offload_{inst_nr}.m_axi_0:DDR[{start_bank}]\n".format(inst_nr=i, start_bank=target_bank)
-            mem_constraints += "sp=ccl_offload_{inst_nr}.m_axi_1:DDR[{start_bank}]\n".format(inst_nr=i, start_bank=target_bank)
+        mem_constraints += "sp=extdma_{inst_nr}_0.m_axi_0:DDR[{start_bank}]\n".format(inst_nr=i, start_bank=target_bank)
+        mem_constraints += "sp=extdma_{inst_nr}_1.m_axi_0:DDR[{start_bank}]\n".format(inst_nr=i, start_bank=target_bank)
     else:
-        if args.host:
-            mem_constraints += "sp=extdma_{inst_nr}_0.m_axi_0:HBM[{start_bank}:{end_bank}]\n".format(inst_nr=i, start_bank=bank_ctr, end_bank=bank_ctr+5)
-            mem_constraints += "sp=extdma_{inst_nr}_0.m_axi_1:HOST[0]\n".format(inst_nr=i)
-            mem_constraints += "sp=extdma_{inst_nr}_1.m_axi_0:HBM[{start_bank}:{end_bank}]\n".format(inst_nr=i, start_bank=bank_ctr, end_bank=bank_ctr+5)
-            mem_constraints += "sp=extdma_{inst_nr}_1.m_axi_1:HOST[0]\n".format(inst_nr=i)
-        else:
-            mem_constraints += "sp=ccl_offload_{inst_nr}.m_axi_0:HBM[{start_bank}:{end_bank}]\n".format(inst_nr=i, start_bank=bank_ctr, end_bank=bank_ctr+5)
-            mem_constraints += "sp=ccl_offload_{inst_nr}.m_axi_1:HBM[{start_bank}:{end_bank}]\n".format(inst_nr=i, start_bank=bank_ctr, end_bank=bank_ctr+5)
-        bank_ctr += 6
+        mem_constraints += "sp=extdma_{inst_nr}_0.m_axi_0:HBM[{start_bank}:{end_bank}]\n".format(inst_nr=i, start_bank=bank_ctr, end_bank=bank_ctr+5)
+        mem_constraints += "sp=extdma_{inst_nr}_1.m_axi_0:HBM[{start_bank}:{end_bank}]\n".format(inst_nr=i, start_bank=bank_ctr, end_bank=bank_ctr+5)
+        bank_ctr += 6   
+
+    if args.host:
+        mem_constraints += "sp=extdma_{inst_nr}_0.m_axi_1:HOST[0]\n".format(inst_nr=i)
+        mem_constraints += "sp=extdma_{inst_nr}_1.m_axi_1:HOST[0]\n".format(inst_nr=i)
+
     if args.poe == "tcp":
         poe_bank = bank_ctr if mem_type == "HBM" else poe_ddr_bank
         mem_constraints += "sp=poe_{inst_nr}.m00_axi:{mtype}[{start_bank}]\n".format(inst_nr=i, mtype=mem_type, start_bank=poe_bank)
@@ -213,12 +203,14 @@ else:
 # Connect host controllers to arbiter to CCL Offload, and connect plug-ins
 for i in range(num_cclo):
     # Command interfaces
-    stream_connections += "stream_connect=hostctrl_{inst_nr}_0.cmd:arb_{inst_nr}.cmd_clients_0\n".format(inst_nr=i)
-    stream_connections += "stream_connect=hostctrl_{inst_nr}_1.cmd:arb_{inst_nr}.cmd_clients_1\n".format(inst_nr=i)
-    stream_connections += "stream_connect=arb_{inst_nr}.cmd_cclo:ccl_offload_{inst_nr}.s_axis_call_req\n".format(inst_nr=i)
-    stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_call_ack:arb_{inst_nr}.ack_cclo\n".format(inst_nr=i)
-    stream_connections += "stream_connect=arb_{inst_nr}.ack_clients_0:hostctrl_{inst_nr}_0.sts\n".format(inst_nr=i)
-    stream_connections += "stream_connect=arb_{inst_nr}.ack_clients_1:hostctrl_{inst_nr}_1.sts\n".format(inst_nr=i)
+    if args.vadd:
+        stream_connections += "stream_connect=hostctrl_{inst_nr}_0.cmd:arb_{inst_nr}.cmd_clients_0\n".format(inst_nr=i)
+        stream_connections += "stream_connect=arb_{inst_nr}.cmd_cclo:ccl_offload_{inst_nr}.s_axis_call_req\n".format(inst_nr=i)
+        stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_call_ack:arb_{inst_nr}.ack_cclo\n".format(inst_nr=i)
+        stream_connections += "stream_connect=arb_{inst_nr}.ack_clients_0:hostctrl_{inst_nr}_0.sts\n".format(inst_nr=i)
+    else:
+        stream_connections += "stream_connect=hostctrl_{inst_nr}_0.cmd:ccl_offload_{inst_nr}.s_axis_call_req\n".format(inst_nr=i)
+        stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_call_ack:hostctrl_{inst_nr}_0.sts\n".format(inst_nr=i)
     # Plugin interfaces
     stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_arith_op0:arith_{inst_nr}.in0\n".format(inst_nr=i)
     stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_arith_op1:arith_{inst_nr}.in1\n".format(inst_nr=i)
@@ -233,23 +225,24 @@ for i in range(num_cclo):
     if args.vadd:
         stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_krnl:vadd_{inst_nr}_0.data_from_cclo\n".format(inst_nr=i)
         stream_connections += "stream_connect=vadd_{inst_nr}_0.data_to_cclo:ccl_offload_{inst_nr}.s_axis_krnl\n".format(inst_nr=i)
+        stream_connections += "stream_connect=arb_{inst_nr}.ack_clients_1:vadd_{inst_nr}_0.sts_from_cclo:512\n".format(inst_nr=i)
+        stream_connections += "stream_connect=vadd_{inst_nr}_0.cmd_to_cclo:arb_{inst_nr}.cmd_clients_1:512\n".format(inst_nr=i)
     else:
         stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_krnl:lb_user_krnl_{inst_nr}.in\n".format(inst_nr=i)
         stream_connections += "stream_connect=lb_user_krnl_{inst_nr}.out:ccl_offload_{inst_nr}.s_axis_krnl\n".format(inst_nr=i)
     # External DMA interface
-    if args.host:
-        stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_dma0_s2mm:extdma_{inst_nr}_0.s_axis_s2mm\n".format(inst_nr=i)
-        stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_dma0_mm2s_cmd:extdma_{inst_nr}_0.s_axis_mm2s_cmd\n".format(inst_nr=i)
-        stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_dma0_s2mm_cmd:extdma_{inst_nr}_0.s_axis_s2mm_cmd\n".format(inst_nr=i)
-        stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_dma1_s2mm:extdma_{inst_nr}_1.s_axis_s2mm\n".format(inst_nr=i)
-        stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_dma1_mm2s_cmd:extdma_{inst_nr}_1.s_axis_mm2s_cmd\n".format(inst_nr=i)
-        stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_dma1_s2mm_cmd:extdma_{inst_nr}_1.s_axis_s2mm_cmd\n".format(inst_nr=i)
-        stream_connections += "stream_connect=extdma_{inst_nr}_0.m_axis_mm2s:ccl_offload_{inst_nr}.s_axis_dma0_mm2s\n".format(inst_nr=i)
-        stream_connections += "stream_connect=extdma_{inst_nr}_0.m_axis_mm2s_sts:ccl_offload_{inst_nr}.s_axis_dma0_mm2s_sts\n".format(inst_nr=i)
-        stream_connections += "stream_connect=extdma_{inst_nr}_0.m_axis_s2mm_sts:ccl_offload_{inst_nr}.s_axis_dma0_s2mm_sts\n".format(inst_nr=i)
-        stream_connections += "stream_connect=extdma_{inst_nr}_1.m_axis_mm2s:ccl_offload_{inst_nr}.s_axis_dma1_mm2s\n".format(inst_nr=i)
-        stream_connections += "stream_connect=extdma_{inst_nr}_1.m_axis_mm2s_sts:ccl_offload_{inst_nr}.s_axis_dma1_mm2s_sts\n".format(inst_nr=i)
-        stream_connections += "stream_connect=extdma_{inst_nr}_1.m_axis_s2mm_sts:ccl_offload_{inst_nr}.s_axis_dma1_s2mm_sts\n".format(inst_nr=i)
+    stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_dma0_s2mm:extdma_{inst_nr}_0.s_axis_s2mm\n".format(inst_nr=i)
+    stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_dma0_mm2s_cmd:extdma_{inst_nr}_0.s_axis_mm2s_cmd\n".format(inst_nr=i)
+    stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_dma0_s2mm_cmd:extdma_{inst_nr}_0.s_axis_s2mm_cmd\n".format(inst_nr=i)
+    stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_dma1_s2mm:extdma_{inst_nr}_1.s_axis_s2mm\n".format(inst_nr=i)
+    stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_dma1_mm2s_cmd:extdma_{inst_nr}_1.s_axis_mm2s_cmd\n".format(inst_nr=i)
+    stream_connections += "stream_connect=ccl_offload_{inst_nr}.m_axis_dma1_s2mm_cmd:extdma_{inst_nr}_1.s_axis_s2mm_cmd\n".format(inst_nr=i)
+    stream_connections += "stream_connect=extdma_{inst_nr}_0.m_axis_mm2s:ccl_offload_{inst_nr}.s_axis_dma0_mm2s\n".format(inst_nr=i)
+    stream_connections += "stream_connect=extdma_{inst_nr}_0.m_axis_mm2s_sts:ccl_offload_{inst_nr}.s_axis_dma0_mm2s_sts\n".format(inst_nr=i)
+    stream_connections += "stream_connect=extdma_{inst_nr}_0.m_axis_s2mm_sts:ccl_offload_{inst_nr}.s_axis_dma0_s2mm_sts\n".format(inst_nr=i)
+    stream_connections += "stream_connect=extdma_{inst_nr}_1.m_axis_mm2s:ccl_offload_{inst_nr}.s_axis_dma1_mm2s\n".format(inst_nr=i)
+    stream_connections += "stream_connect=extdma_{inst_nr}_1.m_axis_mm2s_sts:ccl_offload_{inst_nr}.s_axis_dma1_mm2s_sts\n".format(inst_nr=i)
+    stream_connections += "stream_connect=extdma_{inst_nr}_1.m_axis_s2mm_sts:ccl_offload_{inst_nr}.s_axis_dma1_s2mm_sts\n".format(inst_nr=i)
 
 # Connect CCLOs to POEs
 if args.poe == "tcp" or args.poe == "tcp_dummy":
@@ -278,7 +271,8 @@ with open(args.outfile, "w") as f:
     f.write("[connectivity]\n")
     f.write(cclo_instantiation+"\n")
     f.write(extdma_instantiation+"\n")
-    f.write(arb_instantiation+"\n")
+    if args.vadd:
+        f.write(arb_instantiation+"\n")
     f.write(hc_instantiation+"\n")
     f.write(reduce_instantiation+"\n")
     f.write(cast_instantiation+"\n")

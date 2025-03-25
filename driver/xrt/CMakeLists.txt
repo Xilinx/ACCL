@@ -47,7 +47,7 @@ set(ACCL_HEADERS
     ${ACCL_HEADER_PATH}/constants.hpp
     ${ACCL_HEADER_PATH}/simdevice.hpp
     ${ACCL_HEADER_PATH}/simbuffer.hpp
-    ${ACCL_HEADER_PATH}/fpgadevice.hpp
+    ${ACCL_HEADER_PATH}/xrtdevice.hpp
     ${ACCL_HEADER_PATH}/acclrequest.hpp
 )
 
@@ -58,7 +58,7 @@ set(ACCL_SOURCES
     ${ACCL_SOURCE_PATH}/constants.cpp
     ${ACCL_SOURCE_PATH}/simdevice.cpp
     ${ACCL_SOURCE_PATH}/simbuffer.cpp
-    ${ACCL_SOURCE_PATH}/fpgadevice.cpp
+    ${ACCL_SOURCE_PATH}/xrtdevice.cpp
     ${ZMQ_INTF_DIR}/zmq_client.cpp
     ${ZMQ_INTF_DIR}/zmq_common.cpp
 )
@@ -120,7 +120,7 @@ target_link_libraries(accl PUBLIC xilinxopencl xrt_coreutil xrt_core)
 target_include_directories(accl PUBLIC $ENV{XILINX_XRT}/include)
 
 # ZMQ
-target_link_libraries(accl PUBLIC zmqpp zmq pthread)
+target_link_libraries(accl PUBLIC zmq pthread)
 
 # Json
 find_package(jsoncpp REQUIRED)
