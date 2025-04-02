@@ -30,39 +30,32 @@ module design_user_logic_c0_0 (
     // AXI4L CONTROL
     AXI4L.s                     axi_ctrl,
 
-    // DESCRIPTOR BYPASS
-    metaIntf.m			        bpss_rd_req,
-    metaIntf.m			        bpss_wr_req,
-    metaIntf.s                  bpss_rd_done,
-    metaIntf.s                  bpss_wr_done,
+    // NOTIFY
+    metaIntf.m                  notify,
 
-    // AXI4S HOST STREAMS
-    AXI4SR.s                    axis_host_0_sink,
-    AXI4SR.m                    axis_host_0_src,
-    AXI4SR.s                    axis_host_1_sink,
-    AXI4SR.m                    axis_host_1_src,
-    AXI4SR.s                    axis_host_2_sink,
-    AXI4SR.m                    axis_host_2_src,
+    // DESCRIPTORS
+    metaIntf.m                  sq_rd, 
+    metaIntf.m                  sq_wr,
+    metaIntf.s                  cq_rd,
+    metaIntf.s                  cq_wr,
+    metaIntf.s                  rq_rd,
+    metaIntf.s                  rq_wr,
 
-    // AXI4S CARD STREAMS
-    AXI4SR.s                    axis_card_0_sink,
-    AXI4SR.m                    axis_card_0_src,
-    AXI4SR.s                    axis_card_1_sink,
-    AXI4SR.m                    axis_card_1_src,
-    AXI4SR.s                    axis_card_2_sink,
-    AXI4SR.m                    axis_card_2_src,
-    
-    // RDMA QSFP0 CMD
-    metaIntf.s			        rdma_0_rd_req,
-    metaIntf.s 			        rdma_0_wr_req,
+    // HOST DATA STREAMS
+    AXI4SR.s                    axis_host_recv [N_STRM_AXI],
+    AXI4SR.m                    axis_host_send [N_STRM_AXI],
 
-    // AXI4S RDMA QSFP0 STREAMS
-    AXI4SR.s                    axis_rdma_0_sink,
-    AXI4SR.m                    axis_rdma_0_src,
+    // CARD DATA STREAMS
+    AXI4SR.s                    axis_card_recv [N_CARD_AXI],
+    AXI4SR.m                    axis_card_send [N_CARD_AXI],
 
-    // RDMA QSFP0 SQ and RQ
-    metaIntf.m 			        rdma_0_sq,
-    metaIntf.s                  rdma_0_ack,
+    // RDMA DATA STREAMS REQUESTER
+    AXI4SR.s                    axis_rreq_recv [N_RDMA_AXI],
+    AXI4SR.m                    axis_rreq_send [N_RDMA_AXI],
+
+    // RDMA DATA STREAMS RESPONDER
+    AXI4SR.s                    axis_rrsp_recv [N_RDMA_AXI],
+    AXI4SR.m                    axis_rrsp_send [N_RDMA_AXI],
 
     // Clock and reset
     input  wire                 aclk,
@@ -70,53 +63,14 @@ module design_user_logic_c0_0 (
 );
 
 /* -- Tie-off unused interfaces and signals ----------------------------- */
-// always_comb axis_host_0_sink.tie_off_s();
-// always_comb axis_host_0_src_s.tie_off_m();
-// always_comb axis_card_0_sink.tie_off_s();
-// always_comb axis_card_0_src_s.tie_off_m();
-// always_comb axis_host_1_sink.tie_off_s();
-// always_comb axis_host_1_src.tie_off_m();
-// always_comb axis_card_1_sink.tie_off_s();
-// always_comb axis_card_1_src_s.tie_off_m();
+always_comb notify.tie_off_m();
+
 
 /* -- USER LOGIC -------------------------------------------------------- */
 
 // Constants
 localparam integer COYOTE_AXIL_ADDR_LSB = $clog2(AXIL_DATA_BITS/8);
 localparam integer COYOTE_AXIL_ADDR_MSB = 16;
-
-// Master Data Stream
-AXI4SR axis_host_0_src_s ();
-AXI4SR axis_host_1_src_s ();
-AXI4SR axis_host_2_src_s ();
-AXI4SR axis_card_0_src_s ();
-AXI4SR axis_card_1_src_s ();
-AXI4SR axis_card_2_src_s ();
-
-// register slices
-axisr_reg_array #(.N_STAGES(4)) (.aclk(aclk), .aresetn(aresetn), .s_axis(axis_host_0_src_s),  .m_axis(axis_host_0_src));
-axisr_reg_array #(.N_STAGES(4)) (.aclk(aclk), .aresetn(aresetn), .s_axis(axis_host_1_src_s),  .m_axis(axis_host_1_src));
-axisr_reg_array #(.N_STAGES(4)) (.aclk(aclk), .aresetn(aresetn), .s_axis(axis_host_2_src_s),  .m_axis(axis_host_2_src));
-axisr_reg_array #(.N_STAGES(4)) (.aclk(aclk), .aresetn(aresetn), .s_axis(axis_card_0_src_s),  .m_axis(axis_card_0_src));
-axisr_reg_array #(.N_STAGES(4)) (.aclk(aclk), .aresetn(aresetn), .s_axis(axis_card_1_src_s),  .m_axis(axis_card_1_src));
-axisr_reg_array #(.N_STAGES(4)) (.aclk(aclk), .aresetn(aresetn), .s_axis(axis_card_2_src_s),  .m_axis(axis_card_2_src));
-
-// Slave Data Stream
-AXI4SR axis_host_0_sink_s ();
-AXI4SR axis_host_1_sink_s ();
-AXI4SR axis_host_2_sink_s ();
-AXI4SR axis_card_0_sink_s ();
-AXI4SR axis_card_1_sink_s ();
-AXI4SR axis_card_2_sink_s ();
-
-// register slices
-axisr_reg_array #(.N_STAGES(4)) (.aclk(aclk), .aresetn(aresetn), .s_axis(axis_host_0_sink),  .m_axis(axis_host_0_sink_s));
-axisr_reg_array #(.N_STAGES(4)) (.aclk(aclk), .aresetn(aresetn), .s_axis(axis_host_1_sink),  .m_axis(axis_host_1_sink_s));
-axisr_reg_array #(.N_STAGES(4)) (.aclk(aclk), .aresetn(aresetn), .s_axis(axis_host_2_sink),  .m_axis(axis_host_2_sink_s));
-axisr_reg_array #(.N_STAGES(4)) (.aclk(aclk), .aresetn(aresetn), .s_axis(axis_card_0_sink),  .m_axis(axis_card_0_sink_s));
-axisr_reg_array #(.N_STAGES(4)) (.aclk(aclk), .aresetn(aresetn), .s_axis(axis_card_1_sink),  .m_axis(axis_card_1_sink_s));
-axisr_reg_array #(.N_STAGES(4)) (.aclk(aclk), .aresetn(aresetn), .s_axis(axis_card_2_sink),  .m_axis(axis_card_2_sink_s));
-
 
 // ACCL Block Design
 accl_bd_wrapper accl_system(
@@ -143,138 +97,236 @@ accl_bd_wrapper accl_system(
     .S00_AXI_0_wstrb(axi_ctrl.wstrb),
     .S00_AXI_0_wvalid(axi_ctrl.wvalid),
 
-    .cyt_byp_rd_cmd_0_tdata(bpss_rd_req.data),
-    .cyt_byp_rd_cmd_0_tready(bpss_rd_req.ready),
-    .cyt_byp_rd_cmd_0_tvalid(bpss_rd_req.valid),
+    .cyt_sq_rd_cmd_tdata(sq_rd.data),
+    .cyt_sq_rd_cmd_tready(sq_rd.ready),
+    .cyt_sq_rd_cmd_tvalid(sq_rd.valid),
 
-    .cyt_byp_rd_sts_0_tdata(bpss_rd_done.data),
-    .cyt_byp_rd_sts_0_tready(bpss_rd_done.ready),
-    .cyt_byp_rd_sts_0_tvalid(bpss_rd_done.valid),
+    .cyt_cq_rd_sts_0_tdata(cq_rd.data),
+    .cyt_cq_rd_sts_0_tready(cq_rd.ready),
+    .cyt_cq_rd_sts_0_tvalid(cq_rd.valid),
 
-    .cyt_byp_wr_cmd_0_tdata(bpss_wr_req.data),
-    .cyt_byp_wr_cmd_0_tready(bpss_wr_req.ready),
-    .cyt_byp_wr_cmd_0_tvalid(bpss_wr_req.valid),
+    .cyt_sq_wr_cmd_tdata(sq_wr.data),
+    .cyt_sq_wr_cmd_tready(sq_wr.ready),
+    .cyt_sq_wr_cmd_tvalid(sq_wr.valid),
 
-    .cyt_byp_wr_sts_0_tdata(bpss_wr_done.data),
-    .cyt_byp_wr_sts_0_tready(bpss_wr_done.ready),
-    .cyt_byp_wr_sts_0_tvalid(bpss_wr_done.valid),
+    .cyt_cq_wr_sts_0_tdata(cq_wr.data),
+    .cyt_cq_wr_sts_0_tready(cq_wr.ready),
+    .cyt_cq_wr_sts_0_tvalid(cq_wr.valid),
 
-    .m_axis_host_0_tdata(axis_host_0_src_s.tdata),
-    .m_axis_host_0_tkeep(axis_host_0_src_s.tkeep),
-    .m_axis_host_0_tlast(axis_host_0_src_s.tlast),
-    .m_axis_host_0_tready(axis_host_0_src_s.tready),
-    .m_axis_host_0_tvalid(axis_host_0_src_s.tvalid),
+    .cyt_rq_rd_tdata(rq_rd.data),
+    .cyt_rq_rd_tready(rq_rd.ready),
+    .cyt_rq_rd_tvalid(rq_rd.valid),
+
+    .cyt_rq_wr_tdata(rq_wr.data),
+    .cyt_rq_wr_tready(rq_wr.ready),
+    .cyt_rq_wr_tvalid(rq_wr.valid),
+
+    .m_axis_host_0_tdata(axis_host_send[0].tdata),
+    .m_axis_host_0_tkeep(axis_host_send[0].tkeep),
+    .m_axis_host_0_tlast(axis_host_send[0].tlast),
+    .m_axis_host_0_tready(axis_host_send[0].tready),
+    .m_axis_host_0_tvalid(axis_host_send[0].tvalid),
     .m_axis_host_0_tdest(),
 
-    .m_axis_host_1_tdata(axis_host_1_src_s.tdata),
-    .m_axis_host_1_tkeep(axis_host_1_src_s.tkeep),
-    .m_axis_host_1_tlast(axis_host_1_src_s.tlast),
-    .m_axis_host_1_tready(axis_host_1_src_s.tready),
-    .m_axis_host_1_tvalid(axis_host_1_src_s.tvalid),
+    .m_axis_host_1_tdata(axis_host_send[1].tdata),
+    .m_axis_host_1_tkeep(axis_host_send[1].tkeep),
+    .m_axis_host_1_tlast(axis_host_send[1].tlast),
+    .m_axis_host_1_tready(axis_host_send[1].tready),
+    .m_axis_host_1_tvalid(axis_host_send[1].tvalid),
     .m_axis_host_1_tdest(),
 
-    .m_axis_host_2_tdata(axis_host_2_src_s.tdata),
-    .m_axis_host_2_tkeep(axis_host_2_src_s.tkeep),
-    .m_axis_host_2_tlast(axis_host_2_src_s.tlast),
-    .m_axis_host_2_tready(axis_host_2_src_s.tready),
-    .m_axis_host_2_tvalid(axis_host_2_src_s.tvalid),
+    .m_axis_host_2_tdata(axis_host_send[2].tdata),
+    .m_axis_host_2_tkeep(axis_host_send[2].tkeep),
+    .m_axis_host_2_tlast(axis_host_send[2].tlast),
+    .m_axis_host_2_tready(axis_host_send[2].tready),
+    .m_axis_host_2_tvalid(axis_host_send[2].tvalid),
     .m_axis_host_2_tdest(),
 
-    .m_axis_card_0_tdata(axis_card_0_src_s.tdata),
-    .m_axis_card_0_tkeep(axis_card_0_src_s.tkeep),
-    .m_axis_card_0_tlast(axis_card_0_src_s.tlast),
-    .m_axis_card_0_tready(axis_card_0_src_s.tready),
-    .m_axis_card_0_tvalid(axis_card_0_src_s.tvalid),
+    .m_axis_card_0_tdata(axis_card_send[0].tdata),
+    .m_axis_card_0_tkeep(axis_card_send[0].tkeep),
+    .m_axis_card_0_tlast(axis_card_send[0].tlast),
+    .m_axis_card_0_tready(axis_card_send[0].tready),
+    .m_axis_card_0_tvalid(axis_card_send[0].tvalid),
     .m_axis_card_0_tdest(),
 
-    .m_axis_card_1_tdata(axis_card_1_src_s.tdata),
-    .m_axis_card_1_tkeep(axis_card_1_src_s.tkeep),
-    .m_axis_card_1_tlast(axis_card_1_src_s.tlast),
-    .m_axis_card_1_tready(axis_card_1_src_s.tready),
-    .m_axis_card_1_tvalid(axis_card_1_src_s.tvalid),
+    .m_axis_card_1_tdata(axis_card_send[1].tdata),
+    .m_axis_card_1_tkeep(axis_card_send[1].tkeep),
+    .m_axis_card_1_tlast(axis_card_send[1].tlast),
+    .m_axis_card_1_tready(axis_card_send[1].tready),
+    .m_axis_card_1_tvalid(axis_card_send[1].tvalid),
     .m_axis_card_1_tdest(),
 
-    .m_axis_card_2_tdata(axis_card_2_src_s.tdata),
-    .m_axis_card_2_tkeep(axis_card_2_src_s.tkeep),
-    .m_axis_card_2_tlast(axis_card_2_src_s.tlast),
-    .m_axis_card_2_tready(axis_card_2_src_s.tready),
-    .m_axis_card_2_tvalid(axis_card_2_src_s.tvalid),
+    .m_axis_card_2_tdata(axis_card_send[2].tdata),
+    .m_axis_card_2_tkeep(axis_card_send[2].tkeep),
+    .m_axis_card_2_tlast(axis_card_send[2].tlast),
+    .m_axis_card_2_tready(axis_card_send[2].tready),
+    .m_axis_card_2_tvalid(axis_card_send[2].tvalid),
     .m_axis_card_2_tdest(),
 
-    .s_axis_host_0_tdata(axis_host_0_sink_s.tdata),
-    .s_axis_host_0_tkeep(axis_host_0_sink_s.tkeep),
-    .s_axis_host_0_tlast(axis_host_0_sink_s.tlast),
-    .s_axis_host_0_tready(axis_host_0_sink_s.tready),
-    .s_axis_host_0_tvalid(axis_host_0_sink_s.tvalid),
+    .s_axis_host_0_tdata(axis_host_recv[0].tdata),
+    .s_axis_host_0_tkeep(axis_host_recv[0].tkeep),
+    .s_axis_host_0_tlast(axis_host_recv[0].tlast),
+    .s_axis_host_0_tready(axis_host_recv[0].tready),
+    .s_axis_host_0_tvalid(axis_host_recv[0].tvalid),
 
-    .s_axis_host_1_tdata(axis_host_1_sink_s.tdata),
-    .s_axis_host_1_tkeep(axis_host_1_sink_s.tkeep),
-    .s_axis_host_1_tlast(axis_host_1_sink_s.tlast),
-    .s_axis_host_1_tready(axis_host_1_sink_s.tready),
-    .s_axis_host_1_tvalid(axis_host_1_sink_s.tvalid),
+    .s_axis_host_1_tdata(axis_host_recv[1].tdata),
+    .s_axis_host_1_tkeep(axis_host_recv[1].tkeep),
+    .s_axis_host_1_tlast(axis_host_recv[1].tlast),
+    .s_axis_host_1_tready(axis_host_recv[1].tready),
+    .s_axis_host_1_tvalid(axis_host_recv[1].tvalid),
 
-    .s_axis_host_2_tdata(axis_host_2_sink_s.tdata),
-    .s_axis_host_2_tkeep(axis_host_2_sink_s.tkeep),
-    .s_axis_host_2_tlast(axis_host_2_sink_s.tlast),
-    .s_axis_host_2_tready(axis_host_2_sink_s.tready),
-    .s_axis_host_2_tvalid(axis_host_2_sink_s.tvalid),
+    .s_axis_host_2_tdata(axis_host_recv[2].tdata),
+    .s_axis_host_2_tkeep(axis_host_recv[2].tkeep),
+    .s_axis_host_2_tlast(axis_host_recv[2].tlast),
+    .s_axis_host_2_tready(axis_host_recv[2].tready),
+    .s_axis_host_2_tvalid(axis_host_recv[2].tvalid),
 
-    .s_axis_card_0_tdata(axis_card_0_sink_s.tdata),
-    .s_axis_card_0_tkeep(axis_card_0_sink_s.tkeep),
-    .s_axis_card_0_tlast(axis_card_0_sink_s.tlast),
-    .s_axis_card_0_tready(axis_card_0_sink_s.tready),
-    .s_axis_card_0_tvalid(axis_card_0_sink_s.tvalid),
+    .s_axis_card_0_tdata(axis_card_recv[0].tdata),
+    .s_axis_card_0_tkeep(axis_card_recv[0].tkeep),
+    .s_axis_card_0_tlast(axis_card_recv[0].tlast),
+    .s_axis_card_0_tready(axis_card_recv[0].tready),
+    .s_axis_card_0_tvalid(axis_card_recv[0].tvalid),
 
-    .s_axis_card_1_tdata(axis_card_1_sink_s.tdata),
-    .s_axis_card_1_tkeep(axis_card_1_sink_s.tkeep),
-    .s_axis_card_1_tlast(axis_card_1_sink_s.tlast),
-    .s_axis_card_1_tready(axis_card_1_sink_s.tready),
-    .s_axis_card_1_tvalid(axis_card_1_sink_s.tvalid),
+    .s_axis_card_1_tdata(axis_card_recv[1].tdata),
+    .s_axis_card_1_tkeep(axis_card_recv[1].tkeep),
+    .s_axis_card_1_tlast(axis_card_recv[1].tlast),
+    .s_axis_card_1_tready(axis_card_recv[1].tready),
+    .s_axis_card_1_tvalid(axis_card_recv[1].tvalid),
 
-    .s_axis_card_2_tdata(axis_card_2_sink_s.tdata),
-    .s_axis_card_2_tkeep(axis_card_2_sink_s.tkeep),
-    .s_axis_card_2_tlast(axis_card_2_sink_s.tlast),
-    .s_axis_card_2_tready(axis_card_2_sink_s.tready),
-    .s_axis_card_2_tvalid(axis_card_2_sink_s.tvalid),
+    .s_axis_card_2_tdata(axis_card_recv[2].tdata),
+    .s_axis_card_2_tkeep(axis_card_recv[2].tkeep),
+    .s_axis_card_2_tlast(axis_card_recv[2].tlast),
+    .s_axis_card_2_tready(axis_card_recv[2].tready),
+    .s_axis_card_2_tvalid(axis_card_recv[2].tvalid),
 
-    .s_axis_eth_rx_data_tdata(axis_rdma_0_sink.tdata),
-    .s_axis_eth_rx_data_tdest(axis_rdma_0_sink.tid),
-    .s_axis_eth_rx_data_tkeep(axis_rdma_0_sink.tkeep),
-    .s_axis_eth_rx_data_tlast(axis_rdma_0_sink.tlast),
-    .s_axis_eth_rx_data_tready(axis_rdma_0_sink.tready),
-    .s_axis_eth_rx_data_tvalid(axis_rdma_0_sink.tvalid),
+    .cyt_rreq_recv_0_tdata(axis_rreq_recv[0].tdata),
+    .cyt_rreq_recv_0_tkeep(axis_rreq_recv[0].tkeep),
+    .cyt_rreq_recv_0_tlast(axis_rreq_recv[0].tlast),
+    .cyt_rreq_recv_0_tready(axis_rreq_recv[0].tready),
+    .cyt_rreq_recv_0_tvalid(axis_rreq_recv[0].tvalid),
 
-    .m_axis_eth_tx_data_tdata(axis_rdma_0_src.tdata),
-    .m_axis_eth_tx_data_tdest(axis_rdma_0_src.tid), // not driven, default 0
-    .m_axis_eth_tx_data_tkeep(axis_rdma_0_src.tkeep),
-    .m_axis_eth_tx_data_tlast(axis_rdma_0_src.tlast),
-    .m_axis_eth_tx_data_tready(axis_rdma_0_src.tready),
-    .m_axis_eth_tx_data_tvalid(axis_rdma_0_src.tvalid),
+    .cyt_rreq_recv_1_tdata(axis_rreq_recv[1].tdata),
+    .cyt_rreq_recv_1_tkeep(axis_rreq_recv[1].tkeep),
+    .cyt_rreq_recv_1_tlast(axis_rreq_recv[1].tlast),
+    .cyt_rreq_recv_1_tready(axis_rreq_recv[1].tready),
+    .cyt_rreq_recv_1_tvalid(axis_rreq_recv[1].tvalid),
 
-    .s_axis_rdma_wr_req_tdata(rdma_0_wr_req.data),
-    .s_axis_rdma_wr_req_tvalid(rdma_0_wr_req.valid),
-    .s_axis_rdma_wr_req_tready(rdma_0_wr_req.ready),
+    .cyt_rreq_send_0_tdata(axis_rreq_send[0].tdata),
+    .cyt_rreq_send_0_tdest(),
+    .cyt_rreq_send_0_tkeep(axis_rreq_send[0].tkeep),
+    .cyt_rreq_send_0_tlast(axis_rreq_send[0].tlast),
+    .cyt_rreq_send_0_tready(axis_rreq_send[0].tready),
+    .cyt_rreq_send_0_tstrb(),
+    .cyt_rreq_send_0_tvalid(axis_rreq_send[0].tvalid),
 
-    .s_axis_rdma_rd_req_tdata(rdma_0_rd_req.data),
-    .s_axis_rdma_rd_req_tvalid(rdma_0_rd_req.valid),
-    .s_axis_rdma_rd_req_tready(rdma_0_rd_req.ready),
+    .cyt_rreq_send_1_tdata(axis_rreq_send[1].tdata),
+    .cyt_rreq_send_1_tdest(),
+    .cyt_rreq_send_1_tkeep(axis_rreq_send[1].tkeep),
+    .cyt_rreq_send_1_tlast(axis_rreq_send[1].tlast),
+    .cyt_rreq_send_1_tready(axis_rreq_send[1].tready),
+    .cyt_rreq_send_1_tstrb(),
+    .cyt_rreq_send_1_tvalid(axis_rreq_send[1].tvalid),
 
-    .m_axis_rdma_sq_tdata(rdma_0_sq.data),
-    .m_axis_rdma_sq_tvalid(rdma_0_sq.valid),
-    .m_axis_rdma_sq_tready(rdma_0_sq.ready)
+    .cyt_rrsp_recv_0_tdata(axis_rrsp_recv[0].tdata),
+    .cyt_rrsp_recv_0_tkeep(axis_rrsp_recv[0].tkeep),
+    .cyt_rrsp_recv_0_tlast(axis_rrsp_recv[0].tlast),
+    .cyt_rrsp_recv_0_tready(axis_rrsp_recv[0].tready),
+    .cyt_rrsp_recv_0_tvalid(axis_rrsp_recv[0].tvalid),
+
+    .cyt_rrsp_recv_1_tdata(axis_rrsp_recv[1].tdata),
+    .cyt_rrsp_recv_1_tkeep(axis_rrsp_recv[1].tkeep),
+    .cyt_rrsp_recv_1_tlast(axis_rrsp_recv[1].tlast),
+    .cyt_rrsp_recv_1_tready(axis_rrsp_recv[1].tready),
+    .cyt_rrsp_recv_1_tvalid(axis_rrsp_recv[1].tvalid),
+
+    .cyt_rrsp_send_0_tdata(axis_rrsp_send[0].tdata),
+    .cyt_rrsp_send_0_tkeep(axis_rrsp_send[0].tkeep),
+    .cyt_rrsp_send_0_tlast(axis_rrsp_send[0].tlast),
+    .cyt_rrsp_send_0_tready(axis_rrsp_send[0].tready),
+    .cyt_rrsp_send_0_tvalid(axis_rrsp_send[0].tvalid),
+
+    .cyt_rrsp_send_1_tdata(axis_rrsp_send[1].tdata),
+    .cyt_rrsp_send_1_tkeep(axis_rrsp_send[1].tkeep),
+    .cyt_rrsp_send_1_tlast(axis_rrsp_send[1].tlast),
+    .cyt_rrsp_send_1_tready(axis_rrsp_send[1].tready),
+    .cyt_rrsp_send_1_tvalid(axis_rrsp_send[1].tvalid)
 
 );
 
 
-assign axis_host_0_src_s.tid = 0;
-assign axis_host_1_src_s.tid = 0;
-assign axis_host_2_src_s.tid = 0;
+// ila_top ila_top(
+//     .clk(aclk),
+//     .probe0(sq_wr.valid), //1
+//     .probe1(sq_wr.ready), //1
+//     .probe2(sq_wr.data), //128
+//     .probe3(sq_rd.valid), //1
+//     .probe4(sq_rd.ready), //1
+//     .probe5(sq_rd.data), //128
+//     .probe6(rq_wr.valid), //1
+//     .probe7(rq_wr.ready), //1
+//     .probe8(rq_wr.data), //128
+//     .probe9(rq_rd.valid), //1
+//     .probe10(rq_rd.ready), //1
+//     .probe11(rq_rd.data), //128
+//     .probe12(axis_rreq_send[0].tvalid),
+//     .probe13(axis_rreq_send[0].tready),
+//     .probe14(axis_rreq_send[1].tvalid),
+//     .probe15(axis_rreq_send[1].tready),
+//     .probe16(axis_rrsp_recv[0].tvalid),
+//     .probe17(axis_rrsp_recv[0].tready),
+//     .probe18(axis_rrsp_recv[1].tvalid),
+//     .probe19(axis_rrsp_recv[1].tready),
+//     .probe20(axis_rreq_send[0].tlast),
+//     .probe21(axis_rreq_send[1].tlast),
+//     .probe22(axis_rrsp_recv[0].tlast),
+//     .probe23(axis_rrsp_recv[1].tlast),
+//     .probe24(cq_rd.data), //32
+//     .probe25(cq_rd.valid),
+//     .probe26(cq_rd.ready),
+//     .probe27(cq_wr.data), //32
+//     .probe28(cq_wr.valid),
+//     .probe29(cq_wr.ready),
+//     .probe30(axis_host_send[0].tvalid),
+//     .probe31(axis_host_send[0].tready),
+//     .probe32(axis_host_send[1].tvalid),
+//     .probe33(axis_host_send[1].tready),
+//     .probe34(axis_host_send[2].tvalid),
+//     .probe35(axis_host_send[2].tready),
+//     .probe36(axis_card_send[0].tvalid),
+//     .probe37(axis_card_send[0].tready),
+//     .probe38(axis_card_send[1].tvalid),
+//     .probe39(axis_card_send[1].tready),
+//     .probe40(axis_card_send[2].tvalid),
+//     .probe41(axis_card_send[2].tready),
+//     .probe42(axis_host_recv[0].tvalid),
+//     .probe43(axis_host_recv[0].tready),
+//     .probe44(axis_host_recv[1].tvalid),
+//     .probe45(axis_host_recv[1].tready),
+//     .probe46(axis_host_recv[2].tvalid),
+//     .probe47(axis_host_recv[2].tready),
+//     .probe48(axis_card_recv[0].tvalid),
+//     .probe49(axis_card_recv[0].tready),
+//     .probe50(axis_card_recv[1].tvalid),
+//     .probe51(axis_card_recv[1].tready),
+//     .probe52(axis_card_recv[2].tvalid),
+//     .probe53(axis_card_recv[2].tready)
+// );
 
-assign axis_card_0_src_s.tid = 0;
-assign axis_card_1_src_s.tid = 0;
-assign axis_card_2_src_s.tid = 0;
 
-assign rdma_0_ack.ready = 1'b1;
 
+
+assign axis_host_send[0].tid = 0;
+assign axis_host_send[1].tid = 0;
+assign axis_host_send[2].tid = 0;
+
+assign axis_card_send[0].tid = 0;
+assign axis_card_send[1].tid = 0;
+assign axis_card_send[2].tid = 0;
+
+assign axis_rreq_send[0].tid = 0;
+assign axis_rreq_send[1].tid = 0;
+
+assign axis_rrsp_send[0].tid = 0;
+assign axis_rrsp_send[1].tid = 0;
 
 endmodule

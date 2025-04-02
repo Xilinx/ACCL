@@ -74,6 +74,7 @@ set(ACCL_DOCS_RST
 )
         
 set(EN_COYOTE ON)
+set(EN_AVX 1 CACHE STRING "AVX environment.")
 if(EN_COYOTE)
     message("Enable Coyote")
     set(ACCL_HEADERS 
@@ -88,6 +89,7 @@ if(EN_COYOTE)
     file(GLOB COYOTE_SOURCE "${COYOTE_SOURCE_PATH}/*.cpp")
     
     if(EN_AVX)
+        add_definitions(-DEN_AVX)
         set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -mavx -march=native -O3")
     else()
         set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -march=native -O1")
