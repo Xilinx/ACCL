@@ -54,7 +54,24 @@ module sim_mem
 (* X_INTERFACE_INFO = "xilinx.com:interface:bram_rtl:1.0 MEM_PORT_B DIN" *)
     input [MEM_WIDTH-1:0] din_b,
 (* X_INTERFACE_INFO = "xilinx.com:interface:bram_rtl:1.0 MEM_PORT_B DOUT" *)
-    output [MEM_WIDTH-1:0] dout_b
+    output [MEM_WIDTH-1:0] dout_b,
+
+(* X_INTERFACE_PARAMETER = "MODE Slave, MASTER_TYPE BRAM_CTRL, MEM_ECC NONE, READ_WRITE_MODE READ_WRITE" *)
+(* X_INTERFACE_INFO = "xilinx.com:interface:bram_rtl:1.0 MEM_PORT_C CLK" *)
+    input clk_c,
+(* X_INTERFACE_INFO = "xilinx.com:interface:bram_rtl:1.0 MEM_PORT_C RST" *)
+    input rst_c,
+(* X_INTERFACE_INFO = "xilinx.com:interface:bram_rtl:1.0 MEM_PORT_C EN" *)
+    input en_c,
+(* X_INTERFACE_INFO = "xilinx.com:interface:bram_rtl:1.0 MEM_PORT_C ADDR" *)
+    input [MEM_DEPTH_LOG-1:0] addr_c,
+(* X_INTERFACE_INFO = "xilinx.com:interface:bram_rtl:1.0 MEM_PORT_C WE" *)
+    input [MEM_WIDTH/8-1:0] we_c,
+(* X_INTERFACE_INFO = "xilinx.com:interface:bram_rtl:1.0 MEM_PORT_C DIN" *)
+    input [MEM_WIDTH-1:0] din_c,
+(* X_INTERFACE_INFO = "xilinx.com:interface:bram_rtl:1.0 MEM_PORT_C DOUT" *)
+    output [MEM_WIDTH-1:0] dout_c
+
 );
 
 
@@ -71,11 +88,16 @@ generate for(byte_idx=0; byte_idx<MEM_WIDTH/8; byte_idx=byte_idx+1) begin: byte_
         if(en_b)
             if(we_b[byte_idx])
                 mem[addr_b][8*(byte_idx+1)-1:8*byte_idx] <= din_b[8*(byte_idx+1)-1:8*byte_idx];
+    always @(posedge clk_c)
+        if(en_c)
+            if(we_c[byte_idx])
+                mem[addr_c][8*(byte_idx+1)-1:8*byte_idx] <= din_c[8*(byte_idx+1)-1:8*byte_idx];
 end
 endgenerate
 
 reg [MEM_WIDTH-1:0] delayline_a[READ_LATENCY-1:0];
 reg [MEM_WIDTH-1:0] delayline_b[READ_LATENCY-1:0];
+reg [MEM_WIDTH-1:0] delayline_c[READ_LATENCY-1:0];
 
 always @(posedge clk_a)
     if(rst_a)     delayline_a[0] <= 0; 
@@ -85,6 +107,10 @@ always @(posedge clk_b)
     if(rst_b)     delayline_b[0] <= 0; 
     else if(en_b) delayline_b[0] <= mem[addr_b];
 
+always @(posedge clk_c)
+    if(rst_c)     delayline_c[0] <= 0; 
+    else if(en_c) delayline_c[0] <= mem[addr_c];
+
 genvar i;
 generate for(i=1; i<READ_LATENCY; i=i+1) begin: read_delay
     always @(posedge clk_a)
@@ -93,10 +119,14 @@ generate for(i=1; i<READ_LATENCY; i=i+1) begin: read_delay
     always @(posedge clk_b)
         if(rst_b) delayline_b[i] <= 0; 
         else      delayline_b[i] <= delayline_b[i-1];
+    always @(posedge clk_c)
+        if(rst_c) delayline_c[i] <= 0; 
+        else      delayline_c[i] <= delayline_c[i-1];
 end
 endgenerate
 
 assign dout_a = delayline_a[READ_LATENCY-1];
 assign dout_b = delayline_b[READ_LATENCY-1];
+assign dout_c = delayline_c[READ_LATENCY-1];
 
 endmodule

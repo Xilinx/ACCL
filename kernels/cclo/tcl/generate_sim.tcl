@@ -127,6 +127,18 @@ if { $en_dma != 0 } {
     connect_bd_intf_net [get_bd_intf_pins axi_bram_ctrl_2/BRAM_PORTA] [get_bd_intf_pins sim_mem_2/MEM_PORT_A]
     connect_bd_intf_net [get_bd_intf_pins axi_bram_ctrl_2/BRAM_PORTB] [get_bd_intf_pins sim_mem_2/MEM_PORT_B]
 
+    create_bd_cell -type ip -vlnv xilinx.com:ip:axi_bram_ctrl:4.1 axi_bram_ctrl_3
+    set_property -dict [list CONFIG.SINGLE_PORT_BRAM {1} CONFIG.DATA_WIDTH {512} CONFIG.ECC_TYPE {0} CONFIG.READ_LATENCY $latency] [get_bd_cells axi_bram_ctrl_3]
+    connect_bd_intf_net [get_bd_intf_pins axi_bram_ctrl_3/BRAM_PORTA] [get_bd_intf_pins sim_mem_0/MEM_PORT_C]
+
+    create_bd_cell -type ip -vlnv xilinx.com:ip:axi_bram_ctrl:4.1 axi_bram_ctrl_4
+    set_property -dict [list CONFIG.SINGLE_PORT_BRAM {1} CONFIG.DATA_WIDTH {512} CONFIG.ECC_TYPE {0} CONFIG.READ_LATENCY $latency] [get_bd_cells axi_bram_ctrl_4]
+    connect_bd_intf_net [get_bd_intf_pins axi_bram_ctrl_4/BRAM_PORTA] [get_bd_intf_pins sim_mem_1/MEM_PORT_C]
+
+    create_bd_cell -type ip -vlnv xilinx.com:ip:axi_bram_ctrl:4.1 axi_bram_ctrl_5
+    set_property -dict [list CONFIG.SINGLE_PORT_BRAM {1} CONFIG.DATA_WIDTH {512} CONFIG.ECC_TYPE {0} CONFIG.READ_LATENCY $latency] [get_bd_cells axi_bram_ctrl_5]
+    connect_bd_intf_net [get_bd_intf_pins axi_bram_ctrl_5/BRAM_PORTA] [get_bd_intf_pins sim_mem_2/MEM_PORT_C]
+
     create_bd_cell -type ip -vlnv xilinx.com:ip:axi_crossbar:2.1 axi_crossbar_0
     set_property -dict [list CONFIG.NUM_SI {3} CONFIG.NUM_MI {2}] [get_bd_cells axi_crossbar_0]
     connect_bd_intf_net [get_bd_intf_pins axi_crossbar_0/M00_AXI] [get_bd_intf_pins axi_bram_ctrl_0/S_AXI]
@@ -137,9 +149,10 @@ if { $en_dma != 0 } {
     connect_bd_intf_net [get_bd_intf_pins axi_crossbar_1/M00_AXI] [get_bd_intf_pins axi_bram_ctrl_2/S_AXI]
 
     create_bd_cell -type ip -vlnv xilinx.com:ip:axi_crossbar:2.1 axi_crossbar_2
-    set_property -dict [list CONFIG.NUM_SI {1} CONFIG.NUM_MI {2}] [get_bd_cells axi_crossbar_2]
-    connect_bd_intf_net [get_bd_intf_pins axi_crossbar_2/M00_AXI] [get_bd_intf_pins axi_crossbar_0/S02_AXI]
-    connect_bd_intf_net [get_bd_intf_pins axi_crossbar_2/M01_AXI] [get_bd_intf_pins axi_crossbar_1/S02_AXI]
+    set_property -dict [list CONFIG.NUM_SI {1} CONFIG.NUM_MI {3}] [get_bd_cells axi_crossbar_2]
+    connect_bd_intf_net [get_bd_intf_pins axi_crossbar_2/M00_AXI] [get_bd_intf_pins axi_bram_ctrl_3/S_AXI]
+    connect_bd_intf_net [get_bd_intf_pins axi_crossbar_2/M01_AXI] [get_bd_intf_pins axi_bram_ctrl_4/S_AXI]
+    connect_bd_intf_net [get_bd_intf_pins axi_crossbar_2/M02_AXI] [get_bd_intf_pins axi_bram_ctrl_5/S_AXI]
 
     create_bd_cell -type ip -vlnv Xilinx:ACCL:external_dma_2port:1.0 external_dma_0
     connect_bd_net [get_bd_ports ap_clk] [get_bd_pins external_dma_0/ap_clk]
@@ -219,31 +232,27 @@ if { $en_dma != 0 } {
     connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins axi_bram_ctrl_1/s_axi_aresetn]
     connect_bd_net [get_bd_ports ap_clk] [get_bd_pins axi_bram_ctrl_2/s_axi_aclk]
     connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins axi_bram_ctrl_2/s_axi_aresetn]
+    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins axi_bram_ctrl_3/s_axi_aclk]
+    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins axi_bram_ctrl_3/s_axi_aresetn]
+    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins axi_bram_ctrl_4/s_axi_aclk]
+    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins axi_bram_ctrl_4/s_axi_aresetn]
+    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins axi_bram_ctrl_5/s_axi_aclk]
+    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins axi_bram_ctrl_5/s_axi_aresetn]
 
     # #assign addresses and set ranges
     save_bd_design
-    assign_bd_address
 
-    set_property offset [expr { 0*$memsize }] [get_bd_addr_segs {s_axi_data/SEG_axi_bram_ctrl_0_Mem0}]
-    set_property offset [expr { 1*$memsize }] [get_bd_addr_segs {s_axi_data/SEG_axi_bram_ctrl_1_Mem0}]
-    set_property offset [expr { 2*$memsize }] [get_bd_addr_segs {s_axi_data/SEG_axi_bram_ctrl_2_Mem0}]
-    set_property range $memsize [get_bd_addr_segs {s_axi_data/SEG_axi_bram_ctrl_0_Mem0}]
-    set_property range $memsize [get_bd_addr_segs {s_axi_data/SEG_axi_bram_ctrl_1_Mem0}]
-    set_property range $memsize [get_bd_addr_segs {s_axi_data/SEG_axi_bram_ctrl_2_Mem0}]
+    assign_bd_address -offset [expr { 0*$memsize }] -range $memsize -target_address_space s_axi_data [get_bd_addr_segs axi_bram_ctrl_3/S_AXI/Mem0] -force
+    assign_bd_address -offset [expr { 1*$memsize }] -range $memsize -target_address_space s_axi_data [get_bd_addr_segs axi_bram_ctrl_4/S_AXI/Mem0] -force
+    assign_bd_address -offset [expr { 2*$memsize }] -range $memsize -target_address_space s_axi_data [get_bd_addr_segs axi_bram_ctrl_5/S_AXI/Mem0] -force
 
-    set_property offset [expr { 0*$memsize }] [get_bd_addr_segs {external_dma_0/m_axi_0/SEG_axi_bram_ctrl_0_Mem0}]
-    set_property offset [expr { 1*$memsize }] [get_bd_addr_segs {external_dma_0/m_axi_0/SEG_axi_bram_ctrl_1_Mem0}]
-    set_property offset [expr { 2*$memsize }] [get_bd_addr_segs {external_dma_0/m_axi_1/SEG_axi_bram_ctrl_2_Mem0}]
-    set_property range $memsize [get_bd_addr_segs {external_dma_0/m_axi_0/SEG_axi_bram_ctrl_0_Mem0}]
-    set_property range $memsize [get_bd_addr_segs {external_dma_0/m_axi_0/SEG_axi_bram_ctrl_1_Mem0}]
-    set_property range $memsize [get_bd_addr_segs {external_dma_0/m_axi_1/SEG_axi_bram_ctrl_2_Mem0}]
+    assign_bd_address -offset [expr { 0*$memsize }] -range $memsize -target_address_space external_dma_0/m_axi_0 [get_bd_addr_segs axi_bram_ctrl_0/S_AXI/Mem0] -force
+    assign_bd_address -offset [expr { 1*$memsize }] -range $memsize -target_address_space external_dma_0/m_axi_0 [get_bd_addr_segs axi_bram_ctrl_1/S_AXI/Mem0] -force
+    assign_bd_address -offset [expr { 0*$memsize }] -range $memsize -target_address_space external_dma_0/m_axi_1 [get_bd_addr_segs axi_bram_ctrl_2/S_AXI/Mem0] -force
 
-    set_property offset [expr { 0*$memsize }] [get_bd_addr_segs {external_dma_1/m_axi_0/SEG_axi_bram_ctrl_0_Mem0}]
-    set_property offset [expr { 1*$memsize }] [get_bd_addr_segs {external_dma_1/m_axi_0/SEG_axi_bram_ctrl_1_Mem0}]
-    set_property offset [expr { 2*$memsize }] [get_bd_addr_segs {external_dma_1/m_axi_1/SEG_axi_bram_ctrl_2_Mem0}]
-    set_property range $memsize [get_bd_addr_segs {external_dma_1/m_axi_0/SEG_axi_bram_ctrl_0_Mem0}]
-    set_property range $memsize [get_bd_addr_segs {external_dma_1/m_axi_0/SEG_axi_bram_ctrl_1_Mem0}]
-    set_property range $memsize [get_bd_addr_segs {external_dma_1/m_axi_1/SEG_axi_bram_ctrl_2_Mem0}]
+    assign_bd_address -offset [expr { 0*$memsize }] -range $memsize -target_address_space external_dma_1/m_axi_0 [get_bd_addr_segs axi_bram_ctrl_0/S_AXI/Mem0] -force
+    assign_bd_address -offset [expr { 1*$memsize }] -range $memsize -target_address_space external_dma_1/m_axi_0 [get_bd_addr_segs axi_bram_ctrl_1/S_AXI/Mem0] -force
+    assign_bd_address -offset [expr { 0*$memsize }] -range $memsize -target_address_space external_dma_1/m_axi_1 [get_bd_addr_segs axi_bram_ctrl_2/S_AXI/Mem0] -force
 
     group_bd_cells external_memory [get_bd_cells axi_bram_ctrl_*] [get_bd_cells sim_mem_*] [get_bd_cells axi_crossbar_*]
     group_bd_cells dma [get_bd_cells external_dma_*] [get_bd_cells cyt_dma_0] [get_bd_cells cyt_dma_adapter_0]
@@ -297,20 +306,17 @@ if { $stacktype == "RDMA" } {
     connect_bd_intf_net [get_bd_intf_pins dummy_cyt_rdma_stack/recv_data] [get_bd_intf_pins cclo/s_axis_eth_rx_data]
     connect_bd_intf_net [get_bd_intf_pins cclo/m_axis_eth_tx_data] [get_bd_intf_pins dummy_cyt_rdma_stack/send_data]
 
-    set_property -dict [list CONFIG.NUM_SI {2}] [get_bd_cells external_memory/axi_crossbar_2]
+    create_bd_cell -type ip -vlnv Xilinx:ACCL:external_dma_2port:1.0 cyt_wr_dma
+    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins cyt_wr_dma/ap_clk]
+    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins cyt_wr_dma/ap_rst_n]
+    connect_bd_intf_net [get_bd_intf_pins dummy_cyt_rdma_stack/wr_cmd] [get_bd_intf_pins cyt_wr_dma/s_axis_s2mm_cmd]
+    connect_bd_intf_net [get_bd_intf_pins dummy_cyt_rdma_stack/wr_data] [get_bd_intf_pins cyt_wr_dma/s_axis_s2mm]
+    connect_bd_intf_net [get_bd_intf_pins cyt_wr_dma/m_axi_0] [get_bd_intf_pins external_memory/axi_crossbar_0/S02_AXI]
+    connect_bd_intf_net [get_bd_intf_pins cyt_wr_dma/m_axi_1] [get_bd_intf_pins external_memory/axi_crossbar_1/S02_AXI]
 
-    create_bd_cell -type ip -vlnv xilinx.com:ip:axi_datamover:5.1 cyt_wr_dma
-    set_property -dict [list CONFIG.c_enable_mm2s {0} CONFIG.c_include_s2mm_dre {true} CONFIG.c_s2mm_support_indet_btt {true} ] [get_bd_cells cyt_wr_dma]
-    set_property -dict [list CONFIG.c_m_axi_s2mm_data_width.VALUE_SRC USER CONFIG.c_s_axis_s2mm_tdata_width.VALUE_SRC USER] [get_bd_cells cyt_wr_dma]
-    set_property -dict [list CONFIG.c_addr_width {64} CONFIG.c_m_axi_s2mm_data_width {512} CONFIG.c_s_axis_s2mm_tdata_width {512} ] [get_bd_cells cyt_wr_dma]
-    connect_bd_intf_net [get_bd_intf_pins cyt_wr_dma/S_AXIS_S2MM] [get_bd_intf_pins dummy_cyt_rdma_stack/wr_data]
-    connect_bd_intf_net [get_bd_intf_pins dummy_cyt_rdma_stack/wr_cmd] [get_bd_intf_pins cyt_wr_dma/S_AXIS_S2MM_CMD]
-    connect_bd_intf_net [get_bd_intf_pins dummy_cyt_rdma_stack/wr_sts] [get_bd_intf_pins cyt_wr_dma/M_AXIS_S2MM_STS]
-    connect_bd_intf_net [get_bd_intf_pins cyt_wr_dma/M_AXI_S2MM] [get_bd_intf_pins external_memory/axi_crossbar_2/S01_AXI]
-    connect_bd_net [get_bd_ports ap_clk] [get_bd_pins cyt_wr_dma/m_axi_s2mm_aclk] [get_bd_pins cyt_wr_dma/m_axis_s2mm_cmdsts_awclk]
-    connect_bd_net [get_bd_ports ap_rst_n] [get_bd_pins cyt_wr_dma/m_axi_s2mm_aresetn] [get_bd_pins cyt_wr_dma/m_axis_s2mm_cmdsts_aresetn]
-
-    assign_bd_address -target_address_space /cyt_wr_dma/Data_S2MM [get_bd_addr_segs external_memory/axi_bram_ctrl_0/S_AXI/Mem0] -force
+    assign_bd_address -offset [expr { 0*$memsize }] -range $memsize -target_address_space /cyt_wr_dma/m_axi_0 [get_bd_addr_segs external_memory/axi_bram_ctrl_0/S_AXI/Mem0] -force
+    assign_bd_address -offset [expr { 1*$memsize }] -range $memsize -target_address_space /cyt_wr_dma/m_axi_0 [get_bd_addr_segs external_memory/axi_bram_ctrl_1/S_AXI/Mem0] -force
+    assign_bd_address -offset [expr { 0*$memsize }] -range $memsize -target_address_space /cyt_wr_dma/m_axi_1 [get_bd_addr_segs external_memory/axi_bram_ctrl_2/S_AXI/Mem0] -force
 }
 
 # connect arithmetic plugins
