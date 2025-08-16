@@ -65,6 +65,7 @@ struct options_t
 	unsigned int protoc;
 	std::string xclbin;
 	std::string fpgaIP;
+	bool eagerRx_host;
 };
 
 struct timestamp_t
@@ -276,6 +277,7 @@ options_t parse_options(int argc, char *argv[])
 			"i", "device-index", "device index of FPGA if hardware mode is used",
 			false, 0, "positive integer");
 		cmd.add(device_index_arg);
+		TCLAP::SwitchArg eager_arg("e", "eager_host", "Eager Buffers on host", cmd, false);
 		cmd.parse(argc, argv);
 		if (hardware_arg.getValue())
 		{
@@ -337,6 +339,7 @@ options_t parse_options(int argc, char *argv[])
 		opts.xclbin = xclbin_arg.getValue();
 		opts.fpgaIP = fpgaIP_arg.getValue();
 		opts.protoc = protoc_arg.getValue();
+		opts.eagerRx_host = eager_arg.getValue();
 
 		std::cout << "count:" << opts.count << " rxbuf_size:" << opts.rxbuf_size << " seg_size:" << opts.seg_size << " num_rxbufmem:" << opts.num_rxbufmem << std::endl;
 		return opts;
@@ -479,25 +482,85 @@ void configure_cyt_tcp(std::vector<rank_t> &ranks, int local_rank, ACCL::CoyoteD
 
 }
 
+void test_copy(ACCL::ACCL &accl, options_t &options){
+	unsigned int count = options.count;
+	auto op_buf = accl.create_coyotebuffer<float>(count, dataType::float32);
+	auto res_buf = accl.create_coyotebuffer<float>(count, dataType::float32);
+	int errors = 0;
+	if (options.count*sizeof(dataType::float32) > options.rxbuf_size){
+		std::cout<<"experiment size larger than buffer size, exiting..."<<std::endl;
+		return;
+	}
+	//init the buffers
+	for (int i = 0; i < count; i++){
+		op_buf.get()->buffer()[i] = (float)i;
+		res_buf.get()->buffer()[i] = -999.0f;
+	} 
+	if (options.host == 0){ op_buf->sync_to_device(); }
+	if (options.host == 0){ res_buf->sync_to_device(); }
+	// Print buffer addresses for debugging
+    //std::cout << "Source buffer address: " << op_buf.get()->buffer() << std::endl;
+    //std::cout << "Result buffer address: " << res_buf.get()->buffer() << std::endl;
+	// Debug print first few values before operation
+    
+
+	ACCL::ACCLRequest* req;
+	req = accl.copy(*op_buf, *res_buf, count, true, true, false);
+	accl.wait(req, 1000ms);
+	//sync res buffer from device
+	if (options.host == 0){ 
+		std::cout << "Syncing result buffer from device..." << std::endl;
+        res_buf->sync_from_device(); 
+    }
+	// Debug print first few values after operation
+    std::cout << "Result buffer after copy (first 4 elements): ";
+    for (int i = 0; i < count; i++) {
+        std::cout << res_buf.get()->buffer()[i] << " ";
+    }
+    std::cout << std::endl;
+	//compare results
+		if (options.host == 0){ op_buf->sync_from_device(); }
+		if (options.host == 0){ res_buf->sync_from_device(); }
+	for (int i = 0; i < count; i++) {
+		if (res_buf.get()->buffer()[i] != op_buf.get()->buffer()[i]) {
+			std::cout << std::to_string(i + 1) + "th item is incorrect!" << res_buf.get()->buffer()[i] << " != " 
+			<< op_buf.get()->buffer()[i] << std::endl;
+			errors += 1;
+		}
+	}
+	if (errors > 0) {
+        std::cout << "Copy test failed with " << errors << " errors out of " << count << " elements!" << std::endl;
+        failed_tests++;
+    } else {
+        std::cout << "Copy test successful!" << std::endl;
+    }
+    
+    // Free buffers
+    std::cout << "Freeing buffers..." << std::endl;
+    op_buf->free_buffer();
+    res_buf->free_buffer();
+}
+
+
 
 void test_sendrcv(ACCL::ACCL &accl, options_t &options) {
   	std::cout << "Start send recv test..." << std::endl<<std::flush;
 	// do the send recv test here
 	int bufsize = options.count;
 
-	if (options.count*sizeof(dataType::int32) > options.rxbuf_size){
+	if (options.count*sizeof(dataType::float32) > options.rxbuf_size){
 		std::cout<<"experiment size larger than buffer size, exiting..."<<std::endl;
 		return;
 	}
 
-	auto op_buf = accl.create_coyotebuffer<int>(bufsize, dataType::int32);
+	auto op_buf = accl.create_coyotebuffer<float>(bufsize, dataType::float32);
 	
 	for (int n = 0; n < options.nruns; n++)
 	{
 		std::cout << "Repetition " <<n<< std::endl<<std::flush;
 
 		// rank 0 initializes the buffer with numbers, rank1 with -1
-		for (int i = 0; i < bufsize; i++) op_buf.get()->buffer()[i] = (mpi_rank == 0) ? i : -1;
+		for (int i = 0; i < bufsize; i++) op_buf.get()->buffer()[i] = (mpi_rank == 0) ? 5.0f : -1.0f;
 		
 		if (options.host == 0){ op_buf->sync_to_device(); }
 
@@ -542,8 +605,8 @@ void test_sendrcv(ACCL::ACCL &accl, options_t &options) {
 		if (mpi_rank == 1)
 		{
 			for (int i = 0; i < bufsize; i++) {
-				unsigned int res = op_buf.get()->buffer()[i];
-				unsigned int ref = i;
+				float res = op_buf.get()->buffer()[i];
+				float ref = 5.0f;
 				if (res != ref) {
 				std::cout << std::to_string(i + 1) + "th item is incorrect! (" +
 								std::to_string(res) + " != " + std::to_string(ref) + ")"
@@ -559,6 +622,7 @@ void test_sendrcv(ACCL::ACCL &accl, options_t &options) {
 		} else {
 			std::cout << "Test is successful!" << std::endl;
 		}
+		debug(accl.dump_eager_rx_buffers(false));
 	}
 	
 	op_buf->free_buffer();
@@ -1106,9 +1170,13 @@ void test_accl_base(options_t options)
 
 		accl = std::make_unique<ACCL::ACCL>(device);
 		if (options.protoc == 0){
+			bool eagerBufs = false;
+			if(options.eagerRx_host){
+				eagerBufs = true;
+			}
 			std::cout<<"Eager Protocol"<<std::endl;
 			accl.get()->initialize(ranks, mpi_rank,
-				mpi_size+2, options.rxbuf_size, options.seg_size, 4096*1024*2);
+				mpi_size+3, options.rxbuf_size, /*options.seg_size*/ 4096*1024, 4096*1024*2, eagerBufs);
 		} else if (options.protoc == 1){
 			std::cout<<"Rendezvous Protocol"<<std::endl;
 			accl.get()->initialize(ranks, mpi_rank, mpi_size, 64, 64, options.seg_size);
@@ -1141,6 +1209,7 @@ void test_accl_base(options_t options)
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	
+	test_copy(*accl, options);
 
 	if(options.test_mode == ACCL_SEND || options.test_mode == 0){
 		debug(accl->dump_eager_rx_buffers(false));

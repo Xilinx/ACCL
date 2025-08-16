@@ -2,7 +2,7 @@
 
 # parameters
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-FPGA_BIT_PATH=$SCRIPT_DIR/../../../refdesigns/Coyote/hw/build_RDMA/lynx/lynx.runs/impl_1/cyt_top
+FPGA_BIT_PATH=$SCRIPT_DIR/../../../refdesigns/coyote_build_RDMA_u55c/bitstreams/cyt_top
 # FPGA_BIT_PATH=$SCRIPT_DIR/../../../refdesigns/Coyote/hw/build_TCP/lynx/lynx.runs/impl_1/cyt_top
 DRIVER_PATH=$SCRIPT_DIR/../../../refdesigns/Coyote/driver/
 
@@ -85,8 +85,8 @@ if [ $HOT_RESET -eq 1 ]; then
 	done
 	wait
 	echo "Driver loaded."
-	echo "Getting permissions for fpga..."
-	parallel-ssh -H "$hostlist" -x '-tt' "sudo /opt/sgrt/cli/program/fpga_chmod 0"
+	#echo "Getting permissions for fpga..."
+	#parallel-ssh -H "$hostlist" -x '-tt' "sudo /opt/sgrt/cli/program/fpga_chmod 0"
 	echo "Done."
 fi
 

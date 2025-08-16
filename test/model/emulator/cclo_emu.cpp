@@ -61,6 +61,7 @@ void dma_read(vector<char> &dmem, vector<char> &hmem, Stream<ap_axiu<104,0,0,DES
     axi::Status status;
     stream_word tmp;
     logger << log_level::verbose << "DMA " << (host ? "host" : "device") << " read: Command popped. length: " << command.length << " offset: " << command.address << " EOF: " << command.eof << endl;
+    std::cout << "DMA " << (host ? "host" : "device") << " read: Command popped. length: " << command.length << " offset: " << command.address << " EOF: " << command.eof << endl;
     int byte_count = 0;
     while(byte_count < command.length){
         tmp.keep = 0;
@@ -76,15 +77,17 @@ void dma_read(vector<char> &dmem, vector<char> &hmem, Stream<ap_axiu<104,0,0,DES
     status.tag = command.tag;
     sts.Push(status);
     logger("DMA Read: Status pushed\n", log_level::verbose);
+    std::cout << "DMA Read: Status pushed " << endl;
 }
 
 void dma_write(vector<char> &dmem, vector<char> &hmem, Stream<ap_axiu<104,0,0,DEST_WIDTH> > &cmd, Stream<ap_uint<32> > &sts, Stream<stream_word > &wdata){
     ap_axiu<104,0,0,DEST_WIDTH> cmd_word = cmd.Pop();
     axi::Command<64, 23> command = axi::Command<64, 23>(cmd_word.data);
-    bool host = (cmd_word.dest == 1);
+    bool host = (cmd_word.dest == 1); 
     axi::Status status;
     stream_word tmp;
     logger << log_level::verbose << "DMA " << (host ? "host" : "device") << " write: Command popped. length: " << command.length << " offset: " << command.address << " EOF: " << command.eof << endl;
+    std::cout << "DMA " << (host ? "host" : "device") << " write: Command popped. length: " << command.length << " offset: " << command.address << " EOF: " << command.eof << endl;
     int byte_count = 0;
     while(byte_count<command.length){
         tmp = wdata.Pop();
@@ -101,6 +104,7 @@ void dma_write(vector<char> &dmem, vector<char> &hmem, Stream<ap_axiu<104,0,0,DE
         //end of packet
         if(command.eof && (byte_count == command.length) && !tmp.last){
             logger << log_level::critical_warning << "DMA Write: TLAST not asserted at end of EOF command, DMA might fail" << endl;
+            std::cout << "DMA Write: TLAST not asserted at end of EOF command, DMA might fail" << endl;
         }
         if(tmp.last){
             status.endOfPacket = 1;
@@ -113,6 +117,7 @@ void dma_write(vector<char> &dmem, vector<char> &hmem, Stream<ap_axiu<104,0,0,DE
     status.bytesReceived = byte_count;
     sts.Push(status);
     logger << log_level::verbose << "DMA Write: Status pushed endOfPacket=" << status.endOfPacket << " btt=" << status.bytesReceived << endl;
+    std::cout << "DMA Write: Status pushed endOfPacket=" << status.endOfPacket << " btt=" << status.bytesReceived << endl;
 }
 
 template <unsigned int INW, unsigned int OUTW, unsigned int DESTW>
@@ -216,12 +221,16 @@ void controller(Stream<command_word> &cmdin, Stream<command_word> &cmdout,
     ap_uint<32> function = cmdin.Pop().data;
     ap_uint<32> tag = cmdin.Pop().data;
     ap_uint<32> arithcfg = cmdin.Pop().data;
+    //this must be 0 as well
     ap_uint<32> compression_flags = cmdin.Pop().data;
+    //thex must be 0
     ap_uint<32> stream_flags = cmdin.Pop().data;
+    //this should be active
     ap_uint<64> addr_0 = cmdin.Pop().data;
     addr_0(63,32) = cmdin.Pop().data;
     ap_uint<64> addr_1 = cmdin.Pop().data;
     addr_1(63,32) = cmdin.Pop().data;
+    //this should be active
     ap_uint<64> addr_2 = cmdin.Pop().data;
     addr_2(63,32) = cmdin.Pop().data;
     //execute host controller
@@ -444,6 +453,7 @@ void sim_bd(zmq_intf_context *ctx, string comm_backend, unsigned int local_rank,
     //ARITH
     HLSLIB_FREERUNNING_FUNCTION(reduce_ops, arith_op0, arith_op1, arith_res);
     //COMPRESS 0, 1, 2
+    //this should be disabled
     HLSLIB_FREERUNNING_FUNCTION(hp_compression, clane0_op, clane0_res);
     HLSLIB_FREERUNNING_FUNCTION(hp_compression, clane1_op, clane1_res);
     HLSLIB_FREERUNNING_FUNCTION(hp_compression, clane2_op, clane2_res);
@@ -506,6 +516,8 @@ void sim_bd(zmq_intf_context *ctx, string comm_backend, unsigned int local_rank,
 }
 
 int main(int argc, char** argv){
+
+    std::cout << "Starting ACCL emulator... " << std::endl;
 
     TCLAP::CmdLine cmd("ACCL Emulator");
     TCLAP::ValueArg<unsigned int> loglevel("l", "loglevel",

@@ -84,7 +84,9 @@ void rxbuf_session_command(
                 cmd.length = notif.length;
                 cmd_word.data = cmd;
                 cmd_word.last = 1;//always last, each command is a single word
-                cmd_word.dest = 0;//always write RX data to device (not host)
+                //TODO: keep this?
+                cmd_word.dest = desc.mem_index;//always write RX data to device (not host)
+                //std::cout << "rxbuf_session_command host bit: " << cmd_word.dest << std::endl;
                 STREAM_WRITE(fragment_dma_cmd, cmd_word);
             } else {
                 //if EOF update address in descriptor
@@ -116,6 +118,7 @@ void rxbuf_session_command(
             desc.remaining = desc.header.count;
             //prime the command to status parser
             sts_command.first = true;
+            //std::cout << "rxbuf_session_command host bit else case: " << desc.mem_index << std::endl;
         }
         //store descriptor
         mem[notif.session_id] = desc;

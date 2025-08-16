@@ -452,7 +452,7 @@ std::unique_ptr<ACCL::ACCL>
 initialize_accl(std::vector<rank_t> &ranks, int local_rank,
                 bool simulator, acclDesign design, xrt::device device,
                 fs::path xclbin, unsigned int nbufs, unsigned int bufsize, 
-                unsigned int egrsize, bool rsfec) {
+                unsigned int egrsize, bool rsfec, bool eagerRx_host) {
   std::size_t world_size = ranks.size();
   std::unique_ptr<ACCL::ACCL> accl;
 
@@ -519,7 +519,7 @@ initialize_accl(std::vector<rank_t> &ranks, int local_rank,
 
     accl = std::make_unique<ACCL::ACCL>(device, cclo_ip, hostctrl_ip, devicemem, rxbufmem);
   }
-  accl.get()->initialize(ranks, local_rank,	nbufs, bufsize, egrsize, std::min(nbufs*bufsize, (unsigned int)4*1024*1024));
+  accl.get()->initialize(ranks, local_rank,	nbufs, bufsize, egrsize, std::min(nbufs*bufsize, (unsigned int)4*1024*1024), eagerRx_host);
   return accl;
 }
 } // namespace accl_network_utils

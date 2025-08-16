@@ -21,6 +21,7 @@
 #include <cassert>
 #include <future>
 #include "zmq_client.h"
+#include <bitset>
 
 static void finish_sim_request(ACCL::SimRequest *req) {
   ACCL::SimDevice *cclo = reinterpret_cast<ACCL::SimDevice *>(req->cclo());
@@ -43,6 +44,8 @@ void SimRequest::start() {
   options.addr_0->sync_bo_to_device();
   options.addr_1->sync_bo_to_device();
   options.addr_2->sync_bo_to_device();
+  std::cout << "SimRequest::start: addr_0: " << options.addr_0->address() << std::endl;
+  std::cout << "SimRequest::start: addr_2: " << options.addr_2->address() << std::endl;
 
   if (options.scenario == operation::config) {
     function = static_cast<int>(options.cfg_function);
@@ -51,6 +54,7 @@ void SimRequest::start() {
   }
 
   uint32_t flags = static_cast<uint32_t>(options.host_flags) << 8 | static_cast<uint32_t>(options.stream_flags);
+  std::cout << "host flags " << std::bitset<32>(static_cast<uint32_t>(options.host_flags)) << " shifted: " << std::bitset<32>(static_cast<uint32_t>(options.host_flags)<<8) << std::endl;
 
   zmq_client_startcall(
       reinterpret_cast<SimDevice *>(cclo_ptr)->get_context(),
@@ -164,7 +168,7 @@ void SimDevice::write(addr_t offset, val_t val) {
 
 CCLO::deviceType SimDevice::get_device_type()
 {
-  std::cout<<"get_device_type: sim_device"<<std::endl;
+  //std::cout<<"get_device_type: sim_device"<<std::endl;
   return CCLO::sim_device;
 }
 void SimDevice::launch_request() {

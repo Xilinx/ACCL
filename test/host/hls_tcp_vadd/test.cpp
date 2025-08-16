@@ -48,6 +48,7 @@ struct options_t {
     unsigned int count;
     unsigned int device_index;
     bool hardware;
+    bool eagerRx_host;
     bool rsfec;
     std::string xclbin;
     std::string config_file;

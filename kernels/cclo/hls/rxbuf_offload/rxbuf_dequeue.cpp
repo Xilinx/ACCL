@@ -41,6 +41,7 @@ void rxbuf_dequeue(
 	rx_buffers[(RX_BUFFER_METADATA_OFFSET/4) + spare_idx * SPARE_BUFFER_FIELDS + RX_LEN_OFFSET] = header.count;
 	rx_buffers[(RX_BUFFER_METADATA_OFFSET/4) + spare_idx * SPARE_BUFFER_FIELDS + RX_SRC_OFFSET] = header.src;
 	rx_buffers[(RX_BUFFER_METADATA_OFFSET/4) + spare_idx * SPARE_BUFFER_FIELDS + SEQUENCE_NUMBER_OFFSET] = header.seqn;
+	//std::cout << "rxbuf_dequeue host bit: " << rx_buffers[(RX_BUFFER_METADATA_OFFSET/4) + spare_idx * SPARE_BUFFER_FIELDS + HOST_OFFSET] << std::endl;
 	hlslib::axi::Status dma_status = hlslib::axi::Status(STREAM_READ(dma_sts));
 	//interpret dma sts and write new spare_sts
 	// 3-0 TAG 

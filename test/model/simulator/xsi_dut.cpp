@@ -44,6 +44,12 @@ XSI_DUT::XSI_DUT(const string& design_libname, const string& simkernel_libname,
     memset(&info, 0, sizeof(info));
     info.logFileName = NULL;
     info.wdbFileName = const_cast<char*>(wdbName.c_str());
+    
+    // Work-around for an added field (ximDir) in Vivado >= 2023.2, which if left NULL, will cause C++ string exception
+    // However, for older versions of Vivado, this field is not present, so we need to check the size of the struct
+    if (sizeof(info) == 24) {
+        info.xsimDir =  const_cast<char*>("xsim.dir");
+    }
     xsi.open(&info);
     *logger << log_level::verbose << "XSI opened" << std::endl;
     if(trace){

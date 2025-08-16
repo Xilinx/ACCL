@@ -435,6 +435,7 @@ void start_move(
     opcode |= op0_opcode;
     opcode |= op1_opcode << 3;
     opcode |= res_opcode << 6;
+    //printf("rx_src_rank: %u\n", rx_src_rank);
     
     uint32_t compression_flags = flags & 0xff;
     uint32_t remote_flags = (flags>>8) & 0xff;
@@ -581,6 +582,7 @@ int send(
     unsigned int buftype
 ) {
     unsigned int host = (buftype >> 8) & 0xff;
+    //printf("host bit in send: %u\n", host);
     unsigned int stream = buftype & 0xff;
     //get count in bytes
     unsigned int bytes_count = datatype_nbytes*count;
@@ -609,6 +611,8 @@ int send(
             0, 0, dst_rank, dst_tag
         );
     } else {
+        //printf("eager send, dst_rank: %u, src_addr: %lu, dst_tag: %u, buftype: %u\n", 
+        //    dst_rank, src_addr, dst_tag, buftype);
         //Eager with segmentation
         //if ETH_COMPRESSED is set, also set RES_COMPRESSED
         compression |= (compression & ETH_COMPRESSED) >> 1;
@@ -674,6 +678,8 @@ int recv(
         }
         return rendezvous_get_completion(src_rank, dst_addr, is_host, count, src_tag);
     } else {
+         //printf("eager recv, src_rank: %u, dst_addr: %lu, src_tag: %u, buftype: %u\n", 
+            //src_rank, dst_addr, src_tag, buftype);
         //Eager with segmentation
         //if ETH_COMPRESSED is set, also set OP1_COMPRESSED
         compression |= (compression & ETH_COMPRESSED) >> 2;
@@ -2381,9 +2387,11 @@ void run() {
                 retval = combine(count, function, op0_addr, op1_addr, res_addr, datapath_cfg, compression_flags, buftype_flags);
                 break;
             case ACCL_SEND:
+            //printf("Sending %d bytes to %d\n", count, root_src_dst);
                 retval = send(root_src_dst, count, op0_addr, comm, datapath_cfg, msg_tag, compression_flags, buftype_flags);
                 break;
             case ACCL_RECV:
+                //printf("Receiving %d bytes from %d\n", count, root_src_dst);
                 retval = recv(root_src_dst, count, res_addr, comm, datapath_cfg, msg_tag, compression_flags, buftype_flags);
                 break;
             case ACCL_BCAST:

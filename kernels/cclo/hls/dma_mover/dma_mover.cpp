@@ -224,6 +224,7 @@ void dma_cmd_execute(
     datamover_ack_instruction ack_instr;
 
     if(!STREAM_IS_EMPTY(instruction)){
+        //std::cout << "dma_cmd_execute: starting DMA command execution" << std::endl;
         do{
             instr = STREAM_READ(instruction);
             ack_instr.ncommands = 0;
@@ -239,6 +240,7 @@ void dma_cmd_execute(
                 dma_cmd_word.data = dma_cmd;
                 dma_cmd_word.last = 1;//always last
                 dma_cmd_word.dest = instr.mem_id;
+                //std::cout << "dma_cmd dest: " << instr.mem_id << " addr: " << instr.addr << std::endl;
                 STREAM_WRITE(dma_cmd_channel, dma_cmd_word);
                 //update state
                 instr.total_bytes -= btt;
@@ -375,6 +377,10 @@ void instruction_fetch(
         ret.op0_is_host = tmp(17,17);
         ret.op1_is_host = tmp(18,18);
         ret.res_is_host = tmp(19,19);
+        //std::cout << "dma_mover instruction_fetch host flags: "
+        //          << ret.op0_is_host << " " 
+        //          << ret.op1_is_host << " " 
+        //          << ret.res_is_host << " opcodes: " << ret.op0_opcode << " " << ret.op1_opcode << " " << ret.res_opcode << " remote flags: " << ret.res_is_remote << " function id: " << ret.func_id << std::endl;
         ret.res_is_rendezvous = tmp(20,20);
 
         ret.count = (STREAM_READ(cmd)).data;
@@ -491,6 +497,8 @@ void instruction_decode(
     //compute total transfer bytes for compressed and uncompressed scenarios
     unsigned int total_bytes_uncompressed = get_len(insn.count, 0, arcfg.uncompressed_elem_bytes);
     unsigned int total_bytes_compressed = get_len(insn.count, arcfg.elem_ratio_log, arcfg.compressed_elem_bytes);
+    //std::cout << "dma_mover instruction_decode: total_bytes_uncompressed=" << total_bytes_uncompressed 
+    //          << " total_bytes_compressed=" << total_bytes_compressed << std::endl;
     //service requests
     rtr.c_nwords = (total_bytes_compressed+63) / 64;
     rtr.u_nwords = (total_bytes_uncompressed+63) / 64;
@@ -591,9 +599,13 @@ void instruction_decode(
                         seek_res = STREAM_READ(rxbuf_ack);
                     }while(!seek_res.valid);
                     dm1_rd.addr = seek_res.addr;
+                    //std::cout << "dma_mover instruction_decode: seek result addr " << seek_res.addr << std::endl;
                     dm1_rd.total_bytes = seek_res.len;
+                    //std::cout << "dma_mover instruction_decode: seek result len " << seek_res.len << std::endl;
                     bytes_remaining -= seek_res.len;
                     dm1_rd.last = (bytes_remaining <= 0);
+                    dm1_rd.mem_id = seek_res.host ? 1 : 0;
+                    //std::cout << "dma_mover instruction_decode: seek result host " << seek_res.host << std::endl;
                     //instruct to release this buffer once the DMA movement is complete
                     STREAM_WRITE(rxbuf_release_idx, seek_res.index);
                     ack_insn.release_count++;
@@ -643,6 +655,7 @@ void instruction_decode(
                 pkt_wr.mpi_tag = insn.mpi_tag;
                 pkt_wr.to_stream = (insn.res_opcode == MOVE_STREAM);
                 pkt_wr.to_host = insn.res_is_host;
+                //std::cout << "dma_mover instruction_decode: res is host " << insn.res_is_host << " at address " << insn.res_addr << std::endl;
                 pkt_wr.addr = insn.res_addr;
                 pkt_wr.rendezvous = insn.res_is_rendezvous;
                 STREAM_WRITE(eth_insn, pkt_wr);
@@ -665,6 +678,7 @@ void instruction_decode(
         } else if(!(insn.res_opcode == MOVE_STREAM)){
             dm1_wr.total_bytes = insn.res_is_compressed ? total_bytes_compressed : total_bytes_uncompressed;
             dm1_wr.mem_id = insn.res_is_host ? 1 : 0;
+            //std::cout << "dma_mover instruction_decode res not stream: res is host " << insn.res_is_host << " at address " << insn.res_addr << std::endl;
             switch(insn.res_opcode){
                 case MOVE_IMMEDIATE:
                     dm1_wr.addr = insn.res_addr;

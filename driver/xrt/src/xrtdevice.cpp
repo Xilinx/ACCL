@@ -20,6 +20,7 @@
 #include "accl/common.hpp"
 #include <future>
 #include <cassert>
+#include <bitset>
 
 static void finish_fpga_request(ACCL::FPGARequest *req) {
   req->wait_kernel();
@@ -44,6 +45,7 @@ void FPGARequest::start() {
     function = static_cast<int>(options.reduce_function);
   }
   uint32_t flags = static_cast<uint32_t>(options.host_flags) << 8 | static_cast<uint32_t>(options.stream_flags);
+  std::cout << "host flags xrt " << std::bitset<32>(static_cast<uint32_t>(options.host_flags)) << " shifted: " << std::bitset<32>(static_cast<uint32_t>(options.host_flags)<<8) << std::endl;
   switch(options.scenario) {
     case ACCL::operation::copy:
       run.set_arg(ACCL::XRT_ARG_ID::SCENARIO_ID, static_cast<uint32_t>(options.scenario));

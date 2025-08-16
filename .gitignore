@@ -21,3 +21,45 @@
 driver/xrt/src/m2m
 driver/xrt/build
 .vscode
+<<<<<<< HEAD
+=======
+coyote_build*
+*xcu55c-fsvh2892-2L-e*
+*xcu280-fsvh2892-2L-e*
+sol1/
+*_prj
+*.gen
+*.ip_user_files
+*.cache
+*.srcs
+**/fpga_ips.txt
+
+CMakeFiles/
+CMakeCache.txt
+CMakeDoxy*
+*.cmake
+accl_on_coyote
+*.xsa
+accl_log/
+*.xci
+packaged_kernel/
+*.hw
+*.xml
+*.xpr
+*/xrt/_deps/
+>>>>>>> dev
+
+# HLS-generated files to ignore
+sol1/
+sources_1/
+packaged_kernel/
+*.app
+*.xsa
+*.xpr
+*.lpr
+*.wpc
+<<<<<<< HEAD
+=======
+.run/
+_deps/
+>>>>>>> dev

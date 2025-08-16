@@ -52,7 +52,7 @@ target_link_libraries(cclo_sim PUBLIC zmq zmqpp pthread jsoncpp_lib dl rt)
 target_compile_definitions(cclo_sim PUBLIC ZMQ_CALL_VERBOSE NUM_CTRL_STREAMS=3 ACCL_SIM_MEM_SIZE_KB=${ACCL_SIM_MEM_SIZE_KB})
 target_compile_options(cclo_sim PRIVATE -Wno-attributes -fdiagnostics-color=always -g -fmax-errors=3)
 
-set(STACK_TYPE "TCP" CACHE STRING "Type of POE")
+set(STACK_TYPE "RDMA" CACHE STRING "Type of POE")
 set_property(CACHE STACK_TYPE PROPERTY STRINGS "TCP" "UDP" "RDMA")
 
 set(BUILD_FOLDER ${STACK_TYPE}_sim)

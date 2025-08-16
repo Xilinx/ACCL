@@ -96,15 +96,16 @@ class TestEnvironment : public ::testing::Environment {
         // Clear any erroneous setting of benchmark flag
         options.benchmark = false;
       }
-
+      std::cout << "Setting up TestEnvironment for rank " << ::rank << std::endl;
 
       if(options.hardware && (options.cyt_rdma || options.cyt_tcp)){
 		    accl = std::make_unique<ACCL::ACCL>(cyt_dev);
 			  accl.get()->initialize(ranks, ::rank, options.rxbuf_count, options.rxbuf_size, options.max_eager_count);
       } else {
+        std::cout << "Initializing ACCL for rank " << ::rank << std::endl;
         accl = initialize_accl(
             ranks, ::rank, !options.hardware, design, dev, options.xclbin, options.rxbuf_count,
-            options.rxbuf_size, options.max_eager_count, options.rsfec);
+            options.rxbuf_size, options.max_eager_count, options.rsfec, options.eagerRx_host);
       }
       std::cout << "Done setting up TestEnvironment" << std::endl;
       accl->set_timeout(1e6);

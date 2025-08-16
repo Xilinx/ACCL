@@ -56,7 +56,7 @@ initialize_accl(std::vector<ACCL::rank_t> &ranks, int local_rank,
                 xrt::device device = xrt::device(),
                 std::filesystem::path xclbin = "", unsigned int nbufs = 16,
                 unsigned int bufsize = 1024, unsigned int egrsize = 0,
-                bool rsfec = false);
+                bool rsfec = false, bool eagerRx_host = false);
 
 // Configure the VNX kernel, this function is called by initialize_accl
 void configure_vnx(vnx::CMAC &cmac, vnx::Networklayer &network_layer,

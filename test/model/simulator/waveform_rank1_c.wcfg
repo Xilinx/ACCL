@@ -1,0 +1,264 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<wave_config>
+   <wave_state>
+   </wave_state>
+   <db_ref_list>
+      <db_ref path="/mnt/scratch/jooertli/ACCL/test/model/simulator/waveform_rank1.wdb" id="1">
+         <top_modules>
+            <top_module name="axi_bram_ctrl_funcs" />
+            <top_module name="ccl_offload" />
+            <top_module name="glbl" />
+            <top_module name="ipif_pkg" />
+            <top_module name="lib_pkg" />
+            <top_module name="lmb_bram_if_funcs" />
+            <top_module name="vcomponents" />
+         </top_modules>
+      </db_ref>
+   </db_ref_list>
+   <zoom_setting>
+      <ZoomStartTime time="0.000000 us"></ZoomStartTime>
+      <ZoomEndTime time="230.604001 us"></ZoomEndTime>
+      <Cursor1Time time="230.604000 us"></Cursor1Time>
+   </zoom_setting>
+   <column_width_setting>
+      <NameColumnWidth column_width="293"></NameColumnWidth>
+      <ValueColumnWidth column_width="333"></ValueColumnWidth>
+   </column_width_setting>
+   <WVObjectSize size="13" />
+   <wvobject type="group" fp_name="group97">
+      <obj_property name="label">eth_rx</obj_property>
+      <obj_property name="DisplayName">label</obj_property>
+      <wvobject type="array" fp_name="/ccl_offload/s_axis_eth_rx_data_tdata">
+         <obj_property name="ElementShortName">s_axis_eth_rx_data_tdata[511:0]</obj_property>
+         <obj_property name="ObjectShortName">s_axis_eth_rx_data_tdata[511:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/s_axis_eth_rx_data_tdest">
+         <obj_property name="ElementShortName">s_axis_eth_rx_data_tdest[7:0]</obj_property>
+         <obj_property name="ObjectShortName">s_axis_eth_rx_data_tdest[7:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/s_axis_eth_rx_data_tready">
+         <obj_property name="ElementShortName">s_axis_eth_rx_data_tready</obj_property>
+         <obj_property name="ObjectShortName">s_axis_eth_rx_data_tready</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/s_axis_eth_rx_data_tvalid">
+         <obj_property name="ElementShortName">s_axis_eth_rx_data_tvalid</obj_property>
+         <obj_property name="ObjectShortName">s_axis_eth_rx_data_tvalid</obj_property>
+      </wvobject>
+   </wvobject>
+   <wvobject type="group" fp_name="group102">
+      <obj_property name="label">dma0_s2mm_cmd</obj_property>
+      <obj_property name="DisplayName">label</obj_property>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/m_axis_dma0_s2mm_cmd_tdata">
+         <obj_property name="ElementShortName">m_axis_dma0_s2mm_cmd_tdata[103:0]</obj_property>
+         <obj_property name="ObjectShortName">m_axis_dma0_s2mm_cmd_tdata[103:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/m_axis_dma0_s2mm_cmd_tdest">
+         <obj_property name="ElementShortName">m_axis_dma0_s2mm_cmd_tdest[7:0]</obj_property>
+         <obj_property name="ObjectShortName">m_axis_dma0_s2mm_cmd_tdest[7:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/m_axis_dma0_s2mm_cmd_tready">
+         <obj_property name="ElementShortName">m_axis_dma0_s2mm_cmd_tready</obj_property>
+         <obj_property name="ObjectShortName">m_axis_dma0_s2mm_cmd_tready</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/m_axis_dma0_s2mm_cmd_tvalid">
+         <obj_property name="ElementShortName">m_axis_dma0_s2mm_cmd_tvalid</obj_property>
+         <obj_property name="ObjectShortName">m_axis_dma0_s2mm_cmd_tvalid</obj_property>
+      </wvobject>
+   </wvobject>
+   <wvobject type="group" fp_name="group107">
+      <obj_property name="label">m_axis_dma0_s2mm</obj_property>
+      <obj_property name="DisplayName">label</obj_property>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/m_axis_dma0_s2mm_tdata">
+         <obj_property name="ElementShortName">m_axis_dma0_s2mm_tdata[511:0]</obj_property>
+         <obj_property name="ObjectShortName">m_axis_dma0_s2mm_tdata[511:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/m_axis_dma0_s2mm_tdest">
+         <obj_property name="ElementShortName">m_axis_dma0_s2mm_tdest[7:0]</obj_property>
+         <obj_property name="ObjectShortName">m_axis_dma0_s2mm_tdest[7:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/m_axis_dma0_s2mm_tready">
+         <obj_property name="ElementShortName">m_axis_dma0_s2mm_tready</obj_property>
+         <obj_property name="ObjectShortName">m_axis_dma0_s2mm_tready</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/m_axis_dma0_s2mm_tvalid">
+         <obj_property name="ElementShortName">m_axis_dma0_s2mm_tvalid</obj_property>
+         <obj_property name="ObjectShortName">m_axis_dma0_s2mm_tvalid</obj_property>
+      </wvobject>
+   </wvobject>
+   <wvobject type="group" fp_name="group112">
+      <obj_property name="label">dma1_s2mm_cmd</obj_property>
+      <obj_property name="DisplayName">label</obj_property>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/m_axis_dma1_s2mm_cmd_tdata">
+         <obj_property name="ElementShortName">m_axis_dma1_s2mm_cmd_tdata[103:0]</obj_property>
+         <obj_property name="ObjectShortName">m_axis_dma1_s2mm_cmd_tdata[103:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/m_axis_dma1_s2mm_cmd_tdest">
+         <obj_property name="ElementShortName">m_axis_dma1_s2mm_cmd_tdest[7:0]</obj_property>
+         <obj_property name="ObjectShortName">m_axis_dma1_s2mm_cmd_tdest[7:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/m_axis_dma1_s2mm_cmd_tready">
+         <obj_property name="ElementShortName">m_axis_dma1_s2mm_cmd_tready</obj_property>
+         <obj_property name="ObjectShortName">m_axis_dma1_s2mm_cmd_tready</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/m_axis_dma1_s2mm_cmd_tvalid">
+         <obj_property name="ElementShortName">m_axis_dma1_s2mm_cmd_tvalid</obj_property>
+         <obj_property name="ObjectShortName">m_axis_dma1_s2mm_cmd_tvalid</obj_property>
+      </wvobject>
+   </wvobject>
+   <wvobject type="group" fp_name="group117">
+      <obj_property name="label">m_axis_dma1_s2mm</obj_property>
+      <obj_property name="DisplayName">label</obj_property>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/m_axis_dma1_s2mm_tdata">
+         <obj_property name="ElementShortName">m_axis_dma1_s2mm_tdata[511:0]</obj_property>
+         <obj_property name="ObjectShortName">m_axis_dma1_s2mm_tdata[511:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/m_axis_dma1_s2mm_tdest">
+         <obj_property name="ElementShortName">m_axis_dma1_s2mm_tdest[7:0]</obj_property>
+         <obj_property name="ObjectShortName">m_axis_dma1_s2mm_tdest[7:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/m_axis_dma1_s2mm_tready">
+         <obj_property name="ElementShortName">m_axis_dma1_s2mm_tready</obj_property>
+         <obj_property name="ObjectShortName">m_axis_dma1_s2mm_tready</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/m_axis_dma1_s2mm_tvalid">
+         <obj_property name="ElementShortName">m_axis_dma1_s2mm_tvalid</obj_property>
+         <obj_property name="ObjectShortName">m_axis_dma1_s2mm_tvalid</obj_property>
+      </wvobject>
+   </wvobject>
+   <wvobject type="group" fp_name="group121">
+      <obj_property name="label">dma0_s2mm_sts</obj_property>
+      <obj_property name="DisplayName">label</obj_property>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/s_axis_dma0_s2mm_sts_tdata">
+         <obj_property name="ElementShortName">s_axis_dma0_s2mm_sts_tdata[31:0]</obj_property>
+         <obj_property name="ObjectShortName">s_axis_dma0_s2mm_sts_tdata[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/s_axis_dma0_s2mm_sts_tready">
+         <obj_property name="ElementShortName">s_axis_dma0_s2mm_sts_tready</obj_property>
+         <obj_property name="ObjectShortName">s_axis_dma0_s2mm_sts_tready</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/s_axis_dma0_s2mm_sts_tvalid">
+         <obj_property name="ElementShortName">s_axis_dma0_s2mm_sts_tvalid</obj_property>
+         <obj_property name="ObjectShortName">s_axis_dma0_s2mm_sts_tvalid</obj_property>
+      </wvobject>
+   </wvobject>
+   <wvobject type="group" fp_name="group125">
+      <obj_property name="label">dma1_s2mm_sts</obj_property>
+      <obj_property name="DisplayName">label</obj_property>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/s_axis_dma1_s2mm_sts_tdata">
+         <obj_property name="ElementShortName">s_axis_dma1_s2mm_sts_tdata[31:0]</obj_property>
+         <obj_property name="ObjectShortName">s_axis_dma1_s2mm_sts_tdata[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/s_axis_dma1_s2mm_sts_tready">
+         <obj_property name="ElementShortName">s_axis_dma1_s2mm_sts_tready</obj_property>
+         <obj_property name="ObjectShortName">s_axis_dma1_s2mm_sts_tready</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/s_axis_dma1_s2mm_sts_tvalid">
+         <obj_property name="ElementShortName">s_axis_dma1_s2mm_sts_tvalid</obj_property>
+         <obj_property name="ObjectShortName">s_axis_dma1_s2mm_sts_tvalid</obj_property>
+      </wvobject>
+   </wvobject>
+   <wvobject type="group" fp_name="group130">
+      <obj_property name="label">dma0_mm2s_cmd</obj_property>
+      <obj_property name="DisplayName">label</obj_property>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/m_axis_dma0_mm2s_cmd_tdata">
+         <obj_property name="ElementShortName">m_axis_dma0_mm2s_cmd_tdata[103:0]</obj_property>
+         <obj_property name="ObjectShortName">m_axis_dma0_mm2s_cmd_tdata[103:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/m_axis_dma0_mm2s_cmd_tdest">
+         <obj_property name="ElementShortName">m_axis_dma0_mm2s_cmd_tdest[7:0]</obj_property>
+         <obj_property name="ObjectShortName">m_axis_dma0_mm2s_cmd_tdest[7:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/m_axis_dma0_mm2s_cmd_tready">
+         <obj_property name="ElementShortName">m_axis_dma0_mm2s_cmd_tready</obj_property>
+         <obj_property name="ObjectShortName">m_axis_dma0_mm2s_cmd_tready</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/m_axis_dma0_mm2s_cmd_tvalid">
+         <obj_property name="ElementShortName">m_axis_dma0_mm2s_cmd_tvalid</obj_property>
+         <obj_property name="ObjectShortName">m_axis_dma0_mm2s_cmd_tvalid</obj_property>
+      </wvobject>
+   </wvobject>
+   <wvobject type="group" fp_name="group135">
+      <obj_property name="label">dma1_mm2s_cmd</obj_property>
+      <obj_property name="DisplayName">label</obj_property>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/m_axis_dma1_mm2s_cmd_tdata">
+         <obj_property name="ElementShortName">m_axis_dma1_mm2s_cmd_tdata[103:0]</obj_property>
+         <obj_property name="ObjectShortName">m_axis_dma1_mm2s_cmd_tdata[103:0]</obj_property>
+      </wvobject>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/m_axis_dma1_mm2s_cmd_tdest">
+         <obj_property name="ElementShortName">m_axis_dma1_mm2s_cmd_tdest[7:0]</obj_property>
+         <obj_property name="ObjectShortName">m_axis_dma1_mm2s_cmd_tdest[7:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/m_axis_dma1_mm2s_cmd_tready">
+         <obj_property name="ElementShortName">m_axis_dma1_mm2s_cmd_tready</obj_property>
+         <obj_property name="ObjectShortName">m_axis_dma1_mm2s_cmd_tready</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/m_axis_dma1_mm2s_cmd_tvalid">
+         <obj_property name="ElementShortName">m_axis_dma1_mm2s_cmd_tvalid</obj_property>
+         <obj_property name="ObjectShortName">m_axis_dma1_mm2s_cmd_tvalid</obj_property>
+      </wvobject>
+   </wvobject>
+   <wvobject type="group" fp_name="group139">
+      <obj_property name="label">dma0_mm2s_sts</obj_property>
+      <obj_property name="DisplayName">label</obj_property>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/s_axis_dma0_mm2s_sts_tdata">
+         <obj_property name="ElementShortName">s_axis_dma0_mm2s_sts_tdata[31:0]</obj_property>
+         <obj_property name="ObjectShortName">s_axis_dma0_mm2s_sts_tdata[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/s_axis_dma0_mm2s_sts_tready">
+         <obj_property name="ElementShortName">s_axis_dma0_mm2s_sts_tready</obj_property>
+         <obj_property name="ObjectShortName">s_axis_dma0_mm2s_sts_tready</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/s_axis_dma0_mm2s_sts_tvalid">
+         <obj_property name="ElementShortName">s_axis_dma0_mm2s_sts_tvalid</obj_property>
+         <obj_property name="ObjectShortName">s_axis_dma0_mm2s_sts_tvalid</obj_property>
+      </wvobject>
+   </wvobject>
+   <wvobject type="group" fp_name="group143">
+      <obj_property name="label">s_axis_dm0_mm2s</obj_property>
+      <obj_property name="DisplayName">label</obj_property>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/s_axis_dma0_mm2s_tdata">
+         <obj_property name="ElementShortName">s_axis_dma0_mm2s_tdata[511:0]</obj_property>
+         <obj_property name="ObjectShortName">s_axis_dma0_mm2s_tdata[511:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/s_axis_dma0_mm2s_tready">
+         <obj_property name="ElementShortName">s_axis_dma0_mm2s_tready</obj_property>
+         <obj_property name="ObjectShortName">s_axis_dma0_mm2s_tready</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/s_axis_dma0_mm2s_tvalid">
+         <obj_property name="ElementShortName">s_axis_dma0_mm2s_tvalid</obj_property>
+         <obj_property name="ObjectShortName">s_axis_dma0_mm2s_tvalid</obj_property>
+      </wvobject>
+   </wvobject>
+   <wvobject type="group" fp_name="group147">
+      <obj_property name="label">dma1_mm2s_sts</obj_property>
+      <obj_property name="DisplayName">label</obj_property>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/s_axis_dma1_mm2s_sts_tdata">
+         <obj_property name="ElementShortName">s_axis_dma1_mm2s_sts_tdata[31:0]</obj_property>
+         <obj_property name="ObjectShortName">s_axis_dma1_mm2s_sts_tdata[31:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/s_axis_dma1_mm2s_sts_tready">
+         <obj_property name="ElementShortName">s_axis_dma1_mm2s_sts_tready</obj_property>
+         <obj_property name="ObjectShortName">s_axis_dma1_mm2s_sts_tready</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/s_axis_dma1_mm2s_sts_tvalid">
+         <obj_property name="ElementShortName">s_axis_dma1_mm2s_sts_tvalid</obj_property>
+         <obj_property name="ObjectShortName">s_axis_dma1_mm2s_sts_tvalid</obj_property>
+      </wvobject>
+   </wvobject>
+   <wvobject type="group" fp_name="group151">
+      <obj_property name="label">s_axis_dma1_mm2s</obj_property>
+      <obj_property name="DisplayName">label</obj_property>
+      <wvobject type="array" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/s_axis_dma1_mm2s_tdata">
+         <obj_property name="ElementShortName">s_axis_dma1_mm2s_tdata[511:0]</obj_property>
+         <obj_property name="ObjectShortName">s_axis_dma1_mm2s_tdata[511:0]</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/s_axis_dma1_mm2s_tready">
+         <obj_property name="ElementShortName">s_axis_dma1_mm2s_tready</obj_property>
+         <obj_property name="ObjectShortName">s_axis_dma1_mm2s_tready</obj_property>
+      </wvobject>
+      <wvobject type="logic" fp_name="/ccl_offload/ccl_offload_bd_i/cclo/s_axis_dma1_mm2s_tvalid">
+         <obj_property name="ElementShortName">s_axis_dma1_mm2s_tvalid</obj_property>
+         <obj_property name="ObjectShortName">s_axis_dma1_mm2s_tvalid</obj_property>
+      </wvobject>
+   </wvobject>
+</wave_config>

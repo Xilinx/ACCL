@@ -58,10 +58,13 @@ void rxbuf_seek(
             if((pending_notif.signature.tag == seek_sig.tag || pending_notif.signature.tag == TAG_ANY) && 
                     pending_notif.signature.src == seek_sig.src && pending_notif.signature.seqn == seek_sig.seqn){
                 seek_res.addr(31,0) = rx_buffers[(RX_BUFFER_METADATA_OFFSET/4) + pending_notif.index * SPARE_BUFFER_FIELDS + ADDRL_OFFSET];
+                //add host bit
                 seek_res.addr(63,32) = rx_buffers[(RX_BUFFER_METADATA_OFFSET/4) + pending_notif.index * SPARE_BUFFER_FIELDS + ADDRH_OFFSET];
+                seek_res.host = (rx_buffers[(RX_BUFFER_METADATA_OFFSET/4) + pending_notif.index * SPARE_BUFFER_FIELDS + HOST_OFFSET] == 1) ? true : false;
                 seek_res.len = pending_notif.signature.len;
                 seek_res.index = pending_notif.index;
                 seek_res.valid = true;
+                //std::cout << "rxbuf_seek with host bit: " << rx_buffers[(RX_BUFFER_METADATA_OFFSET/4) + pending_notif.index * SPARE_BUFFER_FIELDS + HOST_OFFSET] << std::endl;
                 num_pending--;
                 break;
             } else{

@@ -49,6 +49,7 @@ struct options_t {
   bool startemu;
   bool benchmark;
   std::string csvfile;
+  bool eagerRx_host;
 };
 
 pid_t start_emulator(options_t opts, unsigned size, unsigned rank);

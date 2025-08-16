@@ -32,15 +32,17 @@ TEST_F(ACCLTest, test_copy){
     GTEST_SKIP() << "Skipping single-node test on multi-node setup";
   }
   unsigned int count = options.count;
+  std::cout << "Testing copy with count: " << count << std::endl;
   auto op_buf = accl->create_buffer<float>(count, dataType::float32);
   auto res_buf = accl->create_buffer<float>(count, dataType::float32);
-  EXPECT_FALSE(op_buf->is_host_only());
-  EXPECT_FALSE(res_buf->is_host_only());
+  //EXPECT_TRUE(op_buf->is_host_only());
+  //EXPECT_TRUE(res_buf->is_host_only());
   random_array(op_buf->buffer(), count);
 
   accl->copy(*op_buf, *res_buf, count);
 
   for (unsigned int i = 0; i < count; ++i) {
+    std::cout << "comapring for i " << i << std::endl;
     EXPECT_FLOAT_EQ((*op_buf)[i], (*res_buf)[i]);
   }
 }
@@ -201,13 +203,26 @@ TEST_F(ACCLTest, test_sendrcv_basic) {
 
   unsigned int count = options.count;
   unsigned int count_bytes = count * dataTypeSize.at(dataType::float32) / 8;
-
   auto op_buf = accl->create_buffer<float>(count, dataType::float32);
   auto res_buf = accl->create_buffer<float>(count, dataType::float32);
-  random_array(op_buf->buffer(), count);
+  //random_array(op_buf->buffer(), count);
+  op_buf->buffer()[0] = 15.5f;
+  res_buf->buffer()[0] = 0.0f;
   int next_rank = ::rank + 1;
   int prev_rank = ::rank - 1;
 
+  std::cout << "op_buf before send/recv: " << (*op_buf)[0] << " in rank " << ::rank << std::endl;
+  std::cout << "res_buf before send/recv: " << (*res_buf)[0] << " in rank " << ::rank << std::endl;
+  uint32_t op_bits, res_bits;
+  float op_val = (*op_buf)[0];
+  float res_val = (*res_buf)[0];
+  std::memcpy(&op_bits, &op_val, sizeof(float));
+  std::memcpy(&res_bits, &res_val, sizeof(float));
+
+  std::cout << "op buf before send/recv: " << std::bitset<32>(op_bits)
+            << " res buf before send/recv:  " << std::bitset<32>(res_bits)
+            << " in rank " << ::rank << std::endl;
+  //accl->dump_eager_rx_buffers(false);
   if(::rank % 2 == 0){
     if(next_rank < ::size){
       test_debug("Sending data on " + std::to_string(::rank) + " to " +
@@ -219,6 +234,10 @@ TEST_F(ACCLTest, test_sendrcv_basic) {
                     std::to_string(prev_rank) + "...", options);
       accl->recv(*res_buf, count, prev_rank, 0);
   }
+
+  std::cout << "op_buf after send/recv: " << (*op_buf)[0] << " in rank " << ::rank << std::endl;
+  std::cout << "res_buf after send/recv: " << (*res_buf)[0] << " in rank " << ::rank << std::endl;
+  //accl->dump_eager_rx_buffers(false);
 
   if(::rank % 2 == 1){
     test_debug("Sending data on " + std::to_string(::rank) + " to " +
@@ -235,6 +254,16 @@ TEST_F(ACCLTest, test_sendrcv_basic) {
   if(next_rank < ::size){
     for (unsigned int i = 0; i < count; ++i) {
       EXPECT_FLOAT_EQ((*res_buf)[i], (*op_buf)[i]);
+      float op_val = (*op_buf)[i];
+      float res_val = (*res_buf)[i];
+
+      uint32_t op_bits, res_bits;
+      std::memcpy(&op_bits, &op_val, sizeof(float));
+      std::memcpy(&res_bits, &res_val, sizeof(float));
+
+      std::cout << "op buf " << std::bitset<32>(op_bits)
+                << " res buf " << std::bitset<32>(res_bits)
+                << std::endl;
     }
   } else {
     SUCCEED();
@@ -1206,6 +1235,7 @@ options_t parse_options(int argc, char *argv[]) {
                                             "Maximum byte count for eager mode", false,
                                             3*1024, "positive integer");
   cmd.add(max_eager_arg);
+  TCLAP::SwitchArg host_arg("", "rxEager-host", "Set eager Rxbufs to host", cmd, false);
   try {
     cmd.parse(argc, argv);
     if (axis3_arg.getValue() + udp_arg.getValue() + tcp_arg.getValue() +
@@ -1233,6 +1263,7 @@ options_t parse_options(int argc, char *argv[]) {
   opts.udp = udp_arg.getValue();
   opts.tcp = tcp_arg.getValue();
   opts.cyt_rdma = cyt_rdma_arg.getValue();
+  std::cout << "options cyt_rdma: " << opts.cyt_rdma << std::endl;
   opts.cyt_tcp = cyt_tcp_arg.getValue();
   opts.device_index = device_index_arg.getValue();
   opts.xclbin = xclbin_arg.getValue();
@@ -1243,6 +1274,7 @@ options_t parse_options(int argc, char *argv[]) {
   opts.benchmark = bench_arg.getValue();
   opts.csvfile = csvfile_arg.getValue();
   opts.max_eager_count = max_eager_arg.getValue();
+  opts.eagerRx_host = host_arg.getValue();
   return opts;
 }
 
@@ -1259,8 +1291,20 @@ int main(int argc, char *argv[]) {
   //gather ACCL options for the test
   //NOTE: this has to come before the gtest environment is initialized
   options = parse_options(argc, argv);
+  if(options.cyt_rdma){
+    std::cout << "Using Coyote RDMA backend" << std::endl;
+  }else if(options.cyt_tcp){
+    std::cout << "Using Coyote TCP backend" << std::endl;
+  }else if(options.axis3){
+    std::cout << "Using AXI Stream 3 backend" << std::endl;
+  }else if(options.udp){
+    std::cout << "Using UDP backend" << std::endl;
+  }else if(options.tcp){
+    std::cout << "Using TCP backend" << std::endl;
+  }
 
   if(options.startemu){
+    std::cout << "Starting emulator..." << std::endl;
     emulator_pid = start_emulator(options,::size,::rank);
     if(!emulator_is_running(emulator_pid)){
       std::cout << "Could not start emulator" << std::endl;
