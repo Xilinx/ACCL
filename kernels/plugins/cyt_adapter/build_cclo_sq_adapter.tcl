@@ -51,16 +51,15 @@ switch $command {
 }
 
 
-open_project build_cyt_rdma_mux.${device}
+open_project build_cclo_sq_adapter.${device}
+
+add_files cclo_sq_adapter.cpp -cflags "-std=c++14 -I. -I../../cclo/hls/eth_intf -I../../../driver/hls/ -DACCL_SYNTHESIS"
 
 
-add_files cyt_rdma_mux.cpp -cflags "-std=c++14 -I. -I../../cclo/hls/eth_intf -I../../../driver/hls/ -DACCL_SYNTHESIS"
-
-
-set_top cyt_rdma_mux
+set_top cclo_sq_adapter
 
 open_solution sol1
-config_export -format xo -library ACCL -output [pwd]/cyt_rdma_mux_${device}.xo
+config_export -format xo -library ACCL -output [pwd]/cclo_sq_adapter_${device}.xo
 
 if {$do_sim} {
     csim_design -clean

@@ -24,70 +24,15 @@
 
 using namespace std;
 
+#define CYT_OFFS_BITS 6
 #define CYT_VADDR_BITS 48
 #define CYT_LEN_BITS 28
 #define CYT_DEST_BITS 4
 #define CYT_PID_BITS 6
-#define CYT_N_REGIONS_BITS 1
-#define CYT_RSRVD_BITS 96-4-CYT_N_REGIONS_BITS-CYT_VADDR_BITS-CYT_LEN_BITS-CYT_DEST_BITS-CYT_PID_BITS
-
-struct cyt_req_t{
-    ap_uint<CYT_RSRVD_BITS> rsrvd;
-	ap_uint<CYT_N_REGIONS_BITS> vfid;
-    ap_uint<CYT_PID_BITS> pid;
-    ap_uint<CYT_DEST_BITS> dest;
-	ap_uint<1> host;
-    ap_uint<1> ctl;
-	ap_uint<1> sync;
-	ap_uint<1> stream;
-    ap_uint<CYT_LEN_BITS> len;
-    ap_uint<CYT_VADDR_BITS> vaddr;
-
-    cyt_req_t() : rsrvd(0), vfid(0), pid(0), dest(0), host(0), ctl(0), sync(0), stream(0), len(0), vaddr(0) {}
-
-	cyt_req_t(ap_uint<CYT_RSRVD_BITS> rsrvd_arg, ap_uint<CYT_N_REGIONS_BITS> vfid_arg, ap_uint<CYT_PID_BITS> pid_arg,
-          ap_uint<CYT_DEST_BITS> dest_arg, ap_uint<1> host_arg, ap_uint<1> ctl_arg, ap_uint<1> sync_arg,
-          ap_uint<1> stream_arg, ap_uint<CYT_LEN_BITS> len_arg, ap_uint<CYT_VADDR_BITS> vaddr_arg)
-        : rsrvd(rsrvd_arg),
-          vfid(vfid_arg),
-          pid(pid_arg),
-          dest(dest_arg),
-          host(host_arg),
-          ctl(ctl_arg),
-          sync(sync_arg),
-          stream(stream_arg),
-          len(len_arg),
-          vaddr(vaddr_arg) {}
-
-    cyt_req_t(ap_uint<96> in) {
-        rsrvd = in(CYT_RSRVD_BITS - 1, 0);
-        vfid = in(CYT_RSRVD_BITS+CYT_N_REGIONS_BITS-1, CYT_RSRVD_BITS);
-        pid = in(CYT_RSRVD_BITS+CYT_N_REGIONS_BITS+CYT_PID_BITS-1,CYT_RSRVD_BITS+CYT_N_REGIONS_BITS);
-        dest = in(CYT_RSRVD_BITS+CYT_N_REGIONS_BITS+CYT_PID_BITS+CYT_DEST_BITS-1,CYT_RSRVD_BITS+CYT_N_REGIONS_BITS+CYT_PID_BITS);
-		host = in(CYT_RSRVD_BITS+CYT_N_REGIONS_BITS+CYT_PID_BITS+CYT_DEST_BITS,CYT_RSRVD_BITS+CYT_N_REGIONS_BITS+CYT_PID_BITS+CYT_DEST_BITS);
-        ctl = in(CYT_RSRVD_BITS+CYT_N_REGIONS_BITS+CYT_PID_BITS+CYT_DEST_BITS+1,CYT_RSRVD_BITS+CYT_N_REGIONS_BITS+CYT_PID_BITS+CYT_DEST_BITS+1);
-		sync = in(CYT_RSRVD_BITS+CYT_N_REGIONS_BITS+CYT_PID_BITS+CYT_DEST_BITS+2,CYT_RSRVD_BITS+CYT_N_REGIONS_BITS+CYT_PID_BITS+CYT_DEST_BITS+2);
-		stream = in(CYT_RSRVD_BITS+CYT_N_REGIONS_BITS+CYT_PID_BITS+CYT_DEST_BITS+3,CYT_RSRVD_BITS+CYT_N_REGIONS_BITS+CYT_PID_BITS+CYT_DEST_BITS+3);
-        len = in(CYT_RSRVD_BITS+CYT_N_REGIONS_BITS+CYT_PID_BITS+CYT_DEST_BITS+4+CYT_LEN_BITS-1,CYT_RSRVD_BITS+CYT_N_REGIONS_BITS+CYT_PID_BITS+CYT_DEST_BITS+4);
-        vaddr = in(CYT_RSRVD_BITS+CYT_N_REGIONS_BITS+CYT_PID_BITS+CYT_DEST_BITS+4+CYT_LEN_BITS+CYT_VADDR_BITS-1,CYT_RSRVD_BITS+CYT_N_REGIONS_BITS+CYT_PID_BITS+CYT_DEST_BITS+4+CYT_LEN_BITS);
-    }
-	
-    operator ap_uint<96>() {
-        ap_uint<96> ret;
-		ret(CYT_RSRVD_BITS+CYT_N_REGIONS_BITS+CYT_PID_BITS+CYT_DEST_BITS+4+CYT_LEN_BITS+CYT_VADDR_BITS-1,CYT_RSRVD_BITS+CYT_N_REGIONS_BITS+CYT_PID_BITS+CYT_DEST_BITS+4+CYT_LEN_BITS) = vaddr; //vaddr
-		ret(CYT_RSRVD_BITS+CYT_N_REGIONS_BITS+CYT_PID_BITS+CYT_DEST_BITS+4+CYT_LEN_BITS-1,CYT_RSRVD_BITS+CYT_N_REGIONS_BITS+CYT_PID_BITS+CYT_DEST_BITS+4) = len; //len
-		ret(CYT_RSRVD_BITS+CYT_N_REGIONS_BITS+CYT_PID_BITS+CYT_DEST_BITS+3,CYT_RSRVD_BITS+CYT_N_REGIONS_BITS+CYT_PID_BITS+CYT_DEST_BITS+3) = stream; //stream
-		ret(CYT_RSRVD_BITS+CYT_N_REGIONS_BITS+CYT_PID_BITS+CYT_DEST_BITS+2,CYT_RSRVD_BITS+CYT_N_REGIONS_BITS+CYT_PID_BITS+CYT_DEST_BITS+2) = sync; //sync
-		ret(CYT_RSRVD_BITS+CYT_N_REGIONS_BITS+CYT_PID_BITS+CYT_DEST_BITS+1,CYT_RSRVD_BITS+CYT_N_REGIONS_BITS+CYT_PID_BITS+CYT_DEST_BITS+1) = ctl; //ctl
-		ret(CYT_RSRVD_BITS+CYT_N_REGIONS_BITS+CYT_PID_BITS+CYT_DEST_BITS,CYT_RSRVD_BITS+CYT_N_REGIONS_BITS+CYT_PID_BITS+CYT_DEST_BITS) = host; //host
-		ret(CYT_RSRVD_BITS+CYT_N_REGIONS_BITS+CYT_PID_BITS+CYT_DEST_BITS-1,CYT_RSRVD_BITS+CYT_N_REGIONS_BITS+CYT_PID_BITS) = dest; //dest
-		ret(CYT_RSRVD_BITS+CYT_N_REGIONS_BITS+CYT_PID_BITS-1,CYT_RSRVD_BITS+CYT_N_REGIONS_BITS) = pid; //pid
-		ret(CYT_RSRVD_BITS+CYT_N_REGIONS_BITS-1,CYT_RSRVD_BITS) = vfid; //vfid
-		ret(CYT_RSRVD_BITS-1,0) = rsrvd; //rsrvd, disregard
-        return ret;
-    }
-};
-
+#define CYT_STRM_BITS 2
+#define CYT_OPCODE_BITS 5
+#define CYT_REQ_RSRVD_BITS (128 - CYT_OFFS_BITS - 2 - CYT_VADDR_BITS - CYT_LEN_BITS - 1 - 2 * CYT_DEST_BITS - CYT_PID_BITS - 3 - CYT_STRM_BITS - CYT_OPCODE_BITS)
+#define CYT_ACK_RSRVD_BITS (32 - CYT_OPCODE_BITS - CYT_STRM_BITS - 2 - CYT_DEST_BITS - CYT_PID_BITS - CYT_DEST_BITS)
 
 // Coyote RDMA Opcode
 #define CYT_RDMA_READ    0
@@ -95,105 +40,158 @@ struct cyt_req_t{
 #define CYT_RDMA_SEND    2
 #define CYT_RDMA_IMMED   3
 
-// Coyote cyt_rdma_req_t structs
-#define CYT_RDMA_OPCODE_BITS	5
-#define CYT_RDMA_MSG_BITS 		448
-#define CYT_RDMA_OFFS_BITS 	 	4
-#define CYT_RDMA_QPN_BITS 		10
-#define CYT_RDMA_MSN_BITS 		24
-#define CYT_RDMA_RSRVD_BITS     17
-#define CYT_RDMA_REQ_BITS 	 	CYT_RDMA_RSRVD_BITS+CYT_RDMA_MSG_BITS+CYT_RDMA_OFFS_BITS+CYT_RDMA_MSN_BITS+4+CYT_RDMA_QPN_BITS+CYT_RDMA_OPCODE_BITS
+#define RC_SEND_FIRST 0
+#define RC_SEND_MIDDLE 1
+#define RC_SEND_LAST 2
+#define RC_SEND_ONLY 4
+#define RC_RDMA_WRITE_FIRST 6
+#define RC_RDMA_WRITE_MIDDLE 7
+#define RC_RDMA_WRITE_LAST 8
+#define RC_RDMA_WRITE_LAST_WITH_IMD 9
+#define RC_RDMA_WRITE_ONLY 10
+#define RC_RDMA_WRITE_ONLY_WIT_IMD 11
+#define RC_RDMA_READ_REQUEST 12
+#define RC_RDMA_READ_RESP_FIRST 13
+#define RC_RDMA_READ_RESP_MIDDLE 14
+#define RC_RDMA_READ_RESP_LAST 15
+#define RC_RDMA_READ_RESP_ONLY 16
+#define RC_ACK 17
 
-#define CYT_RDMA_VADDR_BITS     64
-#define CYT_RDMA_LEN_BITS       32
-#define CYT_RDMA_PARAMS_BITS    288
+// Coyote STRM Opcode
+#define CYT_STRM_CARD 0
+#define CYT_STRM_HOST 1
+#define CYT_STRM_RDMA 2
+#define CYT_STRM_TCP 3
 
-struct cyt_rdma_req_t{
-    ap_uint<CYT_RDMA_RSRVD_BITS> rsrvd;
-    ap_uint<CYT_RDMA_MSG_BITS> msg;
-    ap_uint<CYT_RDMA_OFFS_BITS> offs;
-    ap_uint<CYT_RDMA_MSN_BITS> ssn;
-    ap_uint<1> cmplt;
-    ap_uint<1> last;
-    ap_uint<1> mode;
-    ap_uint<1> host;
-    ap_uint<CYT_RDMA_QPN_BITS> qpn;
-    ap_uint<CYT_RDMA_OPCODE_BITS> opcode;
+struct cyt_req_t{
+    ap_uint<CYT_REQ_RSRVD_BITS> rsrvd;    // 19 bits
+    ap_uint<CYT_OFFS_BITS> offs;       // 6 bits
+    ap_uint<1> host;                   // 1 bit
+    ap_uint<1> actv;                   // 1 bit
 
-    cyt_rdma_req_t() : rsrvd(0), msg(0), offs(0), ssn(0), cmplt(0), last(0), mode(0), host(0), qpn(0), opcode(0) {}
-    cyt_rdma_req_t(ap_uint<CYT_RDMA_REQ_BITS> in) {
-        rsrvd = in(CYT_RDMA_RSRVD_BITS - 1, 0);
-        msg = in(CYT_RDMA_RSRVD_BITS + CYT_RDMA_MSG_BITS - 1, CYT_RDMA_RSRVD_BITS);
-        offs = in(CYT_RDMA_RSRVD_BITS + CYT_RDMA_MSG_BITS + CYT_RDMA_OFFS_BITS - 1, CYT_RDMA_RSRVD_BITS + CYT_RDMA_MSG_BITS);
-        ssn = in(CYT_RDMA_RSRVD_BITS + CYT_RDMA_MSG_BITS + CYT_RDMA_OFFS_BITS + CYT_RDMA_MSN_BITS - 1, CYT_RDMA_RSRVD_BITS + CYT_RDMA_MSG_BITS + CYT_RDMA_OFFS_BITS);
-        cmplt = in(CYT_RDMA_RSRVD_BITS + CYT_RDMA_MSG_BITS + CYT_RDMA_OFFS_BITS + CYT_RDMA_MSN_BITS, CYT_RDMA_RSRVD_BITS + CYT_RDMA_MSG_BITS + CYT_RDMA_OFFS_BITS + CYT_RDMA_MSN_BITS);
-        last = in(CYT_RDMA_RSRVD_BITS + CYT_RDMA_MSG_BITS + CYT_RDMA_OFFS_BITS + CYT_RDMA_MSN_BITS + 1, CYT_RDMA_RSRVD_BITS + CYT_RDMA_MSG_BITS + CYT_RDMA_OFFS_BITS + CYT_RDMA_MSN_BITS + 1);
-        mode = in(CYT_RDMA_RSRVD_BITS + CYT_RDMA_MSG_BITS + CYT_RDMA_OFFS_BITS + CYT_RDMA_MSN_BITS + 2, CYT_RDMA_RSRVD_BITS + CYT_RDMA_MSG_BITS + CYT_RDMA_OFFS_BITS + CYT_RDMA_MSN_BITS + 2);
-        host = in(CYT_RDMA_RSRVD_BITS + CYT_RDMA_MSG_BITS + CYT_RDMA_OFFS_BITS + CYT_RDMA_MSN_BITS + 3, CYT_RDMA_RSRVD_BITS + CYT_RDMA_MSG_BITS + CYT_RDMA_OFFS_BITS + CYT_RDMA_MSN_BITS + 3);
-        qpn = in(CYT_RDMA_RSRVD_BITS + CYT_RDMA_MSG_BITS + CYT_RDMA_OFFS_BITS + CYT_RDMA_MSN_BITS + 4 + CYT_RDMA_QPN_BITS - 1, CYT_RDMA_RSRVD_BITS + CYT_RDMA_MSG_BITS + CYT_RDMA_OFFS_BITS + CYT_RDMA_MSN_BITS + 4);
-        opcode = in(CYT_RDMA_RSRVD_BITS + CYT_RDMA_MSG_BITS + CYT_RDMA_OFFS_BITS + CYT_RDMA_MSN_BITS + 4 + CYT_RDMA_QPN_BITS + CYT_RDMA_OPCODE_BITS - 1, CYT_RDMA_RSRVD_BITS + CYT_RDMA_MSG_BITS + CYT_RDMA_OFFS_BITS + CYT_RDMA_MSN_BITS + 4 + CYT_RDMA_QPN_BITS);
-    }
-    operator ap_uint<CYT_RDMA_REQ_BITS>() {
-        ap_uint<CYT_RDMA_REQ_BITS> ret;
-        ret(CYT_RDMA_RSRVD_BITS - 1, 0) = rsrvd;
-        ret(CYT_RDMA_RSRVD_BITS + CYT_RDMA_MSG_BITS - 1, CYT_RDMA_RSRVD_BITS) = msg;
-        ret(CYT_RDMA_RSRVD_BITS + CYT_RDMA_MSG_BITS + CYT_RDMA_OFFS_BITS - 1, CYT_RDMA_RSRVD_BITS + CYT_RDMA_MSG_BITS) = offs;
-        ret(CYT_RDMA_RSRVD_BITS + CYT_RDMA_MSG_BITS + CYT_RDMA_OFFS_BITS + CYT_RDMA_MSN_BITS - 1, CYT_RDMA_RSRVD_BITS + CYT_RDMA_MSG_BITS + CYT_RDMA_OFFS_BITS) = ssn;
-        ret(CYT_RDMA_RSRVD_BITS + CYT_RDMA_MSG_BITS + CYT_RDMA_OFFS_BITS + CYT_RDMA_MSN_BITS, CYT_RDMA_RSRVD_BITS + CYT_RDMA_MSG_BITS + CYT_RDMA_OFFS_BITS + CYT_RDMA_MSN_BITS) = cmplt;
-        ret(CYT_RDMA_RSRVD_BITS + CYT_RDMA_MSG_BITS + CYT_RDMA_OFFS_BITS + CYT_RDMA_MSN_BITS + 1, CYT_RDMA_RSRVD_BITS + CYT_RDMA_MSG_BITS + CYT_RDMA_OFFS_BITS + CYT_RDMA_MSN_BITS + 1) = last;
-        ret(CYT_RDMA_RSRVD_BITS + CYT_RDMA_MSG_BITS + CYT_RDMA_OFFS_BITS + CYT_RDMA_MSN_BITS + 2, CYT_RDMA_RSRVD_BITS + CYT_RDMA_MSG_BITS + CYT_RDMA_OFFS_BITS + CYT_RDMA_MSN_BITS + 2) = mode;
-        ret(CYT_RDMA_RSRVD_BITS + CYT_RDMA_MSG_BITS + CYT_RDMA_OFFS_BITS + CYT_RDMA_MSN_BITS + 3, CYT_RDMA_RSRVD_BITS + CYT_RDMA_MSG_BITS + CYT_RDMA_OFFS_BITS + CYT_RDMA_MSN_BITS + 3) = host;
-        ret(CYT_RDMA_RSRVD_BITS + CYT_RDMA_MSG_BITS + CYT_RDMA_OFFS_BITS + CYT_RDMA_MSN_BITS + 4 + CYT_RDMA_QPN_BITS - 1, CYT_RDMA_RSRVD_BITS + CYT_RDMA_MSG_BITS + CYT_RDMA_OFFS_BITS + CYT_RDMA_MSN_BITS + 4) = qpn;
-        ret(CYT_RDMA_RSRVD_BITS + CYT_RDMA_MSG_BITS + CYT_RDMA_OFFS_BITS + CYT_RDMA_MSN_BITS + 4 + CYT_RDMA_QPN_BITS + CYT_RDMA_OPCODE_BITS - 1, CYT_RDMA_RSRVD_BITS + CYT_RDMA_MSG_BITS + CYT_RDMA_OFFS_BITS + CYT_RDMA_MSN_BITS + 4 + CYT_RDMA_QPN_BITS) = opcode;
-        return ret;
-    }
-} ;
+    ap_uint<CYT_LEN_BITS> len;         // 28 bits
+    ap_uint<CYT_VADDR_BITS> vaddr;     // 48 bits
 
+    ap_uint<1> last;                   // 1 bit
 
-struct cyt_rdma_req_msg_t{
-    ap_uint<CYT_RDMA_VADDR_BITS> lvaddr;
-    ap_uint<CYT_RDMA_VADDR_BITS> rvaddr;
-    ap_uint<CYT_RDMA_LEN_BITS> len;
-    ap_uint<CYT_RDMA_PARAMS_BITS> params;
+    ap_uint<CYT_DEST_BITS> dest;       // 4 bits
+    ap_uint<CYT_PID_BITS> pid;         // 6 bits
+    ap_uint<CYT_DEST_BITS> vfid;       // 4 bits
+	
+    ap_uint<1> remote;                 // 1 bit
+    ap_uint<1> rdma;                   // 1 bit
+    ap_uint<1> mode;                   // 1 bit
+    ap_uint<CYT_STRM_BITS> strm;       // 2 bits
+    ap_uint<CYT_OPCODE_BITS> opcode;   // 5 bits
     
-    cyt_rdma_req_msg_t() : lvaddr(0), rvaddr(0), len(0), params(0) {}
-    cyt_rdma_req_msg_t(ap_uint<CYT_RDMA_MSG_BITS> in) {
-        lvaddr = in(CYT_RDMA_VADDR_BITS - 1, 0);
-        rvaddr = in(2 * CYT_RDMA_VADDR_BITS - 1, CYT_RDMA_VADDR_BITS);
-        len = in(2 * CYT_RDMA_VADDR_BITS + CYT_RDMA_LEN_BITS - 1, 2 * CYT_RDMA_VADDR_BITS);
-        params = in(CYT_RDMA_MSG_BITS - 1, 2 * CYT_RDMA_VADDR_BITS + CYT_RDMA_LEN_BITS);
+    // Default constructor
+    cyt_req_t()
+        : rsrvd(0), offs(0), host(0), actv(0), len(0), vaddr(0), last(0),
+          dest(0), pid(0), vfid(0), remote(0), rdma(0), mode(0), strm(0), opcode(0) {}
+
+    // Parameterized constructor
+    cyt_req_t(ap_uint<CYT_REQ_RSRVD_BITS> rsrvd_arg, ap_uint<CYT_OFFS_BITS> offs_arg, ap_uint<1> host_arg, ap_uint<1> actv_arg,
+              ap_uint<CYT_LEN_BITS> len_arg, ap_uint<CYT_VADDR_BITS> vaddr_arg, ap_uint<1> last_arg,
+              ap_uint<CYT_DEST_BITS> dest_arg, ap_uint<CYT_PID_BITS> pid_arg, ap_uint<CYT_DEST_BITS> vfid_arg,
+              ap_uint<1> remote_arg, ap_uint<1> rdma_arg, ap_uint<1> mode_arg, ap_uint<CYT_STRM_BITS> strm_arg, ap_uint<CYT_OPCODE_BITS> opcode_arg)
+        : rsrvd(rsrvd_arg), offs(offs_arg), host(host_arg), actv(actv_arg), len(len_arg), vaddr(vaddr_arg),
+          last(last_arg), dest(dest_arg), pid(pid_arg), vfid(vfid_arg), remote(remote_arg), rdma(rdma_arg),
+          mode(mode_arg), strm(strm_arg), opcode(opcode_arg) {}
+
+    // Constructor from a single ap_uint<128> argument
+    cyt_req_t(ap_uint<128> in) {
+        rsrvd = in(CYT_REQ_RSRVD_BITS - 1, 0);
+        offs = in(CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS - 1, CYT_REQ_RSRVD_BITS);
+        host = in(CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS, CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS);
+        actv = in(CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 1, CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 1);
+        len = in(CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 1 + CYT_LEN_BITS - 1, CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2);
+        vaddr = in(CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2 + CYT_LEN_BITS + CYT_VADDR_BITS - 1, CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2 + CYT_LEN_BITS);
+        last = in(CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2 + CYT_LEN_BITS + CYT_VADDR_BITS, CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2 + CYT_LEN_BITS + CYT_VADDR_BITS);
+        dest = in(CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2 + CYT_LEN_BITS + CYT_VADDR_BITS + CYT_DEST_BITS - 1, CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2 + CYT_LEN_BITS + CYT_VADDR_BITS + 1);
+        pid = in(CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2 + CYT_LEN_BITS + CYT_VADDR_BITS + CYT_DEST_BITS + CYT_PID_BITS - 1, CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2 + CYT_LEN_BITS + CYT_VADDR_BITS + CYT_DEST_BITS);
+        vfid = in(CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2 + CYT_LEN_BITS + CYT_VADDR_BITS + CYT_DEST_BITS + CYT_PID_BITS + CYT_DEST_BITS - 1, CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2 + CYT_LEN_BITS + CYT_VADDR_BITS + CYT_DEST_BITS + CYT_PID_BITS);
+        remote = in(CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2 + CYT_LEN_BITS + CYT_VADDR_BITS + CYT_DEST_BITS + CYT_PID_BITS + CYT_DEST_BITS, CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2 + CYT_LEN_BITS + CYT_VADDR_BITS + CYT_DEST_BITS + CYT_PID_BITS + CYT_DEST_BITS);
+        rdma = in(CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2 + CYT_LEN_BITS + CYT_VADDR_BITS + CYT_DEST_BITS + CYT_PID_BITS + CYT_DEST_BITS + 1, CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2 + CYT_LEN_BITS + CYT_VADDR_BITS + CYT_DEST_BITS + CYT_PID_BITS + CYT_DEST_BITS + 1);
+        mode = in(CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2 + CYT_LEN_BITS + CYT_VADDR_BITS + CYT_DEST_BITS + CYT_PID_BITS + CYT_DEST_BITS + 2, CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2 + CYT_LEN_BITS + CYT_VADDR_BITS + CYT_DEST_BITS + CYT_PID_BITS + CYT_DEST_BITS + 2);
+        strm = in(CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2 + CYT_LEN_BITS + CYT_VADDR_BITS + CYT_DEST_BITS + CYT_PID_BITS + CYT_DEST_BITS + 3 + CYT_STRM_BITS - 1, CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2 + CYT_LEN_BITS + CYT_VADDR_BITS + CYT_DEST_BITS + CYT_PID_BITS + CYT_DEST_BITS + 3);
+        opcode = in(CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2 + CYT_LEN_BITS + CYT_VADDR_BITS + CYT_DEST_BITS + CYT_PID_BITS + CYT_DEST_BITS + 3 + CYT_STRM_BITS + CYT_OPCODE_BITS - 1, CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2 + CYT_LEN_BITS + CYT_VADDR_BITS + CYT_DEST_BITS + CYT_PID_BITS + CYT_DEST_BITS + 3 + CYT_STRM_BITS);
     }
-    operator ap_uint<CYT_RDMA_MSG_BITS>() {
-        ap_uint<CYT_RDMA_MSG_BITS> ret;
-        ret(CYT_RDMA_VADDR_BITS - 1, 0) = lvaddr;
-        ret(2 * CYT_RDMA_VADDR_BITS - 1, CYT_RDMA_VADDR_BITS) = rvaddr;
-        ret(2 * CYT_RDMA_VADDR_BITS + CYT_RDMA_LEN_BITS - 1, 2 * CYT_RDMA_VADDR_BITS) = len;
-        ret(CYT_RDMA_MSG_BITS - 1, 2 * CYT_RDMA_VADDR_BITS + CYT_RDMA_LEN_BITS) = params;
+	
+    operator ap_uint<128>() {
+        ap_uint<128> ret;
+
+        // Assigning fields to the appropriate bit positions in the 128-bit return value.
+        ret(CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2 + CYT_LEN_BITS + CYT_VADDR_BITS + CYT_DEST_BITS + CYT_PID_BITS + CYT_DEST_BITS + 3 + CYT_STRM_BITS + CYT_OPCODE_BITS - 1, CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2 + CYT_LEN_BITS + CYT_VADDR_BITS + CYT_DEST_BITS + CYT_PID_BITS + CYT_DEST_BITS + 3 + CYT_STRM_BITS) = opcode; // opcode
+        ret(CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2 + CYT_LEN_BITS + CYT_VADDR_BITS + CYT_DEST_BITS + CYT_PID_BITS + CYT_DEST_BITS + 3 + CYT_STRM_BITS - 1, CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2 + CYT_LEN_BITS + CYT_VADDR_BITS + CYT_DEST_BITS + CYT_PID_BITS + CYT_DEST_BITS + 3) = strm; // strm
+        ret(CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2 + CYT_LEN_BITS + CYT_VADDR_BITS + CYT_DEST_BITS + CYT_PID_BITS + CYT_DEST_BITS + 2, CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2 + CYT_LEN_BITS + CYT_VADDR_BITS + CYT_DEST_BITS + CYT_PID_BITS + CYT_DEST_BITS + 2) = mode; // mode
+        ret(CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2 + CYT_LEN_BITS + CYT_VADDR_BITS + CYT_DEST_BITS + CYT_PID_BITS + CYT_DEST_BITS + 1, CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2 + CYT_LEN_BITS + CYT_VADDR_BITS + CYT_DEST_BITS + CYT_PID_BITS + CYT_DEST_BITS + 1) = rdma; // rdma
+        ret(CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2 + CYT_LEN_BITS + CYT_VADDR_BITS + CYT_DEST_BITS + CYT_PID_BITS + CYT_DEST_BITS, CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2 + CYT_LEN_BITS + CYT_VADDR_BITS + CYT_DEST_BITS + CYT_PID_BITS + CYT_DEST_BITS) = remote; // remote
+        ret(CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2 + CYT_LEN_BITS + CYT_VADDR_BITS + CYT_DEST_BITS + CYT_PID_BITS + CYT_DEST_BITS - 1, CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2 + CYT_LEN_BITS + CYT_VADDR_BITS + CYT_DEST_BITS + CYT_PID_BITS) = vfid; // vfid
+        ret(CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2 + CYT_LEN_BITS + CYT_VADDR_BITS + CYT_DEST_BITS + CYT_PID_BITS - 1, CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2 + CYT_LEN_BITS + CYT_VADDR_BITS + CYT_DEST_BITS) = pid; // pid
+        ret(CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2 + CYT_LEN_BITS + CYT_VADDR_BITS + CYT_DEST_BITS - 1, CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2 + CYT_LEN_BITS + CYT_VADDR_BITS + 1) = dest; // dest
+        ret(CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2 + CYT_LEN_BITS + CYT_VADDR_BITS, CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2 + CYT_LEN_BITS + CYT_VADDR_BITS) = last; // last
+        ret(CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2 + CYT_LEN_BITS + CYT_VADDR_BITS - 1, CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2 + CYT_LEN_BITS) = vaddr; // vaddr
+        ret(CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2 + CYT_LEN_BITS - 1, CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 2) = len; // len
+        ret(CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 1, CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS + 1) = actv; // actv
+        ret(CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS, CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS) = host; // host
+        ret(CYT_REQ_RSRVD_BITS + CYT_OFFS_BITS - 1, CYT_REQ_RSRVD_BITS) = offs; // offs
+        ret(CYT_REQ_RSRVD_BITS - 1, 0) = rsrvd; // rsrvd, disregard
+
         return ret;
     }
 };
 
+struct cyt_ack_t {
+    ap_uint<CYT_ACK_RSRVD_BITS> rsrvd; // 9 bits
+    ap_uint<CYT_DEST_BITS> vfid;       // 4 bits
+    ap_uint<CYT_PID_BITS> pid;         // 6 bits
+    ap_uint<CYT_DEST_BITS> dest;       // 4 bits
+    ap_uint<1> host;                   // 1 bit
+    ap_uint<1> remote;                 // 1 bit
+    ap_uint<CYT_STRM_BITS> strm;       // 2 bits
+    ap_uint<CYT_OPCODE_BITS> opcode;   // 5 bits
 
+    // Default constructor
+    cyt_ack_t()
+        : rsrvd(0), vfid(0), pid(0), dest(0), host(0), remote(0), strm(0), opcode(0) {}
 
-void cyt_dma_adapter(
-	//DM command streams
-	hls::stream<ap_axiu<104,0,0,DEST_WIDTH>> &dma0_s2mm_cmd,
-	hls::stream<ap_axiu<104,0,0,DEST_WIDTH>> &dma1_s2mm_cmd,
-	hls::stream<ap_axiu<104,0,0,DEST_WIDTH>> &dma0_mm2s_cmd,
-	hls::stream<ap_axiu<104,0,0,DEST_WIDTH>> &dma1_mm2s_cmd,
-	//DM status streams
-	hls::stream<ap_axiu<32,0,0,0>> &dma0_s2mm_sts,
-	hls::stream<ap_axiu<32,0,0,0>> &dma1_s2mm_sts,
-	hls::stream<ap_axiu<32,0,0,0>> &dma0_mm2s_sts,
-	hls::stream<ap_axiu<32,0,0,0>> &dma1_mm2s_sts,
-#ifdef ACCL_RDMA
-	//RDMA rd_req and wr_req
-	hls::stream<ap_uint<96>> & rdma_wr_req,
-	hls::stream<ap_uint<96>> & rdma_rd_req,
-#endif
-	//Coyote Bypass interface command and status
-	hls::stream<ap_uint<96>> &cyt_byp_wr_cmd,
-	hls::stream<ap_uint<16>> &cyt_byp_wr_sts,
-	hls::stream<ap_uint<96>> &cyt_byp_rd_cmd,
-	hls::stream<ap_uint<16>> &cyt_byp_rd_sts
-);
+    // Parameterized constructor
+    cyt_ack_t(ap_uint<CYT_ACK_RSRVD_BITS> rsrvd_arg,
+              ap_uint<CYT_DEST_BITS> vfid_arg,
+              ap_uint<CYT_PID_BITS> pid_arg,
+              ap_uint<CYT_DEST_BITS> dest_arg,
+              ap_uint<1> host_arg,
+              ap_uint<1> remote_arg,
+              ap_uint<CYT_STRM_BITS> strm_arg,
+              ap_uint<CYT_OPCODE_BITS> opcode_arg)
+        : rsrvd(rsrvd_arg), vfid(vfid_arg), pid(pid_arg), dest(dest_arg),
+          host(host_arg), remote(remote_arg), strm(strm_arg), opcode(opcode_arg) {}
+
+    // Constructor from a single ap_uint<32> argument
+    cyt_ack_t(ap_uint<32> in) {
+        opcode = in(31, 31 - CYT_OPCODE_BITS + 1);
+        strm = in(31 - CYT_OPCODE_BITS, 31 - CYT_OPCODE_BITS - CYT_STRM_BITS + 1);
+        remote = in(31 - CYT_OPCODE_BITS - CYT_STRM_BITS - 1, 31 - CYT_OPCODE_BITS - CYT_STRM_BITS - 1);
+        host = in(31 - CYT_OPCODE_BITS - CYT_STRM_BITS - 2, 31 - CYT_OPCODE_BITS - CYT_STRM_BITS - 2);
+        dest = in(31 - CYT_OPCODE_BITS - CYT_STRM_BITS - 3, 31 - CYT_OPCODE_BITS - CYT_STRM_BITS - CYT_DEST_BITS - 2);
+        pid = in(31 - CYT_OPCODE_BITS - CYT_STRM_BITS - CYT_DEST_BITS - 3, 31 - CYT_OPCODE_BITS - CYT_STRM_BITS - CYT_DEST_BITS - CYT_PID_BITS - 2);
+        vfid = in(31 - CYT_OPCODE_BITS - CYT_STRM_BITS - CYT_DEST_BITS - CYT_PID_BITS - 3, 31 - CYT_OPCODE_BITS - CYT_STRM_BITS - 2 * CYT_DEST_BITS - CYT_PID_BITS - 2);
+        rsrvd = in(CYT_ACK_RSRVD_BITS - 1, 0); // Remaining bits for reserved
+    }
+
+    // Conversion operator to ap_uint<32>
+    operator ap_uint<32>() {
+        ap_uint<32> ret;
+
+        ret(31, 31 - CYT_OPCODE_BITS + 1) = opcode;
+        ret(31 - CYT_OPCODE_BITS, 31 - CYT_OPCODE_BITS - CYT_STRM_BITS + 1) = strm;
+        ret(31 - CYT_OPCODE_BITS - CYT_STRM_BITS - 1, 31 - CYT_OPCODE_BITS - CYT_STRM_BITS - 1) = remote;
+        ret(31 - CYT_OPCODE_BITS - CYT_STRM_BITS - 2, 31 - CYT_OPCODE_BITS - CYT_STRM_BITS - 2) = host;
+        ret(31 - CYT_OPCODE_BITS - CYT_STRM_BITS - 3, 31 - CYT_OPCODE_BITS - CYT_STRM_BITS - CYT_DEST_BITS - 2) = dest;
+        ret(31 - CYT_OPCODE_BITS - CYT_STRM_BITS - CYT_DEST_BITS - 3, 31 - CYT_OPCODE_BITS - CYT_STRM_BITS - CYT_DEST_BITS - CYT_PID_BITS - 2) = pid;
+        ret(31 - CYT_OPCODE_BITS - CYT_STRM_BITS - CYT_DEST_BITS - CYT_PID_BITS - 3, 31 - CYT_OPCODE_BITS - CYT_STRM_BITS - 2 * CYT_DEST_BITS - CYT_PID_BITS - 2) = vfid;
+        ret(CYT_ACK_RSRVD_BITS - 1, 0) = rsrvd;
+
+        return ret;
+    }
+};

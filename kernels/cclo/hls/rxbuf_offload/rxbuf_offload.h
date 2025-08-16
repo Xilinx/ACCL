@@ -20,6 +20,7 @@ typedef struct {
     ap_uint<32> index;
     ap_uint<32> len;
     bool valid;
+    bool host;
 } rxbuf_seek_result;
 
 typedef struct {

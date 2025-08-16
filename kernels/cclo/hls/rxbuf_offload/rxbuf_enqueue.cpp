@@ -50,8 +50,10 @@ void rxbuf_enqueue(
 	//iterate until you run out of spare buffers
 	for(int i=0; i < nbufs; i++){
 		ap_uint<32> status;
+		ap_uint<32> host;
 		ap_uint<64> addr;
 		status = rx_buffers[(i * SPARE_BUFFER_FIELDS) + STATUS_OFFSET];
+		host = rx_buffers[(i * SPARE_BUFFER_FIELDS) + HOST_OFFSET];
 		addr(31,  0) = rx_buffers[(i * SPARE_BUFFER_FIELDS) + ADDRL_OFFSET];
 		addr(63, 32) = rx_buffers[(i * SPARE_BUFFER_FIELDS) + ADDRH_OFFSET];
 
@@ -64,7 +66,7 @@ void rxbuf_enqueue(
 			cmd.tag = tag++;
 			cmd_word.data = cmd;
 			cmd_word.last = 1;//unused for now
-			cmd_word.dest = 0;//unused for now
+			cmd_word.dest = host;//unused for now
 			STREAM_WRITE(dma_cmd, cmd_word);
 			//update spare buffer status
 			rx_buffers[(i * SPARE_BUFFER_FIELDS) + STATUS_OFFSET] = STATUS_ENQUEUED;

@@ -622,5 +622,46 @@ module ccl_offload
         .s_axi_control_wstrb(s_axi_control_wstrb),
         .s_axi_control_wvalid(s_axi_control_wvalid)
         );
+//ila to capture commands on cclo interf
+/*ila_top inst_ila_top(
+     .clk(ap_clk),
+     .probe0(s_axis_call_req_tdata), //32
+     .probe1(s_axis_call_req_tready),
+     .probe2(s_axis_call_req_tvalid),
+     .probe3(s_axis_call_req_tlast),
+     .probe4(s_axis_eth_rx_data_tdata), //512
+     .probe5(s_axis_eth_rx_data_tdest), //8
+     .probe6(s_axis_eth_rx_data_tready),
+     .probe7(s_axis_eth_rx_data_tvalid),
+     .probe8(m_axis_dma0_s2mm_tdata), //512
+     .probe9(m_axis_dma0_s2mm_tdest), //8
+     .probe10(m_axis_dma0_s2mm_tready),
+     .probe11(m_axis_dma0_s2mm_tvalid),
+     .probe12(s_axis_dma0_mm2s_tdata),//512
+     .probe13(s_axis_dma0_mm2s_tdest), //8
+     .probe14(s_axis_dma0_mm2s_tready),
+     .probe15(s_axis_dma0_mm2s_tvalid),
+     .probe16(m_axis_dma1_s2mm_tdata),//512
+     .probe17(m_axis_dma1_s2mm_tdest), //8
+     .probe18(m_axis_dma1_s2mm_tready),
+     .probe19(m_axis_dma1_s2mm_tvalid),
+     .probe20(s_axis_dma1_mm2s_tdata),//512
+     .probe21(s_axis_dma1_mm2s_tdest), //8
+     .probe22(s_axis_dma1_mm2s_tready),
+     .probe23(s_axis_dma1_mm2s_tvalid),
+     .probe24(s_axis_eth_notification_tdata), //64
+     .probe25(s_axis_eth_notification_tready),
+     .probe26(s_axis_eth_notification_tvalid),
+     .probe27(m_axis_eth_tx_meta_tdata), //32
+     .probe28(m_axis_eth_tx_meta_tready),
+     .probe29(m_axis_eth_tx_meta_tvalid),
+     .probe30(s_axis_eth_tx_status_tdata), //64
+     .probe31(s_axis_eth_tx_status_tready),
+     .probe32(s_axis_eth_tx_status_tvalid),
+     .probe33(m_axis_eth_tx_data_tdata), //512
+     .probe34(m_axis_eth_tx_data_tready),
+     .probe35(m_axis_eth_tx_data_tvalid),
+     .probe36(m_axis_eth_tx_data_tdest) //8
+     );*/
 
 endmodule

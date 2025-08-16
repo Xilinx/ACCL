@@ -70,6 +70,28 @@ generate_target all [get_files  ./ccl_offload_ex/ccl_offload_ex.srcs/sources_1/b
 #build a .xsa file handoff
 write_hw_platform -fixed -force -file $xsafile
 
+
+#create ila_top for commands on cclo interf
+#create_ip -name ila -vendor xilinx.com -library ip -version 6.2 -module_name ila_top
+#set_property -dict [ list CONFIG.C_PROBE0_WIDTH {32} ] [get_ips ila_top]
+#set_property -dict [ list CONFIG.C_PROBE4_WIDTH {512} ] [get_ips ila_top]
+#set_property -dict [ list CONFIG.C_PROBE5_WIDTH {8} ] [get_ips ila_top]
+#set_property -dict [ list CONFIG.C_PROBE8_WIDTH {512} ] [get_ips ila_top]
+#set_property -dict [ list CONFIG.C_PROBE9_WIDTH {8} ] [get_ips ila_top]
+#set_property -dict [ list CONFIG.C_PROBE12_WIDTH {512} ] [get_ips ila_top]
+#set_property -dict [ list CONFIG.C_PROBE13_WIDTH {8} ] [get_ips ila_top]
+#set_property -dict [ list CONFIG.C_PROBE16_WIDTH {512} ] [get_ips ila_top]
+#set_property -dict [ list CONFIG.C_PROBE17_WIDTH {8} ] [get_ips ila_top]
+#set_property -dict [ list CONFIG.C_PROBE20_WIDTH {512} ] [get_ips ila_top]
+#set_property -dict [ list CONFIG.C_PROBE21_WIDTH {8} ] [get_ips ila_top]
+#set_property -dict [ list CONFIG.C_PROBE24_WIDTH {64} ] [get_ips ila_top]
+#set_property -dict [ list CONFIG.C_PROBE27_WIDTH {32} ] [get_ips ila_top]
+#set_property -dict [ list CONFIG.C_PROBE30_WIDTH {64} ] [get_ips ila_top]
+#set_property -dict [ list CONFIG.C_PROBE33_WIDTH {512} ] [get_ips ila_top]
+#set_property -dict [ list CONFIG.C_PROBE36_WIDTH {8} ] [get_ips ila_top]
+#set_property -dict [ list CONFIG.C_NUM_OF_PROBES {37} ] [get_ips ila_top]
+#set_property -dict [ list CONFIG.C_EN_STRG_QUAL {1} ] [get_ips ila_top]
+#set_property -dict [ list CONFIG.C_DATA_DEPTH {1024} ] [get_ips ila_top]
 # close and exit
 close_project
 exit
