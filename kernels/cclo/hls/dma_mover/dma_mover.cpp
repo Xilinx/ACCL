@@ -594,6 +594,7 @@ void instruction_decode(
                     dm1_rd.total_bytes = seek_res.len;
                     bytes_remaining -= seek_res.len;
                     dm1_rd.last = (bytes_remaining <= 0);
+                    dm1_rd.mem_id = seek_res.host ? 1 : 0;
                     //instruct to release this buffer once the DMA movement is complete
                     STREAM_WRITE(rxbuf_release_idx, seek_res.index);
                     ack_insn.release_count++;

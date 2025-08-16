@@ -15,13 +15,13 @@
 #
 # *******************************************************************************/
 
-PLATFORM ?= xilinx_u280_xdma_201920_3
+PLATFORM ?= xilinx_u55c_gen3x16_xdma_3_202210_1
 HW_DEBUG ?= none
-STACK_TYPE ?= UDP
+STACK_TYPE ?= RDMA
 MODE ?= xo
 EN_DMA ?= 1
 EN_ARITH ?= 1
-EN_COMPRESS ?= 1
+EN_COMPRESS ?= 0
 EN_EXT_KRNL ?= 1
 MB_DEBUG_LEVEL ?= 0
 SIM_MEM_SIZE_LOG ?= 28

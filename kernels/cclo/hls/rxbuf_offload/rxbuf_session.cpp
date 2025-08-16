@@ -84,7 +84,7 @@ void rxbuf_session_command(
                 cmd.length = notif.length;
                 cmd_word.data = cmd;
                 cmd_word.last = 1;//always last, each command is a single word
-                cmd_word.dest = 0;//always write RX data to device (not host)
+                cmd_word.dest = desc.mem_index;//always write RX data to device (not host)
                 STREAM_WRITE(fragment_dma_cmd, cmd_word);
             } else {
                 //if EOF update address in descriptor

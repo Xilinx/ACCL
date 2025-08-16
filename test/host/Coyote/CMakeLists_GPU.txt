@@ -1,0 +1,113 @@
+cmake_minimum_required(VERSION 3.16)
+project(accl_on_coyote)
+
+# set(COYOTE_DRIVER_DIR ${CMAKE_SOURCE_DIR}/../../refdesigns/Coyote/sw/)
+set(ACCL_DRIVER_DIR ${CMAKE_SOURCE_DIR}/../../../driver/xrt/)
+
+set(ACCL_DEBUG 1)
+
+# Sources
+# file(GLOB SOURCES ${COYOTE_DRIVER_DIR}/src/*.cpp ${ACCL_DRIVER_DIR}/src/*.cpp ${CMAKE_SOURCE_DIR}/*.cpp)
+
+# Enable Coyote
+# set(EN_COYOTE 1 CACHE STRING "Enable Coyote")
+# AVX support (Disable on Enzian)
+set(EN_AVX 1 CACHE STRING "AVX environment.")
+
+add_subdirectory(${CMAKE_SOURCE_DIR}/../../../driver/xrt/ ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/xrt/)
+
+
+set(EN_GPU 1)
+if(NOT DEFINED ROCM_PATH)
+if(DEFINED ENV{ROCM_PATH})
+    set(ROCM_PATH $ENV{ROCM_PATH} CACHE PATH "Path to which ROCM has been installed")
+elseif(DEFINED ENV{HIP_PATH})
+    set(ROCM_PATH "$ENV{HIP_PATH}/.." CACHE PATH "Path to which ROCM has been installed")
+else()
+    set(ROCM_PATH "/opt/rocm" CACHE PATH "Path to which ROCM has been installed")
+endif()
+endif()
+
+file(STRINGS "${ROCM_PATH}/.info/version" ROCM_VERSION)
+message("-- Found ROCm: ${ROCM_VERSION}")
+
+if (NOT DEFINED CMAKE_CXX_COMPILER)
+    set(CMAKE_CXX_COMPILER ${ROCM_PATH}/bin/hipcc)
+endif()
+
+if(NOT DEFINED HIP_PATH)
+    if(NOT DEFINED ENV{HIP_PATH})
+        set(HIP_PATH "/opt/rocm/hip" CACHE PATH "Path to which HIP has been installed")
+    else()
+        set(HIP_PATH $ENV{HIP_PATH} CACHE PATH "Path to which HIP has been installed")
+    endif()
+endif()
+
+if(NOT DEFINED HCC_PATH)
+    if(DEFINED ENV{HCC_PATH})
+        set(HCC_PATH $ENV{HCC_PATH} CACHE PATH "Path to which HCC has been installed")
+    else()
+        set(HCC_PATH "${ROCM_PATH}/hcc" CACHE PATH "Path to which HCC has been installed")
+    endif()
+    set(HCC_HOME "${HCC_PATH}")
+endif()
+
+if(NOT DEFINED HIP_CLANG_PATH)
+    if(NOT DEFINED ENV{HIP_CLANG_PATH})
+        set(HIP_CLANG_PATH "${ROCM_PATH}/llvm/bin" CACHE PATH "Path to which HIP compatible clang binaries have been installed")
+    else()
+        set(HIP_CLANG_PATH $ENV{HIP_CLANG_PATH} CACHE PATH "Path to which HIP compatible clang binaries have been installed")
+    endif()
+endif()
+
+find_package(HIP QUIET)
+if(HIP_FOUND)
+    message(STATUS "Found HIP: " ${HIP_VERSION})
+else()
+    message(FATAL_ERROR "Could not find HIP. Ensure that HIP is either installed in /opt/rocm/hip or the variable HIP_PATH is set to point to the right location.")
+endif()
+find_package(hip REQUIRED)
+
+set(CYT_LANG ${CYT_LANG} HIP)
+
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Exec
+set(EXEC accl_on_coyote)
+add_executable(${EXEC} ${CMAKE_SOURCE_DIR}/test.cpp)
+
+# accl
+target_include_directories(${EXEC} PUBLIC ${ACCL_DRIVER_DIR}/include)
+target_link_libraries(${EXEC} PUBLIC accl)
+
+# MPI
+find_package(MPI REQUIRED)
+message(STATUS "MPI Include Path: ${MPI_CXX_INCLUDE_PATH}")
+
+target_include_directories(${EXEC} PUBLIC ${MPI_CXX_INCLUDE_PATH})
+target_link_libraries(${EXEC} PUBLIC MPI::MPI_CXX)
+
+# XRT
+if (NOT EXISTS $ENV{XILINX_XRT})
+  message(FATAL_ERROR "Xilinx XRT not found, make sure to source setup.sh")
+endif ()
+
+target_link_directories(${EXEC} PUBLIC $ENV{XILINX_XRT}/lib)
+target_link_libraries(${EXEC} PUBLIC xilinxopencl xrt_coreutil xrt_core)
+target_include_directories(${EXEC} PUBLIC $ENV{XILINX_XRT}/include)
+
+# ZMQ
+target_link_libraries(${EXEC} PUBLIC zmq pthread)
+
+target_include_directories(${EXEC} PUBLIC /opt/rocm/include /opt/rocm/include/hsa)
+target_link_libraries(${EXEC} PUBLIC hip::device numa pthread drm drm_amdgpu rt dl hsa-runtime64 hsakmt)
+
+# # Json
+# find_package(jsoncpp REQUIRED)
+# target_link_libraries(${EXEC} PUBLIC jsoncpp_lib)
+# get_target_property(JSON_INC_PATH jsoncpp_lib INTERFACE_INCLUDE_DIRECTORIES)
+# target_include_directories(${EXEC} PUBLIC ${JSON_INC_PATH})
+
+

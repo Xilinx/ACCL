@@ -19,12 +19,17 @@
 #pragma once
 #include "buffer.hpp"
 #include "common.hpp"
-#include "cProcess.hpp"
+#include "cThread.hpp"
 #include "cDefs.hpp"
 #include "coyotedevice.hpp"
 #include <cstdlib>
 #include <cstring>
 #include <iomanip>
+#define GPU_EN 0
+#if GPU_EN == 1
+  #include <hip/hip_runtime.h>
+  #define DEFAULT_GPU_ID 0
+#endif
 
 /** @file coyotebuffer.hpp */
 
@@ -57,14 +62,18 @@ template <typename dtype> class CoyoteBuffer : public Buffer<dtype> {
       size_t page_size = 1ULL << 21;
       this->buffer_size = length * sizeof(dtype);
       this->n_pages = (buffer_size + page_size - 1) / page_size;
-      std::cerr << "CoyoteBuffer contructor called! page_size:"<<page_size<<", buffer_size:"<<buffer_size<<",n_pages:"<<n_pages<< std::endl;
-
-      this->aligned_buffer = (dtype *)this->device->coyote_proc->getMem({fpga::CoyoteAlloc::HUGE_2M, n_pages});
+      #if GPU_EN == 1
+        if (hipSetDevice(DEFAULT_GPU_ID)) { throw std::runtime_error("Couldn't select GPU!"); }
+        this->aligned_buffer = (dtype *)this->device->coyote_proc->getMem({coyote::CoyoteAllocType::GPU, static_cast<uint32_t>(this->buffer_size), true, DEFAULT_GPU_ID});
+      #else
+       this->aligned_buffer = (dtype *)this->device->coyote_proc->getMem({coyote::CoyoteAllocType::HPF, this->buffer_size, true});
+      #endif
 
       this->update_buffer(this->aligned_buffer, (addr_t)this->aligned_buffer); 
 
       std::cerr << "Allocation successful! Allocated buffer: "<<std::setbase(16)<<(uint64_t)this->aligned_buffer << std::setbase(10) <<", Size: " << this->_size << std::endl;
 
+      //buffers in coyote per default on host memory
       host_flag = true;
       
 
@@ -112,22 +121,30 @@ template <typename dtype> class CoyoteBuffer : public Buffer<dtype> {
      */
     void sync_from_device() override
     {
-      std::cerr << "calling sync: " << std::setbase(16) << (uint64_t)this->aligned_buffer << ", size: " << std::setbase(10) << this->size() << std::endl;
+      std::cerr << "sync_from_device at address: " << std::setbase(16) << (uint64_t)this->aligned_buffer << ", size: " << std::setbase(10) << this->size() << std::endl;
 
-      this->device->coyote_proc->invoke({fpga::CoyoteOper::SYNC, this->aligned_buffer, (uint32_t)this->_size, true, true, 0, false});
+      coyote::syncSg sg;
+      memset(&sg, 0, sizeof(coyote::syncSg));
+      sg.addr = this->aligned_buffer;
+      sg.len = this->size(); 
+      this->device->coyote_proc->invoke(coyote::CoyoteOper::LOCAL_SYNC, sg);
     
       this->host_flag = true;
     }
 
     /**
      * Sync the data from the host to the device. 
-     *
+     * 
      */
     void sync_to_device() override
     {
-      std::cerr << "calling offload: " << std::setbase(16) << (uint64_t)this->aligned_buffer << ", size: " << std::setbase(10) << this->size() << std::endl;
+      std::cerr << "sync_to_device at address: " << std::setbase(16) << (uint64_t)this->aligned_buffer << ", size: " << std::setbase(10) << this->size() << std::endl;
 
-      this->device->coyote_proc->invoke({fpga::CoyoteOper::OFFLOAD, this->aligned_buffer, (uint32_t)this->_size, true, true, 0, false});
+      coyote::syncSg sg;
+      memset(&sg, 0, sizeof(coyote::syncSg));
+      sg.addr = this->aligned_buffer;
+      sg.len = this->size();
+      this->device->coyote_proc->invoke(coyote::CoyoteOper::LOCAL_OFFLOAD, sg);
     
       this->host_flag = false;
     }
@@ -144,7 +161,7 @@ template <typename dtype> class CoyoteBuffer : public Buffer<dtype> {
       //   }
       // }
 
-      std::cerr << "Free user buffer from cProc cPid:"<< std::setbase(10)<<this->device->coyote_proc->getCpid()<<", buffer_size:"<<buffer_size<<","<<std::setbase(16) << (uint64_t)this->aligned_buffer<<std::endl;
+      std::cerr << "Free user buffer from cProc cPid:"<< std::setbase(10)<<this->device->coyote_proc->getCtid()<<", buffer_size:"<<buffer_size<<","<<std::setbase(16) << (uint64_t)this->aligned_buffer<<std::endl;
       this->device->coyote_proc->freeMem(this->aligned_buffer);
       return;
     }

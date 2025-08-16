@@ -18,9 +18,10 @@
 
 #include "accl/coyotedevice.hpp"
 #include "accl/common.hpp"
-#include "cProcess.hpp"
+#include "cThread.hpp"
 #include <future>
 #include <iomanip>
+#include <bitset>
 
 static void finish_coyote_request(ACCL::CoyoteRequest *req) {
   req->wait_kernel();
@@ -45,8 +46,14 @@ void CoyoteRequest::start() {
   } else {
     function = static_cast<int>(options.reduce_function);
   }
+  /*std::cout << "options.scenario " << static_cast<uint32_t>(options.scenario) << " options.count " << options.count << " options.comm " << options.comm <<
+  " options.root_src_dest " << options.root_src_dst << " options.cfg_function " << static_cast<uint32_t>(options.cfg_function) << " options.reduce_function " << static_cast<uint32_t>(options.reduce_function) <<
+  " options.tag " << options.tag << " options.arithcfg_addr " << options.arithcfg_addr << " options.compress_dtype " << static_cast<uint32_t>(options.compress_dtype) <<
+  " options.compression_flags " << std::bitset<32>(static_cast<uint32_t>(options.compression_flags)) << " options.stream_flags " << std::bitset<32>(static_cast<uint32_t>(options.stream_flags)) <<
+  " options.host_flags " << std::bitset<32>(static_cast<uint32_t>(options.host_flags)) << " address0 " << options.addr_0->address() << " address1 " << options.addr_1->address() <<
+  " address2 " << options.addr_2->address() << " options.data_type_io_0 " << static_cast<uint32_t>(options.data_type_io_0) << " options.data_type_io_1 " << static_cast<uint32_t>(options.data_type_io_1) <<
+  " options.data_type_io_2 " << static_cast<uint32_t>(options.data_type_io_2) << std::endl;*/
   uint32_t flags = static_cast<uint32_t>(options.host_flags) << 8 | static_cast<uint32_t>(options.stream_flags);
-
   auto coyote_proc = reinterpret_cast<ACCL::CoyoteDevice *>(cclo())->get_device();
 
   if ((coyote_proc->getCSR((OFFSET_HOSTCTRL + HOSTCTRL_ADDR::AP_CTRL)>>2) & 0x4) == 0) { // read AP_CTRL and check bit 3 (the idle bit)
@@ -251,6 +258,7 @@ void CoyoteRequest::start() {
     }
     case ACCL::operation::config:{
       coyote_proc->setCSR(static_cast<uint32_t>(options.scenario), (OFFSET_HOSTCTRL + HOSTCTRL_ADDR::SCEN)>>2);
+      coyote_proc->setCSR(static_cast<uint32_t>(options.count), (OFFSET_HOSTCTRL + HOSTCTRL_ADDR::LEN)>>2);
       coyote_proc->setCSR(static_cast<uint32_t>(function), (OFFSET_HOSTCTRL + HOSTCTRL_ADDR::FUNCTION_R)>>2);
       //coyote_proc->setCSR(static_cast<uint32_t>(flags), (OFFSET_HOSTCTRL + HOSTCTRL_ADDR::STREAM_FLAGS)>>2); //safe to delete?
     break;
@@ -276,28 +284,28 @@ void CoyoteRequest::wait_kernel() {
 }
 
 CoyoteDevice::CoyoteDevice(): num_qp(0) {
-  this->coyote_proc = new fpga::cProcess(targetRegion, getpid());
-	std::cerr << "ACLL DEBUG: aquiring cProc: targetRegion: " << targetRegion << ", cPid: " << coyote_proc->getCpid() << std::endl;
+  this->coyote_proc = new coyote::cThread(targetRegion, getpid(), 0);
+	std::cerr << "ACLL DEBUG: aquiring cProc: targetRegion: " << targetRegion << ", cPid: " << coyote_proc->getCtid() << std::endl;
 }
 
 CoyoteDevice::CoyoteDevice(unsigned int num_qp): num_qp(num_qp) {
 
   for (unsigned int i=0; i<(num_qp+1); i++)
   {
-    fpga::cProcess* cproc = new fpga::cProcess(targetRegion, getpid());
+    coyote::cThread* cproc = new coyote::cThread(targetRegion, getpid(), 0);
     coyote_qProc_vec.push_back(cproc);
   }
 
   for (unsigned int i=0; i<coyote_qProc_vec.size(); i++){
-    if(coyote_qProc_vec[i]->getCpid() == 0){
+    if(i == 0){
       this->coyote_proc = coyote_qProc_vec[i];
-      std::cerr << "ACLL DEBUG: aquiring cProc: targetRegion: " << targetRegion << ", cPid: " << coyote_proc->getCpid() << std::endl;
+      std::cerr << "ACLL DEBUG: aquiring cProc: targetRegion: " << targetRegion << ", cPid: " << coyote_proc->getCtid() << std::endl;
       coyote_qProc_vec.erase(coyote_qProc_vec.begin() + i);
       break;
     }
   }
 
-  if(coyote_proc == NULL || coyote_proc->getCpid() != 0){
+  if(coyote_proc == NULL){
     std::cerr << "cProc initialization error!"<<std::endl;
     for(unsigned int i = 0; i < coyote_qProc_vec.size(); i++) {
       if(coyote_qProc_vec[i] != nullptr) {
@@ -308,7 +316,7 @@ CoyoteDevice::CoyoteDevice(unsigned int num_qp): num_qp(num_qp) {
   }
 
   for (unsigned int i=0; i<coyote_qProc_vec.size(); i++){
-    std::cerr << "ACLL DEBUG: aquiring qProc: targetRegion: " << targetRegion << ", cPid: " << coyote_qProc_vec[i]->getCpid() << std::endl;
+    std::cerr << "ACLL DEBUG: aquiring qProc: targetRegion: " << targetRegion << ", cPid: " << coyote_qProc_vec[i]->getCtid() << std::endl;
   }
 
 }
@@ -369,7 +377,7 @@ CCLO::deviceType CoyoteDevice::get_device_type()
 void CoyoteDevice::printDebug(){
   coyote_proc->printDebug();
 
-  std::ifstream inputFile("/sys/kernel/coyote_cnfg/cyt_attr_nstats_q0");  
+  std::ifstream inputFile("/sys/kernel/coyote_sysfs_0/cyt_attr_nstats");  
 
   if (!inputFile.is_open()) {
       std::cerr << "Failed to open net sts file." << std::endl;
