@@ -60,7 +60,6 @@ void tcp_depacketizer(
 #pragma HLS PIPELINE II=1 style=flp
 	
 	unsigned constexpr bytes_per_word = DATA_WIDTH/8;
-	unsigned const max_dma_bytes = 8*1024*1024-1;//TODO: convert to argument?
 
 	static unsigned int remaining[MAX_SESSIONS] = {0};//one RAMB36 for max sessions
 	static ap_uint<DEST_WIDTH> target_strm[MAX_SESSIONS] = {0};//one RAMB18 for max sessions
@@ -138,7 +137,7 @@ void tcp_depacketizer(
 		notif.length = (notif.length < bytes_per_word) ? 0u : (unsigned int)notif.length-bytes_per_word;//floor at zero
 		current_bytes += (message_rem < bytes_per_word) ? message_rem : bytes_per_word;
 		message_rem = (message_rem < bytes_per_word) ? 0u : message_rem-bytes_per_word;//slight problem here if the message doesnt end on a 64B boundary...
-	} while(notif.length > 0 && message_rem > 0 && current_bytes < (max_dma_bytes-bytes_per_word));
+	} while(notif.length > 0 && message_rem > 0 && current_bytes < (MAX_DMA_BYTES-bytes_per_word));
 	if(message_strm == 0){
 		downstream_notif.type = 2; //for EOF
 		downstream_notif.length = current_bytes;

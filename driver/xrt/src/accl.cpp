@@ -62,7 +62,7 @@ void ACCL::soft_reset() {
   options.scenario = operation::config;
   options.cfg_function = cfgFunc::reset_periph;
   ACCLRequest *handle = call_async(options);
-  std::chrono::milliseconds timeout(100);
+  std::chrono::milliseconds timeout(DEFAULT_RESET_TIMEOUT_MS);
   if(!wait(handle, timeout)){
     throw std::runtime_error("CCLO failed to soft reset");
   }
@@ -179,8 +179,8 @@ ACCLRequest *ACCL::stream_put(BaseBuffer &srcbuf, unsigned int count,
                         std::vector<ACCLRequest *> waitfor) {
   CCLO::Options options{};
 
-  if (stream_id > 246) {
-    throw std::invalid_argument("Stream ID must < 247");
+  if (stream_id > MAX_STREAM_ID) {
+    throw std::invalid_argument("Stream ID must be <= " + std::to_string(MAX_STREAM_ID));
   }
 
   if (from_fpga == false) {
@@ -211,8 +211,8 @@ ACCLRequest *ACCL::stream_put(dataType src_data_type, unsigned int count,
                         std::vector<ACCLRequest *> waitfor) {
   CCLO::Options options{};
 
-  if (stream_id > 246) {
-    throw std::invalid_argument("Stream ID must < 247");
+  if (stream_id > MAX_STREAM_ID) {
+    throw std::invalid_argument("Stream ID must be <= " + std::to_string(MAX_STREAM_ID));
   }
 
   options.scenario = operation::send;
@@ -1097,7 +1097,7 @@ void ACCL::initialize(const std::vector<rank_t> &ranks, int local_rank,
   cclo->write(CCLO_ADDR::CFGRDY_OFFSET, 1);
 
   debug("Set timeout");
-  set_timeout(1000000);
+  set_timeout(DEFAULT_OPERATION_TIMEOUT);
 
   debug("Set max eager size: " + std::to_string(max_egr_size));
   set_max_eager_msg_size(max_egr_size);
@@ -1227,14 +1227,15 @@ void ACCL::setup_rendezvous_spare_buffers(addr_t rndzv_spare_buf_size, const std
 
 void ACCL::configure_tuning_parameters(){
   //tune gather to reduce fan-in of flat tree above certain message sizes
-  cclo->write(CCLO_ADDR::GATHER_FLAT_TREE_MAX_FANIN_OFFSET, 2);
-  cclo->write(CCLO_ADDR::GATHER_FLAT_TREE_MAX_COUNT_OFFSET, 32*1024);
-  //tune bcast to execute flat tree up to 3 ranks
-  cclo->write(CCLO_ADDR::BCAST_FLAT_TREE_MAX_RANKS_OFFSET, 3);
-  //tune reduce to execute flat tree up to 4 ranks or up to 32KB
-  unsigned int max_reduce_flat_tree_size = 4;
-  cclo->write(CCLO_ADDR::REDUCE_FLAT_TREE_MAX_RANKS_OFFSET, max_reduce_flat_tree_size);
-  cclo->write(CCLO_ADDR::REDUCE_FLAT_TREE_MAX_COUNT_OFFSET, std::min(max_rndzv_msg_size/max_reduce_flat_tree_size, (long unsigned int)32*1024));
+  cclo->write(CCLO_ADDR::GATHER_FLAT_TREE_MAX_FANIN_OFFSET, DEFAULT_GATHER_FLAT_TREE_MAX_FANIN);
+  cclo->write(CCLO_ADDR::GATHER_FLAT_TREE_MAX_COUNT_OFFSET, FLAT_TREE_MAX_COUNT);
+  //tune bcast to execute flat tree up to configured max ranks
+  cclo->write(CCLO_ADDR::BCAST_FLAT_TREE_MAX_RANKS_OFFSET, DEFAULT_BCAST_FLAT_TREE_MAX_RANKS);
+  //tune reduce to execute flat tree up to configured max ranks or up to FLAT_TREE_MAX_COUNT
+  cclo->write(CCLO_ADDR::REDUCE_FLAT_TREE_MAX_RANKS_OFFSET, DEFAULT_REDUCE_FLAT_TREE_MAX_RANKS);
+  cclo->write(CCLO_ADDR::REDUCE_FLAT_TREE_MAX_COUNT_OFFSET,
+              std::min(max_rndzv_msg_size / DEFAULT_REDUCE_FLAT_TREE_MAX_RANKS,
+                       static_cast<long unsigned int>(FLAT_TREE_MAX_COUNT)));
 }
 
 void ACCL::check_return_value(const std::string function_name, ACCLRequest *request) {

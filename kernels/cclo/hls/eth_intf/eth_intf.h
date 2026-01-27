@@ -34,6 +34,10 @@
 #define SESSION_INDEX_BITS 10
 #define SESSION_INDEX_MASK (MAX_SESSIONS - 1)  // 0x3FF for 1024 sessions
 
+// Maximum bytes per DMA transfer (8 MB - 1 byte)
+// Used in depacketizers to limit fragment sizes
+#define MAX_DMA_BYTES (8*1024*1024-1)
+
 #define RATE_CONTROL
 
 typedef ap_axiu<DWIDTH512, 0, 0, 0> pkt512;

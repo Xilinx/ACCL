@@ -96,7 +96,6 @@ void udp_depacketizer(
 #pragma HLS PIPELINE II=1 style=flp
 
 	unsigned const bytes_per_word = DATA_WIDTH/8;
-	unsigned const max_dma_bytes = 8*1024*1024-1;//TODO: convert to argument?
 
 	//session states (for each session, remaining bytes and STRM values for ongoing messages)
 	static unsigned int remaining[MAX_SESSIONS] = {0};//one RAMB36 for max sessions
@@ -155,7 +154,7 @@ void udp_depacketizer(
 	}
 	//write out SOF
 	if(message_strm == 0){
-		notif.length = max_dma_bytes;
+		notif.length = MAX_DMA_BYTES;
 		notif.type = 1; //for SOF
 		STREAM_WRITE(notif_out, notif);
 	}
@@ -169,7 +168,7 @@ void udp_depacketizer(
 			STREAM_WRITE(out, inword);
 			current_bytes += (message_rem < bytes_per_word) ? message_rem : bytes_per_word;
 			message_rem = (message_rem < bytes_per_word) ? 0u : message_rem-bytes_per_word;//slight problem here if the message doesnt end on a 64B boundary...
-		} while(inword.last == 0 && message_rem > 0 && current_bytes < (max_dma_bytes-bytes_per_word));
+		} while(inword.last == 0 && message_rem > 0 && current_bytes < (MAX_DMA_BYTES-bytes_per_word));
 	}
 	//write out EOF
 	if(message_strm == 0){
