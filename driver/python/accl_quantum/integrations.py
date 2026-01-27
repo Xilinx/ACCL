@@ -599,16 +599,24 @@ class UnifiedQuantumControl:
             backend: Backend type ('qubic' or 'qick')
             **backend_config: Backend-specific configuration
         """
+        from dataclasses import fields
+
         self.accl = accl
         self.backend_type = backend
 
         if backend == 'qubic':
-            config = QubiCConfig(**{k: v for k, v in backend_config.items()
-                                   if hasattr(QubiCConfig, k)})
+            # Get valid field names for QubiCConfig
+            valid_fields = {f.name for f in fields(QubiCConfig)}
+            config_kwargs = {k: v for k, v in backend_config.items()
+                           if k in valid_fields}
+            config = QubiCConfig(**config_kwargs)
             self.backend = QubiCIntegration(accl, config)
         elif backend == 'qick':
-            config = QICKConfig(**{k: v for k, v in backend_config.items()
-                                  if hasattr(QICKConfig, k)})
+            # Get valid field names for QICKConfig
+            valid_fields = {f.name for f in fields(QICKConfig)}
+            config_kwargs = {k: v for k, v in backend_config.items()
+                           if k in valid_fields}
+            config = QICKConfig(**config_kwargs)
             self.backend = QICKIntegration(accl, config)
         else:
             raise ValueError(f"Unknown backend: {backend}")
