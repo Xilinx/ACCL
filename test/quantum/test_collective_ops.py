@@ -19,6 +19,7 @@ from typing import List, Dict, Callable, Tuple, Optional
 from enum import Enum
 import time
 from abc import ABC, abstractmethod
+import pytest
 
 # ============================================================================
 # Constants
@@ -314,6 +315,28 @@ class CollectiveSimulator:
                     'max_ns': np.max(latencies)
                 }
         return stats
+
+
+# ============================================================================
+# Pytest Fixtures
+# ============================================================================
+
+@pytest.fixture
+def sim():
+    """Create CollectiveSimulator fixture for tests."""
+    return CollectiveSimulator(num_ranks=8, p2p_latency_ns=100)
+
+
+@pytest.fixture
+def iterations():
+    """Default iteration count for tests."""
+    return 100
+
+
+@pytest.fixture
+def op():
+    """Default reduce operation for tests."""
+    return ReduceOp.XOR
 
 
 # ============================================================================
