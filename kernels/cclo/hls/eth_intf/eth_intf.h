@@ -27,6 +27,13 @@
 #define DWIDTH16 16
 #define DWIDTH8 8
 
+// Maximum number of concurrent sessions supported
+// Used for session state arrays in depacketizers
+// Must be a power of 2 for efficient index masking
+#define MAX_SESSIONS 1024
+#define SESSION_INDEX_BITS 10
+#define SESSION_INDEX_MASK (MAX_SESSIONS - 1)  // 0x3FF for 1024 sessions
+
 #define RATE_CONTROL
 
 typedef ap_axiu<DWIDTH512, 0, 0, 0> pkt512;
