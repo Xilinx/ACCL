@@ -32,7 +32,7 @@ ACCL::ACCL(xrt::device &device, xrt::ip &cclo_ip, xrt::kernel &hostctrl_ip,
            const arithConfigMap &arith_config)
     : arith_config(arith_config), sim_mode(false),
       _devicemem(devicemem), rxbufmem(rxbufmem) {
-  cclo = new XRTDevice(cclo_ip, hostctrl_ip, device);
+  cclo = std::make_unique<XRTDevice>(cclo_ip, hostctrl_ip, device);
 }
 
 // Simulation constructor
@@ -40,10 +40,11 @@ ACCL::ACCL(unsigned int sim_start_port, unsigned int local_rank,
            const arithConfigMap &arith_config)
     : arith_config(arith_config), sim_mode(true),
       _devicemem(0), rxbufmem({}) {
-  cclo = new SimDevice(sim_start_port, local_rank);
+  cclo = std::make_unique<SimDevice>(sim_start_port, local_rank);
 }
 
 // constructor for coyote fpga device
+// Note: Takes ownership of the CoyoteDevice pointer
 ACCL::ACCL(CoyoteDevice *dev, const arithConfigMap &arith_config)
   : arith_config(arith_config), sim_mode(false),
     _devicemem(0), rxbufmem(0), cclo(dev) {}
@@ -51,7 +52,7 @@ ACCL::ACCL(CoyoteDevice *dev, const arithConfigMap &arith_config)
 // destructor
 ACCL::~ACCL() {
   deinit();
-  delete cclo;
+  // cclo is automatically cleaned up by unique_ptr
 }
 
 void ACCL::soft_reset() {
@@ -77,13 +78,13 @@ void ACCL::deinit() {
 
   for (auto &buf : eager_rx_buffers) {
     buf->free_buffer();
-    delete buf;
+    // unique_ptr automatically handles deletion
   }
   eager_rx_buffers.clear();
 
   for (auto &buf : utility_spares) {
     buf->free_buffer();
-    delete buf;
+    // unique_ptr automatically handles deletion
   }
   utility_spares.clear();
 }
@@ -1134,19 +1135,28 @@ void ACCL::setup_eager_rx_buffers(size_t n_egr_rx_bufs, addr_t egr_rx_buf_size,
   eager_rx_buffer_size = egr_rx_buf_size;
   for (size_t i = 0; i < n_egr_rx_bufs; ++i) {
     // create, clear and sync buffers to device
-    Buffer<int8_t> *buf;
+    std::unique_ptr<Buffer<int8_t>> buf;
 
     if (sim_mode) {
-      buf = new SimBuffer(new int8_t[eager_rx_buffer_size](), eager_rx_buffer_size, dataType::int8,
-                          static_cast<SimDevice *>(cclo)->get_context());
+      buf = std::make_unique<SimBuffer<int8_t>>(
+          new int8_t[eager_rx_buffer_size](), eager_rx_buffer_size, dataType::int8,
+          static_cast<SimDevice *>(cclo.get())->get_context());
     } else if(cclo->get_device_type() == CCLO::xrt_device ){
-      buf = new XRTBuffer<int8_t>(eager_rx_buffer_size, dataType::int8, *(static_cast<XRTDevice *>(cclo)->get_device()), devicemem[i % devicemem.size()]);
+      buf = std::make_unique<XRTBuffer<int8_t>>(
+          eager_rx_buffer_size, dataType::int8,
+          *(static_cast<XRTDevice *>(cclo.get())->get_device()),
+          devicemem[i % devicemem.size()]);
     } else if(cclo->get_device_type() == CCLO::coyote_device){
-      buf = new CoyoteBuffer<int8_t>(eager_rx_buffer_size, dataType::int8, static_cast<CoyoteDevice *>(cclo));
+      buf = std::make_unique<CoyoteBuffer<int8_t>>(
+          eager_rx_buffer_size, dataType::int8,
+          static_cast<CoyoteDevice *>(cclo.get()));
+    }
+
+    if (!buf) {
+      throw std::runtime_error("Failed to create eager RX buffer: unsupported device type");
     }
 
     buf->sync_to_device();
-    eager_rx_buffers.emplace_back(buf);
     // program this buffer into the accelerator
     address += 4;
     cclo->write(address, 0);
@@ -1159,6 +1169,7 @@ void ACCL::setup_eager_rx_buffers(size_t n_egr_rx_bufs, addr_t egr_rx_buf_size,
       address += 4;
       cclo->write(address, 0);
     }
+    eager_rx_buffers.push_back(std::move(buf));
   }
 
   //write buffer len
@@ -1176,23 +1187,28 @@ void ACCL::setup_rendezvous_spare_buffers(addr_t rndzv_spare_buf_size, const std
   max_rndzv_msg_size = rndzv_spare_buf_size;
 
   for(int i=0; i<REQUIRED_SPARE_BUFFERS; i++){
-    Buffer<int8_t> *buf = nullptr;
+    std::unique_ptr<Buffer<int8_t>> buf;
     if (sim_mode) {
-      buf = new SimBuffer(new int8_t[max_rndzv_msg_size](), max_rndzv_msg_size, dataType::int8,
-                        static_cast<SimDevice *>(cclo)->get_context());
+      buf = std::make_unique<SimBuffer<int8_t>>(
+          new int8_t[max_rndzv_msg_size](), max_rndzv_msg_size, dataType::int8,
+          static_cast<SimDevice *>(cclo.get())->get_context());
     } else if(cclo->get_device_type() == CCLO::xrt_device ){
-      buf = new XRTBuffer<int8_t>(max_rndzv_msg_size, dataType::int8,
-                        *(static_cast<XRTDevice *>(cclo)->get_device()), devicemem[i % devicemem.size()]);
+      buf = std::make_unique<XRTBuffer<int8_t>>(
+          max_rndzv_msg_size, dataType::int8,
+          *(static_cast<XRTDevice *>(cclo.get())->get_device()),
+          devicemem[i % devicemem.size()]);
     } else if(cclo->get_device_type() == CCLO::coyote_device){
-      buf = new CoyoteBuffer<int8_t>(max_rndzv_msg_size, dataType::int8, static_cast<CoyoteDevice *>(cclo));
+      buf = std::make_unique<CoyoteBuffer<int8_t>>(
+          max_rndzv_msg_size, dataType::int8,
+          static_cast<CoyoteDevice *>(cclo.get()));
     }
 
-    if (buf == nullptr) {
+    if (!buf) {
       throw std::runtime_error("Failed to create spare buffer: unsupported device type");
     }
 
     buf->sync_to_device();
-    utility_spares.emplace_back(buf);
+    utility_spares.push_back(std::move(buf));
   }
 
   if (utility_spares.size() < REQUIRED_SPARE_BUFFERS) {
