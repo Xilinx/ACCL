@@ -1115,8 +1115,8 @@ void ACCL::initialize(const std::vector<rank_t> &ranks, int local_rank,
 
 void ACCL::configure_arithmetic() {
   if (communicators.size() < 1) {
-    throw new std::runtime_error("Communicators unconfigured, please call "
-                                 "configure_communicator() first");
+    throw std::runtime_error("Communicators unconfigured, please call "
+                             "configure_communicator() first");
   }
 
   for (auto &[_key, arithcfg] : arith_config) {
@@ -1172,9 +1172,11 @@ void ACCL::setup_eager_rx_buffers(size_t n_egr_rx_bufs, addr_t egr_rx_buf_size,
 }
 
 void ACCL::setup_rendezvous_spare_buffers(addr_t rndzv_spare_buf_size, const std::vector<int> &devicemem){
+  constexpr int REQUIRED_SPARE_BUFFERS = 3;
   max_rndzv_msg_size = rndzv_spare_buf_size;
-  for(int i=0; i<3; i++){
-    Buffer<int8_t> *buf;
+
+  for(int i=0; i<REQUIRED_SPARE_BUFFERS; i++){
+    Buffer<int8_t> *buf = nullptr;
     if (sim_mode) {
       buf = new SimBuffer(new int8_t[max_rndzv_msg_size](), max_rndzv_msg_size, dataType::int8,
                         static_cast<SimDevice *>(cclo)->get_context());
@@ -1184,15 +1186,27 @@ void ACCL::setup_rendezvous_spare_buffers(addr_t rndzv_spare_buf_size, const std
     } else if(cclo->get_device_type() == CCLO::coyote_device){
       buf = new CoyoteBuffer<int8_t>(max_rndzv_msg_size, dataType::int8, static_cast<CoyoteDevice *>(cclo));
     }
+
+    if (buf == nullptr) {
+      throw std::runtime_error("Failed to create spare buffer: unsupported device type");
+    }
+
     buf->sync_to_device();
     utility_spares.emplace_back(buf);
   }
-  cclo->write(CCLO_ADDR::SPARE1_OFFSET, utility_spares.at(0)->address() & 0xffffffff);
-  cclo->write(CCLO_ADDR::SPARE1_OFFSET+4, (utility_spares.at(0)->address() >> 32) & 0xffffffff);
-  cclo->write(CCLO_ADDR::SPARE2_OFFSET, utility_spares.at(1)->address() & 0xffffffff);
-  cclo->write(CCLO_ADDR::SPARE2_OFFSET+4, (utility_spares.at(1)->address() >> 32) & 0xffffffff);
-  cclo->write(CCLO_ADDR::SPARE3_OFFSET, utility_spares.at(2)->address() & 0xffffffff);
-  cclo->write(CCLO_ADDR::SPARE3_OFFSET+4, (utility_spares.at(2)->address() >> 32) & 0xffffffff);
+
+  if (utility_spares.size() < REQUIRED_SPARE_BUFFERS) {
+    throw std::runtime_error("Insufficient utility spare buffers allocated: expected " +
+                             std::to_string(REQUIRED_SPARE_BUFFERS) + ", got " +
+                             std::to_string(utility_spares.size()));
+  }
+
+  cclo->write(CCLO_ADDR::SPARE1_OFFSET, utility_spares[0]->address() & 0xffffffff);
+  cclo->write(CCLO_ADDR::SPARE1_OFFSET+4, (utility_spares[0]->address() >> 32) & 0xffffffff);
+  cclo->write(CCLO_ADDR::SPARE2_OFFSET, utility_spares[1]->address() & 0xffffffff);
+  cclo->write(CCLO_ADDR::SPARE2_OFFSET+4, (utility_spares[1]->address() >> 32) & 0xffffffff);
+  cclo->write(CCLO_ADDR::SPARE3_OFFSET, utility_spares[2]->address() & 0xffffffff);
+  cclo->write(CCLO_ADDR::SPARE3_OFFSET+4, (utility_spares[2]->address() >> 32) & 0xffffffff);
 }
 
 void ACCL::configure_tuning_parameters(){
