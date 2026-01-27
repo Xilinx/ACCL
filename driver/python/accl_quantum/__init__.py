@@ -23,12 +23,16 @@ Example usage:
     accl.broadcast(measurement_result, root=decoder_rank)
 """
 
-from .driver import ACCLQuantum
+from .driver import ACCLQuantum, OperationResult
 from .constants import (
     ACCLMode,
+    ACCLConfig,
     ReduceOp,
     SyncMode,
+    CollectiveOp,
+    OperationStatus,
     QuantumMsgType,
+    LatencyBudget,
     CLOCK_PERIOD_NS,
     TARGET_P2P_LATENCY_NS,
     TARGET_BROADCAST_LATENCY_NS,
@@ -36,20 +40,89 @@ from .constants import (
     MAX_JITTER_NS,
     FEEDBACK_LATENCY_BUDGET_NS,
 )
-from .stats import LatencyStats, LatencyMonitor
-from .integrations import QubiCIntegration, QICKIntegration
+from .stats import LatencyStats, LatencyMonitor, LatencyProfiler
+from .integrations import QubiCIntegration, QICKIntegration, UnifiedQuantumControl
+from .feedback import MeasurementFeedbackPipeline, FeedbackScheduler
+from .deployment import (
+    BoardConfig,
+    BoardType,
+    DeploymentConfig,
+    DeploymentManager,
+    DeploymentState,
+    NetworkTopology,
+    TopologyBuilder,
+    BoardDiscovery,
+)
+from .emulator import (
+    RealisticQubitEmulator,
+    QubitState,
+    NoiseParameters,
+    GateType,
+    QuantumCircuitValidator,
+)
+from .profiler import (
+    CriticalPathProfiler,
+    BottleneckAnalyzer,
+    OptimizationAdvisor,
+    PerformanceRegressor,
+    LatencyVisualizer,
+    ProfilingSession,
+    LatencyBreakdown,
+    Bottleneck,
+    Recommendation,
+)
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 __all__ = [
+    # Core driver
     "ACCLQuantum",
+    "OperationResult",
+    "ACCLConfig",
+    # Operation modes and types
     "ACCLMode",
     "ReduceOp",
     "SyncMode",
+    "CollectiveOp",
+    "OperationStatus",
     "QuantumMsgType",
+    "LatencyBudget",
+    # Statistics and monitoring
     "LatencyStats",
     "LatencyMonitor",
+    "LatencyProfiler",
+    # Framework integrations
     "QubiCIntegration",
     "QICKIntegration",
+    "UnifiedQuantumControl",
+    # Feedback pipeline
+    "MeasurementFeedbackPipeline",
+    "FeedbackScheduler",
+    # Deployment
+    "BoardConfig",
+    "BoardType",
+    "DeploymentConfig",
+    "DeploymentManager",
+    "DeploymentState",
+    "NetworkTopology",
+    "TopologyBuilder",
+    "BoardDiscovery",
+    # Emulation
+    "RealisticQubitEmulator",
+    "QubitState",
+    "NoiseParameters",
+    "GateType",
+    "QuantumCircuitValidator",
+    # Profiling
+    "CriticalPathProfiler",
+    "BottleneckAnalyzer",
+    "OptimizationAdvisor",
+    "PerformanceRegressor",
+    "LatencyVisualizer",
+    "ProfilingSession",
+    "LatencyBreakdown",
+    "Bottleneck",
+    "Recommendation",
+    # Constants
     "CLOCK_PERIOD_NS",
     "TARGET_P2P_LATENCY_NS",
     "TARGET_BROADCAST_LATENCY_NS",
