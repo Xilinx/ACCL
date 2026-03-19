@@ -32,7 +32,7 @@ ACCL::ACCL(xrt::device &device, xrt::ip &cclo_ip, xrt::kernel &hostctrl_ip,
            const arithConfigMap &arith_config)
     : arith_config(arith_config), sim_mode(false),
       _devicemem(devicemem), rxbufmem(rxbufmem) {
-  cclo = new XRTDevice(cclo_ip, hostctrl_ip, device);
+  cclo = std::make_unique<XRTDevice>(cclo_ip, hostctrl_ip, device);
 }
 
 // Simulation constructor
@@ -40,10 +40,11 @@ ACCL::ACCL(unsigned int sim_start_port, unsigned int local_rank,
            const arithConfigMap &arith_config)
     : arith_config(arith_config), sim_mode(true),
       _devicemem(0), rxbufmem({}) {
-  cclo = new SimDevice(sim_start_port, local_rank);
+  cclo = std::make_unique<SimDevice>(sim_start_port, local_rank);
 }
 
 // constructor for coyote fpga device
+// Note: Takes ownership of the CoyoteDevice pointer
 ACCL::ACCL(CoyoteDevice *dev, const arithConfigMap &arith_config)
   : arith_config(arith_config), sim_mode(false),
     _devicemem(0), rxbufmem(0), cclo(dev) {}
@@ -51,7 +52,7 @@ ACCL::ACCL(CoyoteDevice *dev, const arithConfigMap &arith_config)
 // destructor
 ACCL::~ACCL() {
   deinit();
-  delete cclo;
+  // cclo is automatically cleaned up by unique_ptr
 }
 
 void ACCL::soft_reset() {
@@ -61,7 +62,7 @@ void ACCL::soft_reset() {
   options.scenario = operation::config;
   options.cfg_function = cfgFunc::reset_periph;
   ACCLRequest *handle = call_async(options);
-  std::chrono::milliseconds timeout(100);
+  std::chrono::milliseconds timeout(DEFAULT_RESET_TIMEOUT_MS);
   if(!wait(handle, timeout)){
     throw std::runtime_error("CCLO failed to soft reset");
   }
@@ -77,13 +78,13 @@ void ACCL::deinit() {
 
   for (auto &buf : eager_rx_buffers) {
     buf->free_buffer();
-    delete buf;
+    // unique_ptr automatically handles deletion
   }
   eager_rx_buffers.clear();
 
   for (auto &buf : utility_spares) {
     buf->free_buffer();
-    delete buf;
+    // unique_ptr automatically handles deletion
   }
   utility_spares.clear();
 }
@@ -178,8 +179,8 @@ ACCLRequest *ACCL::stream_put(BaseBuffer &srcbuf, unsigned int count,
                         std::vector<ACCLRequest *> waitfor) {
   CCLO::Options options{};
 
-  if (stream_id > 246) {
-    throw std::invalid_argument("Stream ID must < 247");
+  if (stream_id > MAX_STREAM_ID) {
+    throw std::invalid_argument("Stream ID must be <= " + std::to_string(MAX_STREAM_ID));
   }
 
   if (from_fpga == false) {
@@ -210,8 +211,8 @@ ACCLRequest *ACCL::stream_put(dataType src_data_type, unsigned int count,
                         std::vector<ACCLRequest *> waitfor) {
   CCLO::Options options{};
 
-  if (stream_id > 246) {
-    throw std::invalid_argument("Stream ID must < 247");
+  if (stream_id > MAX_STREAM_ID) {
+    throw std::invalid_argument("Stream ID must be <= " + std::to_string(MAX_STREAM_ID));
   }
 
   options.scenario = operation::send;
@@ -1096,7 +1097,7 @@ void ACCL::initialize(const std::vector<rank_t> &ranks, int local_rank,
   cclo->write(CCLO_ADDR::CFGRDY_OFFSET, 1);
 
   debug("Set timeout");
-  set_timeout(1000000);
+  set_timeout(DEFAULT_OPERATION_TIMEOUT);
 
   debug("Set max eager size: " + std::to_string(max_egr_size));
   set_max_eager_msg_size(max_egr_size);
@@ -1115,8 +1116,8 @@ void ACCL::initialize(const std::vector<rank_t> &ranks, int local_rank,
 
 void ACCL::configure_arithmetic() {
   if (communicators.size() < 1) {
-    throw new std::runtime_error("Communicators unconfigured, please call "
-                                 "configure_communicator() first");
+    throw std::runtime_error("Communicators unconfigured, please call "
+                             "configure_communicator() first");
   }
 
   for (auto &[_key, arithcfg] : arith_config) {
@@ -1134,19 +1135,28 @@ void ACCL::setup_eager_rx_buffers(size_t n_egr_rx_bufs, addr_t egr_rx_buf_size,
   eager_rx_buffer_size = egr_rx_buf_size;
   for (size_t i = 0; i < n_egr_rx_bufs; ++i) {
     // create, clear and sync buffers to device
-    Buffer<int8_t> *buf;
+    std::unique_ptr<Buffer<int8_t>> buf;
 
     if (sim_mode) {
-      buf = new SimBuffer(new int8_t[eager_rx_buffer_size](), eager_rx_buffer_size, dataType::int8,
-                          static_cast<SimDevice *>(cclo)->get_context());
+      buf = std::make_unique<SimBuffer<int8_t>>(
+          new int8_t[eager_rx_buffer_size](), eager_rx_buffer_size, dataType::int8,
+          static_cast<SimDevice *>(cclo.get())->get_context());
     } else if(cclo->get_device_type() == CCLO::xrt_device ){
-      buf = new XRTBuffer<int8_t>(eager_rx_buffer_size, dataType::int8, *(static_cast<XRTDevice *>(cclo)->get_device()), devicemem[i % devicemem.size()]);
+      buf = std::make_unique<XRTBuffer<int8_t>>(
+          eager_rx_buffer_size, dataType::int8,
+          *(static_cast<XRTDevice *>(cclo.get())->get_device()),
+          devicemem[i % devicemem.size()]);
     } else if(cclo->get_device_type() == CCLO::coyote_device){
-      buf = new CoyoteBuffer<int8_t>(eager_rx_buffer_size, dataType::int8, static_cast<CoyoteDevice *>(cclo));
+      buf = std::make_unique<CoyoteBuffer<int8_t>>(
+          eager_rx_buffer_size, dataType::int8,
+          static_cast<CoyoteDevice *>(cclo.get()));
+    }
+
+    if (!buf) {
+      throw std::runtime_error("Failed to create eager RX buffer: unsupported device type");
     }
 
     buf->sync_to_device();
-    eager_rx_buffers.emplace_back(buf);
     // program this buffer into the accelerator
     address += 4;
     cclo->write(address, 0);
@@ -1159,6 +1169,7 @@ void ACCL::setup_eager_rx_buffers(size_t n_egr_rx_bufs, addr_t egr_rx_buf_size,
       address += 4;
       cclo->write(address, 0);
     }
+    eager_rx_buffers.push_back(std::move(buf));
   }
 
   //write buffer len
@@ -1172,39 +1183,59 @@ void ACCL::setup_eager_rx_buffers(size_t n_egr_rx_bufs, addr_t egr_rx_buf_size,
 }
 
 void ACCL::setup_rendezvous_spare_buffers(addr_t rndzv_spare_buf_size, const std::vector<int> &devicemem){
+  constexpr int REQUIRED_SPARE_BUFFERS = 3;
   max_rndzv_msg_size = rndzv_spare_buf_size;
-  for(int i=0; i<3; i++){
-    Buffer<int8_t> *buf;
+
+  for(int i=0; i<REQUIRED_SPARE_BUFFERS; i++){
+    std::unique_ptr<Buffer<int8_t>> buf;
     if (sim_mode) {
-      buf = new SimBuffer(new int8_t[max_rndzv_msg_size](), max_rndzv_msg_size, dataType::int8,
-                        static_cast<SimDevice *>(cclo)->get_context());
+      buf = std::make_unique<SimBuffer<int8_t>>(
+          new int8_t[max_rndzv_msg_size](), max_rndzv_msg_size, dataType::int8,
+          static_cast<SimDevice *>(cclo.get())->get_context());
     } else if(cclo->get_device_type() == CCLO::xrt_device ){
-      buf = new XRTBuffer<int8_t>(max_rndzv_msg_size, dataType::int8,
-                        *(static_cast<XRTDevice *>(cclo)->get_device()), devicemem[i % devicemem.size()]);
+      buf = std::make_unique<XRTBuffer<int8_t>>(
+          max_rndzv_msg_size, dataType::int8,
+          *(static_cast<XRTDevice *>(cclo.get())->get_device()),
+          devicemem[i % devicemem.size()]);
     } else if(cclo->get_device_type() == CCLO::coyote_device){
-      buf = new CoyoteBuffer<int8_t>(max_rndzv_msg_size, dataType::int8, static_cast<CoyoteDevice *>(cclo));
+      buf = std::make_unique<CoyoteBuffer<int8_t>>(
+          max_rndzv_msg_size, dataType::int8,
+          static_cast<CoyoteDevice *>(cclo.get()));
     }
+
+    if (!buf) {
+      throw std::runtime_error("Failed to create spare buffer: unsupported device type");
+    }
+
     buf->sync_to_device();
-    utility_spares.emplace_back(buf);
+    utility_spares.push_back(std::move(buf));
   }
-  cclo->write(CCLO_ADDR::SPARE1_OFFSET, utility_spares.at(0)->address() & 0xffffffff);
-  cclo->write(CCLO_ADDR::SPARE1_OFFSET+4, (utility_spares.at(0)->address() >> 32) & 0xffffffff);
-  cclo->write(CCLO_ADDR::SPARE2_OFFSET, utility_spares.at(1)->address() & 0xffffffff);
-  cclo->write(CCLO_ADDR::SPARE2_OFFSET+4, (utility_spares.at(1)->address() >> 32) & 0xffffffff);
-  cclo->write(CCLO_ADDR::SPARE3_OFFSET, utility_spares.at(2)->address() & 0xffffffff);
-  cclo->write(CCLO_ADDR::SPARE3_OFFSET+4, (utility_spares.at(2)->address() >> 32) & 0xffffffff);
+
+  if (utility_spares.size() < REQUIRED_SPARE_BUFFERS) {
+    throw std::runtime_error("Insufficient utility spare buffers allocated: expected " +
+                             std::to_string(REQUIRED_SPARE_BUFFERS) + ", got " +
+                             std::to_string(utility_spares.size()));
+  }
+
+  cclo->write(CCLO_ADDR::SPARE1_OFFSET, utility_spares[0]->address() & 0xffffffff);
+  cclo->write(CCLO_ADDR::SPARE1_OFFSET+4, (utility_spares[0]->address() >> 32) & 0xffffffff);
+  cclo->write(CCLO_ADDR::SPARE2_OFFSET, utility_spares[1]->address() & 0xffffffff);
+  cclo->write(CCLO_ADDR::SPARE2_OFFSET+4, (utility_spares[1]->address() >> 32) & 0xffffffff);
+  cclo->write(CCLO_ADDR::SPARE3_OFFSET, utility_spares[2]->address() & 0xffffffff);
+  cclo->write(CCLO_ADDR::SPARE3_OFFSET+4, (utility_spares[2]->address() >> 32) & 0xffffffff);
 }
 
 void ACCL::configure_tuning_parameters(){
   //tune gather to reduce fan-in of flat tree above certain message sizes
-  cclo->write(CCLO_ADDR::GATHER_FLAT_TREE_MAX_FANIN_OFFSET, 2);
-  cclo->write(CCLO_ADDR::GATHER_FLAT_TREE_MAX_COUNT_OFFSET, 32*1024);
-  //tune bcast to execute flat tree up to 3 ranks
-  cclo->write(CCLO_ADDR::BCAST_FLAT_TREE_MAX_RANKS_OFFSET, 3);
-  //tune reduce to execute flat tree up to 4 ranks or up to 32KB
-  unsigned int max_reduce_flat_tree_size = 4;
-  cclo->write(CCLO_ADDR::REDUCE_FLAT_TREE_MAX_RANKS_OFFSET, max_reduce_flat_tree_size);
-  cclo->write(CCLO_ADDR::REDUCE_FLAT_TREE_MAX_COUNT_OFFSET, std::min(max_rndzv_msg_size/max_reduce_flat_tree_size, (long unsigned int)32*1024));
+  cclo->write(CCLO_ADDR::GATHER_FLAT_TREE_MAX_FANIN_OFFSET, DEFAULT_GATHER_FLAT_TREE_MAX_FANIN);
+  cclo->write(CCLO_ADDR::GATHER_FLAT_TREE_MAX_COUNT_OFFSET, FLAT_TREE_MAX_COUNT);
+  //tune bcast to execute flat tree up to configured max ranks
+  cclo->write(CCLO_ADDR::BCAST_FLAT_TREE_MAX_RANKS_OFFSET, DEFAULT_BCAST_FLAT_TREE_MAX_RANKS);
+  //tune reduce to execute flat tree up to configured max ranks or up to FLAT_TREE_MAX_COUNT
+  cclo->write(CCLO_ADDR::REDUCE_FLAT_TREE_MAX_RANKS_OFFSET, DEFAULT_REDUCE_FLAT_TREE_MAX_RANKS);
+  cclo->write(CCLO_ADDR::REDUCE_FLAT_TREE_MAX_COUNT_OFFSET,
+              std::min(max_rndzv_msg_size / DEFAULT_REDUCE_FLAT_TREE_MAX_RANKS,
+                       static_cast<long unsigned int>(FLAT_TREE_MAX_COUNT)));
 }
 
 void ACCL::check_return_value(const std::string function_name, ACCLRequest *request) {

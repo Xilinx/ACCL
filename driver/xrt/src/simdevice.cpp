@@ -18,8 +18,8 @@
 
 #include "accl/simdevice.hpp"
 #include "accl/common.hpp"
-#include <cassert>
 #include <future>
+#include <stdexcept>
 #include "zmq_client.h"
 
 static void finish_sim_request(ACCL::SimRequest *req) {
@@ -36,7 +36,9 @@ static void finish_sim_request(ACCL::SimRequest *req) {
 
 namespace ACCL {
 void SimRequest::start() {
-  assert(this->get_status() ==  operationStatus::EXECUTING);
+  if (this->get_status() != operationStatus::EXECUTING) {
+    throw std::logic_error("SimRequest::start() called but request is not in EXECUTING state");
+  }
 
   int function;
 
@@ -171,7 +173,9 @@ void SimDevice::launch_request() {
   // This guarantees permission to only one thread trying to start an operation
   if (queue.run()) {
     SimRequest *req = queue.front();
-    assert(req->get_status() == operationStatus::QUEUED);
+    if (req->get_status() != operationStatus::QUEUED) {
+      throw std::logic_error("SimDevice::launch_request() - request is not in QUEUED state");
+    }
     req->set_status(operationStatus::EXECUTING);
     req->start();
   }

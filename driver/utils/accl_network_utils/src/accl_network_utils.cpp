@@ -127,9 +127,28 @@ bool check_arp(vnx::Networklayer &network_layer,
 } // namespace
 
 namespace accl_network_utils {
+
+// Helper function to validate local_rank against ranks vector
+inline void validate_local_rank(int local_rank, size_t ranks_size, const std::string &function_name) {
+  if (ranks_size == 0) {
+    throw std::invalid_argument(function_name + ": ranks vector is empty");
+  }
+  if (local_rank < 0) {
+    throw std::invalid_argument(function_name + ": local_rank cannot be negative (got " +
+                                std::to_string(local_rank) + ")");
+  }
+  if (static_cast<size_t>(local_rank) >= ranks_size) {
+    throw std::out_of_range(function_name + ": local_rank (" + std::to_string(local_rank) +
+                            ") is out of range for ranks vector of size " +
+                            std::to_string(ranks_size));
+  }
+}
+
 void configure_vnx(vnx::CMAC &cmac, vnx::Networklayer &network_layer,
                    const std::vector<rank_t> &ranks, int local_rank,
                    bool rsfec) {
+  validate_local_rank(local_rank, ranks.size(), "configure_vnx");
+
   if (ranks.size() > vnx::max_sockets_size) {
     throw std::runtime_error("Too many ranks. VNX supports up to " +
                              std::to_string(vnx::max_sockets_size) +
@@ -195,6 +214,8 @@ void configure_vnx(vnx::CMAC &cmac, vnx::Networklayer &network_layer,
 void configure_tcp(XRTBuffer<int8_t> &tx_buf_network, XRTBuffer<int8_t> &rx_buf_network,
                    xrt::kernel &network_krnl, xrt::kernel &session_krnl,
                    std::vector<rank_t> &ranks, int local_rank) {
+  validate_local_rank(local_rank, ranks.size(), "configure_tcp");
+
   tx_buf_network.sync_to_device();
   rx_buf_network.sync_to_device();
 
@@ -270,7 +291,25 @@ void configure_tcp(XRTBuffer<int8_t> &tx_buf_network, XRTBuffer<int8_t> &rx_buf_
 }
 
 void exchange_qp(unsigned int master_rank, unsigned int slave_rank, unsigned int local_rank, std::vector<fpga::ibvQpConn*> &ibvQpConn_vec, std::vector<ACCL::rank_t> &ranks){
-  	
+	// Validate all rank indices
+	if (ranks.empty()) {
+		throw std::invalid_argument("exchange_qp: ranks vector is empty");
+	}
+	if (ibvQpConn_vec.empty()) {
+		throw std::invalid_argument("exchange_qp: ibvQpConn_vec is empty");
+	}
+	if (master_rank >= ranks.size()) {
+		throw std::out_of_range("exchange_qp: master_rank (" + std::to_string(master_rank) +
+		                        ") out of range for ranks size " + std::to_string(ranks.size()));
+	}
+	if (slave_rank >= ranks.size()) {
+		throw std::out_of_range("exchange_qp: slave_rank (" + std::to_string(slave_rank) +
+		                        ") out of range for ranks size " + std::to_string(ranks.size()));
+	}
+	if (slave_rank >= ibvQpConn_vec.size() || master_rank >= ibvQpConn_vec.size()) {
+		throw std::out_of_range("exchange_qp: rank index out of range for ibvQpConn_vec");
+	}
+
 	if (local_rank == master_rank)
 	{
 		std::cout<<"Local rank "<<local_rank<<" sending local QP to remote rank "<<slave_rank<<std::endl;
@@ -333,6 +372,11 @@ void exchange_qp(unsigned int master_rank, unsigned int slave_rank, unsigned int
 }
 
 void configure_cyt_rdma(std::vector<ACCL::rank_t> &ranks, int local_rank, ACCL::CoyoteDevice* device){
+	validate_local_rank(local_rank, ranks.size(), "configure_cyt_rdma");
+
+	if (device == nullptr) {
+		throw std::invalid_argument("configure_cyt_rdma: device pointer is null");
+	}
 
 	std::cout<<"Initializing QP connections..."<<std::endl;
 	// create queue pair connections
@@ -357,6 +401,12 @@ void configure_cyt_rdma(std::vector<ACCL::rank_t> &ranks, int local_rank, ACCL::
 }
 
 void configure_cyt_tcp(std::vector<ACCL::rank_t> &ranks, int local_rank, ACCL::CoyoteDevice* device){
+	validate_local_rank(local_rank, ranks.size(), "configure_cyt_tcp");
+
+	if (device == nullptr) {
+		throw std::invalid_argument("configure_cyt_tcp: device pointer is null");
+	}
+
 	std::cout<<"Configuring Coyote TCP..."<<std::endl;
 	// arp lookup
     for(int i=0; i<ranks.size(); i++){
@@ -410,6 +460,15 @@ std::vector<std::string> get_ips(fs::path config_file) {
 }
 
 std::vector<std::string> get_ips(bool local, int world_size) {
+  if (world_size <= 0) {
+    throw std::invalid_argument("get_ips: world_size must be positive (got " +
+                                std::to_string(world_size) + ")");
+  }
+  if (world_size > 254) {
+    throw std::invalid_argument("get_ips: world_size cannot exceed 254 for IP generation (got " +
+                                std::to_string(world_size) + ")");
+  }
+
   std::vector<std::string> ips{};
   for (int i = 0; i < world_size; ++i) {
     if (local) {
@@ -424,11 +483,24 @@ std::vector<std::string> get_ips(bool local, int world_size) {
 std::vector<rank_t> generate_ranks(fs::path config_file, int local_rank,
                                    std::uint16_t start_port,
                                    unsigned int rxbuf_size) {
+  if (local_rank < 0) {
+    throw std::invalid_argument("generate_ranks: local_rank cannot be negative");
+  }
+
   std::vector<rank_t> ranks{};
   std::vector<std::string> ips = get_ips(config_file);
 
+  if (ips.empty()) {
+    throw std::runtime_error("generate_ranks: no IPs found in config file");
+  }
+
+  // Check for port overflow
+  if (static_cast<size_t>(start_port) + ips.size() - 1 > 65535) {
+    throw std::overflow_error("generate_ranks: start_port + number of ranks would exceed max port 65535");
+  }
+
   for (int i = 0; i < static_cast<int>(ips.size()); ++i) {
-    rank_t new_rank = {ips[i], start_port + i, i, rxbuf_size};
+    rank_t new_rank = {ips[i], static_cast<std::uint16_t>(start_port + i), i, rxbuf_size};
     ranks.emplace_back(new_rank);
   }
 
@@ -438,10 +510,26 @@ std::vector<rank_t> generate_ranks(fs::path config_file, int local_rank,
 std::vector<rank_t> generate_ranks(bool local, int local_rank, int world_size,
                                    std::uint16_t start_port,
                                    unsigned int rxbuf_size) {
+  if (local_rank < 0) {
+    throw std::invalid_argument("generate_ranks: local_rank cannot be negative");
+  }
+  if (world_size <= 0) {
+    throw std::invalid_argument("generate_ranks: world_size must be positive");
+  }
+  if (local_rank >= world_size) {
+    throw std::out_of_range("generate_ranks: local_rank (" + std::to_string(local_rank) +
+                            ") must be less than world_size (" + std::to_string(world_size) + ")");
+  }
+
+  // Check for port overflow
+  if (static_cast<size_t>(start_port) + world_size - 1 > 65535) {
+    throw std::overflow_error("generate_ranks: start_port + world_size would exceed max port 65535");
+  }
+
   std::vector<rank_t> ranks{};
   std::vector<std::string> ips = get_ips(local, world_size);
   for (int i = 0; i < static_cast<int>(ips.size()); ++i) {
-    rank_t new_rank = {ips[i], start_port + i, i, rxbuf_size};
+    rank_t new_rank = {ips[i], static_cast<std::uint16_t>(start_port + i), i, rxbuf_size};
     ranks.emplace_back(new_rank);
   }
 
@@ -451,8 +539,20 @@ std::vector<rank_t> generate_ranks(bool local, int local_rank, int world_size,
 std::unique_ptr<ACCL::ACCL>
 initialize_accl(std::vector<rank_t> &ranks, int local_rank,
                 bool simulator, acclDesign design, xrt::device device,
-                fs::path xclbin, unsigned int nbufs, unsigned int bufsize, 
+                fs::path xclbin, unsigned int nbufs, unsigned int bufsize,
                 unsigned int egrsize, bool rsfec) {
+  validate_local_rank(local_rank, ranks.size(), "initialize_accl");
+
+  if (nbufs == 0) {
+    throw std::invalid_argument("initialize_accl: nbufs must be greater than 0");
+  }
+  if (bufsize == 0) {
+    throw std::invalid_argument("initialize_accl: bufsize must be greater than 0");
+  }
+  if (!simulator && xclbin.empty()) {
+    throw std::invalid_argument("initialize_accl: xclbin path required for non-simulator mode");
+  }
+
   std::size_t world_size = ranks.size();
   std::unique_ptr<ACCL::ACCL> accl;
 

@@ -30,6 +30,7 @@
 #include "accl/simdevice.hpp"
 #include "accl/coyotebuffer.hpp"
 #include "accl/coyotedevice.hpp"
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -778,12 +779,12 @@ ACCLRequest *barrier(communicatorId comm_id = GLOBAL_COMM,
   std::unique_ptr<Buffer<dtype>> create_buffer_host(size_t length, dataType type) {
     if (sim_mode) {
       return std::unique_ptr<Buffer<dtype>>(new SimBuffer<dtype>(
-          length, type, static_cast<SimDevice *>(cclo)->get_context(), true));
+          length, type, static_cast<SimDevice *>(cclo.get())->get_context(), true));
     } else if (cclo->get_device_type() == CCLO::xrt_device) {
       return std::unique_ptr<Buffer<dtype>>(new XRTBuffer<dtype>(
-          length, type, *(static_cast<XRTDevice *>(cclo)->get_device()), xrt::bo::flags::host_only, (xrt::memory_group)0));
+          length, type, *(static_cast<XRTDevice *>(cclo.get())->get_device()), xrt::bo::flags::host_only, (xrt::memory_group)0));
     } else {
-      return std::unique_ptr<Buffer<dtype>>(new CoyoteBuffer<dtype>(length, type, cclo));
+      return std::unique_ptr<Buffer<dtype>>(new CoyoteBuffer<dtype>(length, type, static_cast<CoyoteDevice *>(cclo.get())));
     }
   }
 
@@ -808,13 +809,13 @@ ACCLRequest *barrier(communicatorId comm_id = GLOBAL_COMM,
   std::unique_ptr<Buffer<dtype>> create_buffer(size_t length, dataType type, unsigned mem_grp) {
     if (sim_mode) {
       return std::unique_ptr<Buffer<dtype>>(new SimBuffer<dtype>(
-          length, type, static_cast<SimDevice *>(cclo)->get_context(), false, mem_grp));
+          length, type, static_cast<SimDevice *>(cclo.get())->get_context(), false, mem_grp));
     } else if (cclo->get_device_type() == CCLO::xrt_device) {
       return std::unique_ptr<Buffer<dtype>>(new XRTBuffer<dtype>(
-          length, type, *(static_cast<XRTDevice *>(cclo)->get_device()), (xrt::memory_group)mem_grp));
+          length, type, *(static_cast<XRTDevice *>(cclo.get())->get_device()), (xrt::memory_group)mem_grp));
     } else {
       return std::unique_ptr<Buffer<dtype>>(new CoyoteBuffer<dtype>(
-          length, type, cclo));
+          length, type, static_cast<CoyoteDevice *>(cclo.get())));
     }
   }
 
@@ -874,10 +875,10 @@ ACCLRequest *barrier(communicatorId comm_id = GLOBAL_COMM,
     if (sim_mode) {
       return std::unique_ptr<Buffer<dtype>>(
           new SimBuffer<dtype>(host_buffer, length, type,
-                               static_cast<SimDevice *>(cclo)->get_context(), false, mem_grp));
+                               static_cast<SimDevice *>(cclo.get())->get_context(), false, mem_grp));
     } else if(cclo->get_device_type() == CCLO::xrt_device ){
       return std::unique_ptr<Buffer<dtype>>(new XRTBuffer<dtype>(
-          host_buffer, length, type, *(static_cast<XRTDevice *>(cclo)->get_device()), (xrt::memory_group)mem_grp));
+          host_buffer, length, type, *(static_cast<XRTDevice *>(cclo.get())->get_device()), (xrt::memory_group)mem_grp));
     }
     return std::unique_ptr<Buffer<dtype>>(nullptr);
   }
@@ -905,8 +906,8 @@ ACCLRequest *barrier(communicatorId comm_id = GLOBAL_COMM,
                                                dataType type) {
     if (sim_mode) {
       return std::unique_ptr<Buffer<dtype>>(
-          new SimBuffer<dtype>(bo, *(static_cast<SimDevice *>(cclo)->get_device()), length, type,
-                               static_cast<SimDevice *>(cclo)->get_context()));
+          new SimBuffer<dtype>(bo, *(static_cast<SimDevice *>(cclo.get())->get_device()), length, type,
+                               static_cast<SimDevice *>(cclo.get())->get_context()));
     } else {
       return std::unique_ptr<Buffer<dtype>>(
           new XRTBuffer<dtype>(bo, length, type));
@@ -956,10 +957,10 @@ ACCLRequest *barrier(communicatorId comm_id = GLOBAL_COMM,
                                                    unsigned mem_grp) {
     if (sim_mode) {
       return std::unique_ptr<Buffer<dtype>>(new SimBuffer<dtype>(
-          length, type, static_cast<SimDevice *>(cclo)->get_context()));
+          length, type, static_cast<SimDevice *>(cclo.get())->get_context()));
     } else if(cclo->get_device_type() == CCLO::xrt_device ){
       return std::unique_ptr<Buffer<dtype>>(new XRTBuffer<dtype>(
-          length, type, *(static_cast<XRTDevice *>(cclo)->get_device()), xrt::bo::flags::p2p, (xrt::memory_group)mem_grp));
+          length, type, *(static_cast<XRTDevice *>(cclo.get())->get_device()), xrt::bo::flags::p2p, (xrt::memory_group)mem_grp));
     } else {
       //for Coyote there's no concept of a p2p buffer
       throw std::runtime_error("p2p buffers not supported in Coyote");
@@ -967,7 +968,7 @@ ACCLRequest *barrier(communicatorId comm_id = GLOBAL_COMM,
   }
 
   /**
-   * Construct a new coyote buffer object without an existing host buffer 
+   * Construct a new coyote buffer object without an existing host buffer
    *
    * Coyote buffer object doesn't have a notion of memory banks
    *
@@ -982,7 +983,7 @@ ACCLRequest *barrier(communicatorId comm_id = GLOBAL_COMM,
     if (sim_mode) {
       throw std::runtime_error("create_coyotebuffer sim_mode unsupported!!!");
     } else {
-      return std::unique_ptr<Buffer<dtype>>(new CoyoteBuffer<dtype>(length, type, static_cast<CoyoteDevice *>(cclo)));
+      return std::unique_ptr<Buffer<dtype>>(new CoyoteBuffer<dtype>(length, type, static_cast<CoyoteDevice *>(cclo.get())));
     }
   }
 
@@ -1066,7 +1067,7 @@ ACCLRequest *barrier(communicatorId comm_id = GLOBAL_COMM,
   void close_con(communicatorId comm_id = GLOBAL_COMM);
 
 private:
-  CCLO *cclo{};
+  std::unique_ptr<CCLO> cclo;
   // Supported types and corresponding arithmetic config
   arithConfigMap arith_config;
   // Address to put new configurations like arithmetic configs
@@ -1074,11 +1075,11 @@ private:
   addr_t current_config_address{};
   // RX spare buffers for eager mode
   addr_t max_eager_msg_size{};
-  std::vector<Buffer<int8_t> *> eager_rx_buffers;
+  std::vector<std::unique_ptr<Buffer<int8_t>>> eager_rx_buffers;
   addr_t eager_rx_buffer_size{};
   // Spare buffers for use in rendezvous reduces
   addr_t max_rndzv_msg_size{};
-  std::vector<Buffer<int8_t> *> utility_spares;
+  std::vector<std::unique_ptr<Buffer<int8_t>>> utility_spares;
   // List of communicators, to which users will add
   std::vector<Communicator> communicators;
   // safety checks

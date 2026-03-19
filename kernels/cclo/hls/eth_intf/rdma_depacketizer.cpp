@@ -64,10 +64,9 @@ void rdma_depacketizer(
 #pragma HLS PIPELINE II=1 style=flp
 	
 	unsigned constexpr bytes_per_word = DATA_WIDTH/8;
-	unsigned const max_dma_bytes = 8*1024*1024-1;//TODO: convert to argument?
 
-	static unsigned int remaining[1024] = {0};//one RAMB36 for max 1024 sessions
-	static ap_uint<DEST_WIDTH> target_strm[1024] = {0};//one RAMB18 for max 1024 sessions
+	static unsigned int remaining[MAX_SESSIONS] = {0};//one RAMB36 for max sessions
+	static ap_uint<DEST_WIDTH> target_strm[MAX_SESSIONS] = {0};//one RAMB18 for max sessions
 
 	static eth_notification notif;
 	static bool continue_notif = false;
@@ -91,6 +90,9 @@ void rdma_depacketizer(
 		notif = STREAM_READ(notif_in);
 	}
 
+	// Mask session_id to prevent out-of-bounds array access
+	unsigned int session_idx = notif.session_id & SESSION_INDEX_MASK;
+
 #ifndef ACCL_SYNTHESIS
 	std::stringstream ss;
 	ss << "RDMA Depacketizer: Processing incoming fragment count=" << notif.length << " for qpn " << notif.session_id << "\n";
@@ -99,8 +101,8 @@ void rdma_depacketizer(
 
 	//get remaining message bytes, from local storage
 	//TODO: cache latest accessed value
-	if(prev_session_id != notif.session_id){
-		message_rem = remaining[notif.session_id];
+	if(prev_session_id != session_idx){
+		message_rem = remaining[session_idx];
 	}
 	
 	if(message_rem == 0){//if remaining bytes is zero, then this is the start of a new message
@@ -144,10 +146,10 @@ void rdma_depacketizer(
 			//decrement the length to reflect the fact that we have removed the 64B header
 			//Note: the rxHandler must make sure to not give us fragments less than 64B
 			notif.length -= bytes_per_word;
-			target_strm[notif.session_id] = message_strm;
+			target_strm[session_idx] = message_strm;
 		}
 	} else{//if remaining bytes is not zero, then this is a continuation of an old message
-		message_strm = target_strm[notif.session_id];
+		message_strm = target_strm[session_idx];
 	}
 	//write out notifications
 	//in case the fragment spans the end of the current message and beginning of another,
@@ -168,18 +170,18 @@ void rdma_depacketizer(
 			notif.length = (notif.length < bytes_per_word) ? 0u : (unsigned int)notif.length-bytes_per_word;//floor at zero
 			current_bytes += (message_rem < bytes_per_word) ? message_rem : bytes_per_word;
 			message_rem = (message_rem < bytes_per_word) ? 0u : message_rem-bytes_per_word;//slight problem here if the message doesnt end on a 64B boundary...
-		} while(notif.length > 0 && message_rem > 0 && current_bytes < (max_dma_bytes-bytes_per_word));
+		} while(notif.length > 0 && message_rem > 0 && current_bytes < (MAX_DMA_BYTES-bytes_per_word));
 		if(message_strm == 0){
 			downstream_notif.type = 2; //for EOF
 			downstream_notif.length = current_bytes;
 			STREAM_WRITE(notif_out, downstream_notif);
 		}
 		//update session info (remaining bytes and target of currently processing message)
-		remaining[notif.session_id] = message_rem;
+		remaining[session_idx] = message_rem;
 		//if we're not finished with this fragment, skip notification read on the next run
 		continue_notif = (notif.length > 0);
 		continue_message = (notif.length > 0) && (message_rem > 0);
 		//update session id for caching
-		prev_session_id = notif.session_id;
+		prev_session_id = session_idx;
 	}
 }

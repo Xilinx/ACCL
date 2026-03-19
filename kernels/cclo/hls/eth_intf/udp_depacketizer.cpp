@@ -96,11 +96,10 @@ void udp_depacketizer(
 #pragma HLS PIPELINE II=1 style=flp
 
 	unsigned const bytes_per_word = DATA_WIDTH/8;
-	unsigned const max_dma_bytes = 8*1024*1024-1;//TODO: convert to argument?
 
 	//session states (for each session, remaining bytes and STRM values for ongoing messages)
-	static unsigned int remaining[1024] = {0};//one RAMB36 for max 1024 sessions
-	static ap_uint<DEST_WIDTH> target_strm[1024] = {0};//one RAMB18 for max 1024 sessions
+	static unsigned int remaining[MAX_SESSIONS] = {0};//one RAMB36 for max sessions
+	static ap_uint<DEST_WIDTH> target_strm[MAX_SESSIONS] = {0};//one RAMB18 for max sessions
 
 	eth_notification notif;
 
@@ -116,6 +115,9 @@ void udp_depacketizer(
 	inword = STREAM_READ(in);
 	notif.session_id = inword.dest;
 
+	// Mask session_id to prevent out-of-bounds array access
+	unsigned int session_idx = notif.session_id & SESSION_INDEX_MASK;
+
 #ifndef ACCL_SYNTHESIS
 	std::stringstream ss;
 	ss << "UDP Depacketizer: Processing incoming fragment for session " << notif.session_id << "\n";
@@ -124,8 +126,8 @@ void udp_depacketizer(
 #endif
 
 	//get remaining message bytes, from local storage
-	if(prev_session_id != notif.session_id){
-		message_rem = remaining[notif.session_id];
+	if(prev_session_id != session_idx){
+		message_rem = remaining[session_idx];
 	}
 	
 	if(message_rem == 0){//if remaining bytes is zero, then this is the start of a new message
@@ -137,14 +139,14 @@ void udp_depacketizer(
 		//Note: the rxHandler must make sure to not give us fragments less than 64B
 		notif.length = message_rem;
 		notif.type = 0; //for SOM
-		target_strm[notif.session_id] = message_strm;
+		target_strm[session_idx] = message_strm;
 		if(message_strm == 0){
 			//put SOM notification and header in output streams
 			STREAM_WRITE(sts, hdr);
 			STREAM_WRITE(notif_out, notif);
 		}
 	} else{//if remaining bytes is not zero, then this is a continuation of an old message
-		message_strm = target_strm[notif.session_id];
+		message_strm = target_strm[session_idx];
 		inword.dest = message_strm;
 		STREAM_WRITE(out, inword);
 		current_bytes += (message_rem < bytes_per_word) ? message_rem : bytes_per_word;
@@ -152,7 +154,7 @@ void udp_depacketizer(
 	}
 	//write out SOF
 	if(message_strm == 0){
-		notif.length = max_dma_bytes;
+		notif.length = MAX_DMA_BYTES;
 		notif.type = 1; //for SOF
 		STREAM_WRITE(notif_out, notif);
 	}
@@ -166,7 +168,7 @@ void udp_depacketizer(
 			STREAM_WRITE(out, inword);
 			current_bytes += (message_rem < bytes_per_word) ? message_rem : bytes_per_word;
 			message_rem = (message_rem < bytes_per_word) ? 0u : message_rem-bytes_per_word;//slight problem here if the message doesnt end on a 64B boundary...
-		} while(inword.last == 0 && message_rem > 0 && current_bytes < (max_dma_bytes-bytes_per_word));
+		} while(inword.last == 0 && message_rem > 0 && current_bytes < (MAX_DMA_BYTES-bytes_per_word));
 	}
 	//write out EOF
 	if(message_strm == 0){
@@ -175,7 +177,7 @@ void udp_depacketizer(
 		STREAM_WRITE(notif_out, notif);
 	}
 	//update session info (remaining bytes and target of currently processing message)
-	remaining[notif.session_id] = message_rem;
+	remaining[session_idx] = message_rem;
 	//update session id for caching
-	prev_session_id = notif.session_id;
+	prev_session_id = session_idx;
 }

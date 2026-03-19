@@ -41,6 +41,24 @@ const addr_t EXCHANGE_MEM_ADDRESS_RANGE = 0x2000;
 const communicatorId GLOBAL_COMM = 0x0;
 
 /**
+ * Configuration constants
+ */
+/** Maximum valid stream ID for stream_put operations (0-246, so max is 246) */
+constexpr unsigned int MAX_STREAM_ID = 246;
+/** Default timeout in milliseconds for soft reset operations */
+constexpr unsigned int DEFAULT_RESET_TIMEOUT_MS = 100;
+/** Default timeout value for ACCL operations (in hardware cycles) */
+constexpr unsigned int DEFAULT_OPERATION_TIMEOUT = 1000000;
+/** Maximum count for flat tree gather/reduce operations (32 KB) */
+constexpr unsigned int FLAT_TREE_MAX_COUNT = 32 * 1024;
+/** Default max fanin for flat tree gather operations */
+constexpr unsigned int DEFAULT_GATHER_FLAT_TREE_MAX_FANIN = 2;
+/** Default max ranks for flat tree broadcast operations */
+constexpr unsigned int DEFAULT_BCAST_FLAT_TREE_MAX_RANKS = 3;
+/** Default max ranks for flat tree reduce operations */
+constexpr unsigned int DEFAULT_REDUCE_FLAT_TREE_MAX_RANKS = 4;
+
+/**
  * Address offsets inside the HOSTCTRL internal memory
  * 
  */

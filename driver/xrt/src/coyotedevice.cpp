@@ -21,6 +21,7 @@
 #include "cProcess.hpp"
 #include <future>
 #include <iomanip>
+#include <stdexcept>
 
 static void finish_coyote_request(ACCL::CoyoteRequest *req) {
   req->wait_kernel();
@@ -36,7 +37,9 @@ static void finish_coyote_request(ACCL::CoyoteRequest *req) {
 namespace ACCL {
 
 void CoyoteRequest::start() {
-  assert(this->get_status() ==  operationStatus::EXECUTING);
+  if (this->get_status() != operationStatus::EXECUTING) {
+    throw std::logic_error("CoyoteRequest::start() called but request is not in EXECUTING state");
+  }
 
   int function, arg_id = 0;
 
@@ -443,7 +446,9 @@ void CoyoteDevice::launch_request() {
   // This guarantees permission to only one thread trying to start an operation
   if (queue.run()) {
     CoyoteRequest *req = queue.front();
-    assert(req->get_status() == operationStatus::QUEUED);
+    if (req->get_status() != operationStatus::QUEUED) {
+      throw std::logic_error("CoyoteDevice::launch_request() - request is not in QUEUED state");
+    }
     req->set_status(operationStatus::EXECUTING);
     req->start();
   }

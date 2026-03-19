@@ -19,7 +19,7 @@
 #include "accl/xrtdevice.hpp"
 #include "accl/common.hpp"
 #include <future>
-#include <cassert>
+#include <stdexcept>
 
 static void finish_fpga_request(ACCL::FPGARequest *req) {
   req->wait_kernel();
@@ -34,7 +34,9 @@ static void finish_fpga_request(ACCL::FPGARequest *req) {
 
 namespace ACCL {
 void FPGARequest::start() {
-  assert(this->get_status() ==  operationStatus::EXECUTING);
+  if (this->get_status() != operationStatus::EXECUTING) {
+    throw std::logic_error("FPGARequest::start() called but request is not in EXECUTING state");
+  }
 
   int function, arg_id = 0;
 
@@ -288,7 +290,9 @@ void XRTDevice::launch_request() {
   // This guarantees permission to only one thread trying to start an operation
   if (queue.run()) {
     FPGARequest *req = queue.front();
-    assert(req->get_status() == operationStatus::QUEUED);
+    if (req->get_status() != operationStatus::QUEUED) {
+      throw std::logic_error("XRTDevice::launch_request() - request is not in QUEUED state");
+    }
     req->set_status(operationStatus::EXECUTING);
     req->start();
   }
